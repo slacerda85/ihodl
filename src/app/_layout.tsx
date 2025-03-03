@@ -1,4 +1,4 @@
-import { StrictMode } from 'react'
+// import { StrictMode } from 'react'
 import AuthProvider from '@/features/auth/auth-provider'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
@@ -6,7 +6,7 @@ import InactivityOverlay from '@/features/auth/inactivity-overlay'
 
 export default function RootLayout() {
   return (
-    <StrictMode>
+    <>
       <AuthProvider>
         <Stack>
           <Stack.Screen name="index" options={{ headerShown: false }} />
@@ -16,6 +16,6 @@ export default function RootLayout() {
         <InactivityOverlay />
       </AuthProvider>
       <StatusBar style="auto" />
-    </StrictMode>
+    </>
   )
 }

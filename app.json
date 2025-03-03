@@ -5,12 +5,12 @@
     "scheme": "ihodl",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    
     "owner": "slacerda85",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -24,7 +24,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        
         "backgroundColor": "#ffffff"
       },
       "permissions": [
@@ -34,7 +34,7 @@
       "package": "com.anonymous.ihodl"
     },
     "web": {
-      "favicon": "./assets/favicon.png",
+      
       "bundler": "metro"
     },
     "plugins": [
@@ -48,7 +48,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./src/assets/bitcoin-logo.svg",
+          
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"

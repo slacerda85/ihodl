@@ -2,7 +2,8 @@ import { useAuth } from '@/features/auth/auth-provider'
 import React, { useEffect } from 'react'
 import { Text, View, ActivityIndicator, StyleSheet } from 'react-native'
 import { useRouter } from 'expo-router'
-import BitcoinLogo from '@/assets/bitcoin-logo'
+import BitcoinLogo from '@/shared/assets/bitcoin-logo'
+import colors from '@/shared/theme/colors'
 
 export default function AuthScreen() {
   const { auth, authenticated, setInactive } = useAuth()
@@ -50,7 +51,7 @@ const styles = StyleSheet.create({
   title: {
     fontWeight: 'bold',
     fontSize: 60,
-    color: 'rgba(0, 0, 0, 0.7)',
+    color: colors.textSecondary.light,
     marginTop: 16,
   },
   loader: {
