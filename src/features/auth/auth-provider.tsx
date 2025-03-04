@@ -5,8 +5,8 @@ import { checkHardware, checkPermissions, authenticate } from './utils'
 
 // Constants
 const TIMEOUTS = {
-  INACTIVITY: 1000 * 10, // 30 seconds
-  BACKGROUND: 1000 * 20, // 60 seconds
+  INACTIVITY: 1000 * 30, // 30 seconds
+  BACKGROUND: 1000 * 60, // 60 seconds
 }
 
 const APP_STATE_TIMEOUTS: Record<AppStateStatus, number | undefined> = {

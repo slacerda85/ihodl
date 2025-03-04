@@ -20,17 +20,11 @@ export default function WalletScreen() {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.contentWrapper}>
-        <Text style={[styles.heading, isDark ? styles.headingDark : null]}>
-          Create or Import Wallet
-        </Text>
+        <Text style={[styles.heading, isDark ? styles.headingDark : null]}>Manage wallets</Text>
 
         <TouchableOpacity onPress={handleCreateWallet} style={styles.primaryButton}>
           <Text style={styles.buttonText}>Create New Wallet</Text>
         </TouchableOpacity>
-
-        <Text style={[styles.subText, isDark ? styles.subTextDark : null]}>
-          Or import existing wallet:
-        </Text>
 
         <TouchableOpacity
           disabled

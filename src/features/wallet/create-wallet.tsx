@@ -6,18 +6,25 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  useColorScheme,
+  Switch,
 } from 'react-native'
 import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 import { IconSymbol } from '@/shared/ui/icon-symbol'
+import { useWallet } from './wallet-provider'
 
 export default function CreateWallet() {
-  const isDark = useColorScheme() === 'dark'
-  const [walletType, setWalletType] = useState<string>('online')
+  const { createWallet } = useWallet()
+  const [offline, setOffline] = useState<boolean>(false)
   const [walletName, setWalletName] = useState<string>('')
 
-  const handleCreateWallet = async () => {}
+  function handleCreateWallet() {
+    createWallet()
+  }
+
+  function handleToggleOffline() {
+    setOffline(prev => !prev)
+  }
 
   return (
     <ScrollView style={styles.scrollView}>
@@ -30,51 +37,36 @@ export default function CreateWallet() {
             onChangeText={setWalletName}
           />
         </View>
-        <View
-          style={[
-            styles.toggleSection,
-            walletType === 'offline' ? styles.toggleSectionActive : null,
-          ]}
-        >
+        <View style={[styles.toggleSection, offline ? styles.toggleSectionActive : null]}>
           <View style={styles.toggleContainer}>
             <Text style={styles.toggleText}>Offline mode (cold wallet)</Text>
-            <TouchableOpacity
-              onPress={() => setWalletType(walletType === 'online' ? 'offline' : 'online')}
-              style={[
-                styles.toggle,
-                walletType === 'offline' ? styles.toggleActive : styles.toggleInactive,
-              ]}
-            >
-              <View
-                style={[
-                  styles.toggleHandle,
-                  walletType === 'offline' ? styles.toggleHandleActive : null,
-                ]}
-              />
-            </TouchableOpacity>
+            <Switch
+              trackColor={{ false: alpha(colors.secondary, 0.2), true: colors.secondary }}
+              thumbColor={colors.white}
+              ios_backgroundColor={alpha(colors.secondary, 0.2)}
+              onValueChange={handleToggleOffline}
+              value={offline}
+            />
           </View>
           <View style={styles.infoBox}>
             <IconSymbol
               name="info.circle.fill"
               size={16}
               style={styles.infoIcon}
-              color={colors.info}
+              color={colors.secondary}
             />
             <Text style={styles.infoText}>
-              Prevents this wallet to access the internet. Transactions will be only available via
-              QR codes.
+              Prevents this wallet to access the internet. Transactions are available by using QR
+              codes.
             </Text>
           </View>
         </View>
         <TouchableOpacity
           onPress={handleCreateWallet}
-          style={[
-            styles.button,
-            walletType === 'offline' ? styles.secondaryButton : styles.primaryButton,
-          ]}
+          style={[styles.button, offline ? styles.secondaryButton : styles.primaryButton]}
         >
           <Text style={styles.buttonText}>
-            {walletType === 'offline' ? 'Create offline wallet' : 'Create wallet'}
+            {offline ? 'Create offline wallet' : 'Create wallet'}
           </Text>
         </TouchableOpacity>
       </View>

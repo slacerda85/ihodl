@@ -1,5 +1,10 @@
 import { createEntropy, hexToUint8Array, hmacSeed } from '@/shared/lib/bitcoin/crypto'
-import { createMasterKey, createPublicKey, fromMnemonic } from '@/shared/lib/bitcoin/key'
+import {
+  createMasterKey,
+  createPublicKey,
+  fromMnemonic,
+  toMnemonic,
+} from '@/shared/lib/bitcoin/key'
 
 export default class Wallet {
   // #mnemonic: string;
@@ -44,9 +49,9 @@ export default class Wallet {
     return this.#chainCode
   }
 
-  /* get mnemonic() {
-    return this.#mnemonic;
-  } */
+  get mnemonic() {
+    return toMnemonic(this.#privateKey)
+  }
 
   get publicKey() {
     return this.#publicKey
