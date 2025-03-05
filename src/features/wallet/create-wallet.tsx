@@ -11,15 +11,18 @@ import {
 import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 import { IconSymbol } from '@/shared/ui/icon-symbol'
-import { useWallet } from './wallet-provider'
+// import { useWallet } from './wallet-provider'
+import { useRouter } from 'expo-router'
 
 export default function CreateWallet() {
-  const { createWallet } = useWallet()
+  const router = useRouter()
+  // const { createWallet } = useWallet()
   const [offline, setOffline] = useState<boolean>(false)
   const [walletName, setWalletName] = useState<string>('')
 
   function handleCreateWallet() {
-    createWallet()
+    router.push('/wallet/details')
+    // createWallet()
   }
 
   function handleToggleOffline() {
@@ -40,13 +43,7 @@ export default function CreateWallet() {
         <View style={[styles.toggleSection, offline ? styles.toggleSectionActive : null]}>
           <View style={styles.toggleContainer}>
             <Text style={styles.toggleText}>Offline mode (cold wallet)</Text>
-            <Switch
-              trackColor={{ false: alpha(colors.secondary, 0.2), true: colors.secondary }}
-              thumbColor={colors.white}
-              ios_backgroundColor={alpha(colors.secondary, 0.2)}
-              onValueChange={handleToggleOffline}
-              value={offline}
-            />
+            <Switch onValueChange={handleToggleOffline} value={offline} />
           </View>
           <View style={styles.infoBox}>
             <IconSymbol
@@ -65,9 +62,7 @@ export default function CreateWallet() {
           onPress={handleCreateWallet}
           style={[styles.button, offline ? styles.secondaryButton : styles.primaryButton]}
         >
-          <Text style={styles.buttonText}>
-            {offline ? 'Create offline wallet' : 'Create wallet'}
-          </Text>
+          <Text style={styles.buttonText}>{offline ? 'Create cold wallet' : 'Create wallet'}</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -82,7 +77,7 @@ const styles = StyleSheet.create({
   container: {
     padding: 16,
     marginBottom: 24,
-    gap: 32,
+    gap: 24,
   },
   section: {
     marginBottom: 0,

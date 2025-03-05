@@ -12,6 +12,7 @@ export default function ModalsLayout() {
           name="auth"
           options={{
             headerShown: false,
+            animation: 'fade_from_bottom',
           }}
         />
       </Stack>

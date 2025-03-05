@@ -8,7 +8,11 @@ export default function RootLayout() {
   return (
     <>
       <AuthProvider>
-        <Stack>
+        <Stack
+          screenOptions={{
+            animation: 'fade',
+          }}
+        >
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="(modals)" options={{ headerShown: false, animation: 'fade' }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

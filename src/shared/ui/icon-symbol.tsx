@@ -11,6 +11,7 @@ const MAPPING = {
   // See SF Symbols in the SF Symbols app on Mac.
   'wallet.bifold.fill': 'account-balance-wallet',
   'info.circle.fill': 'info',
+  'doc.text': 'description',
 } as Partial<
   Record<
     import('expo-symbols').SymbolViewProps['name'],

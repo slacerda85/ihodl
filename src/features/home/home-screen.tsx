@@ -2,12 +2,14 @@ import BitcoinLogo from '@/shared/assets/bitcoin-logo'
 import { useAuth } from '@/features/auth/auth-provider'
 import { useRouter } from 'expo-router'
 import { useEffect } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View, useColorScheme } from 'react-native'
 import colors from '@/shared/theme/colors'
 
 export default function HomeScreen() {
   const { authenticated } = useAuth()
   const router = useRouter()
+  const colorScheme = useColorScheme()
+  const isDark = colorScheme === 'dark'
 
   useEffect(() => {
     setTimeout(() => {
@@ -20,9 +22,9 @@ export default function HomeScreen() {
   }, [authenticated, router])
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isDark && styles.containerDark]}>
       <BitcoinLogo width={128} height={128} />
-      <Text style={styles.title}>ihodl</Text>
+      <Text style={[styles.title, isDark && styles.titleDark]}>ihodl</Text>
     </View>
   )
 }
@@ -34,10 +36,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  containerDark: {
+    backgroundColor: '#121212',
+  },
   title: {
     fontWeight: 'bold',
     fontSize: 60,
     color: colors.textSecondary.light,
     marginTop: 16,
+  },
+  titleDark: {
+    color: colors.textSecondary.dark || '#e0e0e0', // Fallback if dark theme color not defined
   },
 })

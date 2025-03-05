@@ -37,15 +37,14 @@ export default function WalletLayout() {
               title: 'Create wallet',
             }}
           />
-
-          {/* <Stack.Screen
+          <Stack.Screen
             name="details"
             options={{
               title: 'Wallet details',
             }}
           />
 
-          <Stack.Screen
+          {/*  <Stack.Screen
             name="import"
             options={{
               title: 'Import wallet',

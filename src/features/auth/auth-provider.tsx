@@ -1,12 +1,12 @@
 import { createContext, useState, useContext, useRef, useEffect, useCallback } from 'react'
 import { AppState, AppStateStatus } from 'react-native'
-import { Href, useRouter } from 'expo-router'
+import { Href, useRouter, useSegments } from 'expo-router'
 import { checkHardware, checkPermissions, authenticate } from './utils'
 
 // Constants
 const TIMEOUTS = {
-  INACTIVITY: 1000 * 30, // 30 seconds
-  BACKGROUND: 1000 * 60, // 60 seconds
+  INACTIVITY: 1000 * 10, // 30 seconds
+  BACKGROUND: 1000 * 10, // 60 seconds
 }
 
 const APP_STATE_TIMEOUTS: Record<AppStateStatus, number | undefined> = {
@@ -18,7 +18,7 @@ const APP_STATE_TIMEOUTS: Record<AppStateStatus, number | undefined> = {
 }
 
 const ROUTES: Record<string, Href> = {
-  AUTH_SCREEN: '/(modals)/auth',
+  AUTH_SCREEN: '/auth',
 }
 
 const ERROR_MESSAGES = {
@@ -34,15 +34,11 @@ type AuthContextType = {
   auth: () => Promise<boolean>
   inactive: boolean
   setInactive: (value: boolean) => void
+  authAndRedirect: () => Promise<boolean>
 }
 
 // Create context with default values
-export const AuthContext = createContext<AuthContextType>({
-  authenticated: false,
-  auth: async () => false,
-  inactive: false,
-  setInactive: () => {},
-})
+export const AuthContext = createContext<AuthContextType>({} as AuthContextType)
 
 interface AuthProviderProps {
   children: React.ReactNode
@@ -59,6 +55,9 @@ export default function AuthProvider({ children }: AuthProviderProps) {
   const startTime = useRef(0)
   const appState = useRef(AppState.currentState)
   const router = useRouter()
+  const [previousRoute, setPreviousRoute] = useState<string | null>(null)
+  const segments = useSegments()
+  const currentRoute = '/' + segments.join('/')
 
   /**
    * Performs the actual biometric authentication
@@ -131,9 +130,26 @@ export default function AuthProvider({ children }: AuthProviderProps) {
    * Locks the app by resetting authentication and redirecting to lock screen
    */
   const lockApp = useCallback((): void => {
+    if (!currentRoute.includes(ROUTES.AUTH_SCREEN as string)) {
+      console.log('currentRoute', currentRoute)
+      setPreviousRoute(currentRoute)
+    }
     setAuthenticated(false)
     router.push(ROUTES.AUTH_SCREEN)
-  }, [router])
+  }, [currentRoute, router])
+
+  const authAndRedirect = useCallback(async (): Promise<boolean> => {
+    const success = await auth()
+
+    if (success && previousRoute) {
+      // Navigate back to stored route
+      router.replace(previousRoute as Href)
+      // Clear the previous route
+      setPreviousRoute(null)
+    }
+
+    return success
+  }, [auth, previousRoute, router])
 
   /**
    * Handles app state changes for security purposes
@@ -168,6 +184,9 @@ export default function AuthProvider({ children }: AuthProviderProps) {
         } else if (currentState === 'inactive' && hasTimeoutExceeded(elapsed, 'inactive')) {
           console.log('Inactivity timeout exceeded')
           lockApp()
+        } else if (currentRoute.includes(ROUTES.AUTH_SCREEN as string) && !authenticated) {
+          // Trigger authentication if we're on the auth screen and not authenticated
+          authAndRedirect()
         } else {
           setInactive(false)
         }
@@ -175,7 +194,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
 
       appState.current = nextAppState
     },
-    [setInactive, lockApp],
+    [setInactive, lockApp, authenticated, currentRoute, authAndRedirect],
   )
 
   // Set up app state change listener
@@ -194,6 +213,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
         auth,
         inactive,
         setInactive,
+        authAndRedirect,
       }}
     >
       {children}

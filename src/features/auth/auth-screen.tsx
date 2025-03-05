@@ -1,42 +1,25 @@
 import { useAuth } from '@/features/auth/auth-provider'
 import React, { useEffect } from 'react'
-import { Text, View, ActivityIndicator, StyleSheet } from 'react-native'
-import { useRouter } from 'expo-router'
+import { Text, View, StyleSheet, useColorScheme } from 'react-native'
 import BitcoinLogo from '@/shared/assets/bitcoin-logo'
 import colors from '@/shared/theme/colors'
 
 export default function AuthScreen() {
-  const { auth, authenticated, setInactive } = useAuth()
-  const router = useRouter()
+  const { authAndRedirect, authenticated } = useAuth()
+  const colorScheme = useColorScheme()
+  const isDark = colorScheme === 'dark'
 
   useEffect(() => {
-    const handleAuth = async () => {
-      auth().then(response => {
-        if (!response) {
-          console.log('Authentication failed')
-        }
-      })
+    // Only trigger authentication if not already authenticated
+    if (!authenticated) {
+      authAndRedirect()
     }
-
-    setInactive(false)
-
-    if (authenticated) {
-      // go back to previous screen
-      router.back()
-      setInactive(false)
-    } else {
-      handleAuth()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authenticated])
+  }, [authenticated, authAndRedirect])
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isDark && styles.containerDark]}>
       <BitcoinLogo width={128} height={128} />
-      <Text style={styles.title}>ihodl</Text>
-      {authenticated ? (
-        <ActivityIndicator size="large" color="#F7931A" style={styles.loader} />
-      ) : null}
+      <Text style={[styles.title, isDark && styles.titleDark]}>ihodl</Text>
     </View>
   )
 }
@@ -48,11 +31,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  containerDark: {
+    backgroundColor: '#121212',
+  },
   title: {
     fontWeight: 'bold',
     fontSize: 60,
     color: colors.textSecondary.light,
     marginTop: 16,
+  },
+  titleDark: {
+    color: colors.textSecondary.dark || '#e0e0e0', // Fallback if dark theme color not defined
   },
   loader: {
     marginTop: 16,
