@@ -1,3 +1,4 @@
+import colors from '@/shared/theme/colors'
 import { Stack } from 'expo-router'
 import { SafeAreaView, StyleSheet, useColorScheme } from 'react-native'
 
@@ -25,9 +26,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   lightContainer: {
-    backgroundColor: 'white',
+    backgroundColor: colors.background.light,
   },
   darkContainer: {
-    backgroundColor: 'black',
+    backgroundColor: colors.background.dark,
   },
 })

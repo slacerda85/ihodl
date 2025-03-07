@@ -2,19 +2,31 @@ import { createContext, ReactNode, useContext, useState } from 'react'
 import { createWallet as generateWallet } from './wallet-actions'
 
 type WalletContextType = {
-  createWallet: () => Promise<void>
-  wallet: Awaited<ReturnType<typeof generateWallet>> | null
-  setWallet: (wallet: Awaited<ReturnType<typeof generateWallet>> | null) => void
+  createWallet: (walletName: string, cold: boolean) => Promise<void>
+  wallet:
+    | (Awaited<ReturnType<typeof generateWallet>> & { walletName: string; cold: boolean })
+    | null
+  setWallet: (
+    wallet:
+      | (Awaited<ReturnType<typeof generateWallet>> & { walletName: string; cold: boolean })
+      | null,
+  ) => void
 }
 
 const WalletContext = createContext({} as WalletContextType)
 
 export default function WalletProvider({ children }: { children: ReactNode }) {
-  const [wallet, setWallet] = useState<Awaited<ReturnType<typeof generateWallet>> | null>(null)
+  const [wallet, setWallet] = useState<
+    | (Awaited<ReturnType<typeof generateWallet>> & {
+        walletName: string
+        cold: boolean
+      })
+    | null
+  >(null)
 
-  async function createWallet() {
-    const newWallet = generateWallet()
-    setWallet(newWallet)
+  async function createWallet(walletName: string, cold: boolean = false) {
+    const newWallet = await generateWallet()
+    setWallet({ ...newWallet, walletName, cold })
   }
 
   return (

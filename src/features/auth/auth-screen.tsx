@@ -5,16 +5,30 @@ import BitcoinLogo from '@/shared/assets/bitcoin-logo'
 import colors from '@/shared/theme/colors'
 
 export default function AuthScreen() {
-  const { authAndRedirect, authenticated } = useAuth()
+  const { unlockApp, authenticated } = useAuth()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
   useEffect(() => {
-    // Only trigger authentication if not already authenticated
-    if (!authenticated) {
-      authAndRedirect()
+    let mounted = true
+
+    const attemptUnlock = async () => {
+      if (!authenticated && mounted) {
+        const success = await unlockApp()
+        if (!success && mounted) {
+          // If authentication failed, try again
+          setTimeout(attemptUnlock, 0)
+        }
+      }
     }
-  }, [authenticated, authAndRedirect])
+
+    attemptUnlock()
+
+    // Cleanup to prevent trying to update state after unmount
+    return () => {
+      mounted = false
+    }
+  }, [authenticated, unlockApp])
 
   return (
     <View style={[styles.container, isDark && styles.containerDark]}>
@@ -27,12 +41,12 @@ export default function AuthScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'white',
+    backgroundColor: colors.background.light,
     justifyContent: 'center',
     alignItems: 'center',
   },
   containerDark: {
-    backgroundColor: '#121212',
+    backgroundColor: colors.background.dark,
   },
   title: {
     fontWeight: 'bold',
@@ -41,7 +55,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   titleDark: {
-    color: colors.textSecondary.dark || '#e0e0e0', // Fallback if dark theme color not defined
+    color: colors.textSecondary.dark,
   },
   loader: {
     marginTop: 16,

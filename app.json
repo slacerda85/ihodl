@@ -5,12 +5,10 @@
     "scheme": "ihodl",
     "version": "1.0.0",
     "orientation": "portrait",
-    
     "owner": "slacerda85",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -20,11 +18,13 @@
         "NSFaceIDUsageDescription": "This app uses Face ID to secure your data",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "bundleIdentifier": "com.anonymous.ihodl"
+      "bundleIdentifier": "com.anonymous.ihodl",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
-        
         "backgroundColor": "#ffffff"
       },
       "permissions": [
@@ -34,7 +34,6 @@
       "package": "com.anonymous.ihodl"
     },
     "web": {
-      
       "bundler": "metro"
     },
     "plugins": [
@@ -48,10 +47,16 @@
       [
         "expo-splash-screen",
         {
-          
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
+        }
+      ],
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": true,
+          "faceIDPermission": "Allow $(PRODUCT_NAME) to access your Face ID biometric data."
         }
       ]
     ],

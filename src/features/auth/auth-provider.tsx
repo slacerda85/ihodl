@@ -34,7 +34,7 @@ type AuthContextType = {
   auth: () => Promise<boolean>
   inactive: boolean
   setInactive: (value: boolean) => void
-  authAndRedirect: () => Promise<boolean>
+  unlockApp: () => Promise<boolean>
 }
 
 // Create context with default values
@@ -135,20 +135,29 @@ export default function AuthProvider({ children }: AuthProviderProps) {
       setPreviousRoute(currentRoute)
     }
     setAuthenticated(false)
-    router.push(ROUTES.AUTH_SCREEN)
+    router.replace(ROUTES.AUTH_SCREEN)
   }, [currentRoute, router])
 
-  const authAndRedirect = useCallback(async (): Promise<boolean> => {
-    const success = await auth()
+  const unlockApp = useCallback(async (): Promise<boolean> => {
+    try {
+      const success = await auth()
 
-    if (success && previousRoute) {
-      // Navigate back to stored route
-      router.replace(previousRoute as Href)
-      // Clear the previous route
-      setPreviousRoute(null)
+      if (!success) {
+        return false
+      }
+
+      if (success && previousRoute) {
+        // Navigate back to stored route
+        router.replace(previousRoute as Href)
+        // Clear the previous route
+        setPreviousRoute(null)
+      }
+
+      return success
+    } catch (error) {
+      console.error('Authentication error:', error)
+      return false
     }
-
-    return success
   }, [auth, previousRoute, router])
 
   /**
@@ -186,7 +195,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
           lockApp()
         } else if (currentRoute.includes(ROUTES.AUTH_SCREEN as string) && !authenticated) {
           // Trigger authentication if we're on the auth screen and not authenticated
-          authAndRedirect()
+          unlockApp()
         } else {
           setInactive(false)
         }
@@ -194,7 +203,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
 
       appState.current = nextAppState
     },
-    [setInactive, lockApp, authenticated, currentRoute, authAndRedirect],
+    [setInactive, lockApp, authenticated, currentRoute, unlockApp],
   )
 
   // Set up app state change listener
@@ -213,7 +222,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
         auth,
         inactive,
         setInactive,
-        authAndRedirect,
+        unlockApp,
       }}
     >
       {children}

@@ -18,9 +18,9 @@ export default function WalletScreen() {
   } */
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.contentWrapper}>
-        <Text style={[styles.heading, isDark ? styles.headingDark : null]}>Manage wallets</Text>
+    <ScrollView style={[styles.container, isDark && styles.containerDark]}>
+      <View style={[styles.contentWrapper, isDark && styles.contentWrapperDark]}>
+        <Text style={[styles.heading, isDark && styles.headingDark]}>Manage wallets</Text>
 
         <TouchableOpacity onPress={handleCreateWallet} style={styles.primaryButton}>
           <Text style={styles.buttonText}>Create New Wallet</Text>
@@ -40,14 +40,17 @@ export default function WalletScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'white',
+    backgroundColor: colors.background.light,
   },
   containerDark: {
-    backgroundColor: 'black',
+    backgroundColor: colors.background.dark,
   },
   contentWrapper: {
     padding: 24,
     marginBottom: 24,
+  },
+  contentWrapperDark: {
+    // No additional styles needed, inherits from containerDark
   },
   walletBox: {
     width: '100%',
@@ -58,7 +61,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   walletBoxDark: {
-    borderColor: colors.border.dark, // gray-800
+    borderColor: colors.border.dark,
   },
   heading: {
     fontSize: 20,
@@ -70,14 +73,14 @@ const styles = StyleSheet.create({
     color: 'white',
   },
   primaryButton: {
-    backgroundColor: colors.primary, // primary color (assuming this is your primary color)
+    backgroundColor: colors.primary,
     borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 16,
     marginBottom: 24,
   },
   secondaryButton: {
-    backgroundColor: colors.secondary, // secondary color (assuming this is your secondary color)
+    backgroundColor: colors.secondary,
     borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 16,
@@ -88,10 +91,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   subText: {
-    color: colors.textSecondary.light, // gray-600
+    color: colors.textSecondary.light,
     marginBottom: 8,
   },
   subTextDark: {
-    color: colors.textSecondary.dark, // gray-400
+    color: colors.textSecondary.dark,
   },
 })

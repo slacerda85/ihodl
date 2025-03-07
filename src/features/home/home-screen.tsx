@@ -1,25 +1,26 @@
 import BitcoinLogo from '@/shared/assets/bitcoin-logo'
 import { useAuth } from '@/features/auth/auth-provider'
-import { useRouter } from 'expo-router'
 import { useEffect } from 'react'
 import { StyleSheet, Text, View, useColorScheme } from 'react-native'
 import colors from '@/shared/theme/colors'
+import { router } from 'expo-router'
 
 export default function HomeScreen() {
-  const { authenticated } = useAuth()
-  const router = useRouter()
+  const { authenticated, auth } = useAuth()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
   useEffect(() => {
-    setTimeout(() => {
-      if (!authenticated) {
-        router.push('/auth')
-      } else {
-        router.push('/wallet')
-      }
-    }, 1000)
-  }, [authenticated, router])
+    // Only trigger authentication if not already authenticated
+    if (!authenticated) {
+      auth().then(success => {
+        if (success) {
+          // Navigate to the wallet details screen
+          router.push('/wallet')
+        }
+      })
+    }
+  }, [authenticated, auth])
 
   return (
     <View style={[styles.container, isDark && styles.containerDark]}>
@@ -32,12 +33,12 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: colors.background.light,
     alignItems: 'center',
     justifyContent: 'center',
   },
   containerDark: {
-    backgroundColor: '#121212',
+    backgroundColor: colors.background.dark,
   },
   title: {
     fontWeight: 'bold',
@@ -46,6 +47,6 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   titleDark: {
-    color: colors.textSecondary.dark || '#e0e0e0', // Fallback if dark theme color not defined
+    color: colors.textSecondary.dark,
   },
 })
