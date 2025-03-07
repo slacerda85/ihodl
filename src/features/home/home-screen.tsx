@@ -1,26 +1,22 @@
 import BitcoinLogo from '@/shared/assets/bitcoin-logo'
-import { useAuth } from '@/features/auth/auth-provider'
 import { useEffect } from 'react'
 import { StyleSheet, Text, View, useColorScheme } from 'react-native'
 import colors from '@/shared/theme/colors'
-import { router } from 'expo-router'
+import { router, useSegments } from 'expo-router'
+import { useAuth } from '../auth/auth-provider'
 
 export default function HomeScreen() {
-  const { authenticated, auth } = useAuth()
+  const { authenticated } = useAuth()
+  const segments = useSegments()
+  const currentRoute = '/' + segments.join('/')
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
   useEffect(() => {
-    // Only trigger authentication if not already authenticated
-    if (!authenticated) {
-      auth().then(success => {
-        if (success) {
-          // Navigate to the wallet details screen
-          router.push('/wallet')
-        }
-      })
+    if (currentRoute === '/' && authenticated) {
+      router.push('/(tabs)/wallet')
     }
-  }, [authenticated, auth])
+  }, [authenticated, currentRoute])
 
   return (
     <View style={[styles.container, isDark && styles.containerDark]}>

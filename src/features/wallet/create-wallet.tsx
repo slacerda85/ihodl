@@ -62,7 +62,7 @@ export default function CreateWallet() {
               name="info.circle.fill"
               size={16}
               style={styles.infoIcon}
-              color={colors.white}
+              color={isDark ? colors.textSecondary.dark : colors.secondary}
             />
             <Text style={[styles.infoText, isDark && styles.infoTextDark]}>
               Prevents this wallet to access the internet. Transactions are available by using QR

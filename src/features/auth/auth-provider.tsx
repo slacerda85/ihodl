@@ -1,7 +1,8 @@
 import { createContext, useState, useContext, useRef, useEffect, useCallback } from 'react'
-import { AppState, AppStateStatus } from 'react-native'
-import { Href, useRouter, useSegments } from 'expo-router'
+import { AppState, AppStateStatus, Modal, StyleSheet, Text, View } from 'react-native' /* 
+import { Href, useSegments } from 'expo-router' */
 import { checkHardware, checkPermissions, authenticate } from './utils'
+import AuthScreen from './auth-screen'
 
 // Constants
 const TIMEOUTS = {
@@ -16,11 +17,11 @@ const APP_STATE_TIMEOUTS: Record<AppStateStatus, number | undefined> = {
   extension: undefined,
   unknown: undefined,
 }
-
+/* 
 const ROUTES: Record<string, Href> = {
   AUTH_SCREEN: '/auth',
 }
-
+ */
 const ERROR_MESSAGES = {
   HARDWARE_UNSUPPORTED: 'Hardware não suporta autenticação biométrica',
   BIOMETRICS_NOT_CONFIGURED: 'Usuário não configurou autenticação biométrica',
@@ -34,7 +35,7 @@ type AuthContextType = {
   auth: () => Promise<boolean>
   inactive: boolean
   setInactive: (value: boolean) => void
-  unlockApp: () => Promise<boolean>
+  // unlockApp: () => Promise<void>
 }
 
 // Create context with default values
@@ -54,10 +55,8 @@ export default function AuthProvider({ children }: AuthProviderProps) {
   const [inactive, setInactive] = useState(false)
   const startTime = useRef(0)
   const appState = useRef(AppState.currentState)
-  const router = useRouter()
-  const [previousRoute, setPreviousRoute] = useState<string | null>(null)
-  const segments = useSegments()
-  const currentRoute = '/' + segments.join('/')
+  /* const segments = useSegments()
+  const currentRoute = '/' + segments.join('/') */
 
   /**
    * Performs the actual biometric authentication
@@ -103,13 +102,6 @@ export default function AuthProvider({ children }: AuthProviderProps) {
    * Public authentication method exposed through context
    */
   const auth = useCallback(async (): Promise<boolean> => {
-    // In development mode, bypass authentication
-    /* if (process.env.NODE_ENV === 'development') {
-      console.log('Forcing authentication in development mode')
-      setAuthenticated(true)
-      return true
-    } */
-
     try {
       const success = await performBiometricAuth()
       if (!success) {
@@ -127,84 +119,46 @@ export default function AuthProvider({ children }: AuthProviderProps) {
   }, [performBiometricAuth, setAuthenticated])
 
   /**
-   * Locks the app by resetting authentication and redirecting to lock screen
-   */
-  const lockApp = useCallback((): void => {
-    if (!currentRoute.includes(ROUTES.AUTH_SCREEN as string)) {
-      console.log('currentRoute', currentRoute)
-      setPreviousRoute(currentRoute)
-    }
-    setAuthenticated(false)
-    router.replace(ROUTES.AUTH_SCREEN)
-  }, [currentRoute, router])
-
-  const unlockApp = useCallback(async (): Promise<boolean> => {
-    try {
-      const success = await auth()
-
-      if (!success) {
-        return false
-      }
-
-      if (success && previousRoute) {
-        // Navigate back to stored route
-        router.replace(previousRoute as Href)
-        // Clear the previous route
-        setPreviousRoute(null)
-      }
-
-      return success
-    } catch (error) {
-      console.error('Authentication error:', error)
-      return false
-    }
-  }, [auth, previousRoute, router])
-
-  /**
    * Handles app state changes for security purposes
    */
-  const handleAppStateChange = useCallback(
-    (nextAppState: AppStateStatus): void => {
-      const hasTimeoutExceeded = (elapsedTime: number, timeoutType: AppStateStatus): boolean => {
-        const timeout = APP_STATE_TIMEOUTS[timeoutType]
-        return !!timeout && elapsedTime > timeout
-      }
-      console.log('App state changed to', nextAppState)
-      const currentState = appState.current
+  const handleAppStateChange = useCallback((nextAppState: AppStateStatus): void => {
+    const hasTimeoutExceeded = (elapsedTime: number, timeoutType: AppStateStatus): boolean => {
+      const timeout = APP_STATE_TIMEOUTS[timeoutType]
+      return !!timeout && elapsedTime > timeout
+    }
+    console.log('App state changed to', nextAppState)
+    const currentState = appState.current
 
-      // App goes to background or becomes inactive
-      if (currentState === 'active') {
-        if (nextAppState === 'background' || nextAppState === 'inactive') {
-          startTime.current = Date.now()
+    // App goes to background or becomes inactive
+    if (currentState === 'active') {
+      if (nextAppState === 'background' || nextAppState === 'inactive') {
+        startTime.current = Date.now()
 
-          // Only set blur when going inactive
-          if (nextAppState === 'inactive') {
-            setInactive(true)
-          }
+        // Only set blur when going inactive
+        if (nextAppState === 'inactive') {
+          setInactive(true)
         }
       }
-      // App comes back to foreground
-      else if (nextAppState === 'active') {
-        const elapsed = Date.now() - startTime.current
+    }
+    // App comes back to foreground
+    else if (nextAppState === 'active') {
+      const elapsed = Date.now() - startTime.current
 
-        if (currentState === 'background' && hasTimeoutExceeded(elapsed, 'background')) {
-          console.log('Background timeout exceeded')
-          lockApp()
-        } else if (currentState === 'inactive' && hasTimeoutExceeded(elapsed, 'inactive')) {
-          console.log('Inactivity timeout exceeded')
-          lockApp()
-        } else if (currentRoute.includes(ROUTES.AUTH_SCREEN as string) && !authenticated) {
-          // Trigger authentication if we're on the auth screen and not authenticated
-          unlockApp()
-        } else {
-          setInactive(false)
-        }
+      if (currentState === 'background' && hasTimeoutExceeded(elapsed, 'background')) {
+        console.log('Background timeout exceeded')
+        setAuthenticated(false)
+        // lockApp()
+      } else if (currentState === 'inactive' && hasTimeoutExceeded(elapsed, 'inactive')) {
+        console.log('Inactivity timeout exceeded')
+        setAuthenticated(false)
+        // lockApp()
+      } else {
+        setInactive(false)
       }
+    }
 
-      appState.current = nextAppState
-    },
-    [setInactive, lockApp, authenticated, currentRoute, unlockApp],
-  )
+    appState.current = nextAppState
+  }, [])
 
   // Set up app state change listener
   useEffect(() => {
@@ -222,10 +176,13 @@ export default function AuthProvider({ children }: AuthProviderProps) {
         auth,
         inactive,
         setInactive,
-        unlockApp,
+        // unlockApp,
       }}
     >
       {children}
+      <Modal visible={!authenticated} animationType="fade" transparent={true}>
+        <AuthScreen />
+      </Modal>
     </AuthContext.Provider>
   )
 }

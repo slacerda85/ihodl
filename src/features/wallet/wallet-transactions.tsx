@@ -173,17 +173,38 @@ export default function WalletTransactions() {
               {shortenedAddress}
             </Text>
             <View style={styles.flexRow}>
-              <View style={styles.transactionTypeBadge}>
+              {/* <View style={styles.transactionTypeBadge}>
                 <Text style={styles.transactionTypeText}>{transaction.transactionType}</Text>
-              </View>
+              </View> */}
               <View
                 style={[
                   styles.networkBadge,
                   transaction.network === 'lightning' ? styles.lightningBadge : styles.onChainBadge,
                 ]}
               >
-                <Text style={styles.networkBadgeText}>
-                  {transaction.network === 'lightning' ? '⚡ Lighting' : '⛓️ On chain'}
+                <IconSymbol
+                  name={transaction.network === 'lightning' ? 'bolt.fill' : 'link'}
+                  size={12}
+                  weight="bold"
+                  color={
+                    transaction.network === 'lightning'
+                      ? colors.primary
+                      : isDark
+                        ? colors.text.dark
+                        : colors.secondary
+                  }
+                />
+                <Text
+                  style={[
+                    styles.networkBadgeText,
+                    transaction.network === 'lightning'
+                      ? styles.lightningBadgeText
+                      : isDark
+                        ? styles.onChainBadgeTextDark
+                        : styles.onChainBadgeText,
+                  ]}
+                >
+                  {transaction.network === 'lightning' ? 'Lighting' : 'On chain'}
                 </Text>
               </View>
             </View>
@@ -241,6 +262,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background.light,
+    borderRadius: 8,
     // padding: 16,
   },
   containerDark: {
@@ -250,13 +272,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '500',
     color: colors.text.light,
-    marginBottom: 16,
+    marginBottom: 8,
   },
   sectionTitleDark: {
     color: colors.text.dark,
   },
   transactionsList: {
-    gap: 12,
+    borderRadius: 8,
+    gap: 4,
   },
   emptyState: {
     alignItems: 'center',
@@ -278,13 +301,14 @@ const styles = StyleSheet.create({
   },
   transactionItem: {
     flexDirection: 'row',
-    padding: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     backgroundColor: colors.white,
     borderRadius: 8,
-    marginBottom: 8,
+    // marginBottom: 8,
   },
   transactionItemDark: {
-    backgroundColor: colors.black,
+    backgroundColor: alpha(colors.white, 0.1),
   },
   transactionIconContainer: {
     marginRight: 12,
@@ -311,7 +335,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    paddingBottom: 4,
   },
   contactName: {
     fontSize: 16,
@@ -322,11 +346,12 @@ const styles = StyleSheet.create({
     color: colors.text.dark,
   },
   transactionValue: {
+    fontFamily: 'monospace',
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   receivedValue: {
-    color: colors.success,
+    color: colors.positive,
   },
   sentValue: {
     color: colors.textSecondary.light,
@@ -336,47 +361,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
-    marginBottom: 4,
   },
   transactionDate: {
-    fontSize: 12,
+    fontSize: 10,
     color: colors.textSecondary.light,
   },
   transactionDateDark: {
     color: colors.textSecondary.dark,
   },
-  transactionTypeBadge: {
-    backgroundColor: alpha(colors.primary, 0.1),
-    padding: 4,
-    borderRadius: 4,
-  },
-  transactionTypeText: {
-    color: colors.primary,
-    fontSize: 10,
-    fontWeight: '500',
-  },
   networkBadge: {
-    paddingVertical: 2,
-    paddingHorizontal: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+
     borderRadius: 4,
   },
   lightningBadge: {
-    padding: 4,
-    backgroundColor: alpha(colors.primary, 0.1), // Orange color for lightning
-    // borderWidth: 1,
-    // borderColor: alpha(colors.primary, 0.2), // Orange color
+    // backgroundColor: alpha(colors.primary, 0.7), // Orange color for lightning
   },
   onChainBadge: {
-    padding: 4,
-    backgroundColor: alpha(colors.secondary, 0.1), // Blue color for on-chain
-    // borderRadius: 4,
-    // borderWidth: 1,
-    // borderColor: alpha(colors.secondary, 0.2), // Blue color
+    // backgroundColor: colors.secondary, // Blue color for on-chain
   },
   networkBadgeText: {
     fontSize: 12,
-    fontWeight: '500',
-    color: colors.textSecondary.light,
+    fontWeight: '600',
+    color: colors.white,
+  },
+  onChainBadgeText: {
+    color: colors.secondary,
+  },
+  onChainBadgeTextDark: {
+    color: colors.text.dark,
+  },
+  lightningBadgeText: {
+    color: colors.primary,
   },
   addressText: {
     fontSize: 12,
@@ -396,7 +414,7 @@ const styles = StyleSheet.create({
     borderBottomColor: alpha(colors.border.dark, 0.2),
   },
   dateHeaderText: {
-    fontSize: 14,
+    fontSize: 10,
     fontWeight: '600',
     color: colors.textSecondary.light,
   },
@@ -406,7 +424,7 @@ const styles = StyleSheet.create({
   flexRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    columnGap: 4,
+    columnGap: 8,
   },
 
   // Update transactionMetadata to not account for date (removed date)

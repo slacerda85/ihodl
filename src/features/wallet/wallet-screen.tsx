@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-nati
 import { useColorScheme } from 'react-native'
 import colors from '@/shared/theme/colors'
 import { useRouter } from 'expo-router'
+import { alpha } from '@/shared/theme/utils'
 
 export default function WalletScreen() {
   const router = useRouter()
@@ -22,6 +23,9 @@ export default function WalletScreen() {
       <View style={[styles.contentWrapper, isDark && styles.contentWrapperDark]}>
         <Text style={[styles.heading, isDark && styles.headingDark]}>Manage wallets</Text>
 
+        <View style={[styles.walletBox, isDark && styles.walletBoxDark]}>
+          <Text style={[styles.subText, isDark && styles.subTextDark]}>No wallets found</Text>
+        </View>
         <TouchableOpacity onPress={handleCreateWallet} style={styles.primaryButton}>
           <Text style={styles.buttonText}>Create New Wallet</Text>
         </TouchableOpacity>
@@ -47,7 +51,7 @@ const styles = StyleSheet.create({
   },
   contentWrapper: {
     padding: 24,
-    marginBottom: 24,
+    gap: 24,
   },
   contentWrapperDark: {
     // No additional styles needed, inherits from containerDark
@@ -55,19 +59,19 @@ const styles = StyleSheet.create({
   walletBox: {
     width: '100%',
     height: '50%',
-    borderWidth: 1,
-    borderRadius: 6,
-    borderColor: colors.border.light,
-    marginBottom: 24,
+    backgroundColor: colors.white,
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   walletBoxDark: {
-    borderColor: colors.border.dark,
+    backgroundColor: alpha(colors.white, 0.1),
   },
   heading: {
     fontSize: 20,
     fontWeight: '600',
     color: 'black',
-    marginBottom: 16,
   },
   headingDark: {
     color: 'white',
@@ -77,7 +81,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 16,
-    marginBottom: 24,
   },
   secondaryButton: {
     backgroundColor: colors.secondary,
@@ -92,7 +95,7 @@ const styles = StyleSheet.create({
   },
   subText: {
     color: colors.textSecondary.light,
-    marginBottom: 8,
+    // marginBottom: 8,
   },
   subTextDark: {
     color: colors.textSecondary.dark,

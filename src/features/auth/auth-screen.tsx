@@ -1,39 +1,21 @@
 import { useAuth } from '@/features/auth/auth-provider'
-import React, { useEffect } from 'react'
-import { Text, View, StyleSheet, useColorScheme } from 'react-native'
+import React from 'react'
+import { Text, View, StyleSheet, useColorScheme, TouchableOpacity } from 'react-native'
 import BitcoinLogo from '@/shared/assets/bitcoin-logo'
 import colors from '@/shared/theme/colors'
 
 export default function AuthScreen() {
-  const { unlockApp, authenticated } = useAuth()
+  const { auth } = useAuth()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
-
-  useEffect(() => {
-    let mounted = true
-
-    const attemptUnlock = async () => {
-      if (!authenticated && mounted) {
-        const success = await unlockApp()
-        if (!success && mounted) {
-          // If authentication failed, try again
-          setTimeout(attemptUnlock, 0)
-        }
-      }
-    }
-
-    attemptUnlock()
-
-    // Cleanup to prevent trying to update state after unmount
-    return () => {
-      mounted = false
-    }
-  }, [authenticated, unlockApp])
 
   return (
     <View style={[styles.container, isDark && styles.containerDark]}>
       <BitcoinLogo width={128} height={128} />
       <Text style={[styles.title, isDark && styles.titleDark]}>ihodl</Text>
+      <TouchableOpacity onPress={auth} style={styles.button}>
+        <Text>Authenticate</Text>
+      </TouchableOpacity>
     </View>
   )
 }
@@ -58,6 +40,12 @@ const styles = StyleSheet.create({
     color: colors.textSecondary.dark,
   },
   loader: {
+    marginTop: 16,
+  },
+  button: {
+    backgroundColor: colors.primary,
+    padding: 16,
+    borderRadius: 8,
     marginTop: 16,
   },
 })
