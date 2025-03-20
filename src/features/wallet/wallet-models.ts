@@ -15,7 +15,7 @@ type Account = {
   wallet: Wallet
   accountPath: AccountPath
   balance: number
-  transactions: Tx[]
+  // transactions: Tx[]
 }
 
 type Tx = {

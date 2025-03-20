@@ -7,89 +7,75 @@ import { useWallet } from './wallet-provider'
 import BitcoinLogo from '@/shared/assets/bitcoin-logo'
 import { Link } from 'expo-router'
 import LightningLogo from '@/shared/assets/lightning-logo'
-
-// Interface for account types
-type Account = {
-  id: string
-  name: string
-  protocol: 'onchain' | 'lightning'
-  balance: number
-  unit: string
-}
+import { BitcoinAddressType, WalletProtocol } from './wallet-actions'
 
 // Interface for list items
 type ListItem =
   | { type: 'header'; id: string; title: string }
-  | { type: 'account'; id: string; first?: boolean; last?: boolean; account: Account }
+  | { type: 'account'; id: string; first?: boolean; last?: boolean; account: AccountData }
+
+type AccountData = {
+  id: string
+  name: string
+  balance: number
+  protocol: string
+  unit: string
+}
+
+const addressTypeLabels: Record<BitcoinAddressType, string> = {
+  bip44: 'Legacy',
+  bip49: 'SegWit-compatible',
+  bip84: 'Native SegWit',
+  bip86: 'Taproot',
+}
+
+const protocolLabels: Record<WalletProtocol, string> = {
+  lightning: 'Lightning',
+  onchain: 'On-chain',
+}
 
 export default function WalletAccounts() {
   const { selectedWalletId, wallets } = useWallet()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const selectedWallet = wallets.find(wallet => wallet.walletId === selectedWalletId)
+  console.log('wallets', wallets)
 
-  // Example accounts data
-  const accounts: Account[] = [
-    {
-      id: '1',
-      name: 'Native Segwit',
-      protocol: 'onchain',
-      balance:
-        selectedWallet?.transactions.reduce((acc, tx) => {
-          // check for onChain or lightning
-          if (tx.network === 'onChain') {
-            return acc + tx.value
-          }
-          return acc
-        }, 0) || 0,
-      unit: 'BTC',
-    },
-    {
-      id: '2',
-      name: 'Lightning',
-      protocol: 'lightning',
-      balance:
-        selectedWallet?.transactions.reduce((acc, tx) => {
-          // check for onChain or lightning
-          if (tx.network === 'lightning') {
-            return acc + tx.value
-          }
-          return acc
-        }, 0) || 0,
-      unit: 'BTC',
-    },
-  ]
+  const selectedWallet = wallets.find(wallet => wallet.walletId === selectedWalletId)
 
   // Prepare data for FlatList with headers and accounts
   const prepareAccountsData = (): ListItem[] => {
     const result: ListItem[] = []
 
-    // Savings account section (OnChain)
-    result.push({ type: 'header', id: 'savings-header', title: 'Savings accounts' })
+    if (!selectedWallet) {
+      return result
+    }
 
-    const savingsAccounts = accounts.filter(acc => acc.protocol === 'onchain')
-    savingsAccounts.forEach((account, index) => {
+    Object.keys(selectedWallet?.addresses).forEach(protocol => {
       result.push({
-        type: 'account',
-        id: account.id,
-        first: index === 0,
-        last: index === savingsAccounts.length - 1,
-        account,
+        type: 'header',
+        id: `${protocol}-header`,
+        title: `${protocolLabels[protocol as WalletProtocol]} accounts`,
       })
-    })
 
-    // Spending accounts section (Lightning, Liquid, etc.)
-    result.push({ type: 'header', id: 'spending-header', title: 'Spending accounts' })
+      const accounts = selectedWallet.addresses[protocol as WalletProtocol]
 
-    const spendingAccounts = accounts.filter(acc => acc.protocol !== 'onchain')
-    spendingAccounts.forEach((account, index) => {
-      result.push({
-        type: 'account',
-        id: account.id,
-        first: index === 0,
-        last: index === spendingAccounts.length - 1,
-        account,
+      Object.keys(accounts).forEach((addressType, index) => {
+        const account = accounts[addressType as BitcoinAddressType]
+
+        result.push({
+          type: 'account',
+          id: account,
+          first: index === 0,
+          last: index === Object.keys(accounts).length - 1,
+          account: {
+            id: account,
+            name: addressTypeLabels[addressType as BitcoinAddressType],
+            balance: 0,
+            protocol,
+            unit: 'BTC',
+          },
+        })
       })
     })
 

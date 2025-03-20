@@ -173,10 +173,10 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
     try {
       const newWallet = await generateWallet()
       const walletId = randomUUID()
-      const transactions: Tx[] = await getAddressTxChain(newWallet.account0Address)
+      // const transactions: Tx[] = await getAddressTxChain(newWallet.addresses['0'])
       const updatedWallets = [
         ...wallets,
-        { ...newWallet, walletId, walletName, cold, transactions },
+        { ...newWallet, walletId, walletName, cold, transactions: [] },
       ]
 
       setWalletsState(updatedWallets)
@@ -192,12 +192,12 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
 
   async function importWallet(walletName: string, seedPhrase: string) {
     try {
-      const newWallet = await generateWallet(seedPhrase)
+      const newWallet = await generateWallet({ mnemonic: seedPhrase })
       const walletId = randomUUID()
-      const transactions: Tx[] = await getAddressTxChain(newWallet.account0Address)
+      // const transactions: Tx[] = await getAddressTxChain(newWallet.addresses.onchain.bip86)
       const updatedWallets = [
         ...wallets,
-        { ...newWallet, walletId, walletName, cold: true, transactions },
+        { ...newWallet, walletId, walletName, cold: true, transactions: [] },
       ]
 
       setWalletsState(updatedWallets)
