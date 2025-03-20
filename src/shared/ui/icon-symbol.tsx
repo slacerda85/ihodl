@@ -12,6 +12,7 @@ const MAPPING = {
   'wallet.bifold.fill': 'account-balance-wallet',
   'info.circle.fill': 'info',
   'doc.text': 'description',
+  'gearshape.fill': 'settings',
 } as Partial<
   Record<
     import('expo-symbols').SymbolViewProps['name'],

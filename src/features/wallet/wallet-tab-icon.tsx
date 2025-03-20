@@ -1,5 +1,6 @@
-import { IconSymbol } from '@/shared/ui/icon-symbol'
+// import { IconSymbol } from '@/shared/ui/icon-symbol'
+import Ionicons from '@expo/vector-icons/Ionicons'
 
 export default function WalletTabIcon({ color }: { color: string }) {
-  return <IconSymbol size={32} name="wallet.bifold.fill" color={color} />
+  return <Ionicons name="wallet" size={24} color={color} />
 }

@@ -24,8 +24,13 @@ export default function CreateWallet() {
   const isDark = colorScheme === 'dark'
 
   async function handleCreateWallet() {
-    router.push('/wallet/details')
-    // await createWallet(walletName, offline)
+    const response = await createWallet(walletName, offline)
+    if (!response.success) {
+      console.error('Failed to create wallet')
+      return
+    }
+
+    router.dismiss(2)
   }
 
   function handleToggleOffline() {
@@ -37,6 +42,7 @@ export default function CreateWallet() {
       <View style={[styles.container, isDark && styles.containerDark]}>
         <View style={styles.section}>
           <TextInput
+            autoFocus
             style={[styles.input, isDark && styles.inputDark]}
             placeholder="Enter wallet name"
             placeholderTextColor={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
@@ -62,7 +68,7 @@ export default function CreateWallet() {
               name="info.circle.fill"
               size={16}
               style={styles.infoIcon}
-              color={isDark ? colors.textSecondary.dark : colors.secondary}
+              color={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
             />
             <Text style={[styles.infoText, isDark && styles.infoTextDark]}>
               Prevents this wallet to access the internet. Transactions are available by using QR
@@ -72,9 +78,20 @@ export default function CreateWallet() {
         </View>
         <TouchableOpacity
           onPress={handleCreateWallet}
-          style={[styles.button, offline ? styles.secondaryButton : styles.primaryButton]}
+          style={[
+            styles.button,
+            offline
+              ? isDark
+                ? styles.secondaryButtonDark
+                : styles.secondaryButton
+              : styles.primaryButton,
+          ]}
         >
-          <Text style={styles.buttonText}>{offline ? 'Create cold wallet' : 'Create wallet'}</Text>
+          <Text
+            style={[styles.buttonText, offline ? (isDark ? styles.buttonTextDark : null) : null]}
+          >
+            {offline ? 'Create cold wallet' : 'Create wallet'}
+          </Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -84,10 +101,10 @@ export default function CreateWallet() {
 const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
-    backgroundColor: colors.background.light,
+    // backgroundColor: colors.background.light,
   },
   scrollViewDark: {
-    backgroundColor: colors.background.dark,
+    // backgroundColor: colors.background.dark,
   },
   container: {
     padding: 16,
@@ -110,28 +127,28 @@ const styles = StyleSheet.create({
     color: colors.text.dark,
   },
   input: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    padding: 16,
     height: 48,
-    borderWidth: 1,
-    borderColor: alpha(colors.border.light, 0.2),
+    // borderWidth: 1,
+    // borderColor: alpha(colors.black, 0.2),
     borderRadius: 8,
+    backgroundColor: alpha(colors.black, 0.05),
     color: colors.text.light,
   },
   inputDark: {
-    borderColor: alpha(colors.white, 0.2),
+    // borderColor: alpha(colors.white, 0.2),
     color: colors.text.dark,
     backgroundColor: alpha(colors.white, 0.1),
   },
   toggleSection: {
-    backgroundColor: alpha(colors.secondary, 0.1),
+    backgroundColor: colors.white,
     borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 16,
     gap: 8,
   },
   toggleSectionDark: {
-    backgroundColor: alpha(colors.secondary, 0.6),
+    backgroundColor: alpha(colors.white, 0.1),
   },
   toggleSectionActive: {
     // borderColor: colors.secondary,
@@ -147,7 +164,7 @@ const styles = StyleSheet.create({
   toggleText: {
     fontSize: 18,
     fontWeight: '500',
-    color: alpha(colors.secondary, 0.8),
+    color: alpha(colors.text.light, 0.8),
   },
   toggleTextDark: {
     color: alpha(colors.text.dark, 0.9),
@@ -192,8 +209,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary.dark,
   },
   button: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    padding: 16,
     borderRadius: 8,
     marginBottom: 8,
   },
@@ -201,11 +217,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   secondaryButton: {
-    backgroundColor: colors.secondary,
+    backgroundColor: colors.black,
+  },
+  secondaryButtonDark: {
+    backgroundColor: colors.background.light,
   },
   buttonText: {
     color: colors.white,
     textAlign: 'center',
     fontWeight: '500',
+  },
+  buttonTextDark: {
+    color: colors.black,
   },
 })

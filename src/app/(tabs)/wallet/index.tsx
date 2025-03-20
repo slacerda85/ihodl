@@ -1,5 +1,5 @@
-import WalletScreen from '@/features/wallet/wallet-screen'
+import WalletDetails from '@/features/wallet/wallet-details'
 
-export default function WalletRoute() {
-  return <WalletScreen />
+export default function WalletDetailsRoute() {
+  return <WalletDetails />
 }

@@ -3,85 +3,41 @@ import { View, Text, StyleSheet, useColorScheme, FlatList, ScrollView } from 're
 import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 import { IconSymbol } from '@/shared/ui/icon-symbol'
+import { useWallet } from './wallet-provider'
+import { Tx } from '@mempool/mempool.js/lib/interfaces/bitcoin/transactions'
 
-interface Transaction {
-  id: string
-  transactionDate: Date
-  value: number
-  contactName?: string
-  address: string
-  transactionType: 'P2WPKH' | 'P2TR'
-  network: 'onChain' | 'lightning'
-}
+// Extended transaction type with our app-specific fields
 
-// New interface for our list items
+// List item types for our FlatList
 type ListItem =
-  | { type: 'header'; id: string; date: string }
-  | { type: 'transaction'; id: string; transaction: Transaction }
+  | { type: 'header'; id: string; first?: boolean; last?: boolean; date: string }
+  | { type: 'transaction'; id: string; first?: boolean; last?: boolean; transaction: Tx }
 
 export default function WalletTransactions() {
+  const { selectedWalletId, wallets } = useWallet()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  // Mock transaction data - in a real app you would get these from your wallet provider
-  const transactions: Transaction[] = [
-    {
-      id: '1',
-      transactionDate: new Date(2025, 2, 5), // March 5, 2025
-      value: 0.0012,
-      contactName: 'Alice',
-      address: 'bc1q8c6fshw2dlwun7ekn9qwf37cu2rn755upcp8cy',
-      transactionType: 'P2WPKH',
-      network: 'onChain',
-    },
-    {
-      id: '2',
-      transactionDate: new Date(2025, 2, 5), // March 3, 2025
-      value: -0.0005,
-      address: 'bc1pyxpexx6kzhng3cdr7jpfpf5euwzkhcmqn3hzmngssk8d9ntgn3eqdk0dg3',
-      transactionType: 'P2WPKH',
-      network: 'onChain',
-    },
-    {
-      id: '3',
-      transactionDate: new Date(2025, 2, 1), // March 1, 2025
-      value: 0.0003,
-      contactName: 'Bob',
-      address: 'lnbc500u1p3qkglupp...',
-      transactionType: 'P2TR',
-      network: 'lightning',
-    },
-    {
-      id: '4',
-      transactionDate: new Date(2025, 1, 28), // February 28, 2025
-      value: -0.0008,
-      address: 'bc1q9h8rsyf9wtwkjz47xklceleqg0aphuwnv5mztq',
-      transactionType: 'P2WPKH',
-      network: 'onChain',
-    },
-    {
-      id: '5',
-      transactionDate: new Date(2025, 1, 25), // February 25, 2025
-      value: 0.0015,
-      contactName: 'Carol',
-      address: 'lnbc150u1p3q9hjdpp...',
-      transactionType: 'P2TR',
-      network: 'lightning',
-    },
-  ]
+  const transactions =
+    wallets.find(wallet => wallet.walletId === selectedWalletId)?.transactions || []
 
   // Group transactions by date and create a flat list with headers
   const prepareTransactionsData = (): ListItem[] => {
     // Sort transactions by date (newest first)
-    const sortedTransactions = [...transactions].sort(
-      (a, b) => b.transactionDate.getTime() - a.transactionDate.getTime(),
-    )
+    const sortedTransactions = [...transactions].sort((a, b) => {
+      const dateA = new Date(a.status.block_time * 1000)
+      const dateB = new Date(b.status.block_time * 1000)
+      return dateB.getTime() - dateA.getTime()
+    })
 
     // Group by date
-    const groupedByDate: Record<string, Transaction[]> = {}
+    const groupedByDate: Record<string, Tx[]> = {}
 
     sortedTransactions.forEach(transaction => {
-      const dateKey = transaction.transactionDate.toLocaleDateString('en-US', {
+      // Get date from transaction locktime
+      const date = new Date(transaction.status.block_time * 1000)
+
+      const dateKey = date.toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
@@ -106,10 +62,12 @@ export default function WalletTransactions() {
       })
 
       // Add transactions for this date
-      transactionsForDate.forEach(transaction => {
+      transactionsForDate.forEach((transaction, index) => {
         result.push({
           type: 'transaction',
-          id: transaction.id,
+          id: transaction.txid,
+          first: index === 0,
+          last: index === transactionsForDate.length - 1,
           transaction,
         })
       })
@@ -132,36 +90,45 @@ export default function WalletTransactions() {
 
     // Render transaction item
     const { transaction } = item
-    const isReceived = transaction.value > 0
+    const isReceived = transaction.vout[0].value > 0
 
     // Format transaction value with sign
-    const formattedValue = `${isReceived ? '+' : ''}${transaction.value.toFixed(8)} BTC`
+    const formattedValue = `${isReceived ? '+' : ''}${transaction.vout[0].value.toLocaleString(
+      'pt-BR',
+      {
+        maximumFractionDigits: 8,
+      },
+    )} BTC`
 
     // Truncate address for display
-    const shortenedAddress =
-      transaction.address.length > 20
-        ? `${transaction.address.substring(0, 10)}...${transaction.address.substring(transaction.address.length - 10)}`
-        : transaction.address
+    const address = transaction.vout[0].scriptpubkey_address
+    const truncatedAddress =
+      address?.length > 20
+        ? `${address.substring(0, 10)}...${address.substring(address.length - 10)}`
+        : address
 
     return (
-      <View style={[styles.transactionItem, isDark && styles.transactionItemDark]}>
-        {/* <View style={styles.transactionIconContainer}>
-          <View
-            style={[styles.transactionIcon, isReceived ? styles.receivedIcon : styles.sentIcon]}
-          >
-            <IconSymbol name={isReceived ? 'arrow.down' : 'arrow.up'} size={16} color="white" />
-          </View>
-        </View> */}
-
+      <View
+        style={[
+          styles.transactionItem,
+          item.first && styles.transactionItemFirst,
+          item.last && styles.transactionItemLast,
+          isDark && styles.transactionItemDark,
+        ]}
+      >
         <View style={styles.transactionDetails}>
           <View style={styles.transactionHeader}>
-            <Text style={[styles.contactName, isDark && styles.contactNameDark]}>
-              {transaction.contactName || (isReceived ? 'Received' : 'Sent')}
+            <Text style={[styles.status, isDark && styles.statusDark]}>
+              {transaction.status.confirmed ? 'Confirmed' : 'Pending'}
             </Text>
             <Text
               style={[
                 styles.transactionValue,
-                isReceived ? styles.receivedValue : styles.sentValue,
+                isReceived
+                  ? styles.receivedValue
+                  : isDark
+                    ? styles.sentValueDark
+                    : styles.sentValue,
               ]}
             >
               {formattedValue}
@@ -170,46 +137,35 @@ export default function WalletTransactions() {
 
           <View style={styles.transactionMetadata}>
             <Text style={[styles.addressText, isDark && styles.addressTextDark]}>
-              {shortenedAddress}
+              {truncatedAddress}
             </Text>
             <View style={styles.flexRow}>
-              {/* <View style={styles.transactionTypeBadge}>
-                <Text style={styles.transactionTypeText}>{transaction.transactionType}</Text>
-              </View> */}
               <View
                 style={[
                   styles.networkBadge,
-                  transaction.network === 'lightning' ? styles.lightningBadge : styles.onChainBadge,
+                  transaction.vout[0].scriptpubkey_type === 'p2sh'
+                    ? styles.lightningBadge
+                    : styles.onChainBadge,
                 ]}
               >
                 <IconSymbol
-                  name={transaction.network === 'lightning' ? 'bolt.fill' : 'link'}
+                  name={transaction.vout[0].scriptpubkey_type === 'p2sh' ? 'bolt.fill' : 'link'}
                   size={12}
                   weight="bold"
-                  color={
-                    transaction.network === 'lightning'
-                      ? colors.primary
-                      : isDark
-                        ? colors.text.dark
-                        : colors.secondary
-                  }
+                  color={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
                 />
-                <Text
-                  style={[
-                    styles.networkBadgeText,
-                    transaction.network === 'lightning'
-                      ? styles.lightningBadgeText
-                      : isDark
-                        ? styles.onChainBadgeTextDark
-                        : styles.onChainBadgeText,
-                  ]}
-                >
-                  {transaction.network === 'lightning' ? 'Lighting' : 'On chain'}
+                <Text style={[styles.networkBadgeText, isDark && styles.networkBadgeTextDark]}>
+                  {transaction.vout[0].scriptpubkey_type === 'p2sh' ? 'Lightning' : 'On chain'}
                 </Text>
               </View>
             </View>
           </View>
         </View>
+        <IconSymbol
+          name="chevron.right"
+          size={20}
+          color={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
+        />
       </View>
     )
   }
@@ -235,7 +191,7 @@ export default function WalletTransactions() {
 
   if (transactions.length === 0) {
     return (
-      <View style={[styles.container, isDark && styles.containerDark]}>
+      <View style={styles.transactionsSection}>
         <ListHeader />
         <EmptyTransactionList />
       </View>
@@ -246,40 +202,32 @@ export default function WalletTransactions() {
   const listData = prepareTransactionsData()
 
   return (
-    <FlatList
-      style={[styles.container, isDark && styles.containerDark]}
-      data={listData}
-      keyExtractor={item => item.id}
-      renderItem={renderItem}
-      contentContainerStyle={styles.transactionsList}
-      showsVerticalScrollIndicator={false}
-      ListHeaderComponent={<ListHeader />}
-    />
+    <View style={styles.transactionsSection}>
+      <FlatList<ListItem>
+        data={listData}
+        keyExtractor={item => item.id}
+        renderItem={renderItem}
+        contentContainerStyle={styles.flatList}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={<ListHeader />}
+      />
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background.light,
-    borderRadius: 8,
-    // padding: 16,
-  },
-  containerDark: {
-    backgroundColor: colors.background.dark,
-  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '500',
     color: colors.text.light,
-    marginBottom: 8,
+    marginBottom: 16,
   },
   sectionTitleDark: {
     color: colors.text.dark,
   },
-  transactionsList: {
-    borderRadius: 8,
-    gap: 4,
+  flatList: {
+    paddingBottom: 48,
+    gap: 1,
   },
   emptyState: {
     alignItems: 'center',
@@ -299,13 +247,26 @@ const styles = StyleSheet.create({
   emptyStateTextDark: {
     color: colors.textSecondary.dark,
   },
+  transactionsSection: {
+    flex: 1,
+    padding: 16,
+    paddingTop: 24,
+  },
   transactionItem: {
     flexDirection: 'row',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    alignItems: 'center',
+    gap: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     backgroundColor: colors.white,
-    borderRadius: 8,
-    // marginBottom: 8,
+  },
+  transactionItemFirst: {
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  transactionItemLast: {
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
   },
   transactionItemDark: {
     backgroundColor: alpha(colors.white, 0.1),
@@ -337,24 +298,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingBottom: 4,
   },
-  contactName: {
+  status: {
     fontSize: 16,
     fontWeight: '500',
     color: colors.text.light,
   },
-  contactNameDark: {
+  statusDark: {
     color: colors.text.dark,
   },
   transactionValue: {
-    fontFamily: 'monospace',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   receivedValue: {
     color: colors.positive,
   },
   sentValue: {
-    color: colors.textSecondary.light,
+    color: colors.text.light,
+  },
+  sentValueDark: {
+    color: colors.text.dark,
   },
   transactionMetadata: {
     flexDirection: 'row',
@@ -373,28 +336,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-
     borderRadius: 4,
   },
   lightningBadge: {
-    // backgroundColor: alpha(colors.primary, 0.7), // Orange color for lightning
+    // backgroundColor: alpha(colors.primary, 0.7),
   },
   onChainBadge: {
-    // backgroundColor: colors.secondary, // Blue color for on-chain
+    // backgroundColor: colors.secondary,
   },
   networkBadgeText: {
     fontSize: 12,
     fontWeight: '600',
-    color: colors.white,
+    color: colors.textSecondary.light,
   },
-  onChainBadgeText: {
-    color: colors.secondary,
-  },
-  onChainBadgeTextDark: {
-    color: colors.text.dark,
-  },
-  lightningBadgeText: {
-    color: colors.primary,
+  networkBadgeTextDark: {
+    color: colors.textSecondary.dark,
   },
   addressText: {
     fontSize: 12,
@@ -405,10 +361,6 @@ const styles = StyleSheet.create({
   },
   dateHeader: {
     paddingVertical: 8,
-    // marginTop: 8,
-    // marginBottom: 4,
-    // borderBottomWidth: 1,
-    // borderBottomColor: alpha(colors.border.light, 0.2),
   },
   dateHeaderDark: {
     borderBottomColor: alpha(colors.border.dark, 0.2),
@@ -426,6 +378,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     columnGap: 8,
   },
-
-  // Update transactionMetadata to not account for date (removed date)
 })

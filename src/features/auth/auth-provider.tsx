@@ -1,5 +1,5 @@
 import { createContext, useState, useContext, useRef, useEffect, useCallback } from 'react'
-import { AppState, AppStateStatus, Modal, StyleSheet, Text, View } from 'react-native' /* 
+import { AppState, AppStateStatus, Modal } from 'react-native' /* 
 import { Href, useSegments } from 'expo-router' */
 import { checkHardware, checkPermissions, authenticate } from './utils'
 import AuthScreen from './auth-screen'
@@ -75,25 +75,31 @@ export default function AuthProvider({ children }: AuthProviderProps) {
       const hardwareSupported = await checkHardware()
       console.log('Hardware supported:', hardwareSupported)
       if (!hardwareSupported) {
-        throw new Error(ERROR_MESSAGES.HARDWARE_UNSUPPORTED)
+        console.warn(ERROR_MESSAGES.HARDWARE_UNSUPPORTED)
+        return false
+        // throw new Error(ERROR_MESSAGES.HARDWARE_UNSUPPORTED)
       }
 
       // Check if user has configured biometric authentication
       const securityLevel = await checkPermissions()
       if (securityLevel === 0) {
-        throw new Error(ERROR_MESSAGES.BIOMETRICS_NOT_CONFIGURED)
+        console.warn(ERROR_MESSAGES.BIOMETRICS_NOT_CONFIGURED)
+        return false
+        // throw new Error(ERROR_MESSAGES.BIOMETRICS_NOT_CONFIGURED)
       }
 
       // Here we would call the actual biometric auth API
       const { success } = await authenticate()
       console.log('Biometric authentication success:', success)
       if (!success) {
-        throw new Error(ERROR_MESSAGES.AUTH_FAILED)
+        console.warn(ERROR_MESSAGES.AUTH_FAILED)
+        return false
+        // throw new Error(ERROR_MESSAGES.AUTH_FAILED)
       }
 
       return true
     } catch (error) {
-      console.error(error)
+      console.warn(error)
       return false
     }
   }, [])
@@ -112,7 +118,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
       setAuthenticated(success)
       return true
     } catch (error) {
-      console.error('Authentication error:', error)
+      console.warn('Authentication error:', error)
       setAuthenticated(false)
       return false
     }

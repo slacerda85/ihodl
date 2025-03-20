@@ -29,30 +29,30 @@ const colors: Colors = {
   primary: '#F7931A',
   secondary: '#142850',
   background: {
-    light: '#F2F2F7', // iOS standard background color for settings in light mode
-    dark: '#000000', // '#121212',
+    light: '#F2F2F7', // iOS standard background color for light mode
+    dark: '#000000', // True black for OLED displays
   },
   text: {
-    light: '#1D1D1D',
-    dark: '#F8F8F8',
+    light: '#000000', // iOS standard text color for light mode
+    dark: '#FFFFFF', // iOS standard text color for dark mode
   },
   textSecondary: {
-    light: '#6B7280',
-    dark: '#9CA3AF',
+    light: '#6C6C70', // iOS standard secondary text color for light mode
+    dark: '#8E8E93', // iOS standard secondary text color for dark mode
   },
   border: {
-    light: '#1D1D1D',
-    dark: '#9CA3AF',
+    light: '#E5E5EA', // iOS standard separator color for light mode
+    dark: '#38383A', // iOS standard separator color for dark mode
   },
-  success: '#34D399',
-  error: '#EF4444',
-  negative: '#EF4444',
-  positive: '#34D399',
-  warning: '#F59E0B',
-  info: '#3B82F6',
-  disabled: '#D1D5DB',
-  placeholder: '#9CA3AF',
-  divider: '#E5E7EB',
+  success: '#34C759', // iOS system green
+  error: '#FF3B30', // iOS system red
+  negative: '#FF3B30', // iOS system red
+  positive: '#34C759', // iOS system green
+  warning: '#FF9500', // iOS system orange
+  info: '#007AFF', // iOS system blue
+  disabled: '#C7C7CC', // iOS light gray
+  placeholder: '#8E8E93', // iOS gray
+  divider: '#E5E5EA', // iOS separator light
   black: '#000000',
   white: '#FFFFFF',
   transparent: 'transparent',
