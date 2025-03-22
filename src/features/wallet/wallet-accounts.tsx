@@ -7,7 +7,7 @@ import { useWallet } from './wallet-provider'
 import BitcoinLogo from '@/shared/assets/bitcoin-logo'
 import { Link } from 'expo-router'
 import LightningLogo from '@/shared/assets/lightning-logo'
-import { BitcoinAddressType, WalletProtocol } from './wallet-actions'
+import { AddressType, WalletProtocol } from './wallet-actions'
 
 // Interface for list items
 type ListItem =
@@ -22,11 +22,12 @@ type AccountData = {
   unit: string
 }
 
-const addressTypeLabels: Record<BitcoinAddressType, string> = {
-  bip44: 'Legacy',
-  bip49: 'SegWit-compatible',
-  bip84: 'Native SegWit',
-  bip86: 'Taproot',
+const addressTypeLabels: Record<AddressType, string> = {
+  bip44: 'BIP 44',
+  bip49: 'BIP 49',
+  bip84: 'BIP 84',
+  bip86: 'BIP 86',
+  'lightning-node': 'Lightning Node',
 }
 
 const protocolLabels: Record<WalletProtocol, string> = {
@@ -35,11 +36,9 @@ const protocolLabels: Record<WalletProtocol, string> = {
 }
 
 export default function WalletAccounts() {
-  const { selectedWalletId, wallets } = useWallet()
+  const { selectedWalletId, wallets, setSelectedAddressType } = useWallet()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
-
-  console.log('wallets', wallets)
 
   const selectedWallet = wallets.find(wallet => wallet.walletId === selectedWalletId)
 
@@ -61,16 +60,15 @@ export default function WalletAccounts() {
       const accounts = selectedWallet.addresses[protocol as WalletProtocol]
 
       Object.keys(accounts).forEach((addressType, index) => {
-        const account = accounts[addressType as BitcoinAddressType]
-
+        if (addressType === undefined) return
         result.push({
           type: 'account',
-          id: account,
+          id: `${protocol}-${addressType}`,
           first: index === 0,
           last: index === Object.keys(accounts).length - 1,
           account: {
-            id: account,
-            name: addressTypeLabels[addressType as BitcoinAddressType],
+            id: `${protocol}-${addressType}`,
+            name: addressType.toUpperCase(),
             balance: 0,
             protocol,
             unit: 'BTC',
@@ -125,7 +123,6 @@ export default function WalletAccounts() {
       <Link
         href={{
           pathname: '/wallet/transactions',
-          params: { id: selectedWalletId },
         }}
         asChild
         style={[
@@ -134,12 +131,13 @@ export default function WalletAccounts() {
           item.last && styles.transactionItemLast,
           isDark && styles.transactionItemDark,
         ]}
+        onPress={() => setSelectedAddressType(account.name.toLowerCase() as AddressType)}
       >
         <Pressable>
           <View style={styles.accountIconContainer}>{getProtocolIcon()}</View>
           <View style={styles.transactionDetails}>
             <Text style={[styles.contactName, isDark && styles.contactNameDark]}>
-              {account.name}
+              {`${account.name}`}
             </Text>
             <View style={styles.accountBalanceWrapper}>
               <Text style={[styles.accountBalance, isDark && styles.accountBalanceDark]}>
@@ -186,13 +184,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '500',
     color: colors.text.light,
+    paddingVertical: 8,
   },
   sectionTitleDark: {
     color: colors.text.dark,
   },
   flatList: {
     paddingBottom: 48,
-    gap: 12,
+    gap: 1,
   },
   accountBalanceWrapper: {
     flexDirection: 'row',
@@ -218,7 +217,7 @@ const styles = StyleSheet.create({
   transactionItemLast: {
     borderBottomLeftRadius: 8,
     borderBottomRightRadius: 8,
-    marginBottom: 8,
+    marginBottom: 16,
   },
   transactionItemDark: {
     backgroundColor: alpha(colors.white, 0.1),

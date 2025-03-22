@@ -1,5 +1,5 @@
 import { createContext, ReactNode, useContext, useEffect, useState } from 'react'
-import { createWallet as generateWallet } from './wallet-actions'
+import { AddressType, createWallet as generateWallet } from './wallet-actions'
 import { randomUUID } from 'expo-crypto'
 import { useLocalSearchParams } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -133,6 +133,8 @@ type WalletContextType = {
   setWallets: (wallets: WalletData[]) => void
   selectedWalletId: string
   setSelectedWalletId: (walletId: string) => void
+  selectedAddressType: AddressType
+  setSelectedAddressType: (addressType: AddressType) => void
   getBalance: (walletId: string) => Promise<number>
 }
 
@@ -145,6 +147,7 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
   const { id } = useLocalSearchParams<{ id: string }>()
   const [wallets, setWalletsState] = useState<WalletData[]>([])
   const [selectedWalletId, setSelectedWalletId] = useState<string>('')
+  const [selectedAddressType, setSelectedAddressType] = useState<AddressType>('bip84')
   // const [isLoading, setIsLoading] = useState(true)
 
   // Save wallets to AsyncStorage
@@ -171,7 +174,12 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
     walletId?: string
   }> {
     try {
-      const newWallet = await generateWallet()
+      const newWallet = await generateWallet({
+        accounts: {
+          onchain: ['bip44', 'bip49', 'bip84', 'bip86'],
+          lightning: ['lightning-node'],
+        },
+      })
       const walletId = randomUUID()
       // const transactions: Tx[] = await getAddressTxChain(newWallet.addresses['0'])
       const updatedWallets = [
@@ -288,6 +296,8 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
         setWallets,
         selectedWalletId,
         setSelectedWalletId,
+        selectedAddressType,
+        setSelectedAddressType,
       }}
     >
       {children}

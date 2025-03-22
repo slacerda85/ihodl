@@ -25,13 +25,17 @@ export async function createWallet(options: WalletOptions = {}) {
 
   const newWallet = new Wallet(undefined, mnemonic)
   const walletId = randomUUID()
-  const addresses: Record<WalletProtocol, Record<AddressType, string>> = {} as any
+  const addresses: Record<WalletProtocol, Record<AddressType, string>> = {
+    onchain: { bip44: '', bip49: '', bip84: '', bip86: '', 'lightning-node': '' },
+    lightning: { bip44: '', bip49: '', bip84: '', bip86: '', 'lightning-node': '' },
+  }
   const derivedKeys: Record<string, any> = {}
 
   // Process Bitcoin on-chain addresses
   accounts['onchain'].forEach(addressType => {
     let path: string
     // let addressPrefix: string
+    if (!addressType) return
 
     switch (addressType) {
       case 'bip44': // Legacy addresses (P2PKH)
@@ -50,9 +54,11 @@ export async function createWallet(options: WalletOptions = {}) {
         path = "m/86'/0'/0'"
         // addressPrefix = 'btc-taproot'
         break
+      case 'lightning-node':
+        return
       default:
-        path = "m/84'/0'/0'"
-      // addressPrefix = 'btc-segwit'
+        const _exhaustiveCheck: never = addressType
+        return _exhaustiveCheck
     }
 
     const accountNode = deriveFromPath(newWallet.privateKey, newWallet.chainCode, path)

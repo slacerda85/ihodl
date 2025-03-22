@@ -1,10 +1,11 @@
-import React from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { View, Text, StyleSheet, useColorScheme, FlatList, ScrollView } from 'react-native'
 import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 import { IconSymbol } from '@/shared/ui/icon-symbol'
 import { useWallet } from './wallet-provider'
 import { Tx } from '@mempool/mempool.js/lib/interfaces/bitcoin/transactions'
+import { getAddressTxChain } from '@/shared/lib/bitcoin/rpc/mempool'
 
 // Extended transaction type with our app-specific fields
 
@@ -14,12 +15,30 @@ type ListItem =
   | { type: 'transaction'; id: string; first?: boolean; last?: boolean; transaction: Tx }
 
 export default function WalletTransactions() {
-  const { selectedWalletId, wallets } = useWallet()
+  const { selectedWalletId, wallets, selectedAddressType } = useWallet()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const transactions =
-    wallets.find(wallet => wallet.walletId === selectedWalletId)?.transactions || []
+  const wallet = wallets.find(wallet => wallet.walletId === selectedWalletId)
+
+  const [transactions, setTransactions] = useState<Tx[]>([])
+  const [loading, setLoading] = useState<boolean>(false)
+
+  useEffect(() => {
+    if (!wallet) {
+      return
+    }
+
+    // Fetch transactions for the selected wallet
+    const fetchTransactions = async () => {
+      setLoading(true)
+      const transactions = await getAddressTxChain(wallet.addresses.onchain[selectedAddressType])
+      setTransactions(transactions)
+      setLoading(false)
+    }
+
+    fetchTransactions()
+  }, [selectedAddressType, wallet])
 
   // Group transactions by date and create a flat list with headers
   const prepareTransactionsData = (): ListItem[] => {
@@ -90,15 +109,15 @@ export default function WalletTransactions() {
 
     // Render transaction item
     const { transaction } = item
-    const isReceived = transaction.vout[0].value > 0
+    // check if transaction is send or receive
+    const isReceived = transaction.vout[0].scriptpubkey_address === wallet?.addresses.onchain.bip84
 
     // Format transaction value with sign
-    const formattedValue = `${isReceived ? '+' : ''}${transaction.vout[0].value.toLocaleString(
-      'pt-BR',
-      {
-        maximumFractionDigits: 8,
-      },
-    )} BTC`
+    const formattedValue = `${isReceived ? '+' : '-'}${(
+      transaction.vout[0].value / 100000000
+    ).toLocaleString('pt-BR', {
+      maximumFractionDigits: 8,
+    })} BTC`
 
     // Truncate address for display
     const address = transaction.vout[0].scriptpubkey_address
@@ -188,6 +207,26 @@ export default function WalletTransactions() {
       Recent Transactions
     </Text>
   )
+
+  if (loading) {
+    return (
+      <View style={styles.transactionsSection}>
+        <ListHeader />
+        <ScrollView>
+          <View style={[styles.emptyState, isDark && styles.emptyStateDark]}>
+            <IconSymbol
+              name="arrow.2.circlepath"
+              size={32}
+              color={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
+            />
+            <Text style={[styles.emptyStateText, isDark && styles.emptyStateTextDark]}>
+              Loading transactions...
+            </Text>
+          </View>
+        </ScrollView>
+      </View>
+    )
+  }
 
   if (transactions.length === 0) {
     return (

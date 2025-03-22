@@ -12,7 +12,13 @@ export default function WalletDetails() {
   const { wallets, selectedWalletId } = useWallet()
 
   const wallet = wallets.find(wallet => wallet.walletId === selectedWalletId)
-  const balance = wallet?.transactions.reduce((acc, tx) => acc + tx.value, 0) || 0
+  const balance = wallet?.transactions.reduce((acc, tx) => {
+    return (
+      acc +
+      tx.vout.reduce((acc, vout) => acc + vout.value, 0) -
+      tx.vin.reduce((acc, vin) => acc + vin.prevout.value, 0)
+    )
+  }, 0)
 
   function handleSend() {
     // Navigate to send screen
@@ -32,11 +38,20 @@ export default function WalletDetails() {
           <Text style={[styles.emptyStateText, isDark && styles.emptyStateTextDark]}>
             No wallets found
           </Text>
-          <Link style={[styles.button, styles.primaryButton]} href="/wallet/create">
-            <Text style={{ color: colors.white, fontWeight: 500, fontSize: 16 }}>
-              Create wallet
-            </Text>
-          </Link>
+          <View style={styles.actionsSection}>
+            <Link style={[styles.button, styles.primaryButton]} href="/wallet/create">
+              <Text style={styles.buttonText}>Create wallet</Text>
+            </Link>
+            {/* import wallet */}
+            <Link
+              style={[styles.button, isDark ? styles.secondaryButtonDark : styles.secondaryButton]}
+              href="/wallet/import"
+            >
+              <Text style={[styles.buttonText, isDark && styles.buttonTextDark]}>
+                Import wallet
+              </Text>
+            </Link>
+          </View>
         </View>
       </View>
     )
@@ -50,26 +65,21 @@ export default function WalletDetails() {
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Text style={[styles.balanceAmount, isDark && styles.balanceAmountDark]}>
-            {balance.toLocaleString('pt-BR', { maximumFractionDigits: 8 })}
+            {balance?.toLocaleString('pt-BR', { maximumFractionDigits: 8 })}
           </Text>
           <Text style={styles.balanceCurrency}>BTC</Text>
         </View>
       </View>
       <View style={styles.actionsSection}>
         <TouchableOpacity onPress={handleSend} style={[styles.button, styles.primaryButton]}>
-          <View style={styles.buttonContent}>
-            {/* <IconSymbol name="arrow.up" size={20} color="white" style={styles.buttonIcon} /> */}
-            <Text style={styles.buttonText}>Send</Text>
-          </View>
+          <Text style={styles.buttonText}>Send</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           onPress={handleReceive}
           style={[styles.button, isDark ? styles.secondaryButtonDark : styles.secondaryButton]}
         >
-          <View style={styles.buttonContent}>
-            <Text style={[styles.buttonText, isDark && styles.buttonTextDark]}>Receive</Text>
-          </View>
+          <Text style={[styles.buttonText, isDark && styles.buttonTextDark]}>Receive</Text>
         </TouchableOpacity>
       </View>
       <View style={styles.transactionsSection}>
@@ -147,11 +157,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
   },
-  buttonContent: {
+  /* buttonContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-  },
+  }, */
   buttonIcon: {
     marginRight: 8,
   },
@@ -159,12 +169,14 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     padding: 16,
     borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   primaryButton: {
     backgroundColor: colors.primary,
   },
   secondaryButton: {
-    backgroundColor: colors.black,
+    backgroundColor: colors.background.dark,
   },
   secondaryButtonDark: {
     backgroundColor: colors.background.light,

@@ -88,7 +88,6 @@ async function checkForTransactions(address: string): Promise<boolean> {
 
 export async function getBalance(address: string): Promise<number> {
   const balance = await getBalance(address)
-  console.log('Balance:', balance)
   return balance
 }
 

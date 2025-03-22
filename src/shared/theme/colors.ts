@@ -30,7 +30,7 @@ const colors: Colors = {
   secondary: '#142850',
   background: {
     light: '#F2F2F7', // iOS standard background color for light mode
-    dark: '#000000', // True black for OLED displays
+    dark: '#000000', // iOS standard background color for dark mode
   },
   text: {
     light: '#000000', // iOS standard text color for light mode
