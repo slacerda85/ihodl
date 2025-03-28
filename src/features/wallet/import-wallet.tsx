@@ -119,6 +119,8 @@ export default function ImportWallet() {
             multiline
             numberOfLines={4}
             textAlignVertical="top"
+            autoComplete="off"
+            autoCorrect={false}
           />
         </View>
         <View style={styles.section}>

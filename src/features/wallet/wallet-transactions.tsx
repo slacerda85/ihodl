@@ -4,8 +4,8 @@ import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 import { IconSymbol } from '@/shared/ui/icon-symbol'
 import { useWallet } from './wallet-provider'
-import { Tx } from '@mempool/mempool.js/lib/interfaces/bitcoin/transactions'
-import { getAddressTxChain } from '@/shared/lib/bitcoin/rpc/mempool'
+import { MINIMUN_CONFIRMATIONS, Tx } from '@/shared/models/transaction'
+import ElectrumService from '@/shared/lib/bitcoin/electrum/electrum.service'
 
 // Extended transaction type with our app-specific fields
 
@@ -26,15 +26,25 @@ export default function WalletTransactions() {
 
   useEffect(() => {
     if (!wallet) {
+      console.log('No wallet selected')
       return
     }
 
     // Fetch transactions for the selected wallet
     const fetchTransactions = async () => {
-      setLoading(true)
-      const transactions = await getAddressTxChain(wallet.addresses.onchain[selectedAddressType])
-      setTransactions(transactions)
-      setLoading(false)
+      try {
+        setLoading(true)
+        console.log('Fetching transactions for', wallet.addresses.onchain[selectedAddressType])
+        const transactions = await ElectrumService.getTransactions(
+          wallet.addresses.onchain[selectedAddressType],
+        )
+        console.log('Transactions:', transactions)
+        setTransactions(transactions)
+        setLoading(false)
+      } catch (error) {
+        console.log('Error fetching transactions:', error)
+        setLoading(false)
+      }
     }
 
     fetchTransactions()
@@ -44,8 +54,11 @@ export default function WalletTransactions() {
   const prepareTransactionsData = (): ListItem[] => {
     // Sort transactions by date (newest first)
     const sortedTransactions = [...transactions].sort((a, b) => {
-      const dateA = new Date(a.status.block_time * 1000)
-      const dateB = new Date(b.status.block_time * 1000)
+      // check for undefined values
+      if (!a.blocktime || !b.blocktime) return 0
+
+      const dateA = new Date(a?.blocktime * 1000)
+      const dateB = new Date(b?.blocktime * 1000)
       return dateB.getTime() - dateA.getTime()
     })
 
@@ -53,8 +66,9 @@ export default function WalletTransactions() {
     const groupedByDate: Record<string, Tx[]> = {}
 
     sortedTransactions.forEach(transaction => {
+      if (!transaction.blocktime) return
       // Get date from transaction locktime
-      const date = new Date(transaction.status.block_time * 1000)
+      const date = new Date(transaction.blocktime * 1000)
 
       const dateKey = date.toLocaleDateString('en-US', {
         month: 'short',
@@ -110,7 +124,9 @@ export default function WalletTransactions() {
     // Render transaction item
     const { transaction } = item
     // check if transaction is send or receive
-    const isReceived = transaction.vout[0].scriptpubkey_address === wallet?.addresses.onchain.bip84
+    const isReceived = transaction.vout[0].scriptPubKey.addresses.includes(
+      wallet?.addresses.onchain?.bip84 ?? '',
+    )
 
     // Format transaction value with sign
     const formattedValue = `${isReceived ? '+' : '-'}${(
@@ -120,7 +136,7 @@ export default function WalletTransactions() {
     })} BTC`
 
     // Truncate address for display
-    const address = transaction.vout[0].scriptpubkey_address
+    const address = transaction.vout[0].scriptPubKey.addresses[0]
     const truncatedAddress =
       address?.length > 20
         ? `${address.substring(0, 10)}...${address.substring(address.length - 10)}`
@@ -138,7 +154,10 @@ export default function WalletTransactions() {
         <View style={styles.transactionDetails}>
           <View style={styles.transactionHeader}>
             <Text style={[styles.status, isDark && styles.statusDark]}>
-              {transaction.status.confirmed ? 'Confirmed' : 'Pending'}
+              {transaction.confirmations === undefined ||
+              transaction?.confirmations < MINIMUN_CONFIRMATIONS
+                ? 'Pending'
+                : 'Confirmed'}
             </Text>
             <Text
               style={[
@@ -162,19 +181,19 @@ export default function WalletTransactions() {
               <View
                 style={[
                   styles.networkBadge,
-                  transaction.vout[0].scriptpubkey_type === 'p2sh'
+                  transaction.vout[0].scriptPubKey.type === 'p2sh'
                     ? styles.lightningBadge
                     : styles.onChainBadge,
                 ]}
               >
                 <IconSymbol
-                  name={transaction.vout[0].scriptpubkey_type === 'p2sh' ? 'bolt.fill' : 'link'}
+                  name={transaction.vout[0].scriptPubKey.type === 'p2sh' ? 'bolt.fill' : 'link'}
                   size={12}
                   weight="bold"
                   color={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
                 />
                 <Text style={[styles.networkBadgeText, isDark && styles.networkBadgeTextDark]}>
-                  {transaction.vout[0].scriptpubkey_type === 'p2sh' ? 'Lightning' : 'On chain'}
+                  {transaction.vout[0].scriptPubKey.type === 'p2sh' ? 'Lightning' : 'On chain'}
                 </Text>
               </View>
             </View>

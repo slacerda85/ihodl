@@ -4,7 +4,6 @@ import { randomUUID } from 'expo-crypto'
 import { useLocalSearchParams } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Tx } from '@mempool/mempool.js/lib/interfaces/bitcoin/transactions'
-import { getAddressTxChain } from '@/shared/lib/bitcoin/rpc/mempool'
 
 /* export interface Transaction {
   id: string

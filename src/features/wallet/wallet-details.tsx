@@ -12,6 +12,7 @@ export default function WalletDetails() {
   const { wallets, selectedWalletId } = useWallet()
 
   const wallet = wallets.find(wallet => wallet.walletId === selectedWalletId)
+  const firstAddress = wallet?.addresses.onchain.bip84
   const balance = wallet?.transactions.reduce((acc, tx) => {
     return (
       acc +
@@ -83,6 +84,13 @@ export default function WalletDetails() {
         </TouchableOpacity>
       </View>
       <View style={styles.transactionsSection}>
+        {/* small ui component to show first address for showing first address */}
+
+        <View style={styles.section}>
+          <Text style={[styles.walletName, isDark && styles.walletNameDark]}>Address</Text>
+          <Text style={isDark ? styles.balanceLabelDark : styles.balanceLabel}>{firstAddress}</Text>
+        </View>
+
         <WalletAccounts />
         {/* <WalletTransactions /> */}
       </View>
