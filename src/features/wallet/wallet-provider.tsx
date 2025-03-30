@@ -1,117 +1,11 @@
 import { createContext, ReactNode, useContext, useEffect, useState } from 'react'
-import { AddressType, createWallet as generateWallet } from './wallet-actions'
+import { createWallet as generateWallet } from './wallet-actions'
 import { randomUUID } from 'expo-crypto'
 import { useLocalSearchParams } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { Tx } from '@mempool/mempool.js/lib/interfaces/bitcoin/transactions'
-
-/* export interface Transaction {
-  id: string
-  transactionDate: string
-  value: number
-  contactName?: string
-  address: string
-  transactionType: 'P2WPKH' | 'P2TR'
-  network: 'onChain' | 'lightning'
-} */
-
-// Mock transaction data - in a real app you would get these from your wallet provider
-/* const transactions: Transaction[] = [
-  {
-    id: '1',
-    transactionDate: '2025-03-05',
-    value: 0.0012,
-    contactName: 'Alice',
-    address: 'bc1q8c6fshw2dlwun7ekn9qwf37cu2rn755upcp8cy',
-    transactionType: 'P2WPKH',
-    network: 'onChain',
-  },
-  {
-    id: '2',
-    transactionDate: '2025-03-05',
-    value: -0.0005,
-    address: 'bc1pyxpexx6kzhng3cdr7jpfpf5euwzkhcmqn3hzmngssk8d9ntgn3eqdk0dg3',
-    transactionType: 'P2WPKH',
-    network: 'onChain',
-  },
-  {
-    id: '3',
-    transactionDate: '2025-03-01',
-    value: 0.0003,
-    contactName: 'Bob',
-    address: 'lnbc500u1p3qkglupp...',
-    transactionType: 'P2TR',
-    network: 'lightning',
-  },
-  {
-    id: '4',
-    transactionDate: '2025-02-28',
-    value: -0.0008,
-    address: 'bc1q9h8rsyf9wtwkjz47xklceleqg0aphuwnv5mztq',
-    transactionType: 'P2WPKH',
-    network: 'onChain',
-  },
-  {
-    id: '5',
-    transactionDate: '2025-02-25',
-    value: 0.0015,
-    contactName: 'Carol',
-    address: 'lnbc150u1p3q9hjdpp...',
-    transactionType: 'P2TR',
-    network: 'lightning',
-  },
-  {
-    id: '6',
-    transactionDate: '2025-02-25',
-    value: -0.0007,
-    address: 'bc1q9h8rsyf9wtwkjz47xklceleqg0aphuwnv5mztq',
-    transactionType: 'P2WPKH',
-    network: 'onChain',
-  },
-  {
-    id: '7',
-    transactionDate: '2025-02-20',
-    value: 0.0021,
-    contactName: 'Dave',
-    address: 'bc1q34aq5drpuwy3wgl9lhup9892qp6svr8ldzyy7c',
-    transactionType: 'P2WPKH',
-    network: 'onChain',
-  },
-  {
-    id: '8',
-    transactionDate: '2025-02-15',
-    value: -0.0004,
-    address: 'lnbc400u1p3qvgtdpp...',
-    transactionType: 'P2TR',
-    network: 'lightning',
-  },
-  {
-    id: '9',
-    transactionDate: '2025-02-10',
-    value: 0.0009,
-    contactName: 'Eve',
-    address: 'bc1pclwuyj69dskddydugsjshm47a9ccdqjcktqgk02qgqrz25ehfqhsea0p4c',
-    transactionType: 'P2TR',
-    network: 'onChain',
-  },
-  {
-    id: '10',
-    transactionDate: '2025-02-05',
-    value: -0.0016,
-    address: 'lnbc160u1p3qp8tfpp...',
-    transactionType: 'P2TR',
-    network: 'lightning',
-  },
-  {
-    id: '11',
-    transactionDate: '2025-01-28',
-    value: 0.0018,
-    contactName: 'Frank',
-    address: 'bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq',
-    transactionType: 'P2WPKH',
-    network: 'onChain',
-  },
-] */
+import { Tx } from '@/shared/models/transaction'
+import { AddressType, WalletProtocol } from './wallet-models'
+import TransactionsController from '@/shared/api/controllers/transactions-controller'
 
 type WalletData = Awaited<ReturnType<typeof generateWallet>> & {
   walletId: string
@@ -135,6 +29,7 @@ type WalletContextType = {
   selectedAddressType: AddressType
   setSelectedAddressType: (addressType: AddressType) => void
   getBalance: (walletId: string) => Promise<number>
+  fetchTransactions: () => Promise<void>
 }
 
 const WalletContext = createContext({} as WalletContextType)
@@ -147,7 +42,8 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
   const [wallets, setWalletsState] = useState<WalletData[]>([])
   const [selectedWalletId, setSelectedWalletId] = useState<string>('')
   const [selectedAddressType, setSelectedAddressType] = useState<AddressType>('bip84')
-  // const [isLoading, setIsLoading] = useState(true)
+
+  const wallet = wallets.find(wallet => wallet.walletId === selectedWalletId)
 
   // Save wallets to AsyncStorage
   async function saveWallets(walletsToSave: WalletData[]) {
@@ -173,22 +69,16 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
     walletId?: string
   }> {
     try {
-      const newWallet = await generateWallet({
-        accounts: {
-          onchain: ['bip44', 'bip49', 'bip84', 'bip86'],
-          lightning: ['lightning-node'],
-        },
-      })
+      const newWallet = await generateWallet()
       const walletId = randomUUID()
-      // const transactions: Tx[] = await getAddressTxChain(newWallet.addresses['0'])
+
       const updatedWallets = [
         ...wallets,
         { ...newWallet, walletId, walletName, cold, transactions: [] },
       ]
-
       setWalletsState(updatedWallets)
+      await fetchTransactions()
       await saveWallets(updatedWallets)
-
       setSelectedWalletId(walletId)
       return { success: true, walletId }
     } catch (error) {
@@ -206,7 +96,7 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
         ...wallets,
         { ...newWallet, walletId, walletName, cold: true, transactions: [] },
       ]
-
+      await fetchTransactions()
       setWalletsState(updatedWallets)
       await saveWallets(updatedWallets)
 
@@ -229,18 +119,131 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
   }
 
   async function getBalance(walletId: string) {
+    console.log(`[getBalance] Starting calculation for wallet: ${walletId}`)
+
     const wallet = await getWalletById(walletId)
     if (!wallet) {
+      console.log(`[getBalance] Wallet not found: ${walletId}`)
       return 0
     }
 
-    return wallet.transactions.reduce(
-      (acc, tx) =>
-        acc +
-        (tx.vout.reduce((acc, vout) => acc + vout.value, 0) -
-          tx.vin.reduce((acc, vin) => acc + (vin.prevout ? vin.prevout.value : 0), 0)),
-      0,
-    )
+    console.log(`[getBalance] Found wallet: ${wallet.walletName} (${walletId})`)
+    console.log(`[getBalance] Transaction count: ${wallet.transactions.length}`)
+
+    // Extract all wallet addresses across protocols and types
+    const walletAddresses = new Set<string>()
+    for (const protocol of Object.keys(wallet.addresses) as WalletProtocol[]) {
+      for (const addressType of Object.keys(wallet.addresses[protocol]) as AddressType[]) {
+        const address = wallet.addresses[protocol][addressType]
+        if (address) {
+          walletAddresses.add(address)
+          console.log(`[getBalance] Added address: ${address} (${protocol}/${addressType})`)
+        }
+      }
+    }
+
+    console.log(`[getBalance] Total unique addresses found: ${walletAddresses.size}`)
+    if (walletAddresses.size === 0) {
+      console.log(`[getBalance] No addresses found for wallet, returning 0`)
+      return 0
+    }
+
+    // Map to track unspent outputs
+    const utxos = new Map<string, number>() // key: txid:vout, value: amount
+    console.log(`[getBalance] Processing ${wallet.transactions.length} transactions`)
+
+    // Process all transactions
+    let skippedTxCount = 0
+    for (const tx of wallet.transactions) {
+      console.log(`[getBalance] Processing tx: ${tx.txid}`)
+
+      // Skip transactions not in active chain
+      if (!tx.in_active_chain) {
+        console.log(`[getBalance] Skipping tx ${tx.txid} - not in active chain`)
+        skippedTxCount++
+        continue
+      }
+
+      let outputsForWallet = 0
+      // Process outputs (vout) - potential incoming funds
+      for (const [index, output] of tx.vout.entries()) {
+        const addressesInOutput = output.scriptPubKey.addresses || []
+        console.log(
+          `[getBalance] Checking output #${index} (${output.value} BTC)`,
+          addressesInOutput.length ? `Addresses: ${addressesInOutput.join(', ')}` : 'No addresses',
+        )
+
+        const matchingAddresses = addressesInOutput.filter(addr => walletAddresses.has(addr))
+        if (matchingAddresses.length > 0) {
+          // This output belongs to one of our addresses
+          const utxoKey = `${tx.txid}:${index}`
+          utxos.set(utxoKey, output.value)
+          outputsForWallet++
+          console.log(
+            `[getBalance] ✅ Found output for our wallet: ${utxoKey} = ${output.value} BTC`,
+          )
+        }
+      }
+
+      console.log(`[getBalance] Found ${outputsForWallet} outputs for wallet in tx ${tx.txid}`)
+
+      // Process inputs (vin) - potential outgoing funds
+      let spentOutputs = 0
+      for (const input of tx.vin) {
+        const utxoKey = `${input.txid}:${input.vout}`
+        console.log(`[getBalance] Checking input: ${utxoKey}`)
+        if (utxos.has(utxoKey)) {
+          // This input spends a previously received output
+          const amount = utxos.get(utxoKey)
+          console.log(`[getBalance] ❌ Found spent output: ${utxoKey} = ${amount} BTC`)
+          utxos.delete(utxoKey)
+          spentOutputs++
+        }
+      }
+
+      console.log(`[getBalance] Found ${spentOutputs} spent outputs in tx ${tx.txid}`)
+    }
+
+    console.log(`[getBalance] Skipped ${skippedTxCount} transactions not in active chain`)
+    console.log(`[getBalance] Remaining ${utxos.size} unspent outputs (UTXOs):`)
+
+    // Sum up all unspent outputs
+    let totalBalance = 0
+    for (const [utxoKey, value] of utxos.entries()) {
+      console.log(`[getBalance] UTXO: ${utxoKey} = ${value} BTC`)
+      totalBalance += value
+    }
+
+    console.log(`[getBalance] Final balance calculation: ${totalBalance} BTC`)
+    return totalBalance
+  }
+
+  // Fetch transactions for the selected wallet
+  async function fetchTransactions() {
+    if (!wallet) {
+      console.error('No wallet selected')
+      return
+    }
+    try {
+      const transactions = await TransactionsController.getTransactions(
+        wallet.addresses?.onchain?.[selectedAddressType] ?? '',
+      )
+      transactions.forEach(transaction => {
+        transaction.vout.forEach(vout => console.log({ vout }))
+      })
+      setWalletsState(prevWallets => {
+        const updatedWallets = prevWallets.map(wallet => {
+          if (wallet.walletId === selectedWalletId) {
+            return { ...wallet, transactions }
+          }
+          return wallet
+        })
+        saveWallets(updatedWallets)
+        return updatedWallets
+      })
+    } catch (error) {
+      console.log('Error fetching transactions:', error)
+    }
   }
 
   // Load wallets on component mount
@@ -297,6 +300,7 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
         setSelectedWalletId,
         selectedAddressType,
         setSelectedAddressType,
+        fetchTransactions,
       }}
     >
       {children}

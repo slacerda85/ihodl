@@ -6,98 +6,62 @@ import {
 import Wallet from '@/shared/lib/bitcoin/wallet/wallet'
 import storage from '../storage'
 import { randomUUID } from 'expo-crypto'
+import {
+  AddressType,
+  WalletProtocol,
+  addressTypePath,
+  OnchainAddressType,
+  // LightningAddressType,
+} from './wallet-models'
 
-export type AddressType = BitcoinAddressType | LightningAddressType
-export type BitcoinAddressType = 'bip44' | 'bip49' | 'bip84' | 'bip86'
-export type LightningAddressType = 'lightning-node'
-export type WalletProtocol = 'onchain' | 'lightning'
-
-interface WalletOptions {
+// Types
+interface CreateWalletProps {
   mnemonic?: string
   accounts?: Record<WalletProtocol, AddressType[]>
 }
 
-export async function createWallet(options: WalletOptions = {}) {
-  const {
-    mnemonic,
-    accounts = { onchain: ['bip84', 'bip86'], lightning: ['lightning-node'] as AddressType[] },
-  } = options
+type Accounts = Record<WalletProtocol, AddressType[]>
+type Addresses = Record<WalletProtocol, Partial<Record<AddressType, string>>>
+
+interface DerivedKeyInfo {
+  accountKey?: any
+  accountPubkey?: any
+  nodeKey?: any
+  nodePubkey?: any
+  channels?: any[]
+  invoicePath?: string
+}
+
+// Default configurations
+const defaultAccounts: Accounts = {
+  onchain: ['bip84', 'bip86'],
+  lightning: ['lightning-node'],
+}
+
+const defaultAddresses: Addresses = {
+  onchain: { bip84: '', bip86: '' },
+  lightning: { 'lightning-node': '' },
+}
+
+/**
+ * Creates a new wallet with specified or default account types
+ */
+export async function createWallet(options?: CreateWalletProps) {
+  const { mnemonic, accounts = defaultAccounts } = options || {}
 
   const newWallet = new Wallet(undefined, mnemonic)
   const walletId = randomUUID()
-  const addresses: Record<WalletProtocol, Record<AddressType, string>> = {
-    onchain: { bip44: '', bip49: '', bip84: '', bip86: '', 'lightning-node': '' },
-    lightning: { bip44: '', bip49: '', bip84: '', bip86: '', 'lightning-node': '' },
+  const addresses: Addresses = JSON.parse(JSON.stringify(defaultAddresses))
+  const derivedKeys: Record<string, DerivedKeyInfo> = {}
+
+  // Process onchain addresses
+  if (accounts.onchain?.length) {
+    processOnchainAddresses(newWallet, accounts.onchain, addresses, derivedKeys)
   }
-  const derivedKeys: Record<string, any> = {}
 
-  // Process Bitcoin on-chain addresses
-  accounts['onchain'].forEach(addressType => {
-    let path: string
-    // let addressPrefix: string
-    if (!addressType) return
-
-    switch (addressType) {
-      case 'bip44': // Legacy addresses (P2PKH)
-        path = "m/44'/0'/0'"
-        // addressPrefix = 'btc-legacy'
-        break
-      case 'bip49': // SegWit-compatible (P2SH-P2WPKH)
-        path = "m/49'/0'/0'"
-        // addressPrefix = 'btc-segwit-compat'
-        break
-      case 'bip84': // Native SegWit (P2WPKH)
-        path = "m/84'/0'/0'"
-        // addressPrefix = 'btc-segwit'
-        break
-      case 'bip86': // Taproot (P2TR)
-        path = "m/86'/0'/0'"
-        // addressPrefix = 'btc-taproot'
-        break
-      case 'lightning-node':
-        return
-      default:
-        const _exhaustiveCheck: never = addressType
-        return _exhaustiveCheck
-    }
-
-    const accountNode = deriveFromPath(newWallet.privateKey, newWallet.chainCode, path)
-    const account0 = deriveFromPath(accountNode.derivedKey, accountNode.derivedChainCode, '0/0')
-    const account0Pubkey = createPublicKey(account0.derivedKey)
-    const address = serializePublicKeyForSegWit(account0Pubkey)
-
-    addresses['onchain'][addressType] = address
-    derivedKeys[addressType] = {
-      accountKey: account0,
-      accountPubkey: account0Pubkey,
-    }
-  })
-
-  // Initialize Lightning Network keys and configuration if requested
-  if (accounts['lightning'].length > 0) {
-    // Lightning Network typically uses BIP32 derivation paths
-    // Common path for Lightning: m/84'/0'/0'/1 for key-spend and m/84'/0'/0'/2 for hash-spend
-    const lightningBasePath = "m/84'/0'/0'/1"
-    const lightningNode = deriveFromPath(
-      newWallet.privateKey,
-      newWallet.chainCode,
-      lightningBasePath,
-    )
-    const nodePubkey = createPublicKey(lightningNode.derivedKey)
-
-    // The node ID in Lightning is derived from the node's public key
-    // This is a placeholder - actual implementation would depend on your Lightning library
-    const nodeId = nodePubkey.toString()
-
-    addresses['lightning']['lightning-node'] = nodeId
-    derivedKeys['lightning'] = {
-      nodeKey: lightningNode,
-      nodePubkey,
-      // Additional fields that might be needed for Lightning
-      channels: [],
-      // Reserved path for invoice keys (commonly m/84'/0'/0'/3)
-      invoicePath: "m/84'/0'/0'/3",
-    }
+  // Process lightning addresses
+  if (accounts.lightning?.length) {
+    processLightningAddresses(newWallet, accounts.lightning, addresses, derivedKeys)
   }
 
   // Save wallet to storage
@@ -108,6 +72,68 @@ export async function createWallet(options: WalletOptions = {}) {
     mnemonic: newWallet.mnemonic,
     addresses,
     derivedKeys,
+  }
+}
+
+/**
+ * Processes and derives onchain addresses based on provided address types
+ */
+function processOnchainAddresses(
+  wallet: Wallet,
+  addressTypes: AddressType[],
+  addresses: Addresses,
+  derivedKeys: Record<string, DerivedKeyInfo>,
+): void {
+  addressTypes
+    .filter(
+      (type): type is OnchainAddressType =>
+        type !== 'lightning-node' && Object.keys(addressTypePath).includes(type),
+    )
+    .forEach(addressType => {
+      const path = addressTypePath[addressType]
+
+      const accountNode = deriveFromPath(wallet.privateKey, wallet.chainCode, path)
+      const account0 = deriveFromPath(accountNode.derivedKey, accountNode.derivedChainCode, '0/0')
+      const account0Pubkey = createPublicKey(account0.derivedKey)
+      const address = serializePublicKeyForSegWit(account0Pubkey)
+
+      addresses.onchain[addressType] = address
+      derivedKeys[addressType] = {
+        accountKey: account0,
+        accountPubkey: account0Pubkey,
+      }
+    })
+}
+
+/**
+ * Processes and derives lightning addresses and node configuration
+ */
+function processLightningAddresses(
+  wallet: Wallet,
+  addressTypes: AddressType[],
+  addresses: Addresses,
+  derivedKeys: Record<string, DerivedKeyInfo>,
+): void {
+  // Check if lightning-node is included in the requested address types
+  if (!addressTypes.includes('lightning-node')) {
+    return
+  }
+
+  // Lightning Network typically uses BIP32 derivation paths
+  // Common path for Lightning: m/84'/0'/0'/1 for key-spend
+  const lightningBasePath = "m/84'/0'/0'/1"
+  const lightningNode = deriveFromPath(wallet.privateKey, wallet.chainCode, lightningBasePath)
+  const nodePubkey = createPublicKey(lightningNode.derivedKey)
+
+  // The node ID in Lightning is derived from the node's public key
+  const nodeId = nodePubkey.toString()
+
+  addresses.lightning['lightning-node'] = nodeId
+  derivedKeys.lightning = {
+    nodeKey: lightningNode,
+    nodePubkey,
+    channels: [],
+    invoicePath: "m/84'/0'/0'/3", // Reserved path for invoice keys
   }
 }
 

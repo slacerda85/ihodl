@@ -7,7 +7,7 @@ import { useWallet } from './wallet-provider'
 import BitcoinLogo from '@/shared/assets/bitcoin-logo'
 import { Link } from 'expo-router'
 import LightningLogo from '@/shared/assets/lightning-logo'
-import { AddressType, WalletProtocol } from './wallet-actions'
+import { AddressType, WalletProtocol } from './wallet-models'
 
 // Interface for list items
 type ListItem =

@@ -4,22 +4,15 @@ import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 import { useWallet } from './wallet-provider'
 import WalletAccounts from './wallet-accounts'
-
+import { useEffect, useState } from 'react'
 export default function WalletDetails() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const { wallets, selectedWalletId } = useWallet()
+  const { wallets, selectedWalletId, fetchTransactions } = useWallet()
+  const [balance, setBalance] = useState<number>(0)
 
   const wallet = wallets.find(wallet => wallet.walletId === selectedWalletId)
-  const firstAddress = wallet?.addresses.onchain.bip84
-  const balance = wallet?.transactions.reduce((acc, tx) => {
-    return (
-      acc +
-      tx.vout.reduce((acc, vout) => acc + vout.value, 0) -
-      tx.vin.reduce((acc, vin) => acc + vin.prevout.value, 0)
-    )
-  }, 0)
 
   function handleSend() {
     // Navigate to send screen
@@ -30,6 +23,13 @@ export default function WalletDetails() {
     // Navigate to receive screen
     // router.push('/wallet/receive')
   }
+
+  // Fetch balance when wallet changes
+  useEffect(() => {
+    if (wallet) {
+      fetchTransactions()
+    }
+  }, [])
 
   // if no wallets, show empty state and a Link component to navigate to create wallet screen
   if (!wallet) {
@@ -84,15 +84,7 @@ export default function WalletDetails() {
         </TouchableOpacity>
       </View>
       <View style={styles.transactionsSection}>
-        {/* small ui component to show first address for showing first address */}
-
-        <View style={styles.section}>
-          <Text style={[styles.walletName, isDark && styles.walletNameDark]}>Address</Text>
-          <Text style={isDark ? styles.balanceLabelDark : styles.balanceLabel}>{firstAddress}</Text>
-        </View>
-
         <WalletAccounts />
-        {/* <WalletTransactions /> */}
       </View>
     </View>
   )

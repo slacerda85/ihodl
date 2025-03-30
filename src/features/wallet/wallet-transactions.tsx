@@ -5,7 +5,7 @@ import { alpha } from '@/shared/theme/utils'
 import { IconSymbol } from '@/shared/ui/icon-symbol'
 import { useWallet } from './wallet-provider'
 import { MINIMUN_CONFIRMATIONS, Tx } from '@/shared/models/transaction'
-import ElectrumService from '@/shared/lib/bitcoin/electrum/electrum.service'
+import TransactionsController from '@/shared/api/controllers/transactions-controller'
 
 // Extended transaction type with our app-specific fields
 
@@ -32,17 +32,27 @@ export default function WalletTransactions() {
 
     // Fetch transactions for the selected wallet
     const fetchTransactions = async () => {
+      if (!wallet?.addresses?.onchain) {
+        console.log('No onchain addresses found')
+        return
+      }
+      if (!wallet?.addresses?.onchain[selectedAddressType]) {
+        console.log('No address found for selected address type')
+        return
+      }
       try {
         setLoading(true)
-        console.log('Fetching transactions for', wallet.addresses.onchain[selectedAddressType])
-        const transactions = await ElectrumService.getTransactions(
-          wallet.addresses.onchain[selectedAddressType],
+        const transactions = await TransactionsController.getTransactions(
+          wallet.addresses?.onchain?.[selectedAddressType],
         )
-        console.log('Transactions:', transactions)
+        console.log('Fetched transactions:', transactions)
+        transactions.forEach(transaction => {
+          transaction.vout.forEach(vout => console.log({ vout }))
+        })
         setTransactions(transactions)
-        setLoading(false)
       } catch (error) {
         console.log('Error fetching transactions:', error)
+      } finally {
         setLoading(false)
       }
     }
@@ -86,25 +96,27 @@ export default function WalletTransactions() {
     // Create flat list with headers and transactions
     const result: ListItem[] = []
 
-    Object.entries(groupedByDate).forEach(([dateKey, transactionsForDate]) => {
-      // Add date header
-      result.push({
-        type: 'header',
-        id: `header-${dateKey}`,
-        date: dateKey,
-      })
-
-      // Add transactions for this date
-      transactionsForDate.forEach((transaction, index) => {
+    if (groupedByDate !== undefined) {
+      Object.entries(groupedByDate).forEach(([dateKey, transactionsForDate]) => {
+        // Add date header
         result.push({
-          type: 'transaction',
-          id: transaction.txid,
-          first: index === 0,
-          last: index === transactionsForDate.length - 1,
-          transaction,
+          type: 'header',
+          id: `header-${dateKey}`,
+          date: dateKey,
+        })
+
+        // Add transactions for this date
+        transactionsForDate?.forEach((transaction, index) => {
+          result.push({
+            type: 'transaction',
+            id: transaction.txid,
+            first: index === 0,
+            last: index === transactionsForDate?.length - 1,
+            transaction,
+          })
         })
       })
-    })
+    }
 
     return result
   }
@@ -123,22 +135,34 @@ export default function WalletTransactions() {
 
     // Render transaction item
     const { transaction } = item
-    // check if transaction is send or receive
-    const isReceived = transaction.vout[0].scriptPubKey.addresses.includes(
-      wallet?.addresses.onchain?.bip84 ?? '',
-    )
+
+    // Make sure transaction.vout exists and has elements
+    if (!transaction.vout || transaction.vout.length === 0) {
+      return null
+    }
+
+    // Make sure scriptPubKey exists
+    const scriptPubKey = transaction.vout[0].scriptPubKey
+    if (!scriptPubKey) {
+      return null
+    }
+
+    // check if transaction is send or receive - with proper null checks
+    const addresses = scriptPubKey.addresses || []
+    const isReceived = addresses.includes(wallet?.addresses?.onchain?.[selectedAddressType] ?? '')
 
     // Format transaction value with sign
-    const formattedValue = `${isReceived ? '+' : '-'}${(
-      transaction.vout[0].value / 100000000
-    ).toLocaleString('pt-BR', {
-      maximumFractionDigits: 8,
-    })} BTC`
+    const formattedValue = `${isReceived ? '+' : '-'}${transaction.vout[0].value.toLocaleString(
+      'pt-BR',
+      {
+        maximumFractionDigits: 8,
+      },
+    )} BTC`
 
-    // Truncate address for display
-    const address = transaction.vout[0].scriptPubKey.addresses[0]
+    // Truncate address for display with proper null check
+    const address = addresses[0] || ''
     const truncatedAddress =
-      address?.length > 20
+      address.length > 20
         ? `${address.substring(0, 10)}...${address.substring(address.length - 10)}`
         : address
 
@@ -181,19 +205,17 @@ export default function WalletTransactions() {
               <View
                 style={[
                   styles.networkBadge,
-                  transaction.vout[0].scriptPubKey.type === 'p2sh'
-                    ? styles.lightningBadge
-                    : styles.onChainBadge,
+                  scriptPubKey.type === 'p2sh' ? styles.lightningBadge : styles.onChainBadge,
                 ]}
               >
                 <IconSymbol
-                  name={transaction.vout[0].scriptPubKey.type === 'p2sh' ? 'bolt.fill' : 'link'}
+                  name={scriptPubKey.type === 'p2sh' ? 'bolt.fill' : 'link'}
                   size={12}
                   weight="bold"
                   color={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
                 />
                 <Text style={[styles.networkBadgeText, isDark && styles.networkBadgeTextDark]}>
-                  {transaction.vout[0].scriptPubKey.type === 'p2sh' ? 'Lightning' : 'On chain'}
+                  {scriptPubKey.type === 'p2sh' ? 'Lightning' : 'On chain'}
                 </Text>
               </View>
             </View>
@@ -221,16 +243,15 @@ export default function WalletTransactions() {
     </View>
   )
 
-  const ListHeader = () => (
+  /* const ListHeader = () => (
     <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
       Recent Transactions
     </Text>
-  )
+  ) */
 
   if (loading) {
     return (
       <View style={styles.transactionsSection}>
-        <ListHeader />
         <ScrollView>
           <View style={[styles.emptyState, isDark && styles.emptyStateDark]}>
             <IconSymbol
@@ -247,10 +268,10 @@ export default function WalletTransactions() {
     )
   }
 
-  if (transactions.length === 0) {
+  if (transactions?.length === 0) {
     return (
       <View style={styles.transactionsSection}>
-        <ListHeader />
+        {/* <ListHeader /> */}
         <EmptyTransactionList />
       </View>
     )
@@ -267,7 +288,7 @@ export default function WalletTransactions() {
         renderItem={renderItem}
         contentContainerStyle={styles.flatList}
         showsVerticalScrollIndicator={false}
-        ListHeaderComponent={<ListHeader />}
+        // ListHeaderComponent={<ListHeader />}
       />
     </View>
   )
