@@ -13,13 +13,7 @@ export default function DeleteWallet() {
 
   const handleDeleteWallet = useCallback(async () => {
     await deleteWallet(selectedWalletId)
-    // check if theres any wallet left
-    if (wallets.length > 0) {
-      setSelectedWalletId(wallets[0].walletId)
-    } else {
-      setSelectedWalletId('')
-    }
-
+    setSelectedWalletId(wallets[0].walletId ?? '')
     router.dismiss(2)
   }, [deleteWallet, router, selectedWalletId, setSelectedWalletId, wallets])
 

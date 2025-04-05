@@ -48,11 +48,13 @@
     "react-native-tcp-socket": "^6.2.0",
     "react-native-web": "~0.19.13",
     "secp256k1": "^5.0.1",
+    "swr": "^2.3.3",
     "tls": "^0.0.1"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
     "@types/react": "~18.3.12",
+    "@types/secp256k1": "^4.0.6",
     "eslint": "^8.57.0",
     "eslint-config-expo": "~8.0.1",
     "eslint-config-prettier": "^10.0.2",

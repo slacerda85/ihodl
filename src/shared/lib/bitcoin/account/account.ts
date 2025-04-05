@@ -2,206 +2,155 @@ import {
   createPublicKey,
   deriveFromPath,
   serializePublicKeyForSegWit,
-} from '@/shared/lib/bitcoin/key/key'
-import { BitcoinRPC } from '../rpc'
+} from '@/shared/lib/bitcoin/key'
+import api from '@/shared/api'
+import { Tx } from '@/shared/models/transaction'
 
-type ListReceivedByAddressResponse = {
+export async function getAccountAddresses(
+  accountNodePrivateKey: Uint8Array,
+  accountNodeChainCode: Uint8Array,
+  gapLimit: number = 20,
+): Promise<{ receiving: string[]; change: string[] }> {
+  const receiving: string[] = []
+  const change: string[] = []
+
+  // derive external chain node (for receiving addresses)
+  const externalChainNode = deriveFromPath(accountNodePrivateKey, accountNodeChainCode, `0`)
+
+  // generate receiving addresses up to gap limit
+  for (let i = 0; i < gapLimit; i++) {
+    const { derivedKey } = deriveFromPath(
+      externalChainNode.derivedKey,
+      externalChainNode.derivedChainCode,
+      `${i}`,
+    )
+
+    const publicKey = createPublicKey(derivedKey)
+    const address = serializePublicKeyForSegWit(publicKey)
+    receiving.push(address)
+  }
+
+  // derive internal chain node (for change addresses)
+  const internalChainNode = deriveFromPath(accountNodePrivateKey, accountNodeChainCode, `1`)
+
+  // generate change addresses up to gap limit
+  for (let i = 0; i < gapLimit; i++) {
+    const { derivedKey } = deriveFromPath(
+      internalChainNode.derivedKey,
+      internalChainNode.derivedChainCode,
+      `${i}`,
+    )
+
+    const publicKey = createPublicKey(derivedKey)
+    const address = serializePublicKeyForSegWit(publicKey)
+    change.push(address)
+  }
+
+  return { receiving, change }
+}
+
+export type DiscoveredAccount = {
+  index: number
+  discovered: DiscoveredAddressInfo[]
+}
+
+type DiscoveredAddressInfo = {
   address: string
-  amount: number
-  confirmations: number
-  label: string
-  txids: string[]
+  index: number
+  txs: Tx[] // Transactions associated with the address
+}
+
+export type DiscoverResponse = {
+  discoveredAccounts: DiscoveredAccount[]
 }
 
 export async function discover(
-  privateKey: Buffer,
-  chainCode: Buffer,
+  privateKey: Uint8Array,
+  chainCode: Uint8Array,
   purpose = 84,
   coinType = 0,
   gapLimit: number = 20,
-) {
-  const accounts = []
+): Promise<DiscoverResponse> {
+  console.log('discover function called...')
+  const discoveredAccounts: DiscoveredAccount[] = []
   let accountIndex = 0
 
   while (true) {
-    // derive first account node
+    console.log('Entered discover loop for Account:', accountIndex)
+    // derive account node
+    // bip 44 levels: m / purpose' / coin_type' / account' / change / address_index
     const accountNode = deriveFromPath(
       privateKey,
       chainCode,
-      `${purpose}'/${coinType}'/${accountIndex}'/0`,
+      `m/${purpose}'/${coinType}'/${accountIndex}'`,
     )
-    // derive external chain node
-    const externalChainNode = deriveFromPath(
-      accountNode.derivedKey,
-      accountNode.derivedChainCode,
-      `0`,
-    ) // this turns previous "m/84'/0'/0'/0" into "m/84'/0'/0'/0/0"
 
-    // scan addresses of the external chain
-    let usedAddresses = 0
-    for (let i = 0; i < gapLimit; i++) {
-      const { derivedKey } = deriveFromPath(
-        externalChainNode.derivedKey,
-        externalChainNode.derivedChainCode,
-        `${i}`,
+    const scanChain = async (nodePrivateKey: Uint8Array, nodeChainCode: Uint8Array) => {
+      const chainNode = deriveFromPath(
+        nodePrivateKey,
+        nodeChainCode,
+        '0', // 0 for receiving addresses
       )
 
-      const publicKey = createPublicKey(derivedKey)
-      const address = serializePublicKeyForSegWit(publicKey)
+      console.log('Scanning chain node:', chainNode)
+      const discovered: DiscoveredAddressInfo[] = []
+      let consecutiveUnused = 0
+      let index = 0
 
-      // Simulate checking for transactions (replace with actual transaction check)
-      const hasTransactions = await checkForTransactions(address)
+      // Continue scanning until we find gapLimit consecutive unused addresses
+      while (consecutiveUnused < gapLimit) {
+        console.log('Entered while consecutiveUnused < gapLimit:', consecutiveUnused)
+        const { derivedKey } = deriveFromPath(
+          chainNode.derivedKey,
+          chainNode.derivedChainCode,
+          `${index}`,
+        )
 
-      if (hasTransactions) {
-        usedAddresses++
-      } else {
-        break
+        const publicKey = createPublicKey(derivedKey)
+        const address = serializePublicKeyForSegWit(publicKey)
+
+        console.log(`Scanning address of index ${index}`, address)
+        const transactions = await api.transactions.getTransactions(address)
+        console.log(`Transactions for address ${address}:`, transactions)
+        if (transactions.length > 0) {
+          console.log(`Found transactions for address ${address}`)
+          discovered.push({
+            address,
+            index,
+            txs: transactions, // Store transactions associated with the address
+          })
+          // Reset consecutive unused counter when we find a used address
+          consecutiveUnused = 0
+        } else {
+          consecutiveUnused++
+        }
+
+        index++
       }
+
+      return discovered
     }
 
-    if (usedAddresses === 0) {
-      break
-    }
-
-    accounts.push({
-      accountIndex,
-      usedAddresses,
-    })
-
-    accountIndex++
-  }
-
-  return accounts
-}
-
-async function checkForTransactions(address: string): Promise<boolean> {
-  const rpc = new BitcoinRPC({
-    host: process.env.RPC_HOST as string,
-    port: Number(process.env.RPC_PORT),
-    user: process.env.RPC_USER as string,
-    password: process.env.RPC_PASSWORD as string,
-  })
-  const list = await rpc.listReceivedByAddress(address)
-
-  return list.length > 0
-}
-
-export async function getBalance(address: string): Promise<number> {
-  const balance = await getBalance(address)
-  return balance
-}
-
-export async function getBalancesPerAddress(
-  privateKey: Buffer,
-  chainCode: Buffer,
-  purpose = 84,
-  coinType = 0,
-  gapLimit = 20,
-): Promise<Record<string, number>> {
-  const balances: Record<string, number> = {}
-  let accountIndex = 0
-
-  while (true) {
-    const accountNode = deriveFromPath(
-      privateKey,
-      chainCode,
-      `${purpose}'/${coinType}'/${accountIndex}'`,
-    )
-
-    const externalChainNode = deriveFromPath(
+    console.log('Scanning chain for account index:', accountIndex)
+    const discoveredAddressInfo = await scanChain(
       accountNode.derivedKey,
       accountNode.derivedChainCode,
-      `0`,
     )
+    console.log('Discovered address info:', discoveredAddressInfo)
+    const hasTransactions = discoveredAddressInfo.some(info => info.txs.length > 0)
 
-    let usedAddresses = 0
-    for await (const addressIndex of Array.from({ length: gapLimit }, (_, i) => i)) {
-      const { derivedKey } = deriveFromPath(
-        externalChainNode.derivedKey,
-        externalChainNode.derivedChainCode,
-        `${addressIndex}`,
-      )
-
-      const publicKey = createPublicKey(derivedKey)
-      const address = serializePublicKeyForSegWit(publicKey)
-
-      const balance = await getBalance(address)
-      if (balance > 0) {
-        balances[address] = balance
-        usedAddresses++
-      }
-    }
-
-    if (usedAddresses === 0) {
-      break
-    }
-
-    accountIndex++
-  }
-
-  return balances
-}
-
-export async function getReceivedByAddress(
-  privateKey: Buffer,
-  chainCode: Buffer,
-  purpose = 84,
-  coinType = 0,
-  gapLimit = 20,
-): Promise<ListReceivedByAddressResponse[]> {
-  const balances: ListReceivedByAddressResponse[] = []
-  let accountIndex = 0
-
-  while (true) {
-    const accountNode = deriveFromPath(
-      privateKey,
-      chainCode,
-      `${purpose}'/${coinType}'/${accountIndex}'`,
-    )
-
-    const externalChainNode = deriveFromPath(
-      accountNode.derivedKey,
-      accountNode.derivedChainCode,
-      `0`,
-    )
-
-    let usedAddresses = 0
-    for (let addressIndex = 0; addressIndex < gapLimit; addressIndex++) {
-      const { derivedKey } = deriveFromPath(
-        externalChainNode.derivedKey,
-        externalChainNode.derivedChainCode,
-        `${addressIndex}`,
-      )
-
-      const publicKey = createPublicKey(derivedKey)
-      const address = serializePublicKeyForSegWit(publicKey)
-
-      // create HD wallet in rpc
-      const walletName = 'hd_wallet'
-
-      const rpc = new BitcoinRPC({
-        host: process.env.RPC_HOST as string,
-        port: Number(process.env.RPC_PORT),
-        user: process.env.RPC_USER as string,
-        password: process.env.RPC_PASSWORD as string,
+    if (hasTransactions) {
+      discoveredAccounts.push({
+        index: accountIndex,
+        discovered: discoveredAddressInfo,
       })
-
-      // create wallet
-      await rpc.createWallet(walletName, true)
-
-      const list = await rpc.listReceivedByAddress(address)
-      if (list.length > 0) {
-        balances.push(...list)
-        usedAddresses++
-      }
-    }
-
-    if (usedAddresses === 0) {
+      accountIndex++
+    } else {
+      // If no transactions were found, we can stop scanning further accounts
+      console.log('No transactions found for account index:', accountIndex)
       break
     }
-
-    accountIndex++
   }
 
-  return balances
+  return { discoveredAccounts }
 }

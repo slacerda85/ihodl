@@ -12,10 +12,10 @@ export type Tx = {
   locktime: number
   vin: Vin[]
   vout: Vout[]
-  blockhash?: string
+  blockhash: string
   confirmations?: number
-  blocktime?: number
-  time?: number
+  blocktime: number
+  time: number
 }
 
 export type Vin = {
@@ -37,6 +37,6 @@ export type Vout = {
     hex: string
     reqSigs: number
     type: string
-    addresses: string[]
+    address: string
   }
 }

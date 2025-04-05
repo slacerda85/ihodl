@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { View, Text, StyleSheet, useColorScheme, FlatList, Pressable, Image } from 'react-native'
 import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
@@ -6,8 +6,13 @@ import { IconSymbol } from '@/shared/ui/icon-symbol'
 import { useWallet } from './wallet-provider'
 import BitcoinLogo from '@/shared/assets/bitcoin-logo'
 import { Link } from 'expo-router'
-import LightningLogo from '@/shared/assets/lightning-logo'
-import { AddressType, WalletProtocol } from './wallet-models'
+import { AccountType, AccountProtocol } from '@/shared/models/account'
+import {
+  createPublicKey,
+  deriveFromPath,
+  serializePublicKeyForSegWit,
+} from '@/shared/lib/bitcoin/key'
+import api from '@/shared/api'
 
 // Interface for list items
 type ListItem =
@@ -17,12 +22,13 @@ type ListItem =
 type AccountData = {
   id: string
   name: string
+  accountType: AccountType // Optional, for type safety
   balance: number
-  protocol: string
+
   unit: string
 }
 
-const addressTypeLabels: Record<AddressType, string> = {
+const addressTypeLabels: Record<AccountType, string> = {
   bip44: 'BIP 44',
   bip49: 'BIP 49',
   bip84: 'BIP 84',
@@ -30,17 +36,98 @@ const addressTypeLabels: Record<AddressType, string> = {
   'lightning-node': 'Lightning Node',
 }
 
-const protocolLabels: Record<WalletProtocol, string> = {
+const protocolLabels: Record<AccountProtocol, string> = {
   lightning: 'Lightning',
   onchain: 'On-chain',
 }
 
 export default function WalletAccounts() {
-  const { selectedWalletId, wallets, setSelectedAddressType } = useWallet()
+  const { selectedWalletId, wallets, setSelectedAccount } = useWallet()
+  const selectedWallet = useMemo(
+    () => wallets.find(wallet => wallet.walletId === selectedWalletId),
+    [wallets, selectedWalletId],
+  )
+
+  const accountData =
+    selectedWallet !== undefined
+      ? deriveFromPath(
+          selectedWallet.accounts.bip84.privateKey,
+          selectedWallet.accounts.bip84.chainCode,
+          '0/0',
+        )
+      : undefined
+  if (accountData === undefined) {
+    console.error('No account data found')
+  } else {
+    const accountPublicKey = createPublicKey(accountData.derivedKey)
+    const accountAddress = serializePublicKeyForSegWit(accountPublicKey)
+    console.log('wallet name:', selectedWallet?.walletName)
+    console.log(`First address: ${accountAddress}`)
+  }
+
+  const [isLoading, setIsLoading] = useState<boolean>(false)
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
+  // Define proper type for account balances
+  const [accountBalances, setAccountBalances] = useState<Record<AccountType, number>>(
+    {} as Record<AccountType, number>,
+  )
 
-  const selectedWallet = wallets.find(wallet => wallet.walletId === selectedWalletId)
+  // Extract this function to reuse in both useEffect and onRefresh
+  const fetchAccountBalances = useCallback(async () => {
+    console.log('fetchWalletBalances called')
+    if (!selectedWallet) {
+      console.log('No wallet selected, returning')
+      return
+    }
+
+    console.log('Setting isLoading to true')
+    setIsLoading(true)
+    const balances: Record<AccountType, number> = {} as Record<AccountType, number>
+
+    try {
+      console.log('Processing wallet accounts:', Object.keys(selectedWallet.accounts))
+      // Use Object.entries to get both keys and values
+      for await (const [accountType, account] of Object.entries(selectedWallet.accounts)) {
+        const typedAccountType = accountType as AccountType
+        // Only implement BIP84 for now, prepare others for future implementation
+        if (typedAccountType === 'bip84') {
+          const { privateKey, chainCode } = account
+          if (privateKey.length === 0) {
+            console.log('Private key is empty, skipping')
+            continue
+          }
+          const accountData = deriveFromPath(privateKey, chainCode, '0/0') // Using 0 as index for now
+          const accountPublicKey = createPublicKey(accountData.derivedKey)
+          const accountAddress = serializePublicKeyForSegWit(accountPublicKey)
+          console.log(`Fetching balance for address: ${accountAddress}`)
+          // Fetch balance from controller
+          const balance = await api.transactions.getBalance(accountAddress)
+          console.log(`Received balance for ${typedAccountType}: ${balance}`)
+          balances[typedAccountType] = balance
+        } else {
+          console.log(`${typedAccountType} implementation pending, setting balance to 0`)
+          // For other account types, set up structure for future implementation
+          balances[typedAccountType] = 0
+        }
+      }
+
+      console.log('Updating account balances with:', balances)
+      // Update the state with all balances
+      setAccountBalances(balances)
+    } catch (error) {
+      console.error('Failed to fetch account balances:', error)
+    } finally {
+      console.log('Setting isLoading to false')
+      setIsLoading(false)
+    }
+  }, [selectedWallet]) // Ensure it only runs when selectedWallet changes
+
+  // Fetch balances for all accounts in the selected wallet
+  useEffect(() => {
+    console.log('useEffect triggered, calling fetchAccountBalances')
+    fetchAccountBalances()
+  }, [fetchAccountBalances])
 
   // Prepare data for FlatList with headers and accounts
   const prepareAccountsData = (): ListItem[] => {
@@ -50,32 +137,45 @@ export default function WalletAccounts() {
       return result
     }
 
-    Object.keys(selectedWallet?.addresses).forEach(protocol => {
+    // title for Accounts section
+    result.push({
+      type: 'header',
+      id: 'accounts',
+      title: 'Accounts',
+    })
+
+    Object.keys(selectedWallet.accounts).forEach((accountType, index) => {
+      if (accountType === undefined) return
+      const accountId = `${accountType}-${index}`
       result.push({
-        type: 'header',
-        id: `${protocol}-header`,
-        title: `${protocolLabels[protocol as WalletProtocol]} accounts`,
-      })
-
-      const accounts = selectedWallet.addresses[protocol as WalletProtocol]
-
-      Object.keys(accounts).forEach((addressType, index) => {
-        if (addressType === undefined) return
-        result.push({
-          type: 'account',
-          id: `${protocol}-${addressType}`,
-          first: index === 0,
-          last: index === Object.keys(accounts).length - 1,
-          account: {
-            id: `${protocol}-${addressType}`,
-            name: addressType.toUpperCase(),
-            balance: 0,
-            protocol,
-            unit: 'BTC',
-          },
-        })
+        type: 'account',
+        id: accountId,
+        first: index === 0,
+        last: index === Object.keys(selectedWallet.accounts).length - 1,
+        account: {
+          id: accountId,
+          name: addressTypeLabels[accountType as AccountType],
+          accountType: accountType as AccountType,
+          balance: accountBalances[accountType as AccountType] || 0,
+          unit: 'BTC',
+        },
       })
     })
+
+    /* Object.entries(selectedWallet?.accounts).forEach(([accountType, account]) => {
+      if (accountType.includes('lightning')) {
+        result.push({
+          type: 'header',
+          id: accountType,
+          title: protocolLabels.lightning as string,
+        })
+      } else {
+        result.push({
+          type: 'header',
+          id: accountType,
+          title: protocolLabels.onchain as string,
+        })
+      } */
 
     return result
   }
@@ -98,8 +198,27 @@ export default function WalletAccounts() {
 
     // Get protocol icon
     const getProtocolIcon = () => {
-      switch (account.protocol) {
-        case 'onchain':
+      if (account.accountType.includes('lightning')) {
+        return (
+          <Image
+            source={require('@/shared/assets/lightning-logo.png')}
+            style={{ width: 24, height: 24 }}
+          />
+        )
+      } else if (account.accountType.includes('bip')) {
+        return <BitcoinLogo width={24} height={24} />
+      } else {
+        return (
+          <IconSymbol
+            name="questionmark.circle"
+            size={20}
+            color={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
+          />
+        )
+      }
+
+      /* switch (account.) {
+        case 'BTC':
           return <BitcoinLogo width={24} height={24} />
         case 'lightning':
           return (
@@ -116,7 +235,7 @@ export default function WalletAccounts() {
               color={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
             />
           )
-      }
+      } */
     }
 
     return (
@@ -131,7 +250,7 @@ export default function WalletAccounts() {
           item.last && styles.transactionItemLast,
           isDark && styles.transactionItemDark,
         ]}
-        onPress={() => setSelectedAddressType(account.name.toLowerCase() as AddressType)}
+        onPress={() => setSelectedAccount(account.accountType)}
       >
         <Pressable>
           <View style={styles.accountIconContainer}>{getProtocolIcon()}</View>
@@ -172,8 +291,8 @@ export default function WalletAccounts() {
         keyExtractor={item => item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.flatList}
-        // showsVerticalScrollIndicator={false}
-        // ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
+        refreshing={isLoading}
+        onRefresh={fetchAccountBalances}
       />
     </View>
   )

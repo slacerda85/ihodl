@@ -3,16 +3,34 @@ import { View, Text, TouchableOpacity, StyleSheet, useColorScheme } from 'react-
 import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 import { useWallet } from './wallet-provider'
-import WalletAccounts from './wallet-accounts'
-import { useEffect, useState } from 'react'
+import WalletAccounts from './components/wallet-accounts'
+import { useEffect, useMemo, useState } from 'react'
+import WalletBalance from './wallet-balance'
+import { discover, DiscoveredAccount } from '@/shared/lib/bitcoin/account/account'
+
 export default function WalletDetails() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const { wallets, selectedWalletId, fetchTransactions } = useWallet()
-  const [balance, setBalance] = useState<number>(0)
+  const { wallets, selectedWalletId } = useWallet()
+  const [totalBalance, setTotalBalance] = useState<number>(0)
+  const [isLoading, setIsLoading] = useState<boolean>(false)
+  const [discoveredAccounts, setDiscoveredAccounts] = useState<DiscoveredAccount[]>([])
+  const wallet = useMemo(
+    () => wallets.find(wallet => wallet.walletId === selectedWalletId),
+    [wallets, selectedWalletId],
+  )
 
-  const wallet = wallets.find(wallet => wallet.walletId === selectedWalletId)
+  async function discoverAccounts(privateKey: Uint8Array, chainCode: Uint8Array) {
+    setIsLoading(true)
+    console.log('privateKey and chainCode', privateKey, chainCode)
+    console.log('discoverAccounts called')
+    const response = await discover(privateKey, chainCode)
+    console.log('discoverAccounts response:', response)
+    const { discoveredAccounts } = response
+    setDiscoveredAccounts(discoveredAccounts)
+    setIsLoading(false)
+  }
 
   function handleSend() {
     // Navigate to send screen
@@ -24,12 +42,18 @@ export default function WalletDetails() {
     // router.push('/wallet/receive')
   }
 
-  // Fetch balance when wallet changes
+  // discover accounts when wallet is selected
   useEffect(() => {
-    if (wallet) {
-      fetchTransactions()
+    if (selectedWalletId && wallet) {
+      const { masterKey, chainCode } = wallet
+      discoverAccounts(masterKey, chainCode).then(() => {
+        const totalBalance = discoveredAccounts.reduce((acc, account) => {
+          return acc + account.discovered.reduce((acc, address) => acc + address.txs.length, 0)
+        }, 0)
+        setTotalBalance(totalBalance)
+      })
     }
-  }, [])
+  }, [selectedWalletId])
 
   // if no wallets, show empty state and a Link component to navigate to create wallet screen
   if (!wallet) {
@@ -60,17 +84,7 @@ export default function WalletDetails() {
 
   return (
     <View style={styles.root}>
-      <View style={styles.balanceSection}>
-        <Text style={[styles.balanceLabel, isDark && styles.balanceLabelDark]}>
-          Current Balance
-        </Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Text style={[styles.balanceAmount, isDark && styles.balanceAmountDark]}>
-            {balance?.toLocaleString('pt-BR', { maximumFractionDigits: 8 })}
-          </Text>
-          <Text style={styles.balanceCurrency}>BTC</Text>
-        </View>
-      </View>
+      <WalletBalance balance={totalBalance} isLoading={!wallet} />
       <View style={styles.actionsSection}>
         <TouchableOpacity onPress={handleSend} style={[styles.button, styles.primaryButton]}>
           <Text style={styles.buttonText}>Send</Text>
@@ -84,7 +98,7 @@ export default function WalletDetails() {
         </TouchableOpacity>
       </View>
       <View style={styles.transactionsSection}>
-        <WalletAccounts />
+        <WalletAccounts isLoading={isLoading} discoveredAccounts={discoveredAccounts} />
       </View>
     </View>
   )
@@ -166,7 +180,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   button: {
-    flexGrow: 1,
+    flex: 0.5,
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',

@@ -9,7 +9,6 @@ import {
 import { bech32 } from 'bech32'
 import { entropyToMnemonic, mnemonicToSeedSync } from '@/shared/lib/bitcoin/bip39'
 import wordList from 'bip39/src/wordlists/english.json'
-import { hmac } from '@noble/hashes/hmac'
 import secp256k1 from 'secp256k1'
 
 export function toMnemonic(entropy: Uint8Array): string {

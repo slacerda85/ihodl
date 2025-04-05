@@ -1,13 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { View, Text, StyleSheet, useColorScheme, FlatList, ScrollView } from 'react-native'
 import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 import { IconSymbol } from '@/shared/ui/icon-symbol'
 import { useWallet } from './wallet-provider'
 import { MINIMUN_CONFIRMATIONS, Tx } from '@/shared/models/transaction'
-import TransactionsController from '@/shared/api/controllers/transactions-controller'
-
-// Extended transaction type with our app-specific fields
+import { discover, getAccountAddresses } from '@/shared/lib/bitcoin/account/account'
 
 // List item types for our FlatList
 type ListItem =
@@ -15,61 +13,74 @@ type ListItem =
   | { type: 'transaction'; id: string; first?: boolean; last?: boolean; transaction: Tx }
 
 export default function WalletTransactions() {
-  const { selectedWalletId, wallets, selectedAddressType } = useWallet()
+  const { selectedWalletId, wallets, selectedAccount } = useWallet()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const wallet = wallets.find(wallet => wallet.walletId === selectedWalletId)
-
-  const [transactions, setTransactions] = useState<Tx[]>([])
+  const wallet = useMemo(
+    () => wallets.find(wallet => wallet.walletId === selectedWalletId),
+    [selectedWalletId, wallets],
+  )
   const [loading, setLoading] = useState<boolean>(false)
+  const [transactions, setTransactions] = useState<Tx[]>([])
+  const [usedAddresses, setUsedAddresses] = useState<string[]>([])
+
+  const fetchTransactions = useCallback(async () => {
+    console.log('wallet-transactions.tsx: Fetching transactions callback called')
+    if (!wallet) return
+    const account = wallet.accounts[selectedAccount]
+    if (!account) return
+
+    const { privateKey, chainCode } = account
+
+    // Discover accounts and their transactions
+    const response = await discover(privateKey, chainCode)
+    const discoveredAccounts = response.discoveredAccounts
+
+    // Get all addresses (receiving + change)
+    const addresses = await getAccountAddresses(privateKey, chainCode)
+    // Combine all addresses for checking transaction ownership
+    setUsedAddresses([...addresses.receiving, ...addresses.change])
+
+    // Extract all transactions from discovered accounts
+    const allTransactions: Tx[] = []
+    discoveredAccounts.forEach(account => {
+      account.discovered.forEach(addressInfo => {
+        if (addressInfo.txs && addressInfo.txs.length > 0) {
+          // Add all transactions from this address
+          allTransactions.push(...addressInfo.txs)
+        }
+      })
+    })
+
+    // Remove duplicates by txid
+    const uniqueTransactions = allTransactions.filter(
+      (tx, index, self) => index === self.findIndex(t => t.txid === tx.txid),
+    )
+
+    setTransactions(uniqueTransactions)
+  }, [wallet, selectedAccount])
 
   useEffect(() => {
-    if (!wallet) {
-      console.log('No wallet selected')
-      return
-    }
-
-    // Fetch transactions for the selected wallet
-    const fetchTransactions = async () => {
-      if (!wallet?.addresses?.onchain) {
-        console.log('No onchain addresses found')
-        return
-      }
-      if (!wallet?.addresses?.onchain[selectedAddressType]) {
-        console.log('No address found for selected address type')
-        return
-      }
-      try {
-        setLoading(true)
-        const transactions = await TransactionsController.getTransactions(
-          wallet.addresses?.onchain?.[selectedAddressType],
-        )
-        console.log('Fetched transactions:', transactions)
-        transactions.forEach(transaction => {
-          transaction.vout.forEach(vout => console.log({ vout }))
-        })
-        setTransactions(transactions)
-      } catch (error) {
-        console.log('Error fetching transactions:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
+    setLoading(true)
     fetchTransactions()
-  }, [selectedAddressType, wallet])
+      .catch(error => {
+        console.error('Error fetching transactions:', error)
+      })
+      .finally(() => {
+        setLoading(false)
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Group transactions by date and create a flat list with headers
   const prepareTransactionsData = (): ListItem[] => {
     // Sort transactions by date (newest first)
     const sortedTransactions = [...transactions].sort((a, b) => {
-      // check for undefined values
-      if (!a.blocktime || !b.blocktime) return 0
+      const dateA = new Date(a.locktime * 1000) // Convert to milliseconds for Date constructor, if blocktime is in seconds
+      const dateB = new Date(b.locktime * 1000) // Convert to milliseconds for Date constructor, if blocktime is in seconds
 
-      const dateA = new Date(a?.blocktime * 1000)
-      const dateB = new Date(b?.blocktime * 1000)
-      return dateB.getTime() - dateA.getTime()
+      return dateB.getTime() - dateA.getTime() // Sort by newest first (descending order)
     })
 
     // Group by date
@@ -78,7 +89,7 @@ export default function WalletTransactions() {
     sortedTransactions.forEach(transaction => {
       if (!transaction.blocktime) return
       // Get date from transaction locktime
-      const date = new Date(transaction.blocktime * 1000)
+      const date = new Date(transaction.blocktime)
 
       const dateKey = date.toLocaleDateString('en-US', {
         month: 'short',
@@ -141,26 +152,49 @@ export default function WalletTransactions() {
       return null
     }
 
-    // Make sure scriptPubKey exists
-    const scriptPubKey = transaction.vout[0].scriptPubKey
+    // Calculate transaction value more accurately
+    let transactionValue = 0
+    let isReceived = false
+
+    // For received transactions - find outputs to our addresses and sum them
+    const ourOutputs = transaction.vout.filter(vout => {
+      const address = vout.scriptPubKey?.address
+      return usedAddresses.includes(address)
+    })
+
+    // For sent transactions - find outputs to external addresses and sum them
+    const externalOutputs = transaction.vout.filter(vout => {
+      const address = vout.scriptPubKey?.address
+      return address && !usedAddresses.includes(address)
+    })
+
+    // If we have outputs to our addresses, it's a received transaction
+    if (ourOutputs.length > 0) {
+      isReceived = true
+      transactionValue = ourOutputs.reduce((sum, vout) => sum + vout.value, 0)
+    }
+    // Otherwise it's a sent transaction
+    else if (externalOutputs.length > 0) {
+      isReceived = false
+      transactionValue = externalOutputs.reduce((sum, vout) => sum + vout.value, 0)
+    }
+
+    // Format transaction value with sign
+    const formattedValue = `${isReceived ? '+' : '-'}${transactionValue.toLocaleString('pt-BR', {
+      maximumFractionDigits: 8,
+    })} BTC`
+
+    // Get the relevant scriptPubKey for display
+    // For received transactions, use our first address that received funds
+    // For sent transactions, use the first external address
+    const scriptPubKey = isReceived ? ourOutputs[0]?.scriptPubKey : externalOutputs[0]?.scriptPubKey
+
     if (!scriptPubKey) {
       return null
     }
 
-    // check if transaction is send or receive - with proper null checks
-    const addresses = scriptPubKey.addresses || []
-    const isReceived = addresses.includes(wallet?.addresses?.onchain?.[selectedAddressType] ?? '')
-
-    // Format transaction value with sign
-    const formattedValue = `${isReceived ? '+' : '-'}${transaction.vout[0].value.toLocaleString(
-      'pt-BR',
-      {
-        maximumFractionDigits: 8,
-      },
-    )} BTC`
-
     // Truncate address for display with proper null check
-    const address = addresses[0] || ''
+    const address = scriptPubKey.address || ''
     const truncatedAddress =
       address.length > 20
         ? `${address.substring(0, 10)}...${address.substring(address.length - 10)}`
