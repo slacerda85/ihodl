@@ -10,5 +10,7 @@ export type WalletData = {
 }
 
 export type WalletDataRaw = Omit<WalletData, 'accounts'> & {
+  masterKeyRaw: Record<string, string>
+  chainCodeRaw: Record<string, string>
   accounts: Record<AccountType, AccountDataRaw>
 }

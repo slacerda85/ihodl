@@ -3,10 +3,11 @@ import { View, Text, TouchableOpacity, StyleSheet, useColorScheme } from 'react-
 import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 import { useWallet } from './wallet-provider'
-import WalletAccounts from './components/wallet-accounts'
+import WalletAccounts from './components/new-wallet-accounts'
 import { useEffect, useMemo, useState } from 'react'
 import WalletBalance from './wallet-balance'
 import { discover, DiscoveredAccount } from '@/shared/lib/bitcoin/account/account'
+import useSWR from 'swr'
 
 export default function WalletDetails() {
   const colorScheme = useColorScheme()
@@ -14,23 +15,34 @@ export default function WalletDetails() {
 
   const { wallets, selectedWalletId } = useWallet()
   const [totalBalance, setTotalBalance] = useState<number>(0)
-  const [isLoading, setIsLoading] = useState<boolean>(false)
-  const [discoveredAccounts, setDiscoveredAccounts] = useState<DiscoveredAccount[]>([])
-  const wallet = useMemo(
-    () => wallets.find(wallet => wallet.walletId === selectedWalletId),
-    [wallets, selectedWalletId],
+  // const [isLoading, setIsLoading] = useState<boolean>(false)
+  // const [discoveredAccounts, setDiscoveredAccounts] = useState<DiscoveredAccount[]>([])
+  const wallet = /* useMemo(
+    () => */ wallets.find(wallet => wallet.walletId === selectedWalletId)
+  /* [wallets, selectedWalletId],
+  ) */
+
+  const { data: discoveredAccounts = [], isLoading } = useSWR<DiscoveredAccount[]>(
+    selectedWalletId ? `/wallet/${selectedWalletId}/accounts` : null,
+    () => {
+      if (!wallet) return []
+      const { masterKey, chainCode } = wallet
+      return discover(masterKey, chainCode).then(res => res.discoveredAccounts)
+    },
+    {
+      refreshInterval: 1000 * 60 * 10, // 10 minutes
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+    },
   )
 
-  async function discoverAccounts(privateKey: Uint8Array, chainCode: Uint8Array) {
+  /* async function discoverAccounts(privateKey: Uint8Array, chainCode: Uint8Array) {
     setIsLoading(true)
-    console.log('privateKey and chainCode', privateKey, chainCode)
-    console.log('discoverAccounts called')
     const response = await discover(privateKey, chainCode)
-    console.log('discoverAccounts response:', response)
     const { discoveredAccounts } = response
     setDiscoveredAccounts(discoveredAccounts)
     setIsLoading(false)
-  }
+  } */
 
   function handleSend() {
     // Navigate to send screen
@@ -43,7 +55,7 @@ export default function WalletDetails() {
   }
 
   // discover accounts when wallet is selected
-  useEffect(() => {
+  /* useEffect(() => {
     if (selectedWalletId && wallet) {
       const { masterKey, chainCode } = wallet
       discoverAccounts(masterKey, chainCode).then(() => {
@@ -53,7 +65,7 @@ export default function WalletDetails() {
         setTotalBalance(totalBalance)
       })
     }
-  }, [selectedWalletId])
+  }, [selectedWalletId]) */
 
   // if no wallets, show empty state and a Link component to navigate to create wallet screen
   if (!wallet) {

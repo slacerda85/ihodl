@@ -58,7 +58,7 @@ export async function createWallet(options: CreateWalletProps) {
     walletId,
     walletName,
     cold,
-    masterKey: masterKey,
+    masterKey,
     chainCode,
     accounts: newAccounts,
   }

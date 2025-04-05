@@ -85,7 +85,7 @@ export async function discover(
       `m/${purpose}'/${coinType}'/${accountIndex}'`,
     )
 
-    const scanChain = async (nodePrivateKey: Uint8Array, nodeChainCode: Uint8Array) => {
+    async function scanChain(nodePrivateKey: Uint8Array, nodeChainCode: Uint8Array) {
       const chainNode = deriveFromPath(
         nodePrivateKey,
         nodeChainCode,

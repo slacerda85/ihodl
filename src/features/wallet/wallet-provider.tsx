@@ -4,7 +4,7 @@ import {
   deleteWallet as deleteWalletAction,
   getWallets as getWalletsAction,
 } from './actions'
-import { AccountType } from '@/shared/models/account'
+import { AccountData, AccountType } from '@/shared/models/account'
 import { WalletData } from '@/shared/models/wallet'
 
 type WalletContextType = {
@@ -44,6 +44,8 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
       const formattedWallets = loadedWallets.map(wallet => {
         return {
           ...wallet,
+          masterKey: new Uint8Array(Object.values(wallet.masterKey).map(value => Number(value))),
+          chainCode: new Uint8Array(Object.values(wallet.chainCode).map(value => Number(value))),
           accounts: Object.entries(wallet.accounts).reduce(
             (acc, [key, value]) => {
               acc[key as AccountType] = {
@@ -57,7 +59,7 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
               }
               return acc
             },
-            {} as Record<AccountType, any>,
+            {} as Record<AccountType, AccountData>,
           ),
         }
       })

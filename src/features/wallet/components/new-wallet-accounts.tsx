@@ -12,6 +12,8 @@ import { useState } from 'react'
 import { DiscoveredAccount } from '@/shared/lib/bitcoin/account/account'
 import { Tx } from '@/shared/models/transaction'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import colors from '@/shared/theme/colors'
+import { alpha } from '@/shared/theme/utils'
 
 interface WalletAccountsProps {
   isLoading: boolean
@@ -103,6 +105,8 @@ export default function WalletAccounts({ isLoading, discoveredAccounts }: Wallet
         transparent={false}
         visible={modalVisible}
         onRequestClose={() => setModalVisible(false)}
+        hardwareAccelerated={true}
+        presentationStyle="pageSheet"
       >
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
