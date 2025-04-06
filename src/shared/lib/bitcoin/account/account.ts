@@ -50,7 +50,9 @@ export async function getAccountAddresses(
 }
 
 export type DiscoveredAccount = {
-  index: number
+  purpose: number
+  coinType: number
+  accountIndex: number
   discovered: DiscoveredAddressInfo[]
 }
 
@@ -70,13 +72,11 @@ export async function discover(
   purpose = 84,
   coinType = 0,
   gapLimit: number = 20,
+  multiAccount = false,
+  accountIndex = 0,
 ): Promise<DiscoverResponse> {
-  console.log('discover function called...')
   const discoveredAccounts: DiscoveredAccount[] = []
-  let accountIndex = 0
-
-  while (true) {
-    console.log('Entered discover loop for Account:', accountIndex)
+  do {
     // derive account node
     // bip 44 levels: m / purpose' / coin_type' / account' / change / address_index
     const accountNode = deriveFromPath(
@@ -99,19 +99,15 @@ export async function discover(
 
       // Continue scanning until we find gapLimit consecutive unused addresses
       while (consecutiveUnused < gapLimit) {
-        console.log('Entered while consecutiveUnused < gapLimit:', consecutiveUnused)
         const { derivedKey } = deriveFromPath(
           chainNode.derivedKey,
           chainNode.derivedChainCode,
           `${index}`,
         )
-
         const publicKey = createPublicKey(derivedKey)
         const address = serializePublicKeyForSegWit(publicKey)
-
         console.log(`Scanning address of index ${index}`, address)
         const transactions = await api.transactions.getTransactions(address)
-        console.log(`Transactions for address ${address}:`, transactions)
         if (transactions.length > 0) {
           console.log(`Found transactions for address ${address}`)
           discovered.push({
@@ -130,18 +126,18 @@ export async function discover(
 
       return discovered
     }
-
-    console.log('Scanning chain for account index:', accountIndex)
     const discoveredAddressInfo = await scanChain(
       accountNode.derivedKey,
       accountNode.derivedChainCode,
     )
-    console.log('Discovered address info:', discoveredAddressInfo)
+
     const hasTransactions = discoveredAddressInfo.some(info => info.txs.length > 0)
 
     if (hasTransactions) {
       discoveredAccounts.push({
-        index: accountIndex,
+        purpose,
+        coinType,
+        accountIndex,
         discovered: discoveredAddressInfo,
       })
       accountIndex++
@@ -150,7 +146,7 @@ export async function discover(
       console.log('No transactions found for account index:', accountIndex)
       break
     }
-  }
+  } while (multiAccount)
 
   return { discoveredAccounts }
 }

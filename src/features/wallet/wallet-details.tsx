@@ -29,11 +29,6 @@ export default function WalletDetails() {
       const { masterKey, chainCode } = wallet
       return discover(masterKey, chainCode).then(res => res.discoveredAccounts)
     },
-    {
-      refreshInterval: 1000 * 60 * 10, // 10 minutes
-      revalidateOnFocus: false,
-      revalidateOnReconnect: false,
-    },
   )
 
   /* async function discoverAccounts(privateKey: Uint8Array, chainCode: Uint8Array) {

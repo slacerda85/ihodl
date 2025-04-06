@@ -43,28 +43,7 @@ const protocolLabels: Record<AccountProtocol, string> = {
 
 export default function WalletAccounts() {
   const { selectedWalletId, wallets, setSelectedAccount } = useWallet()
-  const selectedWallet = useMemo(
-    () => wallets.find(wallet => wallet.walletId === selectedWalletId),
-    [wallets, selectedWalletId],
-  )
-
-  const accountData =
-    selectedWallet !== undefined
-      ? deriveFromPath(
-          selectedWallet.accounts.bip84.privateKey,
-          selectedWallet.accounts.bip84.chainCode,
-          '0/0',
-        )
-      : undefined
-  if (accountData === undefined) {
-    console.error('No account data found')
-  } else {
-    const accountPublicKey = createPublicKey(accountData.derivedKey)
-    const accountAddress = serializePublicKeyForSegWit(accountPublicKey)
-    console.log('wallet name:', selectedWallet?.walletName)
-    console.log(`First address: ${accountAddress}`)
-  }
-
+  const selectedWallet = wallets.find(wallet => wallet.walletId === selectedWalletId)
   const [isLoading, setIsLoading] = useState<boolean>(false)
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
@@ -180,7 +159,7 @@ export default function WalletAccounts() {
     return result
   }
 
-  const renderItem = ({ item }: { item: ListItem }) => {
+  const renderAccount = ({ item }: { item: ListItem }) => {
     // Render section header
     if (item.type === 'header') {
       return (
@@ -216,26 +195,6 @@ export default function WalletAccounts() {
           />
         )
       }
-
-      /* switch (account.) {
-        case 'BTC':
-          return <BitcoinLogo width={24} height={24} />
-        case 'lightning':
-          return (
-            <Image
-              source={require('@/shared/assets/lightning-logo.png')}
-              style={{ width: 24, height: 24 }}
-            />
-          )
-        default:
-          return (
-            <IconSymbol
-              name="questionmark.circle"
-              size={20}
-              color={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
-            />
-          )
-      } */
     }
 
     return (
@@ -289,7 +248,7 @@ export default function WalletAccounts() {
       <FlatList<ListItem>
         data={listData}
         keyExtractor={item => item.id}
-        renderItem={renderItem}
+        renderItem={renderAccount}
         contentContainerStyle={styles.flatList}
         refreshing={isLoading}
         onRefresh={fetchAccountBalances}
