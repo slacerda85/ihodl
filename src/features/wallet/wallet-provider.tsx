@@ -4,8 +4,8 @@ import {
   deleteWallet as deleteWalletAction,
   getWallets as getWalletsAction,
 } from './actions'
-import { AccountData, AccountType } from '@/shared/models/account'
-import { WalletData } from '@/shared/models/wallet'
+import { AccountData, AccountType } from '@/core/models/account'
+import { WalletData } from '@/core/models/wallet'
 
 type WalletContextType = {
   wallets: WalletData[]

@@ -1,6 +1,6 @@
 import { randomUUID } from 'expo-crypto'
-import { AccountData, AccountProtocol, AccountType, accountPath } from '@/shared/models/account'
-import { WalletData, WalletDataRaw } from '@/shared/models/wallet'
+import { AccountData, AccountProtocol, AccountType, accountPath } from '@/core/models/account'
+import { WalletData, WalletDataRaw } from '@/core/models/wallet'
 import { createEntropy } from '@/shared/lib/bitcoin/crypto'
 import {
   createMasterKey,

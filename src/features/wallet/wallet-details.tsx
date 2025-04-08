@@ -6,7 +6,7 @@ import { useWallet } from './wallet-provider'
 import WalletAccounts from './components/new-wallet-accounts'
 import { useEffect, useMemo, useState } from 'react'
 import WalletBalance from './wallet-balance'
-import { discover, DiscoveredAccount } from '@/shared/lib/bitcoin/account/account'
+import { discover, DiscoveredAccount, newDiscover } from '@/shared/lib/bitcoin/account/account'
 import useSWR from 'swr'
 
 export default function WalletDetails() {
@@ -27,7 +27,7 @@ export default function WalletDetails() {
     () => {
       if (!wallet) return []
       const { masterKey, chainCode } = wallet
-      return discover(masterKey, chainCode).then(res => res.discoveredAccounts)
+      return newDiscover(masterKey, chainCode).then(res => res.discoveredAccounts)
     },
   )
 
