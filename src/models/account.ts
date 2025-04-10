@@ -1,4 +1,4 @@
-export type Account = Record<AccountProtocol, AccountType[]>
+// export type Account = Record<AccountProtocol, AccountType[]>
 export type AccountType = OnchainAccountType | LightningAccountType
 export type OnchainAccountType = 'bip44' | 'bip49' | 'bip84' | 'bip86'
 export type LightningAccountType = 'lightning-node'
@@ -24,17 +24,31 @@ export const accountPath: AccountPath = {
 }
 
 export interface AccountData {
-  privateKey: Uint8Array
-  chainCode: Uint8Array
-  childIndex: number
-  parentFingerprint: number
-  depth: number
+  extendedKey: Uint8Array
+  // childIndex: number
+  // parentFingerprint: number
+  // depth: number
   // path: AccountPath[AccountType]
 }
 
-export interface AccountDataRaw
-  extends Pick<AccountData, 'childIndex' | 'parentFingerprint' | 'depth'> {
+export interface AccountDataRaw {
   // For raw data, we use string to represent the byte arrays
-  privateKey: Record<string, string>
-  chainCode: Record<string, string>
+  // privateKey: Record<string, string>
+  // chainCode: Record<string, string>
+  extendedKeyRaw: Record<string, string>
+}
+
+// bitcoin only
+export type Purpose =
+  | 44 // Legacy
+  | 49 // P2SH SegWit
+  | 84 // Native SegWit
+  | 86 // Taproot
+
+export type CoinType = 0 // Bitcoin
+
+export type Account = {
+  purpose: Purpose
+  coinTypes: CoinType[]
+  accountIndex?: number
 }

@@ -46,10 +46,4 @@ async function isValidDataSize(data: string): Promise<boolean> {
   return true
 }
 
-const storage = {
-  setItem,
-  getItem,
-  deleteItem,
-}
-
-export default storage
+export { setItem, getItem, deleteItem }

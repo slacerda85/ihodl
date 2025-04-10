@@ -4,7 +4,7 @@ import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 import { IconSymbol } from '@/shared/ui/icon-symbol'
 import { useWallet } from './wallet-provider'
-import { MINIMUN_CONFIRMATIONS, Tx } from '@/core/models/transaction'
+import { MINIMUN_CONFIRMATIONS, Tx } from '@/models/transaction'
 import { discover, getAccountAddresses } from '@/shared/lib/bitcoin/account/account'
 
 // List item types for our FlatList

@@ -6,7 +6,7 @@ import { IconSymbol } from '@/shared/ui/icon-symbol'
 import { useWallet } from './wallet-provider'
 import BitcoinLogo from '@/shared/assets/bitcoin-logo'
 import { Link } from 'expo-router'
-import { AccountType, AccountProtocol } from '@/core/models/account'
+import { AccountType, AccountProtocol } from '@/models/account'
 import {
   createPublicKey,
   deriveFromPath,

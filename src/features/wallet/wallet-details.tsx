@@ -4,9 +4,9 @@ import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 import { useWallet } from './wallet-provider'
 import WalletAccounts from './components/new-wallet-accounts'
-import { useEffect, useMemo, useState } from 'react'
+import { useState } from 'react'
 import WalletBalance from './wallet-balance'
-import { discover, DiscoveredAccount, newDiscover } from '@/shared/lib/bitcoin/account/account'
+import { DiscoveredAccount, newDiscover } from '@/shared/lib/bitcoin/account/account'
 import useSWR from 'swr'
 
 export default function WalletDetails() {
@@ -22,14 +22,13 @@ export default function WalletDetails() {
   /* [wallets, selectedWalletId],
   ) */
 
-  const { data: discoveredAccounts = [], isLoading } = useSWR<DiscoveredAccount[]>(
+  /* const { data: discoveredAccounts = [], isLoading } = useSWR<DiscoveredAccount[]>(
     selectedWalletId ? `/wallet/${selectedWalletId}/accounts` : null,
     () => {
       if (!wallet) return []
-      const { masterKey, chainCode } = wallet
-      return newDiscover(masterKey, chainCode).then(res => res.discoveredAccounts)
+      const { extendedKey } = wallet
     },
-  )
+  ) */
 
   /* async function discoverAccounts(privateKey: Uint8Array, chainCode: Uint8Array) {
     setIsLoading(true)
@@ -105,7 +104,7 @@ export default function WalletDetails() {
         </TouchableOpacity>
       </View>
       <View style={styles.transactionsSection}>
-        <WalletAccounts isLoading={isLoading} discoveredAccounts={discoveredAccounts} />
+        {/* <WalletAccounts isLoading={isLoading} discoveredAccounts={discoveredAccounts} /> */}
       </View>
     </View>
   )

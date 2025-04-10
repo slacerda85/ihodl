@@ -1,9 +1,9 @@
 import tls, { ConnectionOptions, TLSSocket } from 'tls'
 // import * as bitcoin from 'bitcoinjs-lib'
-import { ElectrumMethod, ElectrumResponse, GetHistoryResult } from '@/core/models/electrum'
-import { JsonRpcRequest } from '@/core/models/rpc'
+import { ElectrumMethod, ElectrumResponse, GetHistoryResult } from '@/models/electrum'
+import { JsonRpcRequest } from '@/models/rpc'
 import { randomUUID } from 'expo-crypto'
-import { Tx } from '@/core/models/transaction'
+import { Tx } from '@/models/transaction'
 import { addressToScriptHash } from '../../../shared/lib/bitcoin/address'
 
 export const peers: ConnectionOptions[] = [

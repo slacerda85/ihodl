@@ -1,6 +1,6 @@
 import { AxiosError } from 'axios'
 import api from '../api'
-import { Tx } from '@/core/models/transaction'
+import { Tx } from '@/models/transaction'
 
 /* async function getTransaction(txid: string): Promise<Tx> {
   const response = await api.get<Tx>(`/transaction/${txid}`)

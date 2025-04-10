@@ -4,7 +4,7 @@ import {
   serializePublicKeyForSegWit,
 } from '@/shared/lib/bitcoin/key'
 import api from '@/shared/api'
-import { Tx } from '@/core/models/transaction'
+import { Tx } from '@/models/transaction'
 import ElectrumService from '@/core/services/electrum'
 
 type AddressInfo = {

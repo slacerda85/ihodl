@@ -12,7 +12,7 @@ import {
 } from 'react-native'
 import { ReactNode, useState } from 'react'
 import { DiscoveredAccount } from '@/shared/lib/bitcoin/account/account'
-import { Tx } from '@/core/models/transaction'
+import { Tx } from '@/models/transaction'
 import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 import { IconSymbol } from '@/shared/ui/icon-symbol'

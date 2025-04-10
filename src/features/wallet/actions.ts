@@ -1,14 +1,8 @@
 import { randomUUID } from 'expo-crypto'
-import { AccountData, AccountProtocol, AccountType, accountPath } from '@/core/models/account'
-import { WalletData, WalletDataRaw } from '@/core/models/wallet'
-import { createEntropy } from '@/shared/lib/bitcoin/crypto'
-import {
-  createMasterKey,
-  createPublicKey,
-  deriveFromPath,
-  fromMnemonic,
-  serializePublicKeyForSegWit,
-} from '@/shared/lib/bitcoin/key'
+import { Account } from '@/models/account'
+import { WalletData, WalletDataRaw } from '@/models/wallet'
+import { fromMnemonic, createRootExtendedKey } from '@/core/services/key'
+import cryptoService from '@/core/services/crypto'
 import storage from '../storage'
 
 // Types
@@ -16,41 +10,17 @@ interface CreateWalletProps {
   walletName: string
   mnemonic?: string
   cold?: boolean
-  accountTypes?: AccountType[]
+  accounts: Account[]
 }
-
-// Default configurations
-const defaultAccountTypes: AccountType[] = ['bip84']
 
 /**
  * Creates a new wallet with specified or default account types
  */
 export async function createWallet(options: CreateWalletProps) {
-  const { walletName, mnemonic, cold = false, accountTypes = defaultAccountTypes } = options || {}
+  const { walletName, mnemonic, cold = false, accounts } = options || {}
 
-  const seed = mnemonic !== undefined ? fromMnemonic(mnemonic) : createEntropy(16)
-  const { masterKey, chainCode } = createMasterKey(seed)
-
-  // mount accounts object
-  const newAccounts: Record<AccountType, AccountData> = {} as Record<AccountType, AccountData>
-
-  accountTypes.forEach(accountType => {
-    const path = accountPath[accountType]
-    if (!path) {
-      return
-    }
-
-    const accountNode = deriveFromPath(masterKey, chainCode, path)
-    const { derivedKey, derivedChainCode, childIndex, depth, parentFingerprint } = accountNode // for typescript to ensure we are using the derived key
-
-    newAccounts[accountType] = {
-      privateKey: derivedKey,
-      chainCode: derivedChainCode,
-      childIndex,
-      parentFingerprint,
-      depth,
-    }
-  })
+  const seed = mnemonic !== undefined ? fromMnemonic(mnemonic) : cryptoService.createEntropy(16)
+  const rootExtendedkey = createRootExtendedKey(seed)
 
   const walletId = randomUUID()
 
@@ -58,9 +28,8 @@ export async function createWallet(options: CreateWalletProps) {
     walletId,
     walletName,
     cold,
-    masterKey,
-    chainCode,
-    accounts: newAccounts,
+    extendedKey: rootExtendedkey,
+    accounts,
   }
 
   await storage.setItem(`wallet_${walletId}`, walletData)
