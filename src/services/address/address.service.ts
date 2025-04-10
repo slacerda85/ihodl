@@ -1,6 +1,6 @@
 import { bech32 } from 'bech32'
 import secp256k1 from 'secp256k1'
-import crypto from '@/core/services/crypto'
+import crypto from '@/services/crypto'
 
 function createSegwitAddress(publicKey: Uint8Array, version: number = 0): string {
   if (!secp256k1.publicKeyVerify(publicKey)) {

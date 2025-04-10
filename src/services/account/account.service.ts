@@ -1,6 +1,6 @@
 import api from '@/shared/api'
 import { CoinType, Purpose } from '@/models/account'
-import { deriveAccount } from '@/core/services/key'
+import { deriveAccount } from '@/services/key'
 
 function discover(
   extendedKey: Uint8Array,

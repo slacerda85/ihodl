@@ -6,8 +6,6 @@ import { useWallet } from './wallet-provider'
 import WalletAccounts from './components/new-wallet-accounts'
 import { useState } from 'react'
 import WalletBalance from './wallet-balance'
-import { DiscoveredAccount, newDiscover } from '@/shared/lib/bitcoin/account/account'
-import useSWR from 'swr'
 
 export default function WalletDetails() {
   const colorScheme = useColorScheme()

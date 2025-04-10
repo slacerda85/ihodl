@@ -3,8 +3,8 @@ import {
   createWallet as createWalletAction,
   deleteWallet as deleteWalletAction,
   getWallets as getWalletsAction,
-} from './actions'
-import { AccountData, AccountType } from '@/models/account'
+} from '@/services/wallet'
+import { Account, AccountData, AccountType } from '@/models/account'
 import { WalletData } from '@/models/wallet'
 
 type WalletContextType = {
@@ -17,12 +17,15 @@ type WalletContextType = {
   // Action wrappers
   createWallet: (
     walletName: string,
-    cold?: boolean,
-  ) => Promise<{ success: boolean; walletId?: string }>
+    cold: boolean,
+    accounts: Account[],
+  ) => Promise<{ success: boolean }>
   importWallet: (
     walletName: string,
     mnemonic: string,
-  ) => Promise<{ success: boolean; walletId?: string }>
+    cold: boolean,
+    accounts: Account[],
+  ) => Promise<{ success: boolean }>
   deleteWallet: (walletId: string) => Promise<boolean>
 }
 
@@ -41,25 +44,11 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
     }
     try {
       const loadedWallets = await getWalletsAction()
-      const formattedWallets = loadedWallets.map(wallet => {
+      const formattedWallets: WalletData[] = loadedWallets.map(wallet => {
         return {
           ...wallet,
-          masterKey: new Uint8Array(Object.values(wallet.masterKey).map(value => Number(value))),
-          chainCode: new Uint8Array(Object.values(wallet.chainCode).map(value => Number(value))),
-          accounts: Object.entries(wallet.accounts).reduce(
-            (acc, [key, value]) => {
-              acc[key as AccountType] = {
-                ...value,
-                privateKey: new Uint8Array(
-                  Object.values(value.privateKey).map(value => Number(value)),
-                ),
-                chainCode: new Uint8Array(
-                  Object.values(value.chainCode).map(value => Number(value)),
-                ),
-              }
-              return acc
-            },
-            {} as Record<AccountType, AccountData>,
+          extendedKey: new Uint8Array(
+            Object.values(wallet.extendedKeyRaw).map(value => Number(value)),
           ),
         }
       })
@@ -79,40 +68,40 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // Wallet creation wrapper
-  const createWallet = useCallback(async (walletName: string, cold = false) => {
-    try {
-      const newWallet = await createWalletAction({
-        walletName,
-        cold,
-      })
+  const createWallet = useCallback(
+    async (walletName: string, cold = false, accounts: Account[]) => {
+      try {
+        const newWallet = await createWalletAction(walletName, cold, accounts)
 
-      setWallets(prev => [...prev, newWallet])
-      setSelectedWalletId(newWallet.walletId)
+        setWallets(prev => [...prev, newWallet])
+        setSelectedWalletId(newWallet.walletId)
 
-      return { success: true, walletId: newWallet.walletId }
-    } catch (error) {
-      console.error('Error creating wallet:', error)
-      return { success: false }
-    }
-  }, [])
+        return { success: true }
+      } catch (error) {
+        console.error('Error creating wallet:', error)
+        return { success: false }
+      }
+    },
+    [],
+  )
 
   // Import wallet wrapper
-  const importWallet = useCallback(async (walletName: string, mnemonic: string) => {
-    try {
-      const importedWallet = await createWalletAction({
-        walletName,
-        mnemonic,
-      })
+  const importWallet = useCallback(
+    async (walletName: string, mnemonic: string, cold: boolean = false, accounts: Account[]) => {
+      try {
+        const importedWallet = await createWalletAction(walletName, cold, accounts, mnemonic)
 
-      setWallets(prev => [...prev, importedWallet])
-      setSelectedWalletId(importedWallet.walletId)
+        setWallets(prev => [...prev, importedWallet])
+        setSelectedWalletId(importedWallet.walletId)
 
-      return { success: true, walletId: importedWallet.walletId }
-    } catch (error) {
-      console.error('Error importing wallet:', error)
-      return { success: false }
-    }
-  }, [])
+        return { success: true }
+      } catch (error) {
+        console.error('Error importing wallet:', error)
+        return { success: false }
+      }
+    },
+    [],
+  )
 
   // Delete wallet wrapper
   const deleteWallet = useCallback(

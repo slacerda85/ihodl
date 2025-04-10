@@ -1,7 +1,7 @@
 import { Account } from '@/models/account'
-import { createRootExtendedKey, fromMnemonic } from '@/core/services/key'
-import { createEntropy, randomUUID } from '@/core/services/crypto'
-import { deleteItem, getItem, setItem } from '@/core/services/storage'
+import { createRootExtendedKey, fromMnemonic } from '@/services/key'
+import { createEntropy, randomUUID } from '@/services/crypto'
+import { deleteItem, getItem, setItem } from '@/services/storage'
 import { WalletData, WalletDataRaw } from '@/models/wallet'
 
 async function createWallet(
@@ -9,7 +9,7 @@ async function createWallet(
   cold: boolean,
   accounts: Account[],
   seedPhrase?: string,
-) {
+): Promise<WalletData> {
   const entropy = seedPhrase ? fromMnemonic(seedPhrase) : createEntropy(16)
   const rootExtendedKey = createRootExtendedKey(entropy)
   const walletId = randomUUID()
@@ -24,6 +24,8 @@ async function createWallet(
 
   await saveWallet(walletId, walletData)
   await saveWalletId(walletId)
+
+  return walletData
 }
 
 async function saveWallet(id: string, walletData: WalletData) {

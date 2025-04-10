@@ -5,7 +5,7 @@ import {
 } from '@/shared/lib/bitcoin/key'
 import api from '@/shared/api'
 import { Tx } from '@/models/transaction'
-import ElectrumService from '@/core/services/electrum'
+import ElectrumService from '@/services/electrum'
 
 type AddressInfo = {
   index: number
