@@ -6,12 +6,9 @@ import { IconSymbol } from '@/shared/ui/icon-symbol'
 import { useWallet } from './wallet-provider'
 import BitcoinLogo from '@/shared/assets/bitcoin-logo'
 import { Link } from 'expo-router'
-import { AccountType, AccountProtocol } from '@/models/account'
-import {
-  createPublicKey,
-  deriveFromPath,
-  serializePublicKeyForSegWit,
-} from '@/shared/lib/bitcoin/key'
+import { AccountType, AccountProtocol, Purpose } from '@/models/account'
+import { createPublicKey, deriveAccount } from '@/services/key'
+import { toBech32 } from '@/services/address'
 import api from '@/shared/api'
 
 // Interface for list items
@@ -22,18 +19,17 @@ type ListItem =
 type AccountData = {
   id: string
   name: string
-  accountType: AccountType // Optional, for type safety
+  purpose: Purpose // Optional, for type safety
   balance: number
 
   unit: string
 }
 
-const addressTypeLabels: Record<AccountType, string> = {
-  bip44: 'BIP 44',
-  bip49: 'BIP 49',
-  bip84: 'BIP 84',
-  bip86: 'BIP 86',
-  'lightning-node': 'Lightning Node',
+const addressTypeLabels: Record<Purpose, string> = {
+  '44': 'BIP 44',
+  '49': 'BIP 49',
+  '84': 'BIP 84',
+  '86': 'BIP 86',
 }
 
 const protocolLabels: Record<AccountProtocol, string> = {
@@ -42,17 +38,17 @@ const protocolLabels: Record<AccountProtocol, string> = {
 }
 
 export default function WalletAccounts() {
-  const { selectedWalletId, wallets, setSelectedAccount } = useWallet()
+  const { selectedWalletId, wallets, setPurpose } = useWallet()
   const selectedWallet = wallets.find(wallet => wallet.walletId === selectedWalletId)
   const [isLoading, setIsLoading] = useState<boolean>(false)
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
   // Define proper type for account balances
-  const [accountBalances, setAccountBalances] = useState<Record<AccountType, number>>(
-    {} as Record<AccountType, number>,
+  const [accountBalances, setAccountBalances] = useState<Record<Purpose, number>>(
+    {} as Record<Purpose, number>,
   )
 
-  // Extract this function to reuse in both useEffect and onRefresh
+  /* // Extract this function to reuse in both useEffect and onRefresh
   const fetchAccountBalances = useCallback(async () => {
     console.log('fetchWalletBalances called')
     if (!selectedWallet) {
@@ -100,13 +96,13 @@ export default function WalletAccounts() {
       console.log('Setting isLoading to false')
       setIsLoading(false)
     }
-  }, [selectedWallet]) // Ensure it only runs when selectedWallet changes
+  }, [selectedWallet]) // Ensure it only runs when selectedWallet changes */
 
   // Fetch balances for all accounts in the selected wallet
-  useEffect(() => {
+  /* useEffect(() => {
     console.log('useEffect triggered, calling fetchAccountBalances')
     fetchAccountBalances()
-  }, [fetchAccountBalances])
+  }, [fetchAccountBalances]) */
 
   // Prepare data for FlatList with headers and accounts
   const prepareAccountsData = (): ListItem[] => {
@@ -123,8 +119,26 @@ export default function WalletAccounts() {
       title: 'Accounts',
     })
 
-    Object.keys(selectedWallet.accounts).forEach((accountType, index) => {
-      if (accountType === undefined) return
+    selectedWallet.accounts.forEach((account, index) => {
+      const purpose = account.purpose as Purpose
+      const accountId = `${account.purpose}-${index}`
+      result.push({
+        type: 'account',
+        id: accountId,
+        first: index === 0,
+        last: index === selectedWallet.accounts.length - 1,
+        account: {
+          id: accountId,
+          name: addressTypeLabels[purpose],
+          purpose: purpose,
+          balance: accountBalances[account.purpose] || 0,
+          unit: 'BTC',
+        },
+      })
+    })
+
+    /* Object.keys(selectedWallet.accounts).forEach((account, index) => {
+      if (account. === undefined) return
       const accountId = `${accountType}-${index}`
       result.push({
         type: 'account',
@@ -133,13 +147,13 @@ export default function WalletAccounts() {
         last: index === Object.keys(selectedWallet.accounts).length - 1,
         account: {
           id: accountId,
-          name: addressTypeLabels[accountType as AccountType],
-          accountType: accountType as AccountType,
+          name: addressTypeLabels[purpose as Purpose],
+          purpose: purpose as Purpose,
           balance: accountBalances[accountType as AccountType] || 0,
           unit: 'BTC',
         },
       })
-    })
+    }) */
 
     /* Object.entries(selectedWallet?.accounts).forEach(([accountType, account]) => {
       if (accountType.includes('lightning')) {
@@ -176,25 +190,17 @@ export default function WalletAccounts() {
     })}`
 
     // Get protocol icon
-    const getProtocolIcon = () => {
-      if (account.accountType.includes('lightning')) {
-        return (
-          <Image
-            source={require('@/shared/assets/lightning-logo.png')}
-            style={{ width: 24, height: 24 }}
-          />
-        )
-      } else if (account.accountType.includes('bip')) {
-        return <BitcoinLogo width={24} height={24} />
-      } else {
-        return (
-          <IconSymbol
-            name="questionmark.circle"
-            size={20}
-            color={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
-          />
-        )
+    const getPurposeIcon = () => {
+      const purposeToIcon: {
+        [key in Purpose]: React.ReactNode
+      } = {
+        '44': <BitcoinLogo width={24} height={24} />,
+        '49': <BitcoinLogo width={24} height={24} />,
+        '84': <BitcoinLogo width={24} height={24} />,
+        '86': <BitcoinLogo width={24} height={24} />,
       }
+
+      return purposeToIcon[account.purpose as Purpose] || <BitcoinLogo width={24} height={24} />
     }
 
     return (
@@ -209,10 +215,10 @@ export default function WalletAccounts() {
           item.last && styles.transactionItemLast,
           isDark && styles.transactionItemDark,
         ]}
-        onPress={() => setSelectedAccount(account.accountType)}
+        onPress={() => setPurpose(account.purpose as Purpose)}
       >
         <Pressable>
-          <View style={styles.accountIconContainer}>{getProtocolIcon()}</View>
+          <View style={styles.accountIconContainer}>{getPurposeIcon()}</View>
           <View style={styles.transactionDetails}>
             <Text style={[styles.contactName, isDark && styles.contactNameDark]}>
               {`${account.name}`}
@@ -251,7 +257,7 @@ export default function WalletAccounts() {
         renderItem={renderAccount}
         contentContainerStyle={styles.flatList}
         refreshing={isLoading}
-        onRefresh={fetchAccountBalances}
+        // onRefresh={fetchAccountBalances}
       />
     </View>
   )

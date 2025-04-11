@@ -82,4 +82,20 @@ async function getWallets(): Promise<WalletDataRaw[]> {
   }
 }
 
-export { createWallet, getWallet, deleteWallet, saveWalletId, getWalletIds, saveWallet, getWallets }
+async function deleteWallets() {
+  // Clear all wallet data
+  deleteItem('wallet_ids')
+  const walletIds = await getWalletIds()
+  await Promise.all(walletIds.map(id => deleteWallet(id)))
+}
+
+export {
+  createWallet,
+  getWallet,
+  deleteWallet,
+  saveWalletId,
+  getWalletIds,
+  saveWallet,
+  getWallets,
+  deleteWallets,
+}

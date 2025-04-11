@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, useColorScheme } from 'react-
 import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 import { useWallet } from './wallet-provider'
-import WalletAccounts from './components/new-wallet-accounts'
+// import WalletAccounts from './components/new-wallet-accounts'
 import { useState } from 'react'
 import WalletBalance from './wallet-balance'
 

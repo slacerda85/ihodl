@@ -5,7 +5,7 @@ import { alpha } from '@/shared/theme/utils'
 import { IconSymbol } from '@/shared/ui/icon-symbol'
 import { useWallet } from './wallet-provider'
 import { MINIMUN_CONFIRMATIONS, Tx } from '@/models/transaction'
-import { discover, getAccountAddresses } from '@/shared/lib/bitcoin/account/account'
+import { discoverAccounts } from '@/services/account/account.service'
 
 // List item types for our FlatList
 type ListItem =
@@ -13,7 +13,7 @@ type ListItem =
   | { type: 'transaction'; id: string; first?: boolean; last?: boolean; transaction: Tx }
 
 export default function WalletTransactions() {
-  const { selectedWalletId, wallets, selectedAccount } = useWallet()
+  const { selectedWalletId, wallets, purpose } = useWallet()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
@@ -28,38 +28,22 @@ export default function WalletTransactions() {
   const fetchTransactions = useCallback(async () => {
     console.log('wallet-transactions.tsx: Fetching transactions callback called')
     if (!wallet) return
-    const account = wallet.accounts[selectedAccount]
+    const account = wallet.accounts.find(account => account.purpose === purpose)
     if (!account) return
 
-    const { privateKey, chainCode } = account
+    const { discoveredAccounts } = await discoverAccounts(wallet.extendedKey, account.purpose)
 
-    // Discover accounts and their transactions
-    const response = await discover(privateKey, chainCode)
-    const discoveredAccounts = response.discoveredAccounts
-
-    // Get all addresses (receiving + change)
-    const addresses = await getAccountAddresses(privateKey, chainCode)
-    // Combine all addresses for checking transaction ownership
-    setUsedAddresses([...addresses.receiving, ...addresses.change])
-
-    // Extract all transactions from discovered accounts
-    const allTransactions: Tx[] = []
-    discoveredAccounts.forEach(account => {
-      account.discovered.forEach(addressInfo => {
-        if (addressInfo.txs && addressInfo.txs.length > 0) {
-          // Add all transactions from this address
-          allTransactions.push(...addressInfo.txs)
-        }
-      })
-    })
-
-    // Remove duplicates by txid
-    const uniqueTransactions = allTransactions.filter(
-      (tx, index, self) => index === self.findIndex(t => t.txid === tx.txid),
+    const usedAddresses = discoveredAccounts.flatMap(account =>
+      account.addressInfo.map(addressInfo => addressInfo.address),
     )
 
-    setTransactions(uniqueTransactions)
-  }, [wallet, selectedAccount])
+    setUsedAddresses(usedAddresses)
+
+    const transactions = discoveredAccounts.flatMap(account =>
+      account.addressInfo.flatMap(addressInfo => addressInfo.txs),
+    )
+    setTransactions(transactions)
+  }, [wallet, purpose])
 
   useEffect(() => {
     setLoading(true)

@@ -176,6 +176,25 @@ function getParentFingerprint(publicKey: Uint8Array): number {
   return parentFingerprint
 }
 
+/* function convertPathToArray(path: string) {
+  const pathArray: number[] = []
+  const segments = path.split('/')
+  // check if first segment is "m" and remove it]
+  if (segments[0] === 'm') {
+    segments.shift()
+  }
+
+  segments.forEach(segment => {
+    if (segment.endsWith("'")) {
+      pathArray.push(createHardenedIndex(parseInt(segment.slice(0, -1), 10)))
+    } else {
+      pathArray.push(parseInt(segment, 10))
+    }
+  })
+
+  return pathArray
+} */
+
 /**
  * Derives an account from the extended key.
  * @param extendedKey - The extended key to derive from.
@@ -290,6 +309,17 @@ function serializePrivateKey(
   return finalKey
 }
 
+/**
+ * Serializes a public key into a specific format.
+ * @param publicKey - The public key to serialize.
+ * @param chainCode - The chain code associated with the public key.
+ * @param depth - The depth of the key (default is 0).
+ * @param parentFingerprint - The parent fingerprint (default is 0).
+ * @param childIndex - The child index (default is 0).
+ * @param version - The version number (default is the mainnet public key version for bip84).
+ * @throws Will throw an error if the depth, parent fingerprint, or child index is invalid.
+ * @returns The serialized public key as a Uint8Array.
+ */
 function serializePublicKey(
   publicKey: Uint8Array,
   chainCode: Uint8Array,
@@ -298,23 +328,22 @@ function serializePublicKey(
   childIndex: number = 0,
   version: Uint8Array,
 ): Uint8Array {
-  // check valid public key
   if (!secp256k1.publicKeyVerify(publicKey)) {
     throw new Error('Invalid public key')
   }
-  // check valid depth
+
   if (depth > 255) {
     throw new Error('Invalid depth')
   }
-  // check valid parent fingerprint
+
   if (parentFingerprint > 0xffffffff) {
     throw new Error('Invalid parent fingerprint')
   }
-  // check valid child index
+
   if (childIndex > 0xffffffff) {
     throw new Error('Invalid child index')
   }
-  // serialize public key
+
   // mount public key buffer (78 bytes)
   const publicKeyBuffer = new Uint8Array(78)
   const view = new DataView(publicKeyBuffer.buffer)
@@ -326,30 +355,24 @@ function serializePublicKey(
   const versionNumber = parseInt(versionHex, 16)
   view.setUint32(0, versionNumber, false) // false for big-endian
 
-  // depth (1 byte)
-  view.setUint8(4, depth)
+  view.setUint8(4, depth) // depth (1 byte)
 
-  // parent fingerprint (4 bytes)
-  view.setUint32(5, parentFingerprint, false)
+  view.setUint32(5, parentFingerprint, false) // parent fingerprint (4 bytes)
 
-  // child index (4 bytes)
-  view.setUint32(9, childIndex, false)
+  view.setUint32(9, childIndex, false) // child index (4 bytes)
 
-  // chain code (32 bytes)
-  publicKeyBuffer.set(chainCode, 13)
+  publicKeyBuffer.set(chainCode, 13) // chain code (32 bytes)
 
-  // public key (33 bytes)
-  publicKeyBuffer.set(publicKey, 45)
+  publicKeyBuffer.set(publicKey, 45) // public key (33 bytes)
 
-  // create checksum (4 bytes)
-  const checksum = createChecksum(publicKeyBuffer)
+  const checksum = createChecksum(publicKeyBuffer) // create checksum (4 bytes)
 
   // combine everything
-  const finalKey = new Uint8Array(82) // 78 + 4 bytes
-  finalKey.set(publicKeyBuffer)
-  finalKey.set(checksum, 78)
+  const serializedPublicKey = new Uint8Array(82) // 78 + 4 bytes
+  serializedPublicKey.set(publicKeyBuffer)
+  serializedPublicKey.set(checksum, 78)
 
-  return finalKey
+  return serializedPublicKey
 }
 
 function privateKeyToWIF(privateKey: Uint8Array, compressed: boolean = true): string {
@@ -373,13 +396,24 @@ function privateKeyToWIF(privateKey: Uint8Array, compressed: boolean = true): st
   return toBase58(wifBuffer)
 }
 
+function toPublicKeyHash(serializedPublicKey: Uint8Array): Uint8Array {
+  const hash = hash160(serializedPublicKey.subarray(0, 33))
+  return hash
+}
+
 export {
+  toMnemonic,
+  fromMnemonic,
   createRootExtendedKey,
+  verifyExtendedKey,
+  deriveChildPrivateKey,
+  createPublicKey,
   deriveAccount,
   serializePrivateKey,
   serializePublicKey,
-  createPublicKey,
   privateKeyToWIF,
-  toMnemonic,
-  fromMnemonic,
+  toPublicKeyHash,
+  createHardenedIndex,
+  getParentFingerprint,
+  splitRootExtendedKey,
 }

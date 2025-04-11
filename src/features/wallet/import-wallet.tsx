@@ -73,7 +73,17 @@ export default function ImportWallet() {
       return
     }
 
-    const response = await importWallet(walletName, seedPhrase)
+    const response = await importWallet(
+      walletName,
+      seedPhrase,
+      false, // cold
+      [
+        {
+          coinTypes: [0], // Bitcoin
+          purpose: 84, // Native SegWit
+        },
+      ], // accounts
+    )
     if (!response.success) {
       console.error('Failed to import wallet')
       return

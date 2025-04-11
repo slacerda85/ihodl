@@ -1,19 +1,29 @@
-import { createContext, ReactNode, useContext, useEffect, useState, useCallback } from 'react'
+import {
+  createContext,
+  ReactNode,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+  Dispatch,
+  SetStateAction,
+} from 'react'
 import {
   createWallet as createWalletAction,
   deleteWallet as deleteWalletAction,
+  deleteWallets,
   getWallets as getWalletsAction,
 } from '@/services/wallet'
-import { Account, AccountData, AccountType } from '@/models/account'
+import { Account, Purpose } from '@/models/account'
 import { WalletData } from '@/models/wallet'
 
 type WalletContextType = {
   wallets: WalletData[]
-  setWallets: (wallets: WalletData[]) => void
+  setWallets: Dispatch<SetStateAction<WalletData[]>>
   selectedWalletId: string
-  setSelectedWalletId: (walletId: string) => void
-  selectedAccount: AccountType
-  setSelectedAccount: (accountType: AccountType) => void
+  setSelectedWalletId: Dispatch<SetStateAction<string>>
+  purpose: Purpose
+  setPurpose: Dispatch<SetStateAction<Purpose>>
   // Action wrappers
   createWallet: (
     walletName: string,
@@ -34,38 +44,37 @@ const WalletContext = createContext({} as WalletContextType)
 export default function WalletProvider({ children }: { children: ReactNode }) {
   const [wallets, setWallets] = useState<WalletData[]>([])
   const [selectedWalletId, setSelectedWalletId] = useState<string>('')
-  const [selectedAccount, setSelectedAccount] = useState<AccountType>('bip84')
-
-  // Load wallets on mount
-  const loadWallets = useCallback(async () => {
-    console.log('loadWallets callback called')
-    if (wallets.length > 0) {
-      return // Wallets already loaded
-    }
-    try {
-      const loadedWallets = await getWalletsAction()
-      const formattedWallets: WalletData[] = loadedWallets.map(wallet => {
-        return {
-          ...wallet,
-          extendedKey: new Uint8Array(
-            Object.values(wallet.extendedKeyRaw).map(value => Number(value)),
-          ),
-        }
-      })
-      setWallets(formattedWallets)
-      // Set the first wallet as selected if none is selected yet and wallets exist
-      if (loadedWallets.length > 0 && !selectedWalletId) {
-        setSelectedWalletId(loadedWallets[0].walletId)
-      }
-    } catch (error) {
-      console.error('Failed to load wallets:', error)
-    }
-  }, [selectedWalletId, wallets.length])
+  const [purpose, setPurpose] = useState<Purpose>(84) // Default to BIP84 (Native SegWit)
 
   useEffect(() => {
-    'loadWallets in useEffect called'
+    async function loadWallets() {
+      console.log('loadWallets callback called')
+      if (wallets.length > 0) {
+        return // Wallets already loaded
+      }
+      try {
+        const loadedWallets = await getWalletsAction()
+        console.log(JSON.stringify(loadedWallets, null, 2))
+        const formattedWallets: WalletData[] = loadedWallets.map(wallet => {
+          return {
+            ...wallet,
+            extendedKey: new Uint8Array(
+              Object.values(wallet.extendedKeyRaw).map(value => Number(value)),
+            ),
+          }
+        })
+        setWallets(formattedWallets)
+        // Set the first wallet as selected if none is selected yet and wallets exist
+        if (loadedWallets.length > 0 && !selectedWalletId) {
+          setSelectedWalletId(loadedWallets[0].walletId)
+        }
+      } catch (error) {
+        console.error('Failed to load wallets:', error)
+      }
+    }
+
     loadWallets()
-  }, [])
+  }, [selectedWalletId, wallets.length])
 
   // Wallet creation wrapper
   const createWallet = useCallback(
@@ -86,22 +95,24 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
   )
 
   // Import wallet wrapper
-  const importWallet = useCallback(
-    async (walletName: string, mnemonic: string, cold: boolean = false, accounts: Account[]) => {
-      try {
-        const importedWallet = await createWalletAction(walletName, cold, accounts, mnemonic)
+  const importWallet = async (
+    walletName: string,
+    mnemonic: string,
+    cold: boolean = false,
+    accounts: Account[],
+  ) => {
+    try {
+      const importedWallet = await createWalletAction(walletName, cold, accounts, mnemonic)
 
-        setWallets(prev => [...prev, importedWallet])
-        setSelectedWalletId(importedWallet.walletId)
+      setWallets(prev => [...prev, importedWallet])
+      setSelectedWalletId(importedWallet.walletId)
 
-        return { success: true }
-      } catch (error) {
-        console.error('Error importing wallet:', error)
-        return { success: false }
-      }
-    },
-    [],
-  )
+      return { success: true }
+    } catch (error) {
+      console.error('Error importing wallet:', error)
+      return { success: false }
+    }
+  }
 
   // Delete wallet wrapper
   const deleteWallet = useCallback(
@@ -137,8 +148,8 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
         setWallets,
         selectedWalletId,
         setSelectedWalletId,
-        selectedAccount,
-        setSelectedAccount,
+        purpose,
+        setPurpose,
         createWallet,
         importWallet,
         deleteWallet,
