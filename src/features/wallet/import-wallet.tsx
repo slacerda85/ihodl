@@ -11,13 +11,15 @@ import {
 } from 'react-native'
 import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
-import { useWallet } from './wallet-provider'
+// import { useWallet } from './wallet-provider'
 import { useRouter } from 'expo-router'
 import wordlist from 'bip39/src/wordlists/english.json'
+import { createWallet } from '@/services/wallet'
+import { useWallet } from './wallet-provider'
 
 export default function ImportWallet() {
   const router = useRouter()
-  const { importWallet } = useWallet()
+  const { setSelectedWalletId } = useWallet()
   const [walletName, setWalletName] = useState<string>('')
   const [seedPhrase, setSeedPhrase] = useState<string>('')
   const [currentWord, setCurrentWord] = useState<string>('')
@@ -72,23 +74,25 @@ export default function ImportWallet() {
     if (!walletName.trim() || !isValidSeedPhrase()) {
       return
     }
+    console.log('Importing wallet with name:', walletName)
 
-    const response = await importWallet(
+    const response = await createWallet(
       walletName,
-      seedPhrase,
-      false, // cold
+      false,
       [
         {
           coinTypes: [0], // Bitcoin
           purpose: 84, // Native SegWit
         },
       ], // accounts
+      seedPhrase,
     )
-    if (!response.success) {
+
+    if (!response) {
       console.error('Failed to import wallet')
       return
     }
-
+    setSelectedWalletId(response.walletId)
     router.dismiss(2)
   }
 

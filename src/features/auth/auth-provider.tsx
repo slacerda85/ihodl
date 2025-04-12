@@ -6,8 +6,8 @@ import AuthScreen from './auth-screen'
 
 // Constants
 const TIMEOUTS = {
-  INACTIVITY: 1000 * 30, // 30 seconds
-  BACKGROUND: 1000 * 60, // 60 seconds
+  INACTIVITY: 1000 * 100000, // 30 seconds
+  BACKGROUND: 1000 * 100000, // 60 seconds
 }
 
 const APP_STATE_TIMEOUTS: Record<AppStateStatus, number | undefined> = {

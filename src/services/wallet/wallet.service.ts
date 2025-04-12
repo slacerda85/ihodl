@@ -1,57 +1,72 @@
-import { Account } from '@/models/account'
-import { createRootExtendedKey, fromMnemonic } from '@/services/key'
+import { AccountToAdd } from '@/models/account'
+import { toMnemonic } from '@/services/key'
 import { createEntropy, randomUUID } from '@/services/crypto'
 import { deleteItem, getItem, setItem } from '@/services/storage'
-import { WalletData, WalletDataRaw } from '@/models/wallet'
+import { WalletData } from '@/models/wallet'
 
 async function createWallet(
   walletName: string,
   cold: boolean,
-  accounts: Account[],
+  accounts: AccountToAdd[],
   seedPhrase?: string,
-): Promise<WalletData> {
-  const entropy = seedPhrase ? fromMnemonic(seedPhrase) : createEntropy(16)
-  const rootExtendedKey = createRootExtendedKey(entropy)
-  const walletId = randomUUID()
+): Promise<{
+  success: boolean
+  walletId: string
+}> {
+  try {
+    const walletId = randomUUID()
 
-  const walletData: WalletData = {
-    walletId,
-    walletName,
-    cold,
-    extendedKey: rootExtendedKey,
-    accounts,
+    const mnemonic = seedPhrase || toMnemonic(createEntropy(128))
+
+    const newWallet: WalletData = {
+      walletId,
+      walletName,
+      cold,
+      seedPhrase: mnemonic,
+      accounts,
+    }
+
+    await saveWallet(newWallet)
+
+    return {
+      success: true,
+      walletId,
+    }
+  } catch (error) {
+    console.error('Error creating wallet:', error)
+    throw new Error('Failed to create wallet')
   }
-
-  await saveWallet(walletId, walletData)
-  await saveWalletId(walletId)
-
-  return walletData
 }
 
-async function saveWallet(id: string, walletData: WalletData) {
-  await setItem(`wallet_${id}`, walletData)
+async function saveWallet(walletData: WalletData) {
+  await setItem(`wallet_${walletData.walletId}`, walletData)
+  await saveWalletId(walletData.walletId)
+  return { success: true }
 }
 
-async function getWallet(id: string): Promise<WalletDataRaw | undefined> {
-  const wallet = await getItem<WalletDataRaw>(`wallet_${id}`)
+async function getWallet(id: string): Promise<WalletData | undefined> {
+  const wallet = await getItem<WalletData>(`wallet_${id}`)
 
   if (!wallet) {
     return undefined
   }
+
   return wallet
 }
 
-async function deleteWallet(id: string): Promise<void> {
+async function deleteWallet(id: string): Promise<{ success: boolean }> {
   await deleteItem(`wallet_${id}`)
   const walletIds = await getWalletIds()
   const newWalletIds = walletIds.filter(walletId => walletId !== id)
   await setItem('wallet_ids', newWalletIds)
+  return { success: true }
 }
 
-async function saveWalletId(id: string) {
+async function saveWalletId(id: string): Promise<{ success: boolean }> {
   const walletIds = await getItem<string[]>('wallet_ids')
   const newWalletIds = walletIds ? [...walletIds, id] : [id]
   await setItem('wallet_ids', newWalletIds)
+  return { success: true }
 }
 
 async function getWalletIds(): Promise<string[]> {
@@ -59,7 +74,7 @@ async function getWalletIds(): Promise<string[]> {
   return walletIds || []
 }
 
-async function getWallets(): Promise<WalletDataRaw[]> {
+async function getWallets(): Promise<WalletData[]> {
   try {
     const walletIds = await getWalletIds()
 
@@ -67,15 +82,15 @@ async function getWallets(): Promise<WalletDataRaw[]> {
     const results = await Promise.allSettled(walletIds.map(id => getWallet(id)))
 
     // Extract successfully retrieved wallets
-    const wallets = results
+    const loadedWallets = results
       .filter(
-        (result): result is PromiseFulfilledResult<WalletDataRaw | undefined> =>
+        (result): result is PromiseFulfilledResult<WalletData | undefined> =>
           result.status === 'fulfilled',
       )
       .map(result => result.value)
-      .filter((wallet): wallet is WalletDataRaw => wallet !== undefined)
+      .filter((wallet): wallet is WalletData => wallet !== undefined)
 
-    return wallets
+    return loadedWallets
   } catch (error) {
     console.error('Failed to fetch wallets:', error)
     return [] // Return empty array instead of failing completely
@@ -84,7 +99,6 @@ async function getWallets(): Promise<WalletDataRaw[]> {
 
 async function deleteWallets() {
   // Clear all wallet data
-  deleteItem('wallet_ids')
   const walletIds = await getWalletIds()
   await Promise.all(walletIds.map(id => deleteWallet(id)))
 }

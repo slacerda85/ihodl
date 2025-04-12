@@ -6,7 +6,7 @@ import {
   toBase58,
   uint8ArrayToHex,
 } from '@/services/crypto'
-import { entropyToMnemonic, mnemonicToSeedSync } from '@/shared/lib/bitcoin/bip39'
+import { entropyToMnemonic, mnemonicToSeedSync } from '@/services/bip39'
 import wordList from 'bip39/src/wordlists/english.json'
 import secp256k1 from 'secp256k1'
 import { CoinType, Purpose } from '@/models/account'
@@ -26,12 +26,12 @@ function fromMnemonic(mnemonic: string): Uint8Array {
 }
 
 function createRootExtendedKey(entropy: Uint8Array): Uint8Array {
-  // check if nBytes is a valid length of 128, 160, 192, 224, or 256 bits
-  if (entropy.length % 4 !== 0 || entropy.length < 16 || entropy.length > 32) {
-    throw new Error('Invalid mnemonic length')
+  try {
+    const extendedKey = hmacSeed(entropy)
+    return extendedKey
+  } catch (error) {
+    throw new Error('Failed to create root extended key', { cause: error })
   }
-  const extendedKey = hmacSeed(entropy)
-  return extendedKey
 }
 
 function verifyExtendedKey(extendedKey: Uint8Array): boolean {

@@ -13,6 +13,7 @@ export default function WalletBalance({ balance, isLoading }: WalletBalanceProps
     <View style={styles.balanceSection}>
       <Text style={[styles.balanceLabel, isDark && styles.balanceLabelDark]}>Current Balance</Text>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Text> </Text>
         <Text style={[styles.balanceAmount, isDark && styles.balanceAmountDark]}>
           {balance.toLocaleString('pt-BR', { maximumFractionDigits: 8 })}
         </Text>

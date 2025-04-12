@@ -11,7 +11,7 @@ import {
   Image,
 } from 'react-native'
 import { ReactNode, useState } from 'react'
-import { DiscoveredAccount } from '@/shared/lib/bitcoin/account/account'
+import { Account } from '@/models/account'
 import { Tx } from '@/models/transaction'
 import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
@@ -20,7 +20,7 @@ import BitcoinLogo from '@/shared/assets/bitcoin-logo'
 
 interface WalletAccountsProps {
   isLoading: boolean
-  discoveredAccounts: DiscoveredAccount[]
+  accounts: Account[]
 }
 
 const coinTypeToLabel: Record<number, string> = {
@@ -57,7 +57,7 @@ function truncateAddress(address: string) {
   return `${address.slice(0, 10)}...${address.slice(-10)}`
 }
 
-export default function WalletAccounts({ isLoading, discoveredAccounts }: WalletAccountsProps) {
+export default function WalletAccounts({ isLoading, accounts }: WalletAccountsProps) {
   const [expandedAccount, setExpandedAccount] = useState<number | null>(null)
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null)
   const [modalVisible, setModalVisible] = useState(false)
@@ -102,7 +102,7 @@ export default function WalletAccounts({ isLoading, discoveredAccounts }: Wallet
     )
   }
 
-  const renderAccount = ({ item }: { item: DiscoveredAccount }) => {
+  const renderAccount = ({ item }: { item: Account }) => {
     const isExpanded = expandedAccount === item.accountIndex
     const usedAddresses = item.discovered.filter(addr => addr.txs.length > 0)
     const totalTxs = item.discovered.reduce((sum, addr) => sum + addr.txs.length, 0)
@@ -244,7 +244,7 @@ export default function WalletAccounts({ isLoading, discoveredAccounts }: Wallet
                         numberOfLines={1}
                         ellipsizeMode="middle"
                       >
-                        {output.scriptPubKey.address}
+                        {truncateAddress(output.scriptPubKey.address)}
                       </Text>
                       <Text style={[styles.txAmount, isDark && styles.txAmountDark]}>
                         {output.value} BTC
@@ -277,13 +277,13 @@ export default function WalletAccounts({ isLoading, discoveredAccounts }: Wallet
 
   return (
     <View style={styles.container}>
-      {discoveredAccounts.length === 0 ? (
+      {accounts.length === 0 ? (
         <Text style={[styles.emptyState, isDark && styles.emptyStateDark]}>
           No accounts discovered yet
         </Text>
       ) : (
         <FlatList
-          data={discoveredAccounts}
+          data={accounts}
           renderItem={renderAccount}
           keyExtractor={item => `account-${item.accountIndex}`}
           style={styles.accountsList}

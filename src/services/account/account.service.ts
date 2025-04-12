@@ -1,5 +1,5 @@
 import api from '@/shared/api'
-import { CoinType, Purpose } from '@/models/account'
+import { Account, CoinType, Purpose } from '@/models/account'
 import {
   createHardenedIndex,
   createPublicKey,
@@ -10,6 +10,7 @@ import {
 import { Tx } from '@/models/transaction'
 import { hash160 } from '../crypto'
 import { toBech32 } from '../address'
+import { AddressInfo } from '@/models/address'
 
 /**
  * Derives an account from the extended key.
@@ -68,21 +69,8 @@ function deriveAccount(
   }
 }
 
-export type DiscoveredAccount = {
-  purpose: number
-  coinType: number
-  accountIndex: number
-  addressInfo: DiscoveredAddressInfo[]
-}
-
-type DiscoveredAddressInfo = {
-  address: string
-  index: number
-  txs: Tx[] // Transactions associated with the address
-}
-
 export type DiscoverAccountsResponse = {
-  discoveredAccounts: DiscoveredAccount[]
+  discoveredAccounts: Account[]
 }
 
 /**
@@ -103,7 +91,7 @@ async function discoverAccounts(
   // multiAccount = false,
 ): Promise<DiscoverAccountsResponse> {
   try {
-    const discoveredAccounts: DiscoveredAccount[] = []
+    const discoveredAccounts: Account[] = []
 
     // derive purpose
     const purposeIndex = createHardenedIndex(purpose)
@@ -121,7 +109,7 @@ async function discoverAccounts(
     const changeIndex = 0
     const changeExtendedKey = deriveChildPrivateKey(accountExtendedKey, changeIndex)
 
-    const discovered: DiscoveredAddressInfo[] = []
+    const discovered: AddressInfo[] = []
     let consecutiveUnused = 0
     let index = 0
 
@@ -152,11 +140,11 @@ async function discoverAccounts(
     }
 
     // Create the discovered account object
-    const discoveredAccount: DiscoveredAccount = {
+    const discoveredAccount: Account = {
       purpose,
       coinType,
       accountIndex: accountStartIndex,
-      addressInfo: discovered,
+      discovered,
     }
     discoveredAccounts.push(discoveredAccount)
 

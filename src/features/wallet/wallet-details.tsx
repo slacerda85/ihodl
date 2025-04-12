@@ -3,9 +3,12 @@ import { View, Text, TouchableOpacity, StyleSheet, useColorScheme } from 'react-
 import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 import { useWallet } from './wallet-provider'
-// import WalletAccounts from './components/new-wallet-accounts'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import WalletBalance from './wallet-balance'
+import WalletAccounts from './components/new-wallet-accounts'
+import { discoverAccounts } from '@/services/account'
+import { createRootExtendedKey, fromMnemonic } from '@/services/key'
+import { Account } from '@/models/account'
 
 export default function WalletDetails() {
   const colorScheme = useColorScheme()
@@ -13,28 +16,53 @@ export default function WalletDetails() {
 
   const { wallets, selectedWalletId } = useWallet()
   const [totalBalance, setTotalBalance] = useState<number>(0)
-  // const [isLoading, setIsLoading] = useState<boolean>(false)
-  // const [discoveredAccounts, setDiscoveredAccounts] = useState<DiscoveredAccount[]>([])
-  const wallet = /* useMemo(
-    () => */ wallets.find(wallet => wallet.walletId === selectedWalletId)
-  /* [wallets, selectedWalletId],
-  ) */
+  const [isLoading, setIsLoading] = useState<boolean>(false)
+  const [discoveredAccounts, setDiscoveredAccounts] = useState<Account[]>([])
+  const wallet = wallets.find(wallet => wallet.walletId === selectedWalletId)
 
-  /* const { data: discoveredAccounts = [], isLoading } = useSWR<DiscoveredAccount[]>(
-    selectedWalletId ? `/wallet/${selectedWalletId}/accounts` : null,
-    () => {
-      if (!wallet) return []
-      const { extendedKey } = wallet
-    },
-  ) */
+  // load discoveredAccounts
+  useEffect(() => {
+    async function loadDiscoveredAccounts() {
+      if (wallet) {
+        setIsLoading(true)
+        const { accounts, seedPhrase } = wallet
+        const seed = fromMnemonic(seedPhrase)
+        // extract values for discover function
+        const extendedKey = createRootExtendedKey(seed)
 
-  /* async function discoverAccounts(privateKey: Uint8Array, chainCode: Uint8Array) {
-    setIsLoading(true)
-    const response = await discover(privateKey, chainCode)
-    const { discoveredAccounts } = response
-    setDiscoveredAccounts(discoveredAccounts)
-    setIsLoading(false)
-  } */
+        try {
+          // Use Promise.all to wait for all async operations
+          const discoveryPromises = accounts.map(async account => {
+            const { purpose, coinTypes, accountIndex } = account
+            const response = await discoverAccounts(
+              extendedKey,
+              purpose,
+              coinTypes[0],
+              accountIndex,
+            )
+            return response.discoveredAccounts
+          })
+
+          // Wait for all discoveries to complete
+          const discoveredResults = await Promise.all(discoveryPromises)
+
+          // Flatten the array of arrays into a single array
+          const discovered = discoveredResults.flat()
+
+          setDiscoveredAccounts(discovered)
+          // setTotalBalance(accounts.reduce((acc, account) => acc + account.balance, 0))
+        } catch (error) {
+          console.error('Failed to discover accounts:', error)
+        } finally {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    loadDiscoveredAccounts()
+  }, [selectedWalletId]) // Change dependency to selectedWalletId instead of wallet
+
+  // load total balance from discovered accounts
 
   function handleSend() {
     // Navigate to send screen
@@ -45,19 +73,6 @@ export default function WalletDetails() {
     // Navigate to receive screen
     // router.push('/wallet/receive')
   }
-
-  // discover accounts when wallet is selected
-  /* useEffect(() => {
-    if (selectedWalletId && wallet) {
-      const { masterKey, chainCode } = wallet
-      discoverAccounts(masterKey, chainCode).then(() => {
-        const totalBalance = discoveredAccounts.reduce((acc, account) => {
-          return acc + account.discovered.reduce((acc, address) => acc + address.txs.length, 0)
-        }, 0)
-        setTotalBalance(totalBalance)
-      })
-    }
-  }, [selectedWalletId]) */
 
   // if no wallets, show empty state and a Link component to navigate to create wallet screen
   if (!wallet) {
@@ -102,7 +117,7 @@ export default function WalletDetails() {
         </TouchableOpacity>
       </View>
       <View style={styles.transactionsSection}>
-        {/* <WalletAccounts isLoading={isLoading} discoveredAccounts={discoveredAccounts} /> */}
+        <WalletAccounts isLoading={isLoading} accounts={discoveredAccounts} />
       </View>
     </View>
   )
