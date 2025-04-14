@@ -6,8 +6,8 @@ import { useWallet } from './wallet-provider'
 import { useEffect, useState } from 'react'
 import WalletBalance from './wallet-balance'
 import WalletAccounts from './components/new-wallet-accounts'
-import { discoverAccounts } from '@/services/account'
-import { createRootExtendedKey, fromMnemonic } from '@/services/key'
+import { discoverAccounts } from '@/lib/account'
+import { createRootExtendedKey, fromMnemonic } from '@/lib/key'
 import { Account } from '@/models/account'
 
 export default function WalletDetails() {

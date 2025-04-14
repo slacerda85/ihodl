@@ -5,7 +5,7 @@ import { alpha } from '@/shared/theme/utils'
 import { IconSymbol } from '@/shared/ui/icon-symbol'
 import { useWallet } from './wallet-provider'
 import { MINIMUN_CONFIRMATIONS, Tx } from '@/models/transaction'
-import { discoverAccounts } from '@/services/account/account.service'
+import { discoverAccounts } from '@/lib/account/account'
 
 // List item types for our FlatList
 type ListItem =

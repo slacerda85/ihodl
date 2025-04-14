@@ -7,9 +7,9 @@ import { useWallet } from './wallet-provider'
 import BitcoinLogo from '@/shared/assets/bitcoin-logo'
 import { Link } from 'expo-router'
 import { AccountType, AccountProtocol, Purpose } from '@/models/account'
-import { createPublicKey, deriveAccount } from '@/services/key'
-import { toBech32 } from '@/services/address'
-import api from '@/shared/api'
+import { createPublicKey, deriveAccount } from '@/lib/key'
+import { toBech32 } from '@/lib/address'
+import api from '@/api'
 
 // Interface for list items
 type ListItem =

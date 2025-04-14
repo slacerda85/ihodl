@@ -8,7 +8,7 @@ import {
   SetStateAction,
   useRef,
 } from 'react'
-import { getWallets } from '@/services/wallet'
+import { getWallets } from '@/lib/wallet'
 import { Purpose } from '@/models/account'
 import { WalletData } from '@/models/wallet'
 

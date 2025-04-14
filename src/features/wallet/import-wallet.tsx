@@ -14,7 +14,7 @@ import { alpha } from '@/shared/theme/utils'
 // import { useWallet } from './wallet-provider'
 import { useRouter } from 'expo-router'
 import wordlist from 'bip39/src/wordlists/english.json'
-import { createWallet } from '@/services/wallet'
+import { createWallet } from '@/lib/wallet'
 import { useWallet } from './wallet-provider'
 
 export default function ImportWallet() {

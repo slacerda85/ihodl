@@ -5,8 +5,8 @@ import {
   hmacSHA512,
   toBase58,
   uint8ArrayToHex,
-} from '@/services/crypto'
-import { entropyToMnemonic, mnemonicToSeedSync } from '@/services/bip39'
+} from '@/lib/crypto'
+import { entropyToMnemonic, mnemonicToSeedSync } from '@/lib/bip39'
 import wordList from 'bip39/src/wordlists/english.json'
 import secp256k1 from 'secp256k1'
 import { CoinType, Purpose } from '@/models/account'

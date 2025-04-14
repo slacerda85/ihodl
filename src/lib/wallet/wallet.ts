@@ -1,7 +1,7 @@
 import { AccountToAdd } from '@/models/account'
-import { toMnemonic } from '@/services/key'
-import { createEntropy, randomUUID } from '@/services/crypto'
-import { deleteItem, getItem, setItem } from '@/services/storage'
+import { toMnemonic } from '@/lib/key'
+import { createEntropy, randomUUID } from '@/lib/crypto'
+import { deleteItem, getItem, setItem } from '@/lib/storage'
 import { WalletData } from '@/models/wallet'
 
 async function createWallet(

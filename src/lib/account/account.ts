@@ -1,4 +1,4 @@
-import api from '@/shared/api'
+import api from '@/api'
 import { Account, CoinType, Purpose } from '@/models/account'
 import {
   createHardenedIndex,
@@ -6,7 +6,7 @@ import {
   deriveChildPrivateKey,
   getParentFingerprint,
   verifyExtendedKey,
-} from '@/services/key'
+} from '@/lib/key'
 import { Tx } from '@/models/transaction'
 import { hash160 } from '../crypto'
 import { toBech32 } from '../address'
