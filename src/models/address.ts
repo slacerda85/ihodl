@@ -1,7 +1,8 @@
 import { Tx } from './transaction'
 
 export type AddressInfo = {
+  receivingAddress: string
+  changeAddress: string
   index: number
-  address: string
   txs: Tx[] // Transactions associated with the address
 }

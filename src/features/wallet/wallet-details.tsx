@@ -6,7 +6,7 @@ import { useWallet } from './wallet-provider'
 import { useEffect, useState } from 'react'
 import WalletBalance from './wallet-balance'
 import WalletAccounts from './components/new-wallet-accounts'
-import { discoverAccounts } from '@/lib/account'
+import { calculateBalance, discoverAccounts } from '@/lib/account'
 import { createRootExtendedKey, fromMnemonic } from '@/lib/key'
 import { Account } from '@/models/account'
 
@@ -31,25 +31,19 @@ export default function WalletDetails() {
         const extendedKey = createRootExtendedKey(seed)
 
         try {
-          // Use Promise.all to wait for all async operations
-          const discoveryPromises = accounts.map(async account => {
-            const { purpose, coinTypes, accountIndex } = account
-            const response = await discoverAccounts(
-              extendedKey,
-              purpose,
-              coinTypes[0],
-              accountIndex,
-            )
-            return response.discoveredAccounts
-          })
+          const defaultAccount = accounts[0]
+          const response = await discoverAccounts(
+            extendedKey,
+            defaultAccount.purpose,
+            defaultAccount.coinTypes[0],
+            defaultAccount.accountIndex,
+          )
 
-          // Wait for all discoveries to complete
-          const discoveredResults = await Promise.all(discoveryPromises)
+          setDiscoveredAccounts(response.discoveredAccounts)
 
-          // Flatten the array of arrays into a single array
-          const discovered = discoveredResults.flat()
+          const totalBalance = calculateBalance(response.discoveredAccounts[0].addressInfo)
+          setTotalBalance(totalBalance.balance)
 
-          setDiscoveredAccounts(discovered)
           // setTotalBalance(accounts.reduce((acc, account) => acc + account.balance, 0))
         } catch (error) {
           console.error('Failed to discover accounts:', error)
@@ -103,7 +97,7 @@ export default function WalletDetails() {
 
   return (
     <View style={styles.root}>
-      <WalletBalance balance={totalBalance} isLoading={!wallet} />
+      <WalletBalance balance={totalBalance} isLoading={isLoading} />
       <View style={styles.actionsSection}>
         <TouchableOpacity onPress={handleSend} style={[styles.button, styles.primaryButton]}>
           <Text style={styles.buttonText}>Send</Text>

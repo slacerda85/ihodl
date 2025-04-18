@@ -12,19 +12,24 @@ import {
 import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 import { IconSymbol } from '@/shared/ui/icon-symbol'
-import { useWallet } from './wallet-provider'
 import { useRouter } from 'expo-router'
+import { createWallet } from '@/lib/wallet'
 
 export default function CreateWallet() {
   const router = useRouter()
-  const { createWallet } = useWallet()
   const [offline, setOffline] = useState<boolean>(false)
   const [walletName, setWalletName] = useState<string>('')
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
   async function handleCreateWallet() {
-    const response = await createWallet(walletName, offline)
+    const response = await createWallet(walletName, offline, [
+      {
+        purpose: 84,
+        coinTypes: [0],
+        accountIndex: 0,
+      },
+    ])
     if (!response.success) {
       console.error('Failed to create wallet')
       return

@@ -38,6 +38,8 @@ export type ElectrumMethod =
   | 'blockchain.numblocks.subscribe'
   | 'blockchain.utxo.get_address'
 
+// Add this type to the file
+export type ElectrumPeer = [string, string, string[]] // [IP, hostname, features[]]
 // Response structure from Electrum
 export interface ElectrumResponse<T> {
   result: T

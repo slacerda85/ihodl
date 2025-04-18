@@ -1,4 +1,4 @@
-import { Tx } from './transaction'
+import { AddressInfo } from './address'
 
 // bitcoin only
 export type Purpose =
@@ -19,11 +19,5 @@ export type Account = {
   purpose: Purpose
   coinType: CoinType
   accountIndex: number
-  discovered: AddressInfo[]
-}
-
-type AddressInfo = {
-  address: string
-  index: number
-  txs: Tx[] // Transactions associated with the address
+  addressInfo: AddressInfo[]
 }

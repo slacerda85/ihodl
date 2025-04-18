@@ -27,7 +27,7 @@
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="ihodl"/>
-        <data android:scheme="com.anonymous.ihodl"/>
+        <data android:scheme="app.ihodl.wallet"/>
         <data android:scheme="exp+ihodl"/>
       </intent-filter>
     </activity>

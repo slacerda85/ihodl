@@ -5,7 +5,8 @@ import { alpha } from '@/shared/theme/utils'
 import { IconSymbol } from '@/shared/ui/icon-symbol'
 import { useWallet } from './wallet-provider'
 import { MINIMUN_CONFIRMATIONS, Tx } from '@/models/transaction'
-import { discoverAccounts } from '@/lib/account/account'
+import { discoverAccounts } from '@/lib/account'
+import { createRootExtendedKey, fromMnemonic } from '@/lib/key'
 
 // List item types for our FlatList
 type ListItem =
@@ -31,16 +32,23 @@ export default function WalletTransactions() {
     const account = wallet.accounts.find(account => account.purpose === purpose)
     if (!account) return
 
-    const { discoveredAccounts } = await discoverAccounts(wallet.extendedKey, account.purpose)
+    const extendedKey = createRootExtendedKey(fromMnemonic(wallet.seedPhrase))
+    if (!extendedKey) return
+
+    const { discoveredAccounts } = await discoverAccounts(
+      extendedKey,
+      account.purpose,
+      account.coinTypes[0],
+    )
 
     const usedAddresses = discoveredAccounts.flatMap(account =>
-      account.addressInfo.map(addressInfo => addressInfo.address),
+      account.discovered.map(addressInfo => addressInfo.address),
     )
 
     setUsedAddresses(usedAddresses)
 
     const transactions = discoveredAccounts.flatMap(account =>
-      account.addressInfo.flatMap(addressInfo => addressInfo.txs),
+      account.discovered.flatMap(addressInfo => addressInfo.txs),
     )
     setTransactions(transactions)
   }, [wallet, purpose])

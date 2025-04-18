@@ -17,7 +17,7 @@ export default function WalletLayout() {
 
 function headerRight() {
   return (
-    <Link style={{ padding: 8, borderRadius: '50%' }} href="/wallet/actions">
+    <Link style={{ padding: 8, borderRadius: 24 }} href="/wallet/actions">
       <Ionicons name="ellipsis-vertical" size={24} color={colors.primary} />
     </Link>
   )
@@ -26,7 +26,7 @@ function headerRight() {
 // link to [id]/manage
 function headerLeft() {
   return (
-    <Link style={{ padding: 8, borderRadius: '50%' }} href="/wallet/manage">
+    <Link style={{ padding: 8, borderRadius: 24 }} href="/wallet/manage">
       <Ionicons name="wallet-outline" size={24} color={colors.primary} />
     </Link>
   )
@@ -90,6 +90,7 @@ function WalletScreens() {
             headerLeft: showHeaders ? () => headerLeft() : undefined,
             headerRight: showHeaders ? () => headerRight() : undefined,
             // headerShown: false,
+            headerTitleAlign: 'center',
             title:
               wallets.find(wallet => wallet.walletId === selectedWalletId)?.walletName ||
               'No wallets found',
@@ -138,12 +139,12 @@ function WalletScreens() {
           }}
         />
 
-        <Stack.Screen
+        {/* <Stack.Screen
           name="transactions"
           options={{
             title: 'Transactions',
           }}
-        />
+        /> */}
       </Stack>
     </SafeAreaView>
   )

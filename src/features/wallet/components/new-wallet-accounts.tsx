@@ -17,6 +17,8 @@ import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 import { IconSymbol } from '@/shared/ui/icon-symbol'
 import BitcoinLogo from '@/shared/assets/bitcoin-logo'
+import { AddressInfo } from '@/models/address'
+import { calculateBalance } from '@/lib'
 
 interface WalletAccountsProps {
   isLoading: boolean
@@ -75,14 +77,14 @@ export default function WalletAccounts({ isLoading, accounts }: WalletAccountsPr
     setModalVisible(true)
   }
 
-  const renderAddress = ({ item }: { item: { address: string; index: number; txs: Tx[] } }) => {
+  const renderAddress = ({ item }: { item: AddressInfo }) => {
     const hasTxs = item.txs.length > 0
 
     return (
       <View style={[styles.addressItem, isDark && styles.addressItemDark]}>
         <View style={styles.addressInfo}>
           <Text style={[styles.addressIndex, isDark && styles.addressIndexDark]}>
-            {truncateAddress(item.address)}
+            {truncateAddress(item.receivingAddress)}
           </Text>
 
           <Text style={[styles.txCount, isDark && styles.txCountDark]}>
@@ -93,7 +95,7 @@ export default function WalletAccounts({ isLoading, accounts }: WalletAccountsPr
         {hasTxs && (
           <TouchableOpacity
             style={styles.viewButton}
-            onPress={() => openTransactionsModal(item.address, item.txs)}
+            onPress={() => openTransactionsModal(item.receivingAddress, item.txs)}
           >
             <Text style={styles.viewButtonText}>View Transactions</Text>
           </TouchableOpacity>
@@ -104,19 +106,10 @@ export default function WalletAccounts({ isLoading, accounts }: WalletAccountsPr
 
   const renderAccount = ({ item }: { item: Account }) => {
     const isExpanded = expandedAccount === item.accountIndex
-    const usedAddresses = item.discovered.filter(addr => addr.txs.length > 0)
-    const totalTxs = item.discovered.reduce((sum, addr) => sum + addr.txs.length, 0)
-    const totalBalance = item.discovered.reduce((sum, addr) => {
-      const { address, txs } = addr
-      const balance = txs.reduce((acc, tx) => {
-        const amount = tx.vout.reduce((total, output) => {
-          return total + (output.scriptPubKey.address === address ? output.value : 0)
-        }, 0)
-        return acc + amount
-      }, 0)
+    const usedAddresses = item.addressInfo.filter(addr => addr.txs.length > 0)
+    const totalTxs = item.addressInfo.reduce((sum, addr) => sum + addr.txs.length, 0)
 
-      return sum + balance
-    }, 0)
+    const totalBalance = calculateBalance(item.addressInfo).balance
 
     // Format account name using purpose and coin type labels
     const purposeLabel = purposeToLabel[item.purpose] || `Purpose ${item.purpose}`
@@ -166,10 +159,10 @@ export default function WalletAccounts({ isLoading, accounts }: WalletAccountsPr
 
         {isExpanded && (
           <FlatList
-            data={item.discovered}
+            data={item.addressInfo}
             renderItem={renderAddress}
             keyExtractor={address => `${item.accountIndex}-${address.index}`}
-            style={styles.addressList}
+            // style={styles.addressList}
             contentContainerStyle={styles.flatList}
           />
         )}
@@ -235,22 +228,24 @@ export default function WalletAccounts({ isLoading, accounts }: WalletAccountsPr
                   ))}
 
                   <Text style={[styles.txDetailHeader, isDark && styles.txDetailHeaderDark]}>
-                    Outputs ({tx.vout.length})
+                    My output
                   </Text>
-                  {tx.vout.map((output, i) => (
-                    <View key={i} style={styles.txOutput}>
-                      <Text
-                        style={[styles.txDetailItem, isDark && styles.txDetailItemDark]}
-                        numberOfLines={1}
-                        ellipsizeMode="middle"
-                      >
-                        {truncateAddress(output.scriptPubKey.address)}
-                      </Text>
-                      <Text style={[styles.txAmount, isDark && styles.txAmountDark]}>
-                        {output.value} BTC
-                      </Text>
-                    </View>
-                  ))}
+                  {tx.vout.map((output, i) =>
+                    output.scriptPubKey.address === selectedAddress ? (
+                      <View key={i} style={styles.txOutput}>
+                        <Text
+                          style={[styles.txDetailItem, isDark && styles.txDetailItemDark]}
+                          numberOfLines={1}
+                          ellipsizeMode="middle"
+                        >
+                          Value for {truncateAddress(output.scriptPubKey.address)}
+                        </Text>
+                        <Text style={[styles.txAmount, isDark && styles.txAmountDark]}>
+                          {output.value} BTC
+                        </Text>
+                      </View>
+                    ) : null,
+                  )}
                 </View>
               </View>
             ))}
@@ -399,9 +394,9 @@ const styles = StyleSheet.create({
   summaryTextDark: {
     color: colors.textSecondary.dark,
   },
-  addressList: {
+  /* addressList: {
     maxHeight: 300,
-  },
+  }, */
   addressItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',

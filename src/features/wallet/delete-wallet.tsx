@@ -4,18 +4,19 @@ import { useWallet } from './wallet-provider'
 import { useCallback } from 'react'
 import { useRouter } from 'expo-router'
 import { alpha } from '@/shared/theme/utils'
+import { deleteWallet } from '@/lib/wallet'
 
 export default function DeleteWallet() {
   const router = useRouter()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
-  const { wallets, selectedWalletId, setSelectedWalletId, deleteWallet } = useWallet()
+  const { wallets, selectedWalletId, setSelectedWalletId } = useWallet()
 
   const handleDeleteWallet = useCallback(async () => {
     await deleteWallet(selectedWalletId)
     setSelectedWalletId(wallets[0].walletId ?? '')
     router.dismiss(2)
-  }, [deleteWallet, router, selectedWalletId, setSelectedWalletId, wallets])
+  }, [router, selectedWalletId, setSelectedWalletId, wallets])
 
   return (
     <View style={styles.modalContainer}>
