@@ -44,6 +44,16 @@ async function saveWallet(walletData: WalletData) {
   return { success: true }
 }
 
+async function saveSelectedWalletId(walletId: string) {
+  await setItem('selected_wallet_id', walletId)
+  return { success: true }
+}
+
+async function getSelectedWalletId(): Promise<string | undefined> {
+  const selectedWalletId = await getItem<string>('selected_wallet_id')
+  return selectedWalletId
+}
+
 async function getWallet(id: string): Promise<WalletData | undefined> {
   const wallet = await getItem<WalletData>(`wallet_${id}`)
 
@@ -112,4 +122,6 @@ export {
   saveWallet,
   getWallets,
   deleteWallets,
+  saveSelectedWalletId,
+  getSelectedWalletId,
 }

@@ -8,7 +8,7 @@ export default function ColdWalletIcon() {
 
   return (
     <Ionicons
-      name="lock-closed"
+      name="lock-closed-outline"
       size={24}
       color={isDark ? colors.background.light : colors.background.dark}
     />

@@ -8,7 +8,7 @@ import {
   SetStateAction,
   useRef,
 } from 'react'
-import { getWallets } from '@/lib/wallet'
+import { getWallets, saveSelectedWalletId, getSelectedWalletId } from '@/lib/wallet'
 import { Purpose } from '@/models/account'
 import { WalletData } from '@/models/wallet'
 
@@ -39,9 +39,17 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
         console.log('Loaded wallets:', loadedWallets)
         setWallets(loadedWallets)
 
-        // Set the first wallet as selected if none is selected yet and wallets exist
-        if (loadedWallets.length > 0 && !selectedWalletId) {
-          setSelectedWalletId(loadedWallets[0].walletId)
+        const selectedId = await getSelectedWalletId()
+
+        if (selectedId) {
+          setSelectedWalletId(selectedId)
+        } else {
+          // If no selected wallet ID is found, set the first wallet as selected
+          const firstWallet = loadedWallets[0]
+          if (firstWallet) {
+            setSelectedWalletId(firstWallet.walletId)
+            await saveSelectedWalletId(firstWallet.walletId)
+          }
         }
       } catch (error) {
         console.error('Failed to load wallets:', error)

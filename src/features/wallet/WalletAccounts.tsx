@@ -1,24 +1,19 @@
 import {
   View,
   Text,
-  FlatList,
   TouchableOpacity,
-  ActivityIndicator,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  useColorScheme,
   Image,
+  useColorScheme,
+  StyleSheet,
+  FlatList,
 } from 'react-native'
-import { ReactNode, useState } from 'react'
 import { Account } from '@/models/account'
-import { Tx } from '@/models/transaction'
-import colors from '@/shared/theme/colors'
-import { alpha } from '@/shared/theme/utils'
-import { IconSymbol } from '@/shared/ui/icon-symbol'
 import BitcoinLogo from '@/shared/assets/bitcoin-logo'
-import { AddressInfo } from '@/models/address'
-import { calculateBalance } from '@/lib'
+import { ReactNode } from 'react'
+import colors from '@/shared/theme/colors'
+import { calculateBalance } from '@/lib/account'
+import { IconSymbol } from '@/shared/ui/icon-symbol'
+import { alpha } from '@/shared/theme/utils'
 
 interface WalletAccountsProps {
   isLoading: boolean
@@ -34,7 +29,7 @@ const coinTypeToLabel: Record<number, string> = {
 const purposeToLabel: Record<number, string> = {
   44: 'Legacy',
   49: 'SegWit',
-  84: 'Native SegWit',
+  84: 'BIP84',
   // Add more purposes as needed
 }
 
@@ -55,57 +50,16 @@ function getPurposeIcon(purpose: number) {
   return purposeToIcon[purpose] || <BitcoinLogo width={24} height={24} />
 }
 
-function truncateAddress(address: string) {
-  return `${address.slice(0, 10)}...${address.slice(-10)}`
-}
-
-export default function WalletAccounts({ isLoading, accounts }: WalletAccountsProps) {
-  const [expandedAccount, setExpandedAccount] = useState<number | null>(null)
-  const [selectedAddress, setSelectedAddress] = useState<string | null>(null)
-  const [modalVisible, setModalVisible] = useState(false)
-  const [selectedTxs, setSelectedTxs] = useState<Tx[]>([])
+export default function WalletAccounts({ accounts = [] }: WalletAccountsProps) {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
   const handleAccountPress = (accountIndex: number) => {
-    setExpandedAccount(expandedAccount === accountIndex ? null : accountIndex)
-  }
-
-  const openTransactionsModal = (address: string, transactions: Tx[]) => {
-    setSelectedAddress(address)
-    setSelectedTxs(transactions)
-    setModalVisible(true)
-  }
-
-  const renderAddress = ({ item }: { item: AddressInfo }) => {
-    const hasTxs = item.txs.length > 0
-
-    return (
-      <View style={[styles.addressItem, isDark && styles.addressItemDark]}>
-        <View style={styles.addressInfo}>
-          <Text style={[styles.addressIndex, isDark && styles.addressIndexDark]}>
-            {truncateAddress(item.receivingAddress)}
-          </Text>
-
-          <Text style={[styles.txCount, isDark && styles.txCountDark]}>
-            {item.txs.length} transaction{item.txs.length !== 1 ? 's' : ''}
-          </Text>
-        </View>
-
-        {hasTxs && (
-          <TouchableOpacity
-            style={styles.viewButton}
-            onPress={() => openTransactionsModal(item.receivingAddress, item.txs)}
-          >
-            <Text style={styles.viewButtonText}>View Transactions</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    )
+    // Handle account press logic here
+    console.log(`Account ${accountIndex} pressed`)
   }
 
   const renderAccount = ({ item }: { item: Account }) => {
-    const isExpanded = expandedAccount === item.accountIndex
     const usedAddresses = item.addressInfo.filter(addr => addr.txs.length > 0)
     const totalTxs = item.addressInfo.reduce((sum, addr) => sum + addr.txs.length, 0)
 
@@ -150,121 +104,21 @@ export default function WalletAccounts({ isLoading, accounts }: WalletAccountsPr
               </Text>
             </View>
             <IconSymbol
-              name={isExpanded ? 'chevron.down' : 'chevron.right'}
+              name={'chevron.right'}
               size={20}
               color={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
             />
           </View>
         </TouchableOpacity>
-
-        {isExpanded && (
-          <FlatList
-            data={item.addressInfo}
-            renderItem={renderAddress}
-            keyExtractor={address => `${item.accountIndex}-${address.index}`}
-            // style={styles.addressList}
-            contentContainerStyle={styles.flatList}
-          />
-        )}
       </View>
     )
   }
 
-  const renderTransactionModal = () => {
-    return (
-      <Modal
-        animationType="slide"
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
-        hardwareAccelerated={true}
-        presentationStyle="pageSheet"
-      >
-        <View style={[styles.modalContainer, isDark && styles.modalContainerDark]}>
-          <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, isDark && styles.modalTitleDark]}>
-              Transactions for
-            </Text>
-            <Text
-              style={[styles.modalAddress, isDark && styles.modalAddressDark]}
-              numberOfLines={1}
-              ellipsizeMode="middle"
-            >
-              {truncateAddress(selectedAddress ?? '')}
-            </Text>
-            <TouchableOpacity style={styles.closeButton} onPress={() => setModalVisible(false)}>
-              <Text style={[styles.closeButtonText, isDark && styles.closeButtonTextDark]}>
-                Close
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView style={styles.txList}>
-            {selectedTxs.map((tx, index) => (
-              <View key={tx.txid} style={[styles.txItem, isDark && styles.txItemDark]}>
-                <Text style={[styles.txId, isDark && styles.txIdDark]}>TXID: {tx.txid}</Text>
-                <Text style={[styles.txDetail, isDark && styles.txDetailDark]}>
-                  Time: {new Date(tx.time * 1000).toLocaleString()}
-                </Text>
-                <Text style={[styles.txDetail, isDark && styles.txDetailDark]}>
-                  Confirmations: {tx.confirmations ?? 0}
-                </Text>
-                <Text style={[styles.txDetail, isDark && styles.txDetailDark]}>
-                  Status: {tx.confirmations && tx.confirmations >= 6 ? 'Confirmed' : 'Pending'}
-                </Text>
-
-                <View style={styles.txDetails}>
-                  <Text style={[styles.txDetailHeader, isDark && styles.txDetailHeaderDark]}>
-                    Inputs ({tx.vin.length})
-                  </Text>
-                  {tx.vin.map((input, i) => (
-                    <Text
-                      key={i}
-                      style={[styles.txDetailItem, isDark && styles.txDetailItemDark]}
-                      numberOfLines={1}
-                      ellipsizeMode="middle"
-                    >
-                      {input.txid}:{input.vout}
-                    </Text>
-                  ))}
-
-                  <Text style={[styles.txDetailHeader, isDark && styles.txDetailHeaderDark]}>
-                    My output
-                  </Text>
-                  {tx.vout.map((output, i) =>
-                    output.scriptPubKey.address === selectedAddress ? (
-                      <View key={i} style={styles.txOutput}>
-                        <Text
-                          style={[styles.txDetailItem, isDark && styles.txDetailItemDark]}
-                          numberOfLines={1}
-                          ellipsizeMode="middle"
-                        >
-                          Value for {truncateAddress(output.scriptPubKey.address)}
-                        </Text>
-                        <Text style={[styles.txAmount, isDark && styles.txAmountDark]}>
-                          {output.value} BTC
-                        </Text>
-                      </View>
-                    ) : null,
-                  )}
-                </View>
-              </View>
-            ))}
-
-            {selectedTxs.length === 0 && (
-              <Text style={[styles.noTxs, isDark && styles.noTxsDark]}>No transactions found</Text>
-            )}
-          </ScrollView>
-        </View>
-      </Modal>
-    )
-  }
-
-  if (isLoading) {
+  if (accounts.length === 0) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, isDark && styles.loadingTextDark]}>
-          Discovering accounts...
+        <Text style={[styles.emptyState, isDark && styles.emptyStateDark]}>
+          No accounts found. Please create or import a wallet.
         </Text>
       </View>
     )
@@ -272,21 +126,14 @@ export default function WalletAccounts({ isLoading, accounts }: WalletAccountsPr
 
   return (
     <View style={styles.container}>
-      {accounts.length === 0 ? (
-        <Text style={[styles.emptyState, isDark && styles.emptyStateDark]}>
-          No accounts discovered yet
-        </Text>
-      ) : (
-        <FlatList
-          data={accounts}
-          renderItem={renderAccount}
-          keyExtractor={item => `account-${item.accountIndex}`}
-          style={styles.accountsList}
-          contentContainerStyle={styles.flatList}
-        />
-      )}
-
-      {renderTransactionModal()}
+      <FlatList
+        data={accounts}
+        renderItem={renderAccount}
+        keyExtractor={item => item.accountIndex.toString()}
+        contentContainerStyle={styles.flatList}
+        style={styles.accountsList}
+        showsVerticalScrollIndicator={false}
+      />
     </View>
   )
 }
@@ -395,8 +242,8 @@ const styles = StyleSheet.create({
     color: colors.textSecondary.dark,
   },
   /* addressList: {
-    maxHeight: 300,
-  }, */
+      maxHeight: 300,
+    }, */
   addressItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',

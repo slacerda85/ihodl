@@ -16,8 +16,8 @@ import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 
 // Components
-import WalletAccounts from './components/new-wallet-accounts'
-import WalletBalance from './wallet-balance'
+import WalletAccounts from './WalletAccounts'
+import WalletBalance from './WalletBalance'
 import { useWallet } from './wallet-provider'
 
 export default function WalletScreen() {
@@ -134,7 +134,11 @@ export default function WalletScreen() {
           <Text style={[styles.buttonText, isDark && styles.buttonTextDark]}>Receive</Text>
         </TouchableOpacity>
       </View>
-      <View style={styles.transactionsSection}>
+      <View style={styles.accountsSection}>
+        <Text
+          style={[styles.accountsHeader, isDark && styles.accountsHeaderDark]}
+        >{`Accounts (${discoveredAccounts.length})`}</Text>
+
         <WalletAccounts isLoading={isLoading} accounts={discoveredAccounts} />
       </View>
     </View>
@@ -220,7 +224,7 @@ const styles = StyleSheet.create({
   button: {
     flex: 0.5,
     padding: 16,
-    borderRadius: 8,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -248,8 +252,17 @@ const styles = StyleSheet.create({
   buttonTextDark: {
     color: colors.black,
   },
-  transactionsSection: {
+  accountsSection: {
     flexGrow: 1,
+  },
+  accountsHeader: {
+    fontSize: 18,
+    fontWeight: '500',
+    color: colors.text.light,
+    marginBottom: 16,
+  },
+  accountsHeaderDark: {
+    color: colors.text.dark,
   },
   sectionTitle: {
     fontSize: 18,

@@ -2,5 +2,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons'
 
 export default function WalletTabIcon({ color }: { color: string }) {
-  return <Ionicons name="wallet" size={24} color={color} />
+  return <Ionicons name="wallet-outline" size={24} color={color} />
 }

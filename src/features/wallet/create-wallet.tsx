@@ -13,10 +13,12 @@ import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 import { IconSymbol } from '@/shared/ui/icon-symbol'
 import { useRouter } from 'expo-router'
-import { createWallet } from '@/lib/wallet'
+import { createWallet, saveSelectedWalletId } from '@/lib/wallet'
+import { useWallet } from './wallet-provider'
 
 export default function CreateWallet() {
   const router = useRouter()
+  const { setSelectedWalletId } = useWallet()
   const [offline, setOffline] = useState<boolean>(false)
   const [walletName, setWalletName] = useState<string>('')
   const colorScheme = useColorScheme()
@@ -27,13 +29,15 @@ export default function CreateWallet() {
       {
         purpose: 84,
         coinTypes: [0],
-        accountIndex: 0,
       },
     ])
     if (!response.success) {
       console.error('Failed to create wallet')
       return
     }
+
+    await saveSelectedWalletId(response.walletId)
+    setSelectedWalletId(response.walletId)
 
     router.dismiss(2)
   }
