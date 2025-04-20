@@ -1,62 +1,77 @@
+// React and React Native
+import { useMemo } from 'react'
 import { Link } from 'expo-router'
-import { View, Text, TouchableOpacity, StyleSheet, useColorScheme } from 'react-native'
-import colors from '@/shared/theme/colors'
-import { alpha } from '@/shared/theme/utils'
-import { useWallet } from './wallet-provider'
-import { useEffect, useState } from 'react'
-import WalletBalance from './wallet-balance'
-import WalletAccounts from './components/new-wallet-accounts'
+import { StyleSheet, Text, TouchableOpacity, useColorScheme, View } from 'react-native'
+
+// Libraries
+import useCache from '../cache'
+
+// Models
+import { WalletData } from '@/models/wallet'
+
+// Utils
 import { calculateBalance, discoverAccounts } from '@/lib/account'
 import { createRootExtendedKey, fromMnemonic } from '@/lib/key'
-import { Account } from '@/models/account'
+import colors from '@/shared/theme/colors'
+import { alpha } from '@/shared/theme/utils'
 
-export default function WalletDetails() {
+// Components
+import WalletAccounts from './components/new-wallet-accounts'
+import WalletBalance from './wallet-balance'
+import { useWallet } from './wallet-provider'
+
+export default function WalletScreen() {
+  // theme
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const { wallets, selectedWalletId } = useWallet()
-  const [totalBalance, setTotalBalance] = useState<number>(0)
-  const [isLoading, setIsLoading] = useState<boolean>(false)
-  const [discoveredAccounts, setDiscoveredAccounts] = useState<Account[]>([])
-  const wallet = wallets.find(wallet => wallet.walletId === selectedWalletId)
+  // wallet provider
+  const { wallets, selectedWalletId, loading: walletsLoading } = useWallet()
+  const wallet = useMemo(
+    () => wallets.find(wallet => wallet.walletId === selectedWalletId),
+    [wallets, selectedWalletId],
+  )
 
-  // load discoveredAccounts
-  useEffect(() => {
-    async function loadDiscoveredAccounts() {
-      if (wallet) {
-        setIsLoading(true)
-        const { accounts, seedPhrase } = wallet
-        const seed = fromMnemonic(seedPhrase)
-        // extract values for discover function
-        const extendedKey = createRootExtendedKey(seed)
+  async function fetchAccounts(walletData: WalletData) {
+    try {
+      const { accounts, seedPhrase } = walletData
+      const seed = fromMnemonic(seedPhrase)
+      // extract values for discover function
+      const extendedKey = createRootExtendedKey(seed)
+      const defaultAccount = accounts[0]
+      const { discoveredAccounts } = await discoverAccounts(
+        extendedKey,
+        defaultAccount.purpose,
+        defaultAccount.coinTypes[0],
+        defaultAccount.accountIndex,
+      )
 
-        try {
-          const defaultAccount = accounts[0]
-          const response = await discoverAccounts(
-            extendedKey,
-            defaultAccount.purpose,
-            defaultAccount.coinTypes[0],
-            defaultAccount.accountIndex,
-          )
-
-          setDiscoveredAccounts(response.discoveredAccounts)
-
-          const totalBalance = calculateBalance(response.discoveredAccounts[0].addressInfo)
-          setTotalBalance(totalBalance.balance)
-
-          // setTotalBalance(accounts.reduce((acc, account) => acc + account.balance, 0))
-        } catch (error) {
-          console.error('Failed to discover accounts:', error)
-        } finally {
-          setIsLoading(false)
-        }
-      }
+      return discoveredAccounts
+    } catch (error) {
+      console.error('Failed to discover accounts:', error)
+      return []
     }
+  }
 
-    loadDiscoveredAccounts()
-  }, [selectedWalletId]) // Change dependency to selectedWalletId instead of wallet
+  const {
+    data: discoveredAccounts = [],
+    // error,
+    isLoading,
+  } = useCache(
+    wallet !== undefined ? [`wallets/${selectedWalletId}`, wallet] : null,
+    async ([_key, wallet]) => await fetchAccounts(wallet),
+    {
+      refreshInterval: 1000 * 60 * 5, // 5 minutes
+    },
+  )
 
-  // load total balance from discovered accounts
+  // wallet balance
+  const totalBalance = useMemo(() => {
+    if (discoveredAccounts.length > 0) {
+      return calculateBalance(discoveredAccounts[0].addressInfo).balance
+    }
+    return 0
+  }, [discoveredAccounts])
 
   function handleSend() {
     // Navigate to send screen
@@ -66,6 +81,15 @@ export default function WalletDetails() {
   function handleReceive() {
     // Navigate to receive screen
     // router.push('/wallet/receive')
+  }
+
+  if (walletsLoading) {
+    // show spinner
+    return (
+      <View style={[styles.root, isDark && styles.rootDark]}>
+        <Text style={[styles.walletName, isDark && styles.walletNameDark]}>Loading wallets...</Text>
+      </View>
+    )
   }
 
   // if no wallets, show empty state and a Link component to navigate to create wallet screen
@@ -121,7 +145,8 @@ const styles = StyleSheet.create({
   root: {
     // backgroundColor: 'blue',
     flex: 1,
-    padding: 16,
+    paddingTop: 8,
+    paddingHorizontal: 16,
     gap: 24,
   },
   rootDark: {

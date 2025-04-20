@@ -33,6 +33,7 @@ export default function TabsLayout() {
             borderTopColor:
               colorScheme === 'dark' ? alpha(colors.white, 0.1) : alpha(colors.black, 0.1),
             borderTopWidth: 1,
+            alignItems: 'center',
           },
         }),
       }}

@@ -19,11 +19,13 @@ type WalletContextType = {
   setSelectedWalletId: Dispatch<SetStateAction<string>>
   purpose: Purpose
   setPurpose: Dispatch<SetStateAction<Purpose>>
+  loading: boolean
 }
 
 const WalletContext = createContext({} as WalletContextType)
 
 export default function WalletProvider({ children }: { children: ReactNode }) {
+  const [loading, setLoading] = useState(false)
   const [wallets, setWallets] = useState<WalletData[]>([])
   const [selectedWalletId, setSelectedWalletId] = useState<string>('')
   const [purpose, setPurpose] = useState<Purpose>(84) // Default to BIP84 (Native SegWit)
@@ -32,6 +34,7 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     async function loadWallets() {
       try {
+        setLoading(true)
         const loadedWallets = await getWallets()
         console.log('Loaded wallets:', loadedWallets)
         setWallets(loadedWallets)
@@ -42,6 +45,8 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
         }
       } catch (error) {
         console.error('Failed to load wallets:', error)
+      } finally {
+        setLoading(false)
       }
     }
 
@@ -63,6 +68,7 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
         setSelectedWalletId,
         purpose,
         setPurpose,
+        loading,
       }}
     >
       {children}

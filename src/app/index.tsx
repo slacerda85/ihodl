@@ -1,5 +1,5 @@
-import Home from '@/features/home/home'
+import HomeScreen from '@/features/home'
 
-export default function HomeRoute() {
-  return <Home />
+export default function Home() {
+  return <HomeScreen />
 }

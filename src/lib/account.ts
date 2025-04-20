@@ -138,7 +138,6 @@ async function discoverAccounts(
       const transactions = await getTransactions(receivingAddress, socket)
       // const transactions = await api.transactions.getTransactions(address)
       if (transactions.length > 0) {
-        console.log(`Found transactions for address ${receivingAddress}`)
         addressInfo.push({
           receivingAddress,
           changeAddress,

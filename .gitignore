@@ -3,6 +3,9 @@
 # dependencies
 node_modules/
 
+# java sdk
+java/
+
 # Expo
 .expo/
 dist/
@@ -34,3 +37,4 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
+

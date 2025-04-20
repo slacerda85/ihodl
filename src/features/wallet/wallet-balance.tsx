@@ -11,9 +11,9 @@ export default function WalletBalance({ balance, isLoading }: WalletBalanceProps
 
   return (
     <View style={styles.balanceSection}>
-      <Text style={[styles.balanceLabel, isDark && styles.balanceLabelDark]}>Balance</Text>
+      {/* <Text style={[styles.balanceLabel, isDark && styles.balanceLabelDark]}>Balance</Text> */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <Text> </Text>
+        <View style={{ width: 32 }}></View>
         <Text style={[styles.balanceAmount, isDark && styles.balanceAmountDark]}>
           {balance.toLocaleString('pt-BR', { maximumFractionDigits: 8 })}
         </Text>
@@ -37,7 +37,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary.dark,
   },
   balanceAmount: {
-    fontSize: 32,
+    fontSize: 22,
     fontWeight: '700',
     color: colors.text.light,
   },
@@ -45,7 +45,7 @@ const styles = StyleSheet.create({
     color: colors.text.dark,
   },
   balanceCurrency: {
-    fontSize: 16,
+    fontSize: 22,
     fontWeight: '700',
     color: colors.primary,
   },

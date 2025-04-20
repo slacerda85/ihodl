@@ -1,11 +1,12 @@
 import { Link, Stack, useRouter } from 'expo-router'
-import { useColorScheme, StyleSheet, Text, Pressable } from 'react-native'
+import { useColorScheme, StyleSheet, Text, Pressable, Platform } from 'react-native'
 import { SafeAreaView } from 'react-native'
 import WalletProvider, { useWallet } from '@/features/wallet/wallet-provider'
 import colors from '@/shared/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@/features/auth/auth-provider'
-import { useCallback, useEffect, useMemo } from 'react'
+import { SetStateAction, useCallback, useEffect, useMemo, useState } from 'react'
+import ManageWallets from '@/features/wallet/manage-wallets'
 
 export default function WalletLayout() {
   return (
@@ -24,11 +25,15 @@ function headerRight() {
 }
 
 // link to [id]/manage
-function headerLeft() {
+function HeaderLeft(
+  modalOpen: boolean,
+  setModalOpen: { (value: SetStateAction<boolean>): void; (open: boolean): void },
+) {
   return (
-    <Link style={{ padding: 8, borderRadius: 24 }} href="/wallet/manage">
+    <Pressable style={{ padding: 8, borderRadius: 24 }} onPress={() => setModalOpen(true)}>
       <Ionicons name="wallet-outline" size={24} color={colors.primary} />
-    </Link>
+      <ManageWallets open={modalOpen} setOpen={setModalOpen} />
+    </Pressable>
   )
 }
 
@@ -62,19 +67,28 @@ const CloseModalButton = () => {
 }
 
 function WalletScreens() {
-  const { selectedWalletId, wallets } = useWallet()
+  const [modalOpen, setModalOpen] = useState(false)
+  const { selectedWalletId, wallets, loading: walletsLoading } = useWallet()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
   // show headers only when there are wallets
   const showHeaders = useMemo(() => wallets.length > 0, [wallets])
 
+  const getTitle = useCallback(() => {
+    if (walletsLoading) {
+      return 'Loading...'
+    }
+    const wallet = wallets.find(wallet => wallet.walletId === selectedWalletId)
+    return wallet ? wallet.walletName : 'No wallets found'
+  }, [selectedWalletId, wallets, walletsLoading])
+
   return (
     <SafeAreaView style={[styles.container, isDark ? styles.darkContainer : styles.lightContainer]}>
       <Stack
         screenOptions={{
           headerShadowVisible: false,
-          headerBackButtonDisplayMode: 'minimal',
+          headerBackButtonDisplayMode: 'default',
           headerTintColor: colors.primary,
           headerStyle: {
             backgroundColor: colors.background[isDark ? 'dark' : 'light'],
@@ -87,13 +101,11 @@ function WalletScreens() {
         <Stack.Screen
           name="index"
           options={{
-            headerLeft: showHeaders ? () => headerLeft() : undefined,
+            headerLeft: showHeaders ? () => HeaderLeft(modalOpen, setModalOpen) : undefined,
             headerRight: showHeaders ? () => headerRight() : undefined,
             // headerShown: false,
             headerTitleAlign: 'center',
-            title:
-              wallets.find(wallet => wallet.walletId === selectedWalletId)?.walletName ||
-              'No wallets found',
+            title: getTitle(),
           }}
         />
         <Stack.Screen
@@ -121,14 +133,16 @@ function WalletScreens() {
             headerRight: () => <CloseModalButton />,
           }}
         />
-        <Stack.Screen
+        {/*  <Stack.Screen
           name="manage"
           options={{
-            presentation: 'modal',
+            presentation: 'card',
+            animation: Platform.OS === 'android' ? 'slide_from_left' : 'slide_from_bottom',
             title: '',
             headerRight: () => <CloseModalButton />,
+            headerLeft: () => null,
           }}
-        />
+        /> */}
         <Stack.Screen
           name="delete"
           options={{

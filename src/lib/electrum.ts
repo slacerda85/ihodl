@@ -13,11 +13,11 @@ const PEERS_STORAGE_KEY = 'electrum_peers'
 
 export const initialPeers /* : ConnectionOptions[] */ = [
   { host: 'electrum.coinb.in', port: 50002, rejectUnauthorized: false },
-  {
+  /* {
     host: 'electrumx.electricnewyear.net',
     port: 50002,
     rejectUnauthorized: false,
-  },
+  }, */
   { host: 'guichet.centure.cc', port: 50002, rejectUnauthorized: false },
   { host: 'electrum1.bluewallet.io', port: 443, rejectUnauthorized: false },
   { host: 'electrum.blockchain.info', port: 50002, rejectUnauthorized: false },
@@ -49,7 +49,7 @@ async function connect(): Promise<TLSSocket> {
       // Connect to the peer
       await new Promise<void>((resolve, reject) => {
         const errorHandler = (e: Error) => {
-          console.error(`[electrum] Connection error to ${peer.host}:${peer.port}:`, e)
+          console.warn(`[electrum] Connection error to ${peer.host}:${peer.port}:`, e)
           reject(e)
         }
 
@@ -379,8 +379,8 @@ async function getTransactions(
   minConfirmations = 3,
   batchSize = 10,
 ): Promise<Tx[]> {
-  const startTime = Date.now()
-  console.log(`[electrum] fetching txs for address: ${address}`)
+  // const startTime = Date.now()
+  // console.log(`[electrum] fetching txs for address: ${address}`)
 
   // Create a socket if not provided to reuse for multiple calls
   const managedSocket = !socket
@@ -394,11 +394,11 @@ async function getTransactions(
     const history = historyResponse.result || []
 
     if (!history.length) {
-      console.log(`[electrum] No txs found for address: ${address}`)
+      // console.log(`[electrum] No txs found for address: ${address}`)
       return []
     }
 
-    console.log(`[electrum] Found ${history.length} txs, retrieving details...`)
+    // console.log(`[electrum] Found ${history.length} txs, retrieving details...`)
 
     // Process transactions in batches to avoid overwhelming the connection
     const transactions: Tx[] = []
@@ -406,11 +406,11 @@ async function getTransactions(
 
     // Process history in batches
     for (let i = 0; i < history.length; i += batchSize) {
-      const batchStartTime = Date.now()
+      // const batchStartTime = Date.now()
       const batch = history.slice(i, i + batchSize)
-      console.log(
+      /* console.log(
         `[electrum] Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(history.length / batchSize)} (${batch.length} transactions)`,
-      )
+      ) */
 
       const results = await Promise.allSettled(
         batch.map(({ tx_hash }) =>
@@ -442,10 +442,10 @@ async function getTransactions(
         }
       })
 
-      console.log(`[electrum] Batch processed in ${Date.now() - batchStartTime}ms`)
+      // console.log(`[electrum] Batch processed in ${Date.now() - batchStartTime}ms`)
     }
 
-    const successRate = history.length
+    /* const successRate = history.length
       ? ((history.length - errors.length) / history.length) * 100
       : 100
     console.log(
@@ -462,7 +462,7 @@ async function getTransactions(
     }
 
     const totalTime = Date.now() - startTime
-    console.log(`[electrum] getTransactions completed in ${totalTime}ms`)
+    console.log(`[electrum] getTransactions completed in ${totalTime}ms`) */
 
     return transactions
   } catch (error) {
