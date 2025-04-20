@@ -11,7 +11,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   userInterfaceStyle: 'automatic',
   newArchEnabled: true,
   splash: {
-    resizeMode: 'contain',
+    resizeMode: 'cover',
     backgroundColor: '#ffffff',
   },
   ios: {
