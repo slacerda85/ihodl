@@ -5,16 +5,15 @@
   },
   "build": {
     "development": {
-      "environment": "development",      
+      "environment": "development",
       "distribution": "internal",
+      "credentialsSource": "local",
       "developmentClient": true
     },
     "preview": {
-      "environment": "preview",
       "distribution": "internal"
     },
     "production": {
-      "environment": "production",
       "autoIncrement": true
     }
   },
