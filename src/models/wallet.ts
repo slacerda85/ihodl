@@ -1,9 +1,9 @@
-import { AccountToAdd } from './account'
+import { Account } from './account'
 
 export type WalletData = {
   walletId: string
   walletName: string
   cold: boolean
   seedPhrase: string
-  accounts: AccountToAdd[]
+  accounts: Account[]
 }

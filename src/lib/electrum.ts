@@ -1,4 +1,4 @@
-import { TLSSocket } from 'tls'
+import { TLSSocket, ConnectionOptions } from 'tls'
 import net from 'net'
 import { ElectrumMethod, ElectrumResponse, GetHistoryResult } from '@/models/electrum'
 import { JsonRpcRequest } from '@/models/rpc'
@@ -11,16 +11,11 @@ import { ElectrumPeer } from '@/models/electrum'
 // Storage key for peers
 const PEERS_STORAGE_KEY = 'electrum_peers'
 
-export const initialPeers /* : ConnectionOptions[] */ = [
-  { host: 'electrum.coinb.in', port: 50002, rejectUnauthorized: false },
-  /* {
-    host: 'electrumx.electricnewyear.net',
-    port: 50002,
-    rejectUnauthorized: false,
-  }, */
-  { host: 'guichet.centure.cc', port: 50002, rejectUnauthorized: false },
+export const initialPeers /*  */ = [
   { host: 'electrum1.bluewallet.io', port: 443, rejectUnauthorized: false },
-  { host: 'electrum.blockchain.info', port: 50002, rejectUnauthorized: false },
+  { host: 'guichet.centure.cc', port: 50002, rejectUnauthorized: false },
+  /* { host: 'electrum.blockstream.info', port: 50002, rejectUnauthorized: false }, */
+  { host: 'api.ordimint.com', port: 50002, rejectUnauthorized: false },
 ]
 
 // Connect to an Electrum server and return the socket
@@ -38,8 +33,20 @@ async function init() {
 
 async function connect(): Promise<TLSSocket> {
   console.log('[electrum] connecting Electrum peers...')
+  const peers: ConnectionOptions[] = []
+  peers.push(...initialPeers)
+  // check saved peers
+  const storedPeers = await readPeers()
+  if (storedPeers.length > 0) {
+    console.log(`[electrum] Found ${storedPeers.length} stored peers`)
+    const formattedPeers = peersToConnectionOptions(storedPeers)
+    peers.push(...formattedPeers)
+  }
+
+  const randomPeers = peers.sort(() => Math.random() - 0.5) // Shuffle the peers array
+
   // Try each server in the peers list
-  for (const peer of initialPeers) {
+  for (const peer of randomPeers) {
     try {
       console.log(`[electrum] peer ${peer.host}:${peer.port}`)
 
@@ -53,7 +60,7 @@ async function connect(): Promise<TLSSocket> {
           reject(e)
         }
 
-        const { host, port } = peer
+        const { host, port } = peer as { host: string; port: number }
 
         socket.connect({ host, port }, () => {
           socket.removeListener('error', errorHandler)
@@ -64,6 +71,22 @@ async function connect(): Promise<TLSSocket> {
         socket.on('error', errorHandler)
       })
 
+      // rawait savePeers([])
+      /* if (storedPeers.length === 0) {
+        // refresh peers
+        const peers = await getPeers(socket)
+
+        if (peers.length > 0) {
+          // save 10 random peers to storage
+          const randomPeers = peers.sort(() => Math.random() - 0.5).slice(0, 10)
+
+          await savePeers(randomPeers)
+          // await refreshPeersList() // Update active peers list
+          console.log(`[electrum] Successfully updated ${peers.length} peers`)
+        } else {
+          console.warn('[electrum] Received empty peer list, not updating storage')
+        }
+      } */
       // If we reach here, connection was successful
       return socket
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -96,7 +119,14 @@ async function getPeers(socket?: TLSSocket): Promise<ElectrumPeer[]> {
     console.log('[electrum] Fetching peers from server')
     const response = await callElectrumMethod<ElectrumPeer[]>('server.peers.subscribe', [], socket)
     console.log(`[electrum] Received ${response.result?.length || 0} peers`)
-    return response.result || []
+
+    // filter peers with SSL (s) or TCP (t) support
+    const filteredPeers = response.result?.filter(peer => {
+      const features = peer[2]
+      return features?.some(f => f.startsWith('s') || f.startsWith('t'))
+    })
+
+    return filteredPeers || []
   } catch (error) {
     console.error('[electrum] Error fetching peers:', error)
     throw error
@@ -169,7 +199,7 @@ function peersToConnectionOptions(peers: ElectrumPeer[]): {
 /**
  * Update the active peers list with peers from storage
  */
-async function refreshPeersList(): Promise<void> {
+/* async function refreshPeersList(): Promise<void> {
   try {
     const storedPeers = await readPeers()
 
@@ -190,14 +220,14 @@ async function refreshPeersList(): Promise<void> {
   } catch (error) {
     console.error('[electrum] Error refreshing peers list:', error)
   }
-}
+} */
 
 /**
  * Update peers list - fetches new peers and updates storage
  * @param socket Optional TLSSocket to reuse
  * @returns Array of updated peers
  */
-async function updatePeers(socket?: TLSSocket): Promise<ElectrumPeer[]> {
+/* async function updatePeers(socket?: TLSSocket): Promise<{ success: boolean }> {
   console.log('[electrum] Updating peer list')
 
   // Create a socket if not provided
@@ -210,13 +240,13 @@ async function updatePeers(socket?: TLSSocket): Promise<ElectrumPeer[]> {
 
     if (peers.length > 0) {
       await savePeers(peers)
-      await refreshPeersList() // Update active peers list
+      // await refreshPeersList() // Update active peers list
       console.log(`[electrum] Successfully updated ${peers.length} peers`)
     } else {
       console.warn('[electrum] Received empty peer list, not updating storage')
     }
 
-    return peers
+    return { success: true }
   } catch (error) {
     console.error('[electrum] Error updating peers:', error)
     throw error
@@ -230,7 +260,7 @@ async function updatePeers(socket?: TLSSocket): Promise<ElectrumPeer[]> {
       }
     }
   }
-}
+} */
 
 // Generic function to make Electrum calls
 async function callElectrumMethod<T>(
@@ -574,8 +604,6 @@ export {
   getPeers,
   savePeers,
   readPeers,
-  updatePeers,
-  refreshPeersList,
   close,
   callElectrumMethod,
   getAddressTxHistory,

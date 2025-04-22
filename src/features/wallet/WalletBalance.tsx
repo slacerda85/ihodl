@@ -1,37 +1,41 @@
-import { View, Text, StyleSheet, useColorScheme, TouchableOpacity } from 'react-native'
+import {
+  View,
+  Text,
+  StyleSheet,
+  useColorScheme,
+  TouchableOpacity,
+  ActivityIndicator,
+} from 'react-native'
 import colors from '@/shared/theme/colors'
-import { useState } from 'react'
 import SwapIcon from './SwapIcon'
-import { alpha } from '@/shared/theme/utils'
+import { useWallet } from './WalletProvider'
 
-interface WalletBalanceProps {
-  balance: number
-  isLoading: boolean
-}
-
-export default function WalletBalance({ balance, isLoading }: WalletBalanceProps) {
+export default function WalletBalance() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const [useSatoshis, setUseSatoshis] = useState(false)
+  const { selectedWallet, balanceLoading, useSatoshis, toggleUnit, balance } = useWallet()
 
-  // Convert balance to satoshis or keep as BTC based on state
-  const displayBalance = useSatoshis ? balance * 100000000 : balance
+  if (balanceLoading) {
+    return (
+      <View style={styles.balanceSection}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    )
+  }
 
-  // Format balance appropriately for each unit
-  const formattedBalance = useSatoshis
-    ? Math.round(displayBalance)
-        .toString()
-        .replace(/\B(?=(\d{3})+(?!\d))/g, '.')
-    : balance.toLocaleString('pt-BR', { maximumFractionDigits: 8 })
-
-  const toggleUnit = () => {
-    setUseSatoshis(prev => !prev)
+  if (!selectedWallet) {
+    return (
+      <View style={styles.balanceSection}>
+        <Text style={[styles.balanceLabel, isDark && styles.balanceLabelDark]}>
+          No wallet selected
+        </Text>
+      </View>
+    )
   }
 
   return (
     <View style={styles.balanceSection}>
-      {/* <Text style={[styles.balanceLabel, isDark && styles.balanceLabelDark]}>Balance</Text> */}
       <View
         style={{
           flexDirection: 'row',
@@ -42,9 +46,7 @@ export default function WalletBalance({ balance, isLoading }: WalletBalanceProps
       >
         <View style={{ flex: 1 }}></View>
 
-        <Text style={[styles.balanceAmount, isDark && styles.balanceAmountDark]}>
-          {formattedBalance}
-        </Text>
+        <Text style={[styles.balanceAmount, isDark && styles.balanceAmountDark]}>{balance}</Text>
         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
           <TouchableOpacity onPress={toggleUnit} style={styles.unitButton}>
             <View style={styles.unitContainer}>
@@ -62,8 +64,6 @@ export default function WalletBalance({ balance, isLoading }: WalletBalanceProps
 const styles = StyleSheet.create({
   balanceSection: {
     alignItems: 'center',
-    borderRadius: 12,
-    gap: 4,
   },
   balanceLabel: {
     fontSize: 14,
@@ -101,8 +101,7 @@ const styles = StyleSheet.create({
   unitButton: {
     borderRadius: 8,
     // backgroundColor: alpha(colors.primary, 0.1),
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    padding: 4,
     alignItems: 'center',
   },
 })

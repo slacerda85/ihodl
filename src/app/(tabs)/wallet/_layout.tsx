@@ -1,7 +1,7 @@
 import { Link, Stack, useRouter } from 'expo-router'
 import { useColorScheme, StyleSheet, Text, Pressable } from 'react-native'
 import { SafeAreaView } from 'react-native'
-import WalletProvider, { useWallet } from '@/features/wallet/wallet-provider'
+import WalletProvider, { useWallet } from '@/features/wallet/WalletProvider'
 import colors from '@/shared/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@/features/auth/auth-provider'
@@ -46,7 +46,10 @@ const CloseModalButton = () => {
     }
   }, [inactive, handleClose])
   return (
-    <Pressable style={{ padding: 8 }} onPress={handleClose}>
+    <Pressable
+      style={{ paddingVertical: 8, paddingLeft: 16, paddingRight: 8 }}
+      onPress={handleClose}
+    >
       <Text
         style={{
           fontSize: 16,
@@ -67,7 +70,7 @@ function WalletScreens() {
   const isDark = colorScheme === 'dark'
 
   // show headers only when there are wallets
-  const showHeaders = useMemo(() => wallets.length > 0, [wallets])
+  const showHeaders = useMemo(() => wallets !== undefined, [wallets])
 
   return (
     <SafeAreaView style={[styles.container, isDark ? styles.darkContainer : styles.lightContainer]}>
@@ -92,7 +95,7 @@ function WalletScreens() {
             // headerShown: false,
             headerTitleAlign: 'center',
             title:
-              wallets.find(wallet => wallet.walletId === selectedWalletId)?.walletName ||
+              wallets?.find(wallet => wallet.walletId === selectedWalletId)?.walletName ||
               'No wallets found',
           }}
         />
@@ -101,6 +104,12 @@ function WalletScreens() {
           options={{
             presentation: 'modal',
             title: 'Actions',
+            headerStyle: {
+              backgroundColor: colors.modal[isDark ? 'dark' : 'light'],
+            },
+            contentStyle: {
+              backgroundColor: colors.modal[isDark ? 'dark' : 'light'],
+            },
             // right action closes modal
             headerRight: () => <CloseModalButton />,
           }}
@@ -110,6 +119,12 @@ function WalletScreens() {
           options={{
             presentation: 'modal',
             title: '',
+            headerStyle: {
+              backgroundColor: colors.modal[isDark ? 'dark' : 'light'],
+            },
+            contentStyle: {
+              backgroundColor: colors.modal[isDark ? 'dark' : 'light'],
+            },
             headerRight: () => <CloseModalButton />,
           }}
         />
@@ -124,14 +139,26 @@ function WalletScreens() {
         <Stack.Screen
           name="manage"
           options={{
+            headerStyle: {
+              backgroundColor: colors.background[isDark ? 'dark' : 'light'],
+            },
+            contentStyle: {
+              backgroundColor: colors.background[isDark ? 'dark' : 'light'],
+            },
             presentation: 'modal',
-            title: '',
+            title: 'Manage wallets',
             headerRight: () => <CloseModalButton />,
           }}
         />
         <Stack.Screen
           name="delete"
           options={{
+            headerStyle: {
+              backgroundColor: colors.modal[isDark ? 'dark' : 'light'],
+            },
+            contentStyle: {
+              backgroundColor: colors.modal[isDark ? 'dark' : 'light'],
+            },
             presentation: 'modal',
             animation: 'fade',
             title: '',

@@ -1,4 +1,4 @@
-import DeleteWallet from '@/features/wallet/delete-wallet'
+import DeleteWallet from '@/features/wallet/DeleteWallet'
 
 export default function DeleteWalletRoute() {
   return <DeleteWallet />

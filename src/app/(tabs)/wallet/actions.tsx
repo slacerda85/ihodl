@@ -24,7 +24,7 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 8,
+    borderRadius: 16,
     backgroundColor: alpha(colors.black, 0.2),
   },
   wrapperDark: {

@@ -1,22 +1,22 @@
 import colors from '@/shared/theme/colors'
 import { Button, StyleSheet, Text, useColorScheme, View } from 'react-native'
-import { useWallet } from './wallet-provider'
+import { useWallet } from './WalletProvider'
 import { useCallback } from 'react'
 import { useRouter } from 'expo-router'
-import { alpha } from '@/shared/theme/utils'
 import { deleteWallet } from '@/lib/wallet'
 
 export default function DeleteWallet() {
   const router = useRouter()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
-  const { wallets, selectedWalletId, setSelectedWalletId } = useWallet()
+  const { selectedWalletId, refreshSelectedWalletId } = useWallet()
 
   const handleDeleteWallet = useCallback(async () => {
+    if (!selectedWalletId) return
     await deleteWallet(selectedWalletId)
-    setSelectedWalletId(wallets[0].walletId ?? '')
+    await refreshSelectedWalletId()
     router.dismiss(2)
-  }, [router, selectedWalletId, setSelectedWalletId, wallets])
+  }, [refreshSelectedWalletId, router, selectedWalletId])
 
   return (
     <View style={styles.modalContainer}>
@@ -42,21 +42,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 24,
     // paddingBottom: 48,
-    backgroundColor: alpha(colors.background.dark, 0.8),
+    // backgroundColor: alpha(colors.background.dark, 0.8),
   },
   modalWrapper: {
     padding: 16,
     // backgroundColor: colors.black,
-    borderRadius: 8,
+    // borderRadius: 16,
   },
   modalContent: {
     // width: '90%',
     padding: 16,
-    borderRadius: 8,
-    backgroundColor: colors.white,
+    // borderRadius: 8,
+    // backgroundColor: colors.white,
   },
   modalContentDark: {
-    backgroundColor: alpha(colors.white, 0.1),
+    // backgroundColor: alpha(colors.white, 0.1),
   },
   modalTitle: {
     fontSize: 18,

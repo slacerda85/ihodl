@@ -1,5 +1,12 @@
 export const MINIMUN_CONFIRMATIONS = 6
 
+export type TxHistory = {
+  receivingAddress: string
+  changeAddress: string
+  index: number
+  txs: Tx[] // Transactions associated with the address
+}
+
 export type Tx = {
   in_active_chain: boolean
   hex: string

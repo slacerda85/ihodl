@@ -1,24 +1,13 @@
 // React and React Native
-import { useMemo } from 'react'
 import { Link } from 'expo-router'
 import { StyleSheet, Text, TouchableOpacity, useColorScheme, View } from 'react-native'
-
-// Libraries
-import useCache from '../cache'
-
-// Models
-import { WalletData } from '@/models/wallet'
-
-// Utils
-import { calculateBalance, discoverAccounts } from '@/lib/account'
-import { createRootExtendedKey, fromMnemonic } from '@/lib/key'
 import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 
 // Components
 import WalletAccounts from './WalletAccounts'
 import WalletBalance from './WalletBalance'
-import { useWallet } from './wallet-provider'
+import { useWallet } from './WalletProvider'
 
 export default function WalletScreen() {
   // theme
@@ -26,52 +15,7 @@ export default function WalletScreen() {
   const isDark = colorScheme === 'dark'
 
   // wallet provider
-  const { wallets, selectedWalletId, loading: walletsLoading } = useWallet()
-  const wallet = useMemo(
-    () => wallets.find(wallet => wallet.walletId === selectedWalletId),
-    [wallets, selectedWalletId],
-  )
-
-  async function fetchAccounts(walletData: WalletData) {
-    try {
-      const { accounts, seedPhrase } = walletData
-      const seed = fromMnemonic(seedPhrase)
-      // extract values for discover function
-      const extendedKey = createRootExtendedKey(seed)
-      const defaultAccount = accounts[0]
-      const { discoveredAccounts } = await discoverAccounts(
-        extendedKey,
-        defaultAccount.purpose,
-        defaultAccount.coinTypes[0],
-        defaultAccount.accountIndex,
-      )
-
-      return discoveredAccounts
-    } catch (error) {
-      console.error('Failed to discover accounts:', error)
-      return []
-    }
-  }
-
-  const {
-    data: discoveredAccounts = [],
-    // error,
-    isLoading,
-  } = useCache(
-    wallet !== undefined ? [`wallets/${selectedWalletId}`, wallet] : null,
-    async ([_key, wallet]) => await fetchAccounts(wallet),
-    {
-      refreshInterval: 1000 * 60 * 5, // 5 minutes
-    },
-  )
-
-  // wallet balance
-  const totalBalance = useMemo(() => {
-    if (discoveredAccounts.length > 0) {
-      return calculateBalance(discoveredAccounts[0].addressInfo).balance
-    }
-    return 0
-  }, [discoveredAccounts])
+  const { wallets, selectedWallet, loading } = useWallet()
 
   function handleSend() {
     // Navigate to send screen
@@ -83,7 +27,7 @@ export default function WalletScreen() {
     // router.push('/wallet/receive')
   }
 
-  if (walletsLoading) {
+  if (loading) {
     // show spinner
     return (
       <View style={[styles.root, isDark && styles.rootDark]}>
@@ -93,7 +37,7 @@ export default function WalletScreen() {
   }
 
   // if no wallets, show empty state and a Link component to navigate to create wallet screen
-  if (!wallet) {
+  if (wallets === undefined || wallets.length === 0) {
     return (
       <View style={[styles.root, isDark && styles.rootDark]}>
         <View style={[styles.emptyState, isDark && styles.emptyStateDark]}>
@@ -119,9 +63,21 @@ export default function WalletScreen() {
     )
   }
 
+  if (selectedWallet === undefined) {
+    // create link to wallet/manage
+    return (
+      <View style={[styles.root, isDark && styles.rootDark]}>
+        <Text style={[styles.walletName, isDark && styles.walletNameDark]}>No wallet selected</Text>
+        <Link href="/wallet/manage" style={[styles.button, styles.primaryButton]}>
+          <Text style={styles.buttonText}>Select a wallet</Text>
+        </Link>
+      </View>
+    )
+  }
+
   return (
     <View style={styles.root}>
-      <WalletBalance balance={totalBalance} isLoading={isLoading} />
+      <WalletBalance /* balance={totalBalance} isLoading={isLoading} */ />
       <View style={styles.actionsSection}>
         <TouchableOpacity onPress={handleSend} style={[styles.button, styles.primaryButton]}>
           <Text style={styles.buttonText}>Send</Text>
@@ -135,11 +91,9 @@ export default function WalletScreen() {
         </TouchableOpacity>
       </View>
       <View style={styles.accountsSection}>
-        <Text
-          style={[styles.accountsHeader, isDark && styles.accountsHeaderDark]}
-        >{`Accounts (${discoveredAccounts.length})`}</Text>
+        <Text style={[styles.accountsHeader, isDark && styles.accountsHeaderDark]}>Accounts</Text>
 
-        <WalletAccounts isLoading={isLoading} accounts={discoveredAccounts} />
+        <WalletAccounts />
       </View>
     </View>
   )
@@ -149,9 +103,8 @@ const styles = StyleSheet.create({
   root: {
     // backgroundColor: 'blue',
     flex: 1,
-    paddingTop: 8,
-    paddingHorizontal: 16,
-    gap: 24,
+    padding: 16,
+    gap: 32,
   },
   rootDark: {
     backgroundColor: colors.background.dark,
@@ -213,11 +166,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
   },
-  /* buttonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  }, */
   buttonIcon: {
     marginRight: 8,
   },

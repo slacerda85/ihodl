@@ -13,31 +13,27 @@ import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 import { IconSymbol } from '@/shared/ui/icon-symbol'
 import { useRouter } from 'expo-router'
-import { createWallet, saveSelectedWalletId } from '@/lib/wallet'
-import { useWallet } from './wallet-provider'
+import { createWallet } from '@/lib/wallet'
+import { useWallet } from './WalletProvider'
 
 export default function CreateWallet() {
   const router = useRouter()
-  const { setSelectedWalletId } = useWallet()
+  const { selectWalletId } = useWallet()
   const [offline, setOffline] = useState<boolean>(false)
   const [walletName, setWalletName] = useState<string>('')
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
   async function handleCreateWallet() {
-    const response = await createWallet(walletName, offline, [
-      {
-        purpose: 84,
-        coinTypes: [0],
-      },
-    ])
+    const response = await createWallet({
+      walletName,
+      cold: offline,
+    })
     if (!response.success) {
       console.error('Failed to create wallet')
       return
     }
-
-    await saveSelectedWalletId(response.walletId)
-    setSelectedWalletId(response.walletId)
+    await selectWalletId(response.walletId)
 
     router.dismiss(2)
   }
@@ -140,7 +136,7 @@ const styles = StyleSheet.create({
     height: 48,
     // borderWidth: 1,
     // borderColor: alpha(colors.black, 0.2),
-    borderRadius: 8,
+    borderRadius: 16,
     backgroundColor: alpha(colors.black, 0.05),
     color: colors.text.light,
   },
@@ -151,7 +147,7 @@ const styles = StyleSheet.create({
   },
   toggleSection: {
     backgroundColor: colors.white,
-    borderRadius: 8,
+    borderRadius: 16,
     paddingVertical: 12,
     paddingHorizontal: 16,
     gap: 8,
@@ -219,7 +215,7 @@ const styles = StyleSheet.create({
   },
   button: {
     padding: 16,
-    borderRadius: 8,
+    borderRadius: 16,
     marginBottom: 8,
   },
   primaryButton: {

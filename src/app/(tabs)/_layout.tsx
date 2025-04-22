@@ -1,5 +1,5 @@
 import SettingsTabIcon from '@/features/settings/settings-tab-icon'
-import WalletTabIcon from '@/features/wallet/wallet-tab-icon'
+import WalletTabIcon from '@/features/wallet/WalletTabIcon'
 import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 import { HapticTab } from '@/shared/ui/haptic-tab'
