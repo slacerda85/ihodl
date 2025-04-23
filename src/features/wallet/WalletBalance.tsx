@@ -1,11 +1,4 @@
-import {
-  View,
-  Text,
-  StyleSheet,
-  useColorScheme,
-  TouchableOpacity,
-  ActivityIndicator,
-} from 'react-native'
+import { View, Text, StyleSheet, useColorScheme, Pressable, ActivityIndicator } from 'react-native'
 import colors from '@/shared/theme/colors'
 import SwapIcon from './SwapIcon'
 import { useWallet } from './WalletProvider'
@@ -48,12 +41,12 @@ export default function WalletBalance() {
 
         <Text style={[styles.balanceAmount, isDark && styles.balanceAmountDark]}>{balance}</Text>
         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
-          <TouchableOpacity onPress={toggleUnit} style={styles.unitButton}>
+          <Pressable onPress={toggleUnit} style={styles.unitButton}>
             <View style={styles.unitContainer}>
               <Text style={styles.balanceCurrency}>{useSatoshis ? 'Sats' : 'BTC'}</Text>
               <SwapIcon size={24} color={colors.primary} />
             </View>
-          </TouchableOpacity>
+          </Pressable>
           <View style={{ flex: 1 }}></View>
         </View>
       </View>

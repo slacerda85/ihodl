@@ -1,12 +1,5 @@
 import colors from '@/shared/theme/colors'
-import {
-  TouchableOpacity,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  View,
-  ActivityIndicator,
-} from 'react-native'
+import { Pressable, StyleSheet, Text, useColorScheme, View, ActivityIndicator } from 'react-native'
 import { useWallet } from './WalletProvider'
 import { useCallback, useState } from 'react'
 import { useRouter } from 'expo-router'
@@ -40,7 +33,7 @@ export default function DeleteWallet() {
       <Text style={[styles.modalText, isDark && styles.modalTextDark]}>
         Are you sure you want to delete this wallet?
       </Text>
-      <TouchableOpacity
+      <Pressable
         style={[styles.button, styles.buttonFirst, styles.buttonLast, isDark && styles.buttonDark]}
         onPress={handleDeleteWallet}
       >
@@ -54,7 +47,7 @@ export default function DeleteWallet() {
         >
           {submitting ? 'Deleting...' : 'Delete'}
         </Text>
-      </TouchableOpacity>
+      </Pressable>
     </View>
   )
 }
@@ -83,7 +76,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   button: {
-    backgroundColor: colors.modal.light,
+    backgroundColor: colors.white,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
@@ -91,7 +84,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   buttonDark: {
-    backgroundColor: alpha(colors.modal.light, 0.05),
+    backgroundColor: alpha(colors.background.light, 0.05),
   },
   buttonFirst: {
     borderTopLeftRadius: 16,

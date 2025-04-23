@@ -1,7 +1,7 @@
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable,
   Image,
   useColorScheme,
   StyleSheet,
@@ -126,7 +126,7 @@ function AccountWithBalance({
 
   return (
     <View style={[styles.accountContainer, isDark && styles.accountContainerDark]}>
-      <TouchableOpacity
+      <Pressable
         style={[styles.accountHeader, isDark && styles.accountHeaderDark]}
         onPress={() => handleAccountPress(account.accountIndex)}
       >
@@ -149,7 +149,7 @@ function AccountWithBalance({
             </Fragment>
           )}
         </View>
-      </TouchableOpacity>
+      </Pressable>
     </View>
   )
 }
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   accountContainerDark: {
-    backgroundColor: alpha(colors.white, 0.1),
+    backgroundColor: alpha(colors.background.light, 0.05),
   },
   accountHeader: {
     flexDirection: 'row',

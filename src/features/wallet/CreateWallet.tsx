@@ -4,7 +4,7 @@ import {
   Text,
   TextInput,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   Switch,
   useColorScheme,
@@ -91,7 +91,7 @@ export default function CreateWallet() {
             </Text>
           </View>
         </View>
-        <TouchableOpacity
+        <Pressable
           onPress={handleCreateWallet}
           style={[
             styles.button,
@@ -109,7 +109,7 @@ export default function CreateWallet() {
           >
             {submitting ? 'Creating...' : offline ? 'Create cold wallet' : 'Create wallet'}
           </Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
     </ScrollView>
   )

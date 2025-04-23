@@ -9,6 +9,7 @@ import { Platform, useColorScheme } from 'react-native'
 
 export default function TabsLayout() {
   const colorScheme = useColorScheme()
+  const isDark = colorScheme === 'dark'
 
   return (
     <Tabs
@@ -21,18 +22,19 @@ export default function TabsLayout() {
           ios: {
             // Use a transparent background on iOS to show the blur effect
             position: 'absolute',
-            backgroundColor:
-              colorScheme === 'dark' ? colors.background.dark : colors.background.light,
-            borderTopColor:
-              colorScheme === 'dark' ? alpha(colors.white, 0.1) : alpha(colors.black, 0.1),
-            borderTopWidth: 1,
+            backgroundColor: isDark ? colors.background.dark : colors.background.light,
+            borderTopColor: isDark
+              ? alpha(colors.background.light, 0.05)
+              : alpha(colors.background.dark, 0.05),
+            // borderTopWidth: 1,
           },
           default: {
-            backgroundColor:
-              colorScheme === 'dark' ? colors.background.dark : colors.background.light,
-            borderTopColor:
-              colorScheme === 'dark' ? alpha(colors.white, 0.1) : alpha(colors.black, 0.1),
-            borderTopWidth: 1,
+            backgroundColor: isDark ? colors.background.dark : colors.background.light,
+
+            /* borderTopColor: isDark
+              ? alpha(colors.background.light, 0.05)
+              : alpha(colors.background.dark, 0.05), */
+            // borderTopWidth: 1,
             alignItems: 'center',
           },
         }),

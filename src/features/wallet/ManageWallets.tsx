@@ -1,12 +1,5 @@
 import React, { Fragment, useState } from 'react'
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-  ActivityIndicator,
-} from 'react-native'
+import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator } from 'react-native'
 import { useColorScheme } from 'react-native'
 import colors from '@/shared/theme/colors'
 import { useRouter } from 'expo-router'
@@ -73,7 +66,7 @@ export default function ManageWallets() {
 
               return (
                 <Fragment key={index}>
-                  <TouchableOpacity
+                  <Pressable
                     key={wallet.walletId}
                     style={[
                       styles.walletBox,
@@ -116,7 +109,7 @@ export default function ManageWallets() {
                         </Text>
                       </View>
                     </View>
-                  </TouchableOpacity>
+                  </Pressable>
                   {!last ? (
                     <Divider
                       orientation="horizontal"
@@ -142,7 +135,7 @@ export default function ManageWallets() {
         />
 
         <View>
-          <TouchableOpacity
+          <Pressable
             onPress={handleCreateWallet}
             style={[styles.walletBox, styles.walletBoxFirst, isDark && styles.walletBoxDark]}
           >
@@ -150,13 +143,13 @@ export default function ManageWallets() {
               <CreateWalletIcon size={24} color={colors.primary} />
               <Text style={styles.actionButton}>Create New Wallet</Text>
             </View>
-          </TouchableOpacity>
+          </Pressable>
           <Divider
             orientation="horizontal"
             color={isDark ? alpha(colors.background.light, 0.1) : colors.background.light}
           />
 
-          <TouchableOpacity
+          <Pressable
             onPress={handleImportWallet}
             style={[
               styles.walletBox,
@@ -170,7 +163,7 @@ export default function ManageWallets() {
 
               <Text style={styles.actionButton}>Import Wallet</Text>
             </View>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </View>
     </ScrollView>
@@ -193,7 +186,7 @@ const styles = StyleSheet.create({
     // gap: 1,
   },
   walletBox: {
-    backgroundColor: colors.modal.light,
+    backgroundColor: colors.white,
     paddingVertical: 12,
     paddingHorizontal: 16,
     flexDirection: 'row',
@@ -209,7 +202,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 16,
   },
   walletBoxDark: {
-    backgroundColor: alpha(colors.modal.light, 0.05),
+    backgroundColor: alpha(colors.background.light, 0.05),
   },
   selectedWalletBox: {
     backgroundColor: colors.border.light, // alpha(colors.primary, 0.1),
@@ -217,9 +210,7 @@ const styles = StyleSheet.create({
     // borderWidth: 1,
   },
   selectedWalletBoxDark: {
-    backgroundColor: colors.border.dark, // alpha(colors.modal.light, 0.12),
-    // borderColor: alpha(colors.primary, 0.2),
-    // borderWidth: 1,
+    backgroundColor: colors.border.dark,
   },
   walletBoxLoading: {
     opacity: 0.5,

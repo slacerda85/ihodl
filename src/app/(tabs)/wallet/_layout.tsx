@@ -119,10 +119,10 @@ function WalletScreens() {
           name="create"
           options={{
             headerStyle: {
-              backgroundColor: colors.modal[isDark ? 'dark' : 'light'],
+              backgroundColor: colors.background[isDark ? 'dark' : 'light'],
             },
             contentStyle: {
-              backgroundColor: colors.modal[isDark ? 'dark' : 'light'],
+              backgroundColor: colors.background[isDark ? 'dark' : 'light'],
             },
             presentation: Platform.select({
               ios: 'modal',

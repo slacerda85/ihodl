@@ -6,7 +6,6 @@ type Colors = {
   divider: string
   error: string
   info: string
-  modal: ColorScheme
   negative: string
   placeholder: string
   positive: string
@@ -65,10 +64,6 @@ const colors: Colors = {
   border: {
     light: '#E5E5EA', // iOS standard separator color for light mode
     dark: '#38383A', // iOS standard separator color for dark mode
-  },
-  modal: {
-    light: '#FFFFFF', // iOS standard modal background color for light mode
-    dark: '#151517', // '#1C1C1E', // iOS standard modal background color for dark mode
   },
   success: '#34C759', // iOS system green
   error: '#FF3B30', // iOS system red

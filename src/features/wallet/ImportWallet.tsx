@@ -4,7 +4,7 @@ import {
   Text,
   TextInput,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   useColorScheme,
   FlatList,
@@ -92,12 +92,12 @@ export default function ImportWallet() {
 
   // Render suggestion item
   const renderSuggestion = ({ item }: { item: string }) => (
-    <TouchableOpacity
+    <Pressable
       style={[styles.suggestionItem, isDark && styles.suggestionItemDark]}
       onPress={() => handleSelectSuggestion(item)}
     >
       <Text style={[styles.suggestionText, isDark && styles.suggestionTextDark]}>{item}</Text>
-    </TouchableOpacity>
+    </Pressable>
   )
 
   return (
@@ -145,7 +145,7 @@ export default function ImportWallet() {
           </View>
         </View>
 
-        <TouchableOpacity
+        <Pressable
           onPress={handleImportWallet}
           disabled={!walletName.trim() || !isValidSeedPhrase()}
           style={[
@@ -155,7 +155,7 @@ export default function ImportWallet() {
           ]}
         >
           <Text style={styles.buttonText}>Import wallet</Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
     </ScrollView>
   )

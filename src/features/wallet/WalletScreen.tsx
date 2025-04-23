@@ -1,13 +1,6 @@
 // React and React Native
 import { Link } from 'expo-router'
-import {
-  ActivityIndicator,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  useColorScheme,
-  View,
-} from 'react-native'
+import { ActivityIndicator, StyleSheet, Text, Pressable, useColorScheme, View } from 'react-native'
 import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 
@@ -54,16 +47,16 @@ export default function WalletScreen() {
     <View style={styles.root}>
       <WalletBalance /* balance={totalBalance} isLoading={isLoading} */ />
       <View style={styles.actionsSection}>
-        <TouchableOpacity onPress={handleSend} style={[styles.button, styles.primaryButton]}>
+        <Pressable onPress={handleSend} style={[styles.button, styles.primaryButton]}>
           <Text style={styles.buttonText}>Send</Text>
-        </TouchableOpacity>
+        </Pressable>
 
-        <TouchableOpacity
+        <Pressable
           onPress={handleReceive}
           style={[styles.button, isDark ? styles.secondaryButtonDark : styles.secondaryButton]}
         >
           <Text style={[styles.buttonText, isDark && styles.buttonTextDark]}>Receive</Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
       <View style={styles.accountsSection}>
         <Text style={[styles.accountsHeader, isDark && styles.accountsHeaderDark]}>Accounts</Text>

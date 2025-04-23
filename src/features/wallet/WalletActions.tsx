@@ -24,7 +24,7 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   button: {
-    backgroundColor: colors.modal.light,
+    backgroundColor: colors.white,
     paddingVertical: 12,
     paddingHorizontal: 16,
     flexDirection: 'row',
@@ -32,7 +32,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   buttonDark: {
-    backgroundColor: alpha(colors.modal.light, 0.05),
+    backgroundColor: alpha(colors.background.light, 0.05),
   },
   buttonFirst: {
     borderTopLeftRadius: 16,
@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   walletBox: {
-    backgroundColor: colors.modal.light,
+    backgroundColor: colors.white,
     paddingVertical: 12,
     paddingHorizontal: 16,
     flexDirection: 'row',
@@ -70,6 +70,6 @@ const styles = StyleSheet.create({
   },
 
   walletBoxDark: {
-    backgroundColor: alpha(colors.modal.light, 0.05),
+    backgroundColor: alpha(colors.background.light, 0.05),
   },
 })
