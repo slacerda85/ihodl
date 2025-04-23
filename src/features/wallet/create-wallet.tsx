@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Switch,
   useColorScheme,
+  ActivityIndicator,
 } from 'react-native'
 import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
@@ -17,25 +18,34 @@ import { createWallet } from '@/lib/wallet'
 import { useWallet } from './WalletProvider'
 
 export default function CreateWallet() {
-  const router = useRouter()
-  const { selectWalletId } = useWallet()
-  const [offline, setOffline] = useState<boolean>(false)
-  const [walletName, setWalletName] = useState<string>('')
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  async function handleCreateWallet() {
-    const response = await createWallet({
-      walletName,
-      cold: offline,
-    })
-    if (!response.success) {
-      console.error('Failed to create wallet')
-      return
-    }
-    await selectWalletId(response.walletId)
+  const router = useRouter()
+  const { revalidateWallets, revalidateSelectedWalletId } = useWallet()
+  const [offline, setOffline] = useState<boolean>(false)
+  const [walletName, setWalletName] = useState<string>('')
+  const [submitting, setSubmitting] = useState<boolean>(false)
 
-    router.dismiss(2)
+  async function handleCreateWallet() {
+    try {
+      setSubmitting(true)
+      const response = await createWallet({
+        walletName,
+        cold: offline,
+      })
+      if (!response.success) {
+        console.error('Failed to create wallet')
+        return
+      }
+      await revalidateWallets()
+      await revalidateSelectedWalletId()
+      router.dismiss(2)
+    } catch (error) {
+      console.error('Error creating wallet:', error)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   function handleToggleOffline() {
@@ -91,11 +101,13 @@ export default function CreateWallet() {
                 : styles.secondaryButton
               : styles.primaryButton,
           ]}
+          disabled={submitting}
         >
+          {submitting ? <ActivityIndicator color={colors.white} /> : null}
           <Text
             style={[styles.buttonText, offline ? (isDark ? styles.buttonTextDark : null) : null]}
           >
-            {offline ? 'Create cold wallet' : 'Create wallet'}
+            {submitting ? 'Creating...' : offline ? 'Create cold wallet' : 'Create wallet'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -217,6 +229,10 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 16,
     marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
   primaryButton: {
     backgroundColor: colors.primary,
@@ -226,6 +242,9 @@ const styles = StyleSheet.create({
   },
   secondaryButtonDark: {
     backgroundColor: colors.background.light,
+  },
+  disabledButton: {
+    backgroundColor: alpha(colors.black, 0.2),
   },
   buttonText: {
     color: colors.white,

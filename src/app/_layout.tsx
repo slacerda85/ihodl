@@ -1,12 +1,14 @@
 // import { StrictMode } from 'react'
-import AuthProvider from '@/features/auth/auth-provider'
+import AuthProvider from '@/features/auth/AuthProvider'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
-import InactivityOverlay from '@/features/auth/inactivity-overlay'
+import InactivityOverlay from '@/features/auth/InactivityOverlay'
 import { useColorScheme } from 'react-native'
 import colors from '@/shared/theme/colors'
 import * as SplashScreen from 'expo-splash-screen'
 import { useEffect, useState } from 'react'
+import AuthScreen from '@/features/auth/AuthScreen'
+import WalletProvider from '@/features/wallet/WalletProvider'
 
 SplashScreen.preventAutoHideAsync()
 
@@ -35,26 +37,10 @@ export default function RootLayout() {
   return (
     <>
       <AuthProvider>
-        <Stack
-          screenOptions={{
-            animation: 'fade',
-            headerShown: false,
-            headerStyle: {
-              backgroundColor: isDark ? colors.background.dark : colors.background.light,
-            },
-            contentStyle: {
-              backgroundColor: isDark ? colors.background.dark : colors.background.light,
-            },
-          }}
-        >
-          <Stack.Screen
-            name="index"
-            options={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}
-          />
-
-          <Stack.Screen
-            name="(tabs)"
-            options={{
+        <WalletProvider>
+          <Stack
+            screenOptions={{
+              animation: 'fade',
               headerShown: false,
               headerStyle: {
                 backgroundColor: isDark ? colors.background.dark : colors.background.light,
@@ -63,9 +49,28 @@ export default function RootLayout() {
                 backgroundColor: isDark ? colors.background.dark : colors.background.light,
               },
             }}
-          />
-        </Stack>
-        <InactivityOverlay />
+          >
+            <Stack.Screen
+              name="index"
+              options={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}
+            />
+
+            <Stack.Screen
+              name="(tabs)"
+              options={{
+                headerShown: false,
+                headerStyle: {
+                  backgroundColor: isDark ? colors.background.dark : colors.background.light,
+                },
+                contentStyle: {
+                  backgroundColor: isDark ? colors.background.dark : colors.background.light,
+                },
+              }}
+            />
+          </Stack>
+          <InactivityOverlay />
+          <AuthScreen />
+        </WalletProvider>
       </AuthProvider>
       <StatusBar style="auto" />
     </>

@@ -1,62 +1,67 @@
 import colors from '@/shared/theme/colors'
-import { Button, StyleSheet, Text, useColorScheme, View } from 'react-native'
+import {
+  TouchableOpacity,
+  StyleSheet,
+  Text,
+  useColorScheme,
+  View,
+  ActivityIndicator,
+} from 'react-native'
 import { useWallet } from './WalletProvider'
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { useRouter } from 'expo-router'
 import { deleteWallet } from '@/lib/wallet'
+import { alpha } from '@/shared/theme/utils'
 
 export default function DeleteWallet() {
   const router = useRouter()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
-  const { selectedWalletId, refreshSelectedWalletId } = useWallet()
+  const { selectedWalletId, revalidateWallets, revalidateSelectedWalletId } = useWallet()
+  const [submitting, setSubmitting] = useState<boolean>(false)
 
   const handleDeleteWallet = useCallback(async () => {
-    if (!selectedWalletId) return
-    await deleteWallet(selectedWalletId)
-    await refreshSelectedWalletId()
-    router.dismiss(2)
-  }, [refreshSelectedWalletId, router, selectedWalletId])
+    try {
+      setSubmitting(true)
+      if (!selectedWalletId) return
+      await deleteWallet(selectedWalletId)
+      await revalidateWallets()
+      await revalidateSelectedWalletId()
+      router.dismiss(2)
+    } catch (error) {
+      console.error('Error deleting wallet:', error)
+    } finally {
+      setSubmitting(false)
+    }
+  }, [revalidateWallets, revalidateSelectedWalletId, router, selectedWalletId])
 
   return (
     <View style={styles.modalContainer}>
-      <View style={styles.modalWrapper}>
-        <View style={[styles.modalContent, isDark && styles.modalContentDark]}>
-          <Text style={[styles.modalTitle, isDark && styles.modalTitleDark]}>Delete wallet</Text>
-          <Text style={[styles.modalText, isDark && styles.modalTextDark]}>
-            Are you sure you want to delete this wallet?
-          </Text>
-          <View style={styles.modalActions}>
-            <Button title="Delete" onPress={handleDeleteWallet} />
-          </View>
-        </View>
-      </View>
+      <Text style={[styles.modalText, isDark && styles.modalTextDark]}>
+        Are you sure you want to delete this wallet?
+      </Text>
+      <TouchableOpacity
+        style={[styles.button, styles.buttonFirst, styles.buttonLast, isDark && styles.buttonDark]}
+        onPress={handleDeleteWallet}
+      >
+        {submitting ? <ActivityIndicator color={colors.error} /> : null}
+        <Text
+          style={{
+            color: colors.error,
+            fontSize: 16,
+            textAlign: 'center',
+          }}
+        >
+          {submitting ? 'Deleting...' : 'Delete'}
+        </Text>
+      </TouchableOpacity>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
   modalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     padding: 24,
-    // paddingBottom: 48,
-    // backgroundColor: alpha(colors.background.dark, 0.8),
-  },
-  modalWrapper: {
-    padding: 16,
-    // backgroundColor: colors.black,
-    // borderRadius: 16,
-  },
-  modalContent: {
-    // width: '90%',
-    padding: 16,
-    // borderRadius: 8,
-    // backgroundColor: colors.white,
-  },
-  modalContentDark: {
-    // backgroundColor: alpha(colors.white, 0.1),
   },
   modalTitle: {
     fontSize: 18,
@@ -67,6 +72,7 @@ const styles = StyleSheet.create({
     color: colors.text.dark,
   },
   modalText: {
+    fontSize: 18,
     marginBottom: 16,
   },
   modalTextDark: {
@@ -75,5 +81,24 @@ const styles = StyleSheet.create({
   modalActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
+  },
+  button: {
+    backgroundColor: colors.modal.light,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  buttonDark: {
+    backgroundColor: alpha(colors.modal.light, 0.05),
+  },
+  buttonFirst: {
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  buttonLast: {
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
   },
 })

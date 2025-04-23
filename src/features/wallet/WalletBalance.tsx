@@ -14,9 +14,9 @@ export default function WalletBalance() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const { selectedWallet, balanceLoading, useSatoshis, toggleUnit, balance } = useWallet()
+  const { selectedWallet, loadingBalance, useSatoshis, toggleUnit, balance } = useWallet()
 
-  if (balanceLoading) {
+  if (loadingBalance) {
     return (
       <View style={styles.balanceSection}>
         <ActivityIndicator size="large" color={colors.primary} />

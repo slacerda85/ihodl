@@ -48,7 +48,7 @@ export default function WalletAccounts() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const { selectedWallet, balance, useSatoshis, balanceLoading } = useWallet()
+  const { selectedWallet, balance, useSatoshis, loadingBalance } = useWallet()
 
   if (!selectedWallet) {
     return (
@@ -74,11 +74,10 @@ export default function WalletAccounts() {
 
     return (
       <AccountWithBalance
-        key={item.accountIndex}
         account={item}
         balance={balance}
         useSatoshis={useSatoshis}
-        loading={balanceLoading}
+        loading={loadingBalance}
       />
     )
   }
@@ -88,7 +87,7 @@ export default function WalletAccounts() {
       <FlatList
         data={accounts}
         renderItem={renderAccount}
-        keyExtractor={(_item, index) => index.toString()}
+        keyExtractor={(item: Account) => item.purpose.toString()}
         contentContainerStyle={styles.flatList}
         style={styles.accountsList}
         showsVerticalScrollIndicator={false}
@@ -98,13 +97,11 @@ export default function WalletAccounts() {
 }
 
 function AccountWithBalance({
-  key,
   account,
   balance,
   useSatoshis,
   loading,
 }: {
-  key: Key
   account: Account
   balance: string
   useSatoshis: boolean
@@ -128,7 +125,7 @@ function AccountWithBalance({
   }
 
   return (
-    <View key={key} style={[styles.accountContainer, isDark && styles.accountContainerDark]}>
+    <View style={[styles.accountContainer, isDark && styles.accountContainerDark]}>
       <TouchableOpacity
         style={[styles.accountHeader, isDark && styles.accountHeaderDark]}
         onPress={() => handleAccountPress(account.accountIndex)}

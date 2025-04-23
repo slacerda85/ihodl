@@ -1,6 +1,13 @@
 // React and React Native
 import { Link } from 'expo-router'
-import { StyleSheet, Text, TouchableOpacity, useColorScheme, View } from 'react-native'
+import {
+  ActivityIndicator,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useColorScheme,
+  View,
+} from 'react-native'
 import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 
@@ -15,7 +22,7 @@ export default function WalletScreen() {
   const isDark = colorScheme === 'dark'
 
   // wallet provider
-  const { wallets, selectedWallet, loading } = useWallet()
+  const { selectedWalletId } = useWallet()
 
   function handleSend() {
     // Navigate to send screen
@@ -27,50 +34,18 @@ export default function WalletScreen() {
     // router.push('/wallet/receive')
   }
 
-  if (loading) {
-    // show spinner
-    return (
-      <View style={[styles.root, isDark && styles.rootDark]}>
-        <Text style={[styles.walletName, isDark && styles.walletNameDark]}>Loading wallets...</Text>
-      </View>
-    )
-  }
-
-  // if no wallets, show empty state and a Link component to navigate to create wallet screen
-  if (wallets === undefined || wallets.length === 0) {
-    return (
-      <View style={[styles.root, isDark && styles.rootDark]}>
-        <View style={[styles.emptyState, isDark && styles.emptyStateDark]}>
-          <Text style={[styles.emptyStateText, isDark && styles.emptyStateTextDark]}>
-            No wallets found
-          </Text>
-          <View style={styles.actionsSection}>
-            <Link style={[styles.button, styles.primaryButton]} href="/wallet/create">
-              <Text style={styles.buttonText}>Create wallet</Text>
-            </Link>
-            {/* import wallet */}
-            <Link
-              style={[styles.button, isDark ? styles.secondaryButtonDark : styles.secondaryButton]}
-              href="/wallet/import"
-            >
-              <Text style={[styles.buttonText, isDark && styles.buttonTextDark]}>
-                Import wallet
-              </Text>
-            </Link>
-          </View>
-        </View>
-      </View>
-    )
-  }
-
-  if (selectedWallet === undefined) {
+  if (selectedWalletId === undefined) {
     // create link to wallet/manage
     return (
       <View style={[styles.root, isDark && styles.rootDark]}>
-        <Text style={[styles.walletName, isDark && styles.walletNameDark]}>No wallet selected</Text>
-        <Link href="/wallet/manage" style={[styles.button, styles.primaryButton]}>
-          <Text style={styles.buttonText}>Select a wallet</Text>
-        </Link>
+        <View style={[styles.emptyState, isDark && styles.emptyStateDark]}>
+          <Text style={[styles.walletName, isDark && styles.walletNameDark]}>
+            No wallet selected
+          </Text>
+          <Link href="/wallet/manage" style={[styles.button, styles.primaryButton]}>
+            <Text style={styles.buttonText}>Select a wallet</Text>
+          </Link>
+        </View>
       </View>
     )
   }

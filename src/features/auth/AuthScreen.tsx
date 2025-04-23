@@ -1,4 +1,5 @@
-import { useAuth } from '@/features/auth/auth-provider'
+import { useAuth } from '@/features/auth/AuthProvider'
+import { Modal } from 'react-native'
 import React, { useState, useRef } from 'react'
 import { Text, View, StyleSheet, useColorScheme, TouchableOpacity, Animated } from 'react-native'
 import { Ionicons } from '@expo/vector-icons' // Assuming you have react-native-vector-icons installed
@@ -6,7 +7,7 @@ import BitcoinLogo from '@/shared/assets/bitcoin-logo'
 import colors from '@/shared/theme/colors'
 
 export default function AuthScreen() {
-  const { auth } = useAuth()
+  const { auth, authenticated } = useAuth()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
   const [isUnlocked, setIsUnlocked] = useState(false)
@@ -37,22 +38,24 @@ export default function AuthScreen() {
   })
 
   return (
-    <View style={[styles.container, isDark && styles.containerDark]}>
-      <BitcoinLogo width={128} height={128} />
-      <Text style={[styles.title, isDark && styles.titleDark]}>ihodl</Text>
-      <TouchableOpacity onPress={handleAuth} style={styles.buttonContainer}>
-        <Animated.View style={{ transform: [{ rotate: rotation }] }}>
-          <View style={styles.iconButton}>
-            <Ionicons
-              name={isUnlocked ? 'lock-open-outline' : 'lock-closed-outline'}
-              size={32}
-              color={colors.primary}
-            />
-          </View>
-        </Animated.View>
-        <Text style={styles.buttonText}>Unlock</Text>
-      </TouchableOpacity>
-    </View>
+    <Modal visible={!authenticated} animationType="fade" transparent={true}>
+      <View style={[styles.container, isDark && styles.containerDark]}>
+        <BitcoinLogo width={128} height={128} />
+        <Text style={[styles.title, isDark && styles.titleDark]}>ihodl</Text>
+        <TouchableOpacity onPress={handleAuth} style={styles.buttonContainer}>
+          <Animated.View style={{ transform: [{ rotate: rotation }] }}>
+            <View style={styles.iconButton}>
+              <Ionicons
+                name={isUnlocked ? 'lock-open-outline' : 'lock-closed-outline'}
+                size={32}
+                color={colors.primary}
+              />
+            </View>
+          </Animated.View>
+          <Text style={styles.buttonText}>Unlock</Text>
+        </TouchableOpacity>
+      </View>
+    </Modal>
   )
 }
 

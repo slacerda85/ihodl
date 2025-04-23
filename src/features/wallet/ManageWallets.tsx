@@ -8,21 +8,20 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { useColorScheme } from 'react-native'
-import colors, { rbgToHex, rgbaToHex } from '@/shared/theme/colors'
+import colors from '@/shared/theme/colors'
 import { useRouter } from 'expo-router'
 import { alpha } from '@/shared/theme/utils'
 import { useWallet } from './WalletProvider'
-import ColdWalletIcon from './cold-wallet-icon'
-import WalletTabIcon from './WalletTabIcon'
 import Divider from '@/shared/ui/Divider'
 import CreateWalletIcon from './CreateWalletIcon'
 import ImportWalletIcon from './ImportWalletIcon'
+import { setSelectedWalletId } from '@/lib/wallet'
 
 export default function ManageWallets() {
   const router = useRouter()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
-  const { wallets, selectedWalletId, selectWalletId, loading } = useWallet()
+  const { wallets, selectedWalletId, loadingWallets, revalidateSelectedWalletId } = useWallet()
   const [loadingWalletId, setLoadingWalletId] = useState<string | null>(null)
 
   function handleCreateWallet() {
@@ -37,7 +36,8 @@ export default function ManageWallets() {
     try {
       setLoadingWalletId(walletId)
       // Assuming selectWalletId is or can be modified to return a Promise
-      await selectWalletId(walletId)
+      await setSelectedWalletId(walletId)
+      await revalidateSelectedWalletId()
       router.dismiss()
     } catch (error) {
       console.error('Error selecting wallet:', error)
@@ -51,7 +51,7 @@ export default function ManageWallets() {
     <ScrollView style={styles.container}>
       <View style={[styles.contentWrapper, isDark && styles.contentWrapperDark]}>
         <View style={styles.walletList}>
-          {loading ? (
+          {loadingWallets ? (
             <View style={[styles.walletBox, isDark && styles.walletBoxDark]}>
               <View style={styles.emptyWalletBox}>
                 <Text style={[styles.subText, isDark && styles.subTextDark]}>
@@ -67,7 +67,7 @@ export default function ManageWallets() {
             </View>
           ) : wallets.length > 0 ? (
             wallets.map((wallet, index) => {
-              const isSelected = wallet.walletId === selectedWalletId
+              const isSelected = wallet.walletId === selectedWalletId && loadingWalletId === null
               const first = index === 0
               const last = index === wallets.length - 1
 
@@ -80,39 +80,38 @@ export default function ManageWallets() {
                       first && styles.walletBoxFirst,
                       last && styles.walletBoxLast,
                       isDark && styles.walletBoxDark,
-                      loading && styles.walletBoxLoading,
-                      isSelected && styles.selectedWalletBox,
-                      isDark && isSelected && styles.selectedWalletBoxDark,
+                      loadingWallets && styles.walletBoxLoading,
+                      // isSelected && styles.selectedWalletBox,
+                      // isDark && isSelected && styles.selectedWalletBoxDark,
                       wallet.walletId === loadingWalletId && styles.walletBoxLoading,
                     ]}
                     onPress={() => handleSelectWallet(wallet.walletId)}
                     disabled={loadingWalletId !== null} // Disable all selections during loading
                   >
-                    {/* <View style={styles.radioContainer}>
-                    <View
-                      style={[
-                        styles.radioOuter,
-                        isDark && styles.radioOuterDark,
-                        isSelected && styles.radioOuterSelected,
-                      ]}
-                    >
-                      {isSelected && <View style={styles.radioInner} />}
-                    </View>
-                  </View> */}
-
                     <View style={{ flex: 1 }}>
                       <View style={styles.walletHeader}>
                         {wallet.walletId === loadingWalletId ? (
-                          <ActivityIndicator size={24} color={colors.primary} />
-                        ) : wallet.cold ? (
-                          <ColdWalletIcon />
+                          <ActivityIndicator size={20} color={colors.primary} />
                         ) : (
-                          <WalletTabIcon
-                            color={isSelected ? colors.primary : colors.textSecondary.light}
-                            filled={isSelected}
-                          />
+                          <View style={styles.radioContainer}>
+                            <View
+                              style={[
+                                styles.radioOuter,
+                                isDark && styles.radioOuterDark,
+                                isSelected && styles.radioOuterSelected,
+                              ]}
+                            >
+                              {isSelected && <View style={styles.radioInner} />}
+                            </View>
+                          </View>
                         )}
-                        <Text style={[styles.walletName, isDark && styles.walletNameDark]}>
+                        <Text
+                          style={[
+                            styles.walletName,
+                            isDark && styles.walletNameDark,
+                            isSelected && styles.walletNameSelected,
+                          ]}
+                        >
                           {wallet.walletName}
                         </Text>
                       </View>
@@ -121,7 +120,7 @@ export default function ManageWallets() {
                   {!last ? (
                     <Divider
                       orientation="horizontal"
-                      color={isDark ? colors.border.dark : colors.border.light}
+                      color={isDark ? alpha(colors.background.light, 0.1) : colors.background.light}
                     />
                   ) : null}
                 </Fragment>
@@ -137,7 +136,9 @@ export default function ManageWallets() {
         </View>
         <Divider
           orientation="horizontal"
-          color={isDark ? colors.border.dark : colors.border.light}
+          color={
+            isDark ? alpha(colors.background.light, 0.05) : alpha(colors.background.dark, 0.05)
+          }
         />
 
         <View>
@@ -152,7 +153,7 @@ export default function ManageWallets() {
           </TouchableOpacity>
           <Divider
             orientation="horizontal"
-            color={isDark ? colors.border.dark : colors.border.light}
+            color={isDark ? alpha(colors.background.light, 0.1) : colors.background.light}
           />
 
           <TouchableOpacity
@@ -245,8 +246,12 @@ const styles = StyleSheet.create({
   },
   walletName: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '400',
     color: colors.textSecondary.light,
+  },
+  walletNameSelected: {
+    // fontWeight: '600',
+    color: colors.primary,
   },
   walletNameDark: {
     color: colors.text.dark,
@@ -277,7 +282,7 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '400',
     color: colors.primary,
   },
   primaryButton: {
@@ -311,5 +316,30 @@ const styles = StyleSheet.create({
   },
   subTextDark: {
     color: colors.textSecondary.dark,
+  },
+  radioContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  radioOuter: {
+    height: 20,
+    width: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: colors.textSecondary.light,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  radioOuterDark: {
+    borderColor: colors.textSecondary.dark,
+  },
+  radioOuterSelected: {
+    borderColor: colors.primary,
+  },
+  radioInner: {
+    height: 10,
+    width: 10,
+    borderRadius: 5,
+    backgroundColor: colors.primary,
   },
 })

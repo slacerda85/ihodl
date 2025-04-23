@@ -48,11 +48,8 @@ async function createWallet({
       throw new Error('Failed to save wallet')
     }
     // set the created wallet as selected wallet
-    const { success: setSuccess } = await setSelectedWalletId(walletId)
+    await setItem('selected_wallet_id', newWallet.walletId)
 
-    if (!setSuccess) {
-      throw new Error('Failed to set selected wallet')
-    }
     return {
       success: true,
       walletId,

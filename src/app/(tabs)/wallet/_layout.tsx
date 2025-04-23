@@ -1,18 +1,15 @@
 import { Link, Stack, useRouter } from 'expo-router'
-import { useColorScheme, StyleSheet, Text, Pressable } from 'react-native'
+import { useColorScheme, StyleSheet, Text, Pressable, Platform } from 'react-native'
 import { SafeAreaView } from 'react-native'
-import WalletProvider, { useWallet } from '@/features/wallet/WalletProvider'
+import { useWallet } from '@/features/wallet/WalletProvider'
 import colors from '@/shared/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
-import { useAuth } from '@/features/auth/auth-provider'
+import { useAuth } from '@/features/auth/AuthProvider'
 import { useCallback, useEffect, useMemo } from 'react'
+import ManageWalletsIcon from '@/features/wallet/ManageWalletsIcon'
 
 export default function WalletLayout() {
-  return (
-    <WalletProvider>
-      <WalletScreens />
-    </WalletProvider>
-  )
+  return <WalletScreens />
 }
 
 function headerRight() {
@@ -27,7 +24,8 @@ function headerRight() {
 function headerLeft() {
   return (
     <Link style={{ padding: 8, borderRadius: 24 }} href="/wallet/manage">
-      <Ionicons name="wallet-outline" size={24} color={colors.primary} />
+      <ManageWalletsIcon color={colors.primary} />
+      {/* <Ionicons name="wallet-outline" size={24} color={colors.primary} /> */}
     </Link>
   )
 }
@@ -102,30 +100,37 @@ function WalletScreens() {
         <Stack.Screen
           name="actions"
           options={{
-            presentation: 'modal',
-            title: 'Actions',
             headerStyle: {
-              backgroundColor: colors.modal[isDark ? 'dark' : 'light'],
+              backgroundColor: colors.background[isDark ? 'dark' : 'light'],
             },
             contentStyle: {
-              backgroundColor: colors.modal[isDark ? 'dark' : 'light'],
+              backgroundColor: colors.background[isDark ? 'dark' : 'light'],
             },
-            // right action closes modal
-            headerRight: () => <CloseModalButton />,
+            presentation: Platform.select({
+              ios: 'modal',
+              default: 'transparentModal',
+            }),
+            animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
+            title: 'Wallet actions',
+            headerRight: Platform.OS === 'ios' ? () => <CloseModalButton /> : undefined,
           }}
         />
         <Stack.Screen
           name="create"
           options={{
-            presentation: 'modal',
-            title: '',
             headerStyle: {
               backgroundColor: colors.modal[isDark ? 'dark' : 'light'],
             },
             contentStyle: {
               backgroundColor: colors.modal[isDark ? 'dark' : 'light'],
             },
-            headerRight: () => <CloseModalButton />,
+            presentation: Platform.select({
+              ios: 'modal',
+              default: 'modal',
+            }),
+            animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
+            title: 'Create wallet',
+            headerRight: Platform.OS === 'ios' ? () => <CloseModalButton /> : undefined,
           }}
         />
         <Stack.Screen
@@ -145,24 +150,31 @@ function WalletScreens() {
             contentStyle: {
               backgroundColor: colors.background[isDark ? 'dark' : 'light'],
             },
-            presentation: 'modal',
+            presentation: Platform.select({
+              ios: 'modal',
+              default: 'transparentModal',
+            }),
+            animation: Platform.OS === 'android' ? 'slide_from_left' : undefined,
             title: 'Manage wallets',
-            headerRight: () => <CloseModalButton />,
+            headerRight: Platform.OS === 'ios' ? () => <CloseModalButton /> : undefined,
           }}
         />
         <Stack.Screen
           name="delete"
           options={{
             headerStyle: {
-              backgroundColor: colors.modal[isDark ? 'dark' : 'light'],
+              backgroundColor: colors.background[isDark ? 'dark' : 'light'],
             },
             contentStyle: {
-              backgroundColor: colors.modal[isDark ? 'dark' : 'light'],
+              backgroundColor: colors.background[isDark ? 'dark' : 'light'],
             },
-            presentation: 'modal',
-            animation: 'fade',
-            title: '',
-            // headerRight: () => <CloseModalButton />,
+            presentation: Platform.select({
+              ios: 'modal',
+              default: 'transparentModal',
+            }),
+            animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
+            title: 'Delete wallet',
+            headerRight: Platform.OS === 'ios' ? () => <CloseModalButton /> : undefined,
           }}
         />
 

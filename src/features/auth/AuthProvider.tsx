@@ -2,7 +2,6 @@ import { createContext, useState, useContext, useRef, useEffect, useCallback } f
 import { AppState, AppStateStatus, Modal } from 'react-native' /* 
 import { Href, useSegments } from 'expo-router' */
 import { checkHardware, checkPermissions, authenticate } from './utils'
-import AuthScreen from './auth-screen'
 
 // Constants
 const TIMEOUTS = {
@@ -186,9 +185,6 @@ export default function AuthProvider({ children }: AuthProviderProps) {
       }}
     >
       {children}
-      <Modal visible={!authenticated} animationType="fade" transparent={true}>
-        <AuthScreen />
-      </Modal>
     </AuthContext.Provider>
   )
 }

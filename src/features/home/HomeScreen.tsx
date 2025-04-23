@@ -3,7 +3,7 @@ import { useEffect } from 'react'
 import { StyleSheet, Text, View, useColorScheme } from 'react-native'
 import colors from '@/shared/theme/colors'
 import { router, useSegments } from 'expo-router'
-import { useAuth } from '../auth/auth-provider'
+import { useAuth } from '../auth/AuthProvider'
 
 export default function HomeScreen() {
   const { authenticated } = useAuth()

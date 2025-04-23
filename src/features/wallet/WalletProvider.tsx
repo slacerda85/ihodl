@@ -3,22 +3,26 @@ import { getWallets, setSelectedWalletId, getSelectedWalletId, getBalance } from
 import { WalletData } from '@/models/wallet'
 import useCache from '@/features/cache'
 import { KeyedMutator } from 'swr'
+// import { KeyedMutator } from 'swr'
 
 type WalletContextType = {
   // wallet data
   wallets: WalletData[] | undefined
-  selectedWallet: WalletData | undefined
+  loadingWallets: boolean
+  revalidateWallets: KeyedMutator<WalletData[]>
+  // selected wallet data
   selectedWalletId: string | undefined
-  selectWalletId: (walletId: string) => Promise<{ success: boolean }>
-  refreshSelectedWalletId: () => Promise<string | undefined>
+  loadingSelectedWalletId: boolean
+  revalidateSelectedWalletId: KeyedMutator<string | undefined>
   // balance data
   balance: string
-  // selectedWalletBalance: string
-  balanceLoading: boolean
+  loadingBalance: boolean
+  revalidateBalance: KeyedMutator<number>
+  // other data
+  selectedWallet: WalletData | undefined
   useSatoshis: boolean
   toggleUnit: () => void
-  loading: boolean
-  revalidateBalance: KeyedMutator<number>
+  // revalidate: () => Promise<void>
 }
 
 const WalletContext = createContext({} as WalletContextType)
@@ -29,17 +33,17 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
     refreshInterval: 5 * 60 * 1000,
   }
 
-  const { data: wallets, isLoading: walletsLoading } = useCache(
-    'wallets',
-    getWallets,
-    defaultCacheParams,
-  )
+  const {
+    data: wallets,
+    isLoading: loadingWallets,
+    mutate: revalidateWallets,
+  } = useCache('wallets', getWallets)
 
   const {
     data: selectedWalletId,
-    isLoading: walletIdLoading,
-    mutate: refreshSelectedWalletId,
-  } = useCache(wallets !== undefined ? 'selectedWalletId' : null, getSelectedWalletId)
+    isLoading: loadingSelectedWalletId,
+    mutate: revalidateSelectedWalletId,
+  } = useCache('selectedWalletId', getSelectedWalletId)
 
   const { data: selectedWallet } = useCache(
     selectedWalletId !== undefined && wallets !== undefined
@@ -49,27 +53,12 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
       const wallet = wallets.find(w => w.walletId === selectedWalletId)
       return wallet
     },
-    defaultCacheParams,
-  )
-
-  async function selectWalletId(walletId: string) {
-    const { success } = await setSelectedWalletId(walletId)
-    if (success) {
-      // update cache
-      await refreshSelectedWalletId()
-    }
-    return { success }
-  }
-
-  const loading = useMemo(
-    () => walletsLoading || walletIdLoading,
-    [walletsLoading, walletIdLoading],
   )
 
   // balance
   const {
     data: balance,
-    isLoading: balanceLoading,
+    isLoading: loadingBalance,
     mutate: revalidateBalance,
   } = useCache(
     selectedWallet ? [`wallets/${selectedWallet.walletId}/balance`, selectedWallet] : null,
@@ -85,17 +74,20 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
   // Convert balance to satoshis or keep as BTC based on state
   const displayBalance = balance === undefined ? 0 : useSatoshis ? balance * 100000000 : balance
 
+  const formatBalance = (balance: number, useSats: boolean) => {
+    if (useSats) {
+      return Math.round(balance)
+        .toString()
+        .replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+    } else {
+      return balance.toLocaleString('pt-BR', { maximumFractionDigits: 8 })
+    }
+  }
+
   // Format balance appropriately for each unit
   const formattedBalance = useMemo(
-    () =>
-      balance === undefined
-        ? '0'
-        : useSatoshis
-          ? Math.round(displayBalance)
-              .toString()
-              .replace(/\B(?=(\d{3})+(?!\d))/g, '.')
-          : balance?.toLocaleString('pt-BR', { maximumFractionDigits: 8 }),
-    [balance, displayBalance, useSatoshis],
+    () => formatBalance(displayBalance, useSatoshis),
+    [displayBalance, useSatoshis],
   )
 
   const toggleUnit = () => {
@@ -106,16 +98,18 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
     <WalletContext.Provider
       value={{
         wallets,
+        loadingWallets,
+        revalidateWallets,
         selectedWallet,
         selectedWalletId,
-        selectWalletId,
-        refreshSelectedWalletId,
-        loading,
+        loadingSelectedWalletId,
+        revalidateSelectedWalletId,
         balance: formattedBalance,
-        balanceLoading,
+        loadingBalance,
+        revalidateBalance,
         useSatoshis,
         toggleUnit,
-        revalidateBalance,
+        // revalidate,
       }}
     >
       {children}
