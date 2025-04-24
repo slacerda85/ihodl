@@ -158,7 +158,7 @@ async function getBalance(wallet: WalletData): Promise<number> {
   return balance
 }
 
-export {
+/* export {
   createWallet,
   getWallet,
   deleteWallet,
@@ -170,4 +170,4 @@ export {
   setSelectedWalletId,
   getSelectedWalletId,
   getBalance,
-}
+} */

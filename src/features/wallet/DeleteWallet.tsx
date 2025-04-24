@@ -3,10 +3,11 @@ import { Pressable, StyleSheet, Text, useColorScheme, View, ActivityIndicator } 
 import useWallet from './useWallet'
 import { useCallback, useState } from 'react'
 import { useRouter } from 'expo-router'
-import { deleteWallet } from '@/lib/wallet'
+// import { deleteWallet } from '@/lib/wallet'
 import { alpha } from '@/shared/theme/utils'
 
 export default function DeleteWallet() {
+  const { deleteWallet } = useWallet()
   const router = useRouter()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
@@ -17,7 +18,7 @@ export default function DeleteWallet() {
     try {
       setSubmitting(true)
       if (!selectedWalletId) return
-      await deleteWallet(selectedWalletId)
+      deleteWallet(selectedWalletId)
       // await revalidateWallets()
       // await revalidateSelectedWalletId()
       router.dismiss(2)
@@ -26,7 +27,7 @@ export default function DeleteWallet() {
     } finally {
       setSubmitting(false)
     }
-  }, [router, selectedWalletId])
+  }, [deleteWallet, router, selectedWalletId])
 
   return (
     <View style={styles.modalContainer}>

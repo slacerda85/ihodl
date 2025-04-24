@@ -14,7 +14,7 @@ type WalletStore = {
   loadWallets: () => void
 }
 
-const useWalletStore = create<WalletStore>()(
+const useWallet = create<WalletStore>()(
   persist(
     (set, get) => ({
       wallets: [],
@@ -61,4 +61,4 @@ const useWalletStore = create<WalletStore>()(
   ),
 )
 
-export default useWalletStore
+export default useWallet

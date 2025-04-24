@@ -1,7 +1,7 @@
 import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 import { Link } from 'expo-router'
-import { ScrollView, StyleSheet, Text, useColorScheme, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, useColorScheme } from 'react-native'
 
 export default function WalletActions() {
   const colorScheme = useColorScheme()

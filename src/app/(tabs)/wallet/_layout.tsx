@@ -1,11 +1,11 @@
 import { Link, Stack, useRouter } from 'expo-router'
 import { useColorScheme, StyleSheet, Text, Pressable, Platform } from 'react-native'
 import { SafeAreaView } from 'react-native'
-import { useWallet } from '@/features/wallet/WalletProvider'
+import useWallet from '@/features/wallet/useWallet'
 import colors from '@/shared/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@/features/auth/AuthProvider'
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect } from 'react'
 import ManageWalletsIcon from '@/features/wallet/ManageWalletsIcon'
 
 export default function WalletLayout() {

@@ -14,12 +14,13 @@ import { alpha } from '@/shared/theme/utils'
 // import { useWallet } from './wallet-provider'
 import { useRouter } from 'expo-router'
 import wordlist from 'bip39/src/wordlists/english.json'
-import { createWallet } from '@/lib/wallet'
+// import { createWallet } from '@/lib/wallet'
 import useWallet from './useWallet'
+import { randomUUID } from '@/lib/crypto'
 
 export default function ImportWallet() {
   const router = useRouter()
-  const { selectWalletId } = useWallet()
+  const { createWallet } = useWallet()
   const [walletName, setWalletName] = useState<string>('')
   const [seedPhrase, setSeedPhrase] = useState<string>('')
   const [currentWord, setCurrentWord] = useState<string>('')
@@ -76,17 +77,20 @@ export default function ImportWallet() {
     }
     console.log('Importing wallet with name:', walletName)
 
-    const response = await createWallet({
+    createWallet({
+      walletId: randomUUID(), // Generate a unique wallet ID
       walletName,
       seedPhrase,
       cold: false, // Assuming this is a hot wallet import
+      accounts: [
+        {
+          purpose: 84,
+          coinType: 0,
+          accountIndex: 0,
+        },
+      ],
     })
 
-    if (!response) {
-      console.error('Failed to import wallet')
-      return
-    }
-    await selectWalletId(response.walletId)
     router.dismiss(2)
   }
 

@@ -7,8 +7,7 @@ import { alpha } from '@/shared/theme/utils'
 // Components
 import WalletAccounts from './WalletAccounts'
 import WalletBalance from './WalletBalance'
-import { useWallet } from './WalletProvider'
-import { HapticPressable } from '@/ui/HapticPressable'
+import useWallet from './useWallet'
 
 export default function WalletScreen() {
   // theme
@@ -16,7 +15,7 @@ export default function WalletScreen() {
   const isDark = colorScheme === 'dark'
 
   // wallet provider
-  const { selectedWalletId } = useWallet()
+  const { wallets, selectedWalletId } = useWallet()
 
   function handleSend() {
     // Navigate to send screen
@@ -28,7 +27,19 @@ export default function WalletScreen() {
     // router.push('/transactions/receive')
   }
 
-  if (selectedWalletId === undefined) {
+  if (wallets === undefined || wallets?.length === 0) {
+    // create link to wallet/manage
+    return (
+      <View style={[styles.root, isDark && styles.rootDark]}>
+        <View style={[styles.emptyState, isDark && styles.emptyStateDark]}>
+          <Text style={[styles.walletName, isDark && styles.walletNameDark]}>No wallets found</Text>
+          <Link href="/wallet/create" style={[styles.button, styles.primaryButton]}>
+            <Text style={styles.buttonText}>Create a wallet</Text>
+          </Link>
+        </View>
+      </View>
+    )
+  } else if (selectedWalletId === undefined) {
     // create link to wallet/manage
     return (
       <View style={[styles.root, isDark && styles.rootDark]}>
@@ -48,9 +59,9 @@ export default function WalletScreen() {
     <View style={styles.root}>
       <WalletBalance /* balance={totalBalance} isLoading={isLoading} */ />
       <View style={styles.actionsSection}>
-        <HapticPressable onPress={handleSend} style={[styles.button, styles.primaryButton]}>
+        <Pressable onPress={handleSend} style={[styles.button, styles.primaryButton]}>
           <Text style={styles.buttonText}>Send</Text>
-        </HapticPressable>
+        </Pressable>
 
         <Pressable
           onPress={handleReceive}
@@ -139,7 +150,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   button: {
-    flex: 0.5,
+    // flex: 0.5,
     padding: 16,
     borderRadius: 16,
     alignItems: 'center',

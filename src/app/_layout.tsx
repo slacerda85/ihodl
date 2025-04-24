@@ -8,7 +8,8 @@ import colors from '@/shared/theme/colors'
 import * as SplashScreen from 'expo-splash-screen'
 import { useEffect, useState } from 'react'
 import AuthScreen from '@/features/auth/AuthScreen'
-import WalletProvider from '@/features/wallet/WalletProvider'
+// import WalletProvider from '@/features/wallet/WalletProvider'
+import useWalletStore from '@/features/wallet/useWallet'
 
 SplashScreen.preventAutoHideAsync()
 
@@ -19,16 +20,34 @@ SplashScreen.setOptions({
 })
 
 export default function RootLayout() {
+  const { loadWallets } = useWalletStore()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const [loaded] = useState(true)
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
+    const loadResources = async () => {
+      try {
+        // Load any resources or data that you need before rendering the app
+        loadWallets()
+      } catch (e) {
+        console.warn(e)
+      } finally {
+        setLoaded(true)
+        // Hide the splash screen once the resources are loaded
+        await SplashScreen.hideAsync()
+      }
+    }
+
+    loadResources()
+  }, [loadWallets])
+
+  /* useEffect(() => {
     if (loaded) {
       SplashScreen.hideAsync()
     }
-  }, [loaded])
+  }, [loaded]) */
 
   if (!loaded) {
     return null
