@@ -7,7 +7,7 @@ import {
 } from '@/lib/key'
 import { connect, getTransactions } from './electrum'
 import { createSegwitAddress } from './address'
-import { TxHistory } from '@/models/transaction'
+import { Tx, TxHistory } from '@/models/transaction'
 
 interface GetTxHistoryParams {
   extendedKey: Uint8Array
@@ -33,7 +33,14 @@ async function getTxHistory({
   accountStartIndex = 0,
   gapLimit = 20,
   // multiAccount = false,
-}: GetTxHistoryParams): Promise<{ txHistory: TxHistory[] }> {
+}: GetTxHistoryParams): Promise<{
+  balance: number
+  utxos: {
+    address: string
+    tx: Tx[]
+  }[]
+  txHistory: TxHistory[]
+}> {
   try {
     const txHistory: TxHistory[] = []
 
@@ -57,7 +64,7 @@ async function getTxHistory({
     const changeIndex = 1
     const changeExtendedKey = deriveChildPrivateKey(accountExtendedKey, changeIndex)
 
-    // const addressInfo: AddressInfo[] = []
+    // const txHistory: TxHistory[] = []
     let consecutiveUnused = 0
     let index = 0
 
@@ -96,9 +103,48 @@ async function getTxHistory({
       index++
     }
 
-    return { txHistory }
+    const { balance, utxos } = calculateBalance(txHistory)
+
+    return { balance, utxos, txHistory }
   } catch (error) {
     throw new Error(`Failed to discover accounts: ${(error as Error).message}`)
+  }
+}
+
+function calculateBalance(txHistory: TxHistory[]): {
+  balance: number
+  utxos: { address: string; tx: Tx[] }[]
+} {
+  let balance = 0
+  const utxos: { address: string; tx: Tx[] }[] = []
+
+  txHistory.forEach(address => {
+    const { receivingAddress, txs } = address
+
+    const utxos = txs.filter(tx => {
+      // if the array of txs has any tx that has a vin that matches the txid of the current tx, its already spent
+      if (txs.some(t => t.vin.some(v => v.txid === tx.txid))) {
+        return false
+      }
+      // if the tx is not spent, add it to the utxos array
+      return true
+    })
+
+    // calculate balance for each address
+    const addressBalance = utxos.reduce((acc, tx) => {
+      const vout = tx.vout.find(v => v.scriptPubKey.address === receivingAddress)
+      if (vout) {
+        return acc + vout.value
+      }
+      return acc
+    }, 0)
+
+    balance += addressBalance
+  })
+
+  return {
+    balance,
+    utxos,
   }
 }
 

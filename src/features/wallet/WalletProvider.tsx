@@ -1,8 +1,10 @@
 import { createContext, ReactNode, useContext, useMemo, useState } from 'react'
-import { getWallets, setSelectedWalletId, getSelectedWalletId, getBalance } from '@/lib/wallet'
+import { getWallets, getSelectedWalletId } from '@/lib/wallet'
 import { WalletData } from '@/models/wallet'
 import useCache from '@/features/cache'
 import { KeyedMutator } from 'swr'
+import { getTxHistory } from '@/lib/transactions'
+import { createRootExtendedKey, fromMnemonic } from '@/lib/key'
 // import { KeyedMutator } from 'swr'
 
 type WalletContextType = {
@@ -17,7 +19,13 @@ type WalletContextType = {
   // balance data
   balance: string
   loadingBalance: boolean
-  revalidateBalance: KeyedMutator<number>
+  revalidateBalance: KeyedMutator<{
+    balance: number
+    utxos: {
+      address: string
+      tx: any[] // Replace with the correct type for transactions
+    }[]
+  }>
   // other data
   selectedWallet: WalletData | undefined
   useSatoshis: boolean
@@ -63,8 +71,15 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
   } = useCache(
     selectedWallet ? [`wallets/${selectedWallet.walletId}/balance`, selectedWallet] : null,
     async ([_key, selectedWallet]) => {
-      const balance = await getBalance(selectedWallet)
-      return balance
+      const entropy = fromMnemonic(selectedWallet.seedPhrase)
+      const extendedKey = createRootExtendedKey(entropy)
+      const { balance, utxos } = await getTxHistory({
+        extendedKey,
+        purpose: selectedWallet.accounts[0].purpose,
+        coinType: selectedWallet.accounts[0].coinType,
+        accountStartIndex: selectedWallet.accounts[0].accountIndex,
+      })
+      return { balance, utxos }
     },
     defaultCacheParams,
   )
@@ -72,7 +87,8 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
   const [useSatoshis, setUseSatoshis] = useState(false)
 
   // Convert balance to satoshis or keep as BTC based on state
-  const displayBalance = balance === undefined ? 0 : useSatoshis ? balance * 100000000 : balance
+  const displayBalance =
+    balance === undefined ? 0 : useSatoshis ? balance.balance * 100000000 : balance.balance
 
   const formatBalance = (balance: number, useSats: boolean) => {
     if (useSats) {

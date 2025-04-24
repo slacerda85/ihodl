@@ -1,5 +1,3 @@
-// import { AddressInfo } from './address'
-
 // bitcoin only
 export type Purpose =
   | 44 // Legacy
@@ -9,15 +7,8 @@ export type Purpose =
 
 export type CoinType = 0 // Bitcoin
 
-/* export type AccountToAdd = {
-  purpose: Purpose
-  coinTypes: CoinType[]
-  accountIndex?: number
-} */
-
 export type Account = {
   purpose: Purpose
   coinType: CoinType
   accountIndex: number
-  // addressInfo: AddressInfo[]
 }

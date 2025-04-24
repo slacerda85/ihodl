@@ -1,6 +1,6 @@
 // React and React Native
 import { Link } from 'expo-router'
-import { ActivityIndicator, StyleSheet, Text, Pressable, useColorScheme, View } from 'react-native'
+import { StyleSheet, Text, Pressable, useColorScheme, View } from 'react-native'
 import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 
@@ -8,6 +8,7 @@ import { alpha } from '@/shared/theme/utils'
 import WalletAccounts from './WalletAccounts'
 import WalletBalance from './WalletBalance'
 import { useWallet } from './WalletProvider'
+import { HapticPressable } from '@/ui/HapticPressable'
 
 export default function WalletScreen() {
   // theme
@@ -19,12 +20,12 @@ export default function WalletScreen() {
 
   function handleSend() {
     // Navigate to send screen
-    // router.push('/wallet/send')
+    // router.push('/transactions/send')
   }
 
   function handleReceive() {
     // Navigate to receive screen
-    // router.push('/wallet/receive')
+    // router.push('/transactions/receive')
   }
 
   if (selectedWalletId === undefined) {
@@ -47,9 +48,9 @@ export default function WalletScreen() {
     <View style={styles.root}>
       <WalletBalance /* balance={totalBalance} isLoading={isLoading} */ />
       <View style={styles.actionsSection}>
-        <Pressable onPress={handleSend} style={[styles.button, styles.primaryButton]}>
+        <HapticPressable onPress={handleSend} style={[styles.button, styles.primaryButton]}>
           <Text style={styles.buttonText}>Send</Text>
-        </Pressable>
+        </HapticPressable>
 
         <Pressable
           onPress={handleReceive}

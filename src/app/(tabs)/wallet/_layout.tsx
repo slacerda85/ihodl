@@ -30,7 +30,7 @@ function headerLeft() {
   )
 }
 
-const CloseModalButton = () => {
+const CloseModalButton = ({ title }: { title?: string }) => {
   const router = useRouter()
   const { inactive } = useAuth()
 
@@ -51,12 +51,12 @@ const CloseModalButton = () => {
       <Text
         style={{
           fontSize: 16,
-          fontWeight: 'bold',
+          // fontWeight: 'bold',
           color: colors.primary,
           // padding: 8,
         }}
       >
-        Done
+        {title || 'Close'}
       </Text>
     </Pressable>
   )
@@ -106,13 +106,11 @@ function WalletScreens() {
             contentStyle: {
               backgroundColor: colors.background[isDark ? 'dark' : 'light'],
             },
-            presentation: Platform.select({
-              ios: 'modal',
-              default: 'transparentModal',
-            }),
+            presentation: 'modal',
             animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
             title: 'Wallet actions',
-            headerRight: Platform.OS === 'ios' ? () => <CloseModalButton /> : undefined,
+            headerRight:
+              Platform.OS === 'ios' ? () => <CloseModalButton title="Done" /> : undefined,
           }}
         />
         <Stack.Screen
@@ -130,15 +128,16 @@ function WalletScreens() {
             }),
             animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
             title: 'Create wallet',
-            headerRight: Platform.OS === 'ios' ? () => <CloseModalButton /> : undefined,
+            headerRight:
+              Platform.OS === 'ios' ? () => <CloseModalButton title="Cancel" /> : undefined,
           }}
         />
         <Stack.Screen
           name="import"
           options={{
             presentation: 'modal',
-            title: '',
-            headerRight: () => <CloseModalButton />,
+            title: 'Import wallet',
+            headerRight: () => <CloseModalButton title="Cancel" />,
           }}
         />
         <Stack.Screen
@@ -156,7 +155,8 @@ function WalletScreens() {
             }),
             animation: Platform.OS === 'android' ? 'slide_from_left' : undefined,
             title: 'Manage wallets',
-            headerRight: Platform.OS === 'ios' ? () => <CloseModalButton /> : undefined,
+            headerRight:
+              Platform.OS === 'ios' ? () => <CloseModalButton title="Done" /> : undefined,
           }}
         />
         <Stack.Screen
