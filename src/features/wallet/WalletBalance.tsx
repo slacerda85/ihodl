@@ -1,21 +1,31 @@
 import { View, Text, StyleSheet, useColorScheme, Pressable, ActivityIndicator } from 'react-native'
 import colors from '@/shared/theme/colors'
 import SwapIcon from './SwapIcon'
-import { useWallet } from './WalletProvider'
+import useWallet from './useWallet'
+import { useState } from 'react'
 
 export default function WalletBalance() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
+  const [useSatoshis, setUseSatoshis] = useState<boolean>(false)
+  const toggleUnit = () => {
+    setUseSatoshis(prev => !prev)
+  }
+  const balance = useSatoshis ? '0.00000000 BTC' : '0.00 BTC' // Placeholder for actual balance
 
-  const { selectedWallet, loadingBalance, useSatoshis, toggleUnit, balance } = useWallet()
+  const {
+    wallets,
+    selectedWalletId /* selectedWallet, loadingBalance, useSatoshis = , toggleUnit, balance */,
+  } = useWallet()
+  const selectedWallet = wallets.find(wallet => wallet.walletId === selectedWalletId)
 
-  if (loadingBalance) {
+  /* if (loadingBalance) {
     return (
       <View style={styles.balanceSection}>
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     )
-  }
+  } */
 
   if (!selectedWallet) {
     return (

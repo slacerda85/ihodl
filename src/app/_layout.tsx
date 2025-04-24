@@ -37,10 +37,27 @@ export default function RootLayout() {
   return (
     <>
       <AuthProvider>
-        <WalletProvider>
-          <Stack
-            screenOptions={{
-              animation: 'fade',
+        {/* <WalletProvider> */}
+        <Stack
+          screenOptions={{
+            animation: 'fade',
+            headerShown: false,
+            headerStyle: {
+              backgroundColor: isDark ? colors.background.dark : colors.background.light,
+            },
+            contentStyle: {
+              backgroundColor: isDark ? colors.background.dark : colors.background.light,
+            },
+          }}
+        >
+          <Stack.Screen
+            name="index"
+            options={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}
+          />
+
+          <Stack.Screen
+            name="(tabs)"
+            options={{
               headerShown: false,
               headerStyle: {
                 backgroundColor: isDark ? colors.background.dark : colors.background.light,
@@ -49,28 +66,11 @@ export default function RootLayout() {
                 backgroundColor: isDark ? colors.background.dark : colors.background.light,
               },
             }}
-          >
-            <Stack.Screen
-              name="index"
-              options={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}
-            />
-
-            <Stack.Screen
-              name="(tabs)"
-              options={{
-                headerShown: false,
-                headerStyle: {
-                  backgroundColor: isDark ? colors.background.dark : colors.background.light,
-                },
-                contentStyle: {
-                  backgroundColor: isDark ? colors.background.dark : colors.background.light,
-                },
-              }}
-            />
-          </Stack>
-          <InactivityOverlay />
-          <AuthScreen />
-        </WalletProvider>
+          />
+        </Stack>
+        <InactivityOverlay />
+        <AuthScreen />
+        {/*  </WalletProvider> */}
       </AuthProvider>
       <StatusBar style="auto" />
     </>

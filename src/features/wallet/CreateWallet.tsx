@@ -15,14 +15,14 @@ import { alpha } from '@/shared/theme/utils'
 import { IconSymbol } from '@/shared/ui/icon-symbol'
 import { useRouter } from 'expo-router'
 import { createWallet } from '@/lib/wallet'
-import { useWallet } from './WalletProvider'
+// import useWallet from './useWallet'
 
 export default function CreateWallet() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
   const router = useRouter()
-  const { revalidateWallets, revalidateSelectedWalletId } = useWallet()
+  // const { revalidateWallets, revalidateSelectedWalletId } = useWallet()
   const [offline, setOffline] = useState<boolean>(false)
   const [walletName, setWalletName] = useState<string>('')
   const [submitting, setSubmitting] = useState<boolean>(false)
@@ -38,8 +38,8 @@ export default function CreateWallet() {
         console.error('Failed to create wallet')
         return
       }
-      await revalidateWallets()
-      await revalidateSelectedWalletId()
+      // await revalidateWallets()
+      // await revalidateSelectedWalletId()
       router.dismiss(2)
     } catch (error) {
       console.error('Error creating wallet:', error)

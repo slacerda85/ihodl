@@ -15,7 +15,7 @@ import { alpha } from '@/shared/theme/utils'
 import { useRouter } from 'expo-router'
 import wordlist from 'bip39/src/wordlists/english.json'
 import { createWallet } from '@/lib/wallet'
-import { useWallet } from './WalletProvider'
+import useWallet from './useWallet'
 
 export default function ImportWallet() {
   const router = useRouter()

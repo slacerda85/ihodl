@@ -1,6 +1,6 @@
 import colors from '@/shared/theme/colors'
 import { Pressable, StyleSheet, Text, useColorScheme, View, ActivityIndicator } from 'react-native'
-import { useWallet } from './WalletProvider'
+import useWallet from './useWallet'
 import { useCallback, useState } from 'react'
 import { useRouter } from 'expo-router'
 import { deleteWallet } from '@/lib/wallet'
@@ -10,7 +10,7 @@ export default function DeleteWallet() {
   const router = useRouter()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
-  const { selectedWalletId, revalidateWallets, revalidateSelectedWalletId } = useWallet()
+  const { selectedWalletId /* revalidateWallets, revalidateSelectedWalletId */ } = useWallet()
   const [submitting, setSubmitting] = useState<boolean>(false)
 
   const handleDeleteWallet = useCallback(async () => {
@@ -18,15 +18,15 @@ export default function DeleteWallet() {
       setSubmitting(true)
       if (!selectedWalletId) return
       await deleteWallet(selectedWalletId)
-      await revalidateWallets()
-      await revalidateSelectedWalletId()
+      // await revalidateWallets()
+      // await revalidateSelectedWalletId()
       router.dismiss(2)
     } catch (error) {
       console.error('Error deleting wallet:', error)
     } finally {
       setSubmitting(false)
     }
-  }, [revalidateWallets, revalidateSelectedWalletId, router, selectedWalletId])
+  }, [router, selectedWalletId])
 
   return (
     <View style={styles.modalContainer}>

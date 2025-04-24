@@ -68,7 +68,7 @@ function WalletScreens() {
   const isDark = colorScheme === 'dark'
 
   // show headers only when there are wallets
-  const showHeaders = useMemo(() => wallets !== undefined, [wallets])
+  // const showHeaders = useMemo(() => wallets !== undefined, [wallets])
 
   return (
     <SafeAreaView style={[styles.container, isDark ? styles.darkContainer : styles.lightContainer]}>
@@ -88,8 +88,8 @@ function WalletScreens() {
         <Stack.Screen
           name="index"
           options={{
-            headerLeft: showHeaders ? () => headerLeft() : undefined,
-            headerRight: showHeaders ? () => headerRight() : undefined,
+            headerLeft: () => headerLeft(),
+            headerRight: selectedWalletId ? () => headerRight() : undefined,
             // headerShown: false,
             headerTitleAlign: 'center',
             title:

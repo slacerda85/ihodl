@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { WalletData } from '@/models/wallet'
 import store from '@/lib/store'
-import { deleteWallet } from '@/lib/wallet'
+import { randomUUID } from '@/lib/crypto'
 
 type WalletStore = {
   wallets: WalletData[]
@@ -11,19 +11,31 @@ type WalletStore = {
   clearWallets: () => void
   selectedWalletId: string | undefined
   selectWalletId: (walletId: string) => void
+  loadWallets: () => void
 }
 
 const useWalletStore = create<WalletStore>()(
   persist(
     (set, get) => ({
       wallets: [],
-      createWallet: (wallet: WalletData) => {
-        set(state => ({ wallets: [...state.wallets, wallet] }))
+      createWallet: (wallet: Omit<WalletData, 'walletId'>) => {
+        const walletId = randomUUID()
+        const newWallet: WalletData = {
+          ...wallet,
+          walletId,
+        }
+        set(state => ({
+          wallets: [...state.wallets, newWallet],
+          selectedWalletId: newWallet.walletId, // Set the selected wallet ID to the newly created wallet
+        }))
       },
-      deleteWallet: async (walletId: string) => {
-        await deleteWallet(walletId)
+      deleteWallet: (walletId: string) => {
         set(state => ({
           wallets: state.wallets.filter(wallet => wallet.walletId !== walletId),
+          selectedWalletId:
+            state.selectedWalletId === walletId
+              ? state.wallets[0].walletId
+              : state.selectedWalletId,
         }))
       },
       clearWallets: () => {
@@ -33,10 +45,18 @@ const useWalletStore = create<WalletStore>()(
       selectWalletId: (walletId: string) => {
         set({ selectedWalletId: walletId })
       },
+      loadWallets: () => {
+        const wallets = get().wallets
+        if (wallets.length === 0) {
+          console.log('No wallets found')
+        } else {
+          console.log('Loaded wallets:', wallets)
+        }
+      },
     }),
     {
-      name: 'wallet-storage',
-      storage: createJSONStorage(() => store),
+      name: 'wallet-storage', // unique name
+      storage: createJSONStorage(() => store), // use MMKV storage
     },
   ),
 )

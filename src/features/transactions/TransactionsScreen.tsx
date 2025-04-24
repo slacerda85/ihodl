@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Text, View, Pressable, FlatList } from 'react-native'
 import useCache from '../cache'
-import { useWallet } from '../wallet/WalletProvider'
+import useWallet from '../wallet/useWallet'
 
 export default function TransactionsScreen() {
-  const { selectedWallet } = useWallet()
+  const { selectedWalletId } = useWallet()
   const [selectedPurpose, setSelectedPurpose] = useState(84)
 
   const [selectedCoinType, setSelectedCoinType] = useState(0)

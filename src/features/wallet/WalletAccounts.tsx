@@ -14,7 +14,7 @@ import { Fragment, Key, ReactNode } from 'react'
 import { alpha } from '@/shared/theme/utils'
 import colors from '@/shared/theme/colors'
 import { WalletData } from '@/models/wallet'
-import { useWallet } from './WalletProvider'
+import useWallet from './useWallet'
 
 interface WalletAccountsProps {
   wallet: WalletData
@@ -48,9 +48,9 @@ export default function WalletAccounts() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const { selectedWallet, balance, useSatoshis, loadingBalance } = useWallet()
+  const { wallets, selectedWalletId } = useWallet()
 
-  if (!selectedWallet) {
+  if (!selectedWalletId) {
     return (
       <View style={styles.loadingContainer}>
         <Text style={[styles.loadingText, isDark && styles.loadingTextDark]}>
@@ -60,7 +60,7 @@ export default function WalletAccounts() {
     )
   }
 
-  const { accounts } = selectedWallet
+  const accounts = wallets.find(wallet => wallet.walletId === selectedWalletId)?.accounts || []
   const renderAccount = ({ item }: { item: Account }) => {
     if (accounts === undefined || accounts.length === 0) {
       return (
@@ -73,12 +73,7 @@ export default function WalletAccounts() {
     }
 
     return (
-      <AccountWithBalance
-        account={item}
-        balance={balance}
-        useSatoshis={useSatoshis}
-        loading={loadingBalance}
-      />
+      <AccountWithBalance account={item} balance={'0.00'} useSatoshis={false} loading={false} />
     )
   }
 
