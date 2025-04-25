@@ -1,38 +1,22 @@
 import { View, Text, StyleSheet, useColorScheme, Pressable, ActivityIndicator } from 'react-native'
 import colors from '@/shared/theme/colors'
 import SwapIcon from './SwapIcon'
-import useWallet from './useWallet'
-import { useState } from 'react'
+import useStore from '../store'
 
 export default function WalletBalance() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
-  const [useSatoshis, setUseSatoshis] = useState<boolean>(false)
-  const toggleUnit = () => {
-    setUseSatoshis(prev => !prev)
-  }
-  const balance = useSatoshis ? '0.00000000 BTC' : '0.00 BTC' // Placeholder for actual balance
 
-  const {
-    wallets,
-    selectedWalletId /* selectedWallet, loadingBalance, useSatoshis = , toggleUnit, balance */,
-  } = useWallet()
-  const selectedWallet = wallets.find(wallet => wallet.walletId === selectedWalletId)
+  // wallet provider
+  const { selectedWalletId, unit, setUnit, getBalance, getLoading } = useStore()
+  // Transactions provider
+  const loading = selectedWalletId ? getLoading(selectedWalletId) : false
+  const balance = selectedWalletId ? getBalance(selectedWalletId) : 0
 
-  /* if (loadingBalance) {
+  if (loading) {
     return (
       <View style={styles.balanceSection}>
         <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    )
-  } */
-
-  if (!selectedWallet) {
-    return (
-      <View style={styles.balanceSection}>
-        <Text style={[styles.balanceLabel, isDark && styles.balanceLabelDark]}>
-          No wallet selected
-        </Text>
       </View>
     )
   }
@@ -51,9 +35,16 @@ export default function WalletBalance() {
 
         <Text style={[styles.balanceAmount, isDark && styles.balanceAmountDark]}>{balance}</Text>
         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
-          <Pressable onPress={toggleUnit} style={styles.unitButton}>
+          <Pressable
+            onPress={() => {
+              if (selectedWalletId) {
+                setUnit(unit === 'BTC' ? 'sats' : 'BTC')
+              }
+            }}
+            style={styles.unitButton}
+          >
             <View style={styles.unitContainer}>
-              <Text style={styles.balanceCurrency}>{useSatoshis ? 'Sats' : 'BTC'}</Text>
+              <Text style={styles.balanceCurrency}>{unit}</Text>
               <SwapIcon size={24} color={colors.primary} />
             </View>
           </Pressable>

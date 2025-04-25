@@ -8,14 +8,15 @@ import useWallet from './useWallet'
 import Divider from '@/shared/ui/Divider'
 import CreateWalletIcon from './CreateWalletIcon'
 import ImportWalletIcon from './ImportWalletIcon'
+import useStore from '../store'
 // import { setSelectedWalletId } from '@/lib/wallet'
 
 export default function ManageWallets() {
   const router = useRouter()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
-  const { wallets, selectedWalletId, selectWalletId } = useWallet()
-  const [loadingWalletId, setLoadingWalletId] = useState<string | null>(null)
+  const { wallets, selectedWalletId, selectWalletId } = useStore()
+  // const [loadingWalletId, setLoadingWalletId] = useState<string | null>(null)
 
   function handleCreateWallet() {
     router.push('/wallet/create')
@@ -25,19 +26,18 @@ export default function ManageWallets() {
     router.push('/wallet/import')
   }
 
-  async function handleSelectWallet(walletId: string) {
+  function handleSelectWallet(walletId: string) {
     try {
-      setLoadingWalletId(walletId)
+      // setLoadingWalletId(walletId)
       selectWalletId(walletId) // Assuming selectWalletId is a synchronous function
       // Assuming selectWalletId is or can be modified to return a Promise
       // await setSelectedWalletId(walletId)
       // await revalidateSelectedWalletId()
-      router.dismiss()
     } catch (error) {
       console.error('Error selecting wallet:', error)
       // Handle error if needed - you could add error state if required
     } finally {
-      setLoadingWalletId(null)
+      router.dismiss()
     }
   }
 
@@ -62,7 +62,8 @@ export default function ManageWallets() {
               </View>
             ) : wallets.length > 0 ? (
               wallets.map((wallet, index) => {
-                const isSelected = wallet.walletId === selectedWalletId && loadingWalletId === null
+                const isSelected =
+                  wallet.walletId === selectedWalletId /* && loadingWalletId === null */
                 const first = index === 0
                 const last = index === wallets.length - 1
 
@@ -78,17 +79,17 @@ export default function ManageWallets() {
                         // loadingWallets && styles.walletBoxLoading,
                         // isSelected && styles.selectedWalletBox,
                         // isDark && isSelected && styles.selectedWalletBoxDark,
-                        wallet.walletId === loadingWalletId && styles.walletBoxLoading,
+                        // wallet.walletId === loadingWalletId && styles.walletBoxLoading,
                       ]}
                       onPress={() => handleSelectWallet(wallet.walletId)}
-                      disabled={loadingWalletId !== null} // Disable all selections during loading
+                      // disabled={loadingWalletId !== null} // Disable all selections during loading
                     >
                       <View style={{ flex: 1 }}>
                         <View style={styles.walletHeader}>
-                          {wallet.walletId === loadingWalletId ? (
+                          {
+                            /* wallet.walletId === loadingWalletId ? (
                             <ActivityIndicator size={20} color={colors.primary} />
-                          ) : (
-                            <View style={styles.radioContainer}>
+                          ) :  */ <View style={styles.radioContainer}>
                               <View
                                 style={[
                                   styles.radioOuter,
@@ -99,7 +100,7 @@ export default function ManageWallets() {
                                 {isSelected && <View style={styles.radioInner} />}
                               </View>
                             </View>
-                          )}
+                          }
                           <Text
                             style={[
                               styles.walletName,

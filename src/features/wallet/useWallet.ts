@@ -6,18 +6,24 @@ import { randomUUID } from '@/lib/crypto'
 
 type WalletStore = {
   wallets: WalletData[]
+  getSelectedWallet: () => WalletData | undefined
   createWallet: (wallet: WalletData) => void
   deleteWallet: (walletId: string) => void
   clearWallets: () => void
   selectedWalletId: string | undefined
   selectWalletId: (walletId: string) => void
-  loadWallets: () => void
+  unit: 'BTC' | 'sats'
+  setUnit: (unit: 'BTC' | 'sats') => void
 }
 
 const useWallet = create<WalletStore>()(
   persist(
     (set, get) => ({
       wallets: [],
+      getSelectedWallet: () => {
+        const { selectedWalletId, wallets } = get()
+        return wallets.find(wallet => wallet.walletId === selectedWalletId)
+      },
       createWallet: (wallet: Omit<WalletData, 'walletId'>) => {
         const walletId = randomUUID()
         const newWallet: WalletData = {
@@ -45,13 +51,9 @@ const useWallet = create<WalletStore>()(
       selectWalletId: (walletId: string) => {
         set({ selectedWalletId: walletId })
       },
-      loadWallets: () => {
-        const wallets = get().wallets
-        if (wallets.length === 0) {
-          console.log('No wallets found')
-        } else {
-          console.log('Loaded wallets:', wallets)
-        }
+      unit: 'BTC',
+      setUnit: (unit: 'BTC' | 'sats') => {
+        set({ unit })
       },
     }),
     {

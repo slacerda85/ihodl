@@ -1,17 +1,18 @@
 import colors from '@/shared/theme/colors'
 import { Pressable, StyleSheet, Text, useColorScheme, View, ActivityIndicator } from 'react-native'
-import useWallet from './useWallet'
+
 import { useCallback, useState } from 'react'
 import { useRouter } from 'expo-router'
 // import { deleteWallet } from '@/lib/wallet'
 import { alpha } from '@/shared/theme/utils'
+import useStore from '../store'
 
 export default function DeleteWallet() {
-  const { deleteWallet } = useWallet()
+  const { deleteWallet } = useStore()
   const router = useRouter()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
-  const { selectedWalletId /* revalidateWallets, revalidateSelectedWalletId */ } = useWallet()
+  const { selectedWalletId /* revalidateWallets, revalidateSelectedWalletId */ } = useStore()
   const [submitting, setSubmitting] = useState<boolean>(false)
 
   const handleDeleteWallet = useCallback(async () => {

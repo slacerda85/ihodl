@@ -7,6 +7,16 @@ export type TxHistory = {
   txs: Tx[] // Transactions associated with the address
 }
 
+export type UTXO = {
+  txid: string
+  vout: number
+  address: string
+  amount: number
+  confirmations: number
+  scriptPubKey: string
+  redeemScript?: string
+}
+
 export type Tx = {
   in_active_chain: boolean
   hex: string

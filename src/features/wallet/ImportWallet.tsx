@@ -17,10 +17,11 @@ import wordlist from 'bip39/src/wordlists/english.json'
 // import { createWallet } from '@/lib/wallet'
 import useWallet from './useWallet'
 import { randomUUID } from '@/lib/crypto'
+import useStore from '../store'
 
 export default function ImportWallet() {
   const router = useRouter()
-  const { createWallet } = useWallet()
+  const { createWallet } = useStore()
   const [walletName, setWalletName] = useState<string>('')
   const [seedPhrase, setSeedPhrase] = useState<string>('')
   const [currentWord, setCurrentWord] = useState<string>('')

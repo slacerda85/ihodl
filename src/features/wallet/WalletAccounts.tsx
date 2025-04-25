@@ -10,11 +10,15 @@ import {
 } from 'react-native'
 import { Account } from '@/models/account'
 import BitcoinLogo from '@/shared/assets/bitcoin-logo'
-import { Fragment, Key, ReactNode } from 'react'
+import { Fragment, Key, ReactNode, useEffect, useState } from 'react'
 import { alpha } from '@/shared/theme/utils'
 import colors from '@/shared/theme/colors'
 import { WalletData } from '@/models/wallet'
 import useWallet from './useWallet'
+import { createRootExtendedKey, fromMnemonic } from '@/lib/key'
+import { getTxHistory } from '@/lib/transactions'
+import useTransactions from '../transactions/useTransactions'
+import useStore from '../store'
 
 interface WalletAccountsProps {
   wallet: WalletData
@@ -48,7 +52,10 @@ export default function WalletAccounts() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const { wallets, selectedWalletId } = useWallet()
+  const {
+    wallets,
+    selectedWalletId /* selectedWallet, loadingBalance, useSatoshis = , toggleUnit, balance */,
+  } = useStore()
 
   if (!selectedWalletId) {
     return (
@@ -73,7 +80,12 @@ export default function WalletAccounts() {
     }
 
     return (
-      <AccountWithBalance account={item} balance={'0.00'} useSatoshis={false} loading={false} />
+      <AccountDetails
+        account={item}
+        // balance={balance}
+        // useSatoshis={false}
+        // loading={loadingBalance}
+      />
     )
   }
 
@@ -91,19 +103,14 @@ export default function WalletAccounts() {
   )
 }
 
-function AccountWithBalance({
-  account,
-  balance,
-  useSatoshis,
-  loading,
-}: {
-  account: Account
-  balance: string
-  useSatoshis: boolean
-  loading: boolean
-}) {
+function AccountDetails({ account }: { account: Account }) {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
+
+  const { selectedWalletId, unit, getBalance, getLoading } = useStore()
+
+  const loading = selectedWalletId ? getLoading(selectedWalletId) : false
+  const balance = selectedWalletId ? getBalance(selectedWalletId) : 0
 
   // Format account name using purpose and coin type labels
   const purposeLabel = purposeToLabel[account.purpose] || `Purpose ${account.purpose}`
@@ -113,7 +120,6 @@ function AccountWithBalance({
   // Get the appropriate icon
   const accountIcon = getPurposeIcon(account.purpose)
 
-  const balanceLabel = useSatoshis ? 'Sats' : 'BTC'
   const handleAccountPress = (accountIndex: number) => {
     // Handle account press logic here
     console.log(`Account ${accountIndex} pressed`)
@@ -140,7 +146,7 @@ function AccountWithBalance({
               <Text style={[styles.accountBalance, isDark && styles.accountBalanceDark]}>
                 {balance}
               </Text>
-              <Text style={styles.balanceUnit}>{balanceLabel}</Text>
+              <Text style={styles.balanceUnit}>{unit}</Text>
             </Fragment>
           )}
         </View>

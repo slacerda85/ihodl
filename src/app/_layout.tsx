@@ -20,7 +20,6 @@ SplashScreen.setOptions({
 })
 
 export default function RootLayout() {
-  const { loadWallets } = useWalletStore()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
@@ -30,7 +29,7 @@ export default function RootLayout() {
     const loadResources = async () => {
       try {
         // Load any resources or data that you need before rendering the app
-        loadWallets()
+        // loadWallets()
       } catch (e) {
         console.warn(e)
       } finally {
@@ -41,7 +40,7 @@ export default function RootLayout() {
     }
 
     loadResources()
-  }, [loadWallets])
+  }, [])
 
   /* useEffect(() => {
     if (loaded) {

@@ -7,7 +7,8 @@ import { alpha } from '@/shared/theme/utils'
 // Components
 import WalletAccounts from './WalletAccounts'
 import WalletBalance from './WalletBalance'
-import useWallet from './useWallet'
+import useStore from '../store'
+import { useEffect } from 'react'
 
 export default function WalletScreen() {
   // theme
@@ -15,7 +16,7 @@ export default function WalletScreen() {
   const isDark = colorScheme === 'dark'
 
   // wallet provider
-  const { wallets, selectedWalletId } = useWallet()
+  const { wallets, selectedWalletId, getSelectedWallet, fetchTxHistory } = useStore()
 
   function handleSend() {
     // Navigate to send screen
@@ -26,6 +27,14 @@ export default function WalletScreen() {
     // Navigate to receive screen
     // router.push('/transactions/receive')
   }
+
+  useEffect(() => {
+    const selectedWallet = getSelectedWallet()
+    if (selectedWallet) {
+      const { walletId, seedPhrase, accounts } = selectedWallet
+      fetchTxHistory(walletId, seedPhrase, accounts[0])
+    }
+  }, [getSelectedWallet, fetchTxHistory])
 
   if (wallets === undefined || wallets?.length === 0) {
     // create link to wallet/manage
@@ -57,7 +66,7 @@ export default function WalletScreen() {
 
   return (
     <View style={styles.root}>
-      <WalletBalance /* balance={totalBalance} isLoading={isLoading} */ />
+      <WalletBalance />
       <View style={styles.actionsSection}>
         <Pressable onPress={handleSend} style={[styles.button, styles.primaryButton]}>
           <Text style={styles.buttonText}>Send</Text>
@@ -150,7 +159,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   button: {
-    // flex: 0.5,
+    flexGrow: 1,
     padding: 16,
     borderRadius: 16,
     alignItems: 'center',

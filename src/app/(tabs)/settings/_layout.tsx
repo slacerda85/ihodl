@@ -14,8 +14,6 @@ const styles = StyleSheet.create({
 })
 
 function SettingsScreens() {
-  // const { wallet } = useWallet()
-
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
   return (

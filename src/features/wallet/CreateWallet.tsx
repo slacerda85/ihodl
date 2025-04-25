@@ -14,18 +14,16 @@ import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 import { IconSymbol } from '@/shared/ui/icon-symbol'
 import { useRouter } from 'expo-router'
-import useWallet from './useWallet'
 import { toMnemonic } from '@/lib/key'
 import { createEntropy, randomUUID } from '@/lib/crypto'
-// import { createWallet } from '@/lib/wallet'
-// import useWallet from './useWallet'
+import useStore from '../store'
 
 export default function CreateWallet() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
   const router = useRouter()
-  const { createWallet } = useWallet()
+  const { createWallet } = useStore()
   const [offline, setOffline] = useState<boolean>(false)
   const [walletName, setWalletName] = useState<string>('')
   const [submitting, setSubmitting] = useState<boolean>(false)
@@ -46,8 +44,6 @@ export default function CreateWallet() {
           },
         ],
       })
-      // await revalidateWallets()
-      // await revalidateSelectedWalletId()
       router.dismiss(2)
     } catch (error) {
       console.error('Error creating wallet:', error)

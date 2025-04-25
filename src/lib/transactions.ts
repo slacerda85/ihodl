@@ -17,6 +17,15 @@ interface GetTxHistoryParams {
   gapLimit?: number
 }
 
+interface GetTxHistoryResponse {
+  balance: number
+  utxos: {
+    address: string
+    tx: Tx[]
+  }[]
+  txHistory: TxHistory[]
+}
+
 /**
  * Discovers addresses and txs based on account parameters.
  * @param extendedKey - The extended private key (bip32) to derive from.
@@ -33,14 +42,7 @@ async function getTxHistory({
   accountStartIndex = 0,
   gapLimit = 20,
   // multiAccount = false,
-}: GetTxHistoryParams): Promise<{
-  balance: number
-  utxos: {
-    address: string
-    tx: Tx[]
-  }[]
-  txHistory: TxHistory[]
-}> {
+}: GetTxHistoryParams): Promise<GetTxHistoryResponse> {
   try {
     const txHistory: TxHistory[] = []
 
@@ -148,4 +150,4 @@ function calculateBalance(txHistory: TxHistory[]): {
   }
 }
 
-export { getTxHistory }
+export { getTxHistory, calculateBalance }
