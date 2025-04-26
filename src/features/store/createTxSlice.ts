@@ -1,10 +1,10 @@
-import { createRootExtendedKey, fromMnemonic, verifyExtendedKey } from '@/lib/key'
-import { getTxHistory, calculateBalance } from '@/lib/transactions'
+import { createRootExtendedKey, fromMnemonic } from '@/lib/key'
+import { getTxHistory } from '@/lib/transactions'
 import { TxHistory } from '@/models/transaction'
 import { StateCreator } from 'zustand'
 import { StoreState } from './useStore'
 
-const MAX_BLOCK_INTERVAL = 1000 * 60 * 1
+const FETCH_INTERVAL = 1000 * 60 * 10
 
 type TransactionsState = {
   transactions: Transaction[]
@@ -37,6 +37,13 @@ const createTxSlice: StateCreator<
     set(() => ({ loading }))
   },
   fetchTransactions: async walletId => {
+    // check if last fetch was less then 10 minutes from lastUpdated, using fetch interval
+    const transactions = get().transactions
+    const transaction = transactions.find(t => t.walletId === walletId)
+    if (transaction !== undefined && Date.now() - transaction.lastUpdated < FETCH_INTERVAL) {
+      return
+    }
+
     set(() => ({ loading: true }))
     const wallets = get().wallets
     const wallet = wallets.find(w => w.walletId === walletId)
@@ -52,10 +59,8 @@ const createTxSlice: StateCreator<
       extendedKey,
       purpose,
       coinType,
-      accountIndex,
+      accountStartIndex: accountIndex,
     })
-    console.log('balance', balance)
-    console.log('txHistory', txHistory)
 
     set(state => ({
       transactions: [

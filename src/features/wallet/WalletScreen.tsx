@@ -8,6 +8,7 @@ import useStore from '../store'
 // Components
 import WalletBalance from './WalletBalance'
 import { useEffect } from 'react'
+import WalletAccounts from './WalletAccounts'
 // import useStore from '../store'
 
 export default function WalletScreen() {
@@ -26,14 +27,14 @@ export default function WalletScreen() {
   }
 
   const activeWalletId = useStore(state => state.activeWalletId)
-  // const fetchTransactions = useStore(state => state.fetchTransactions)
+  const fetchTransactions = useStore(state => state.fetchTransactions)
   const wallets = useStore(state => state.wallets)
 
-  /* useEffect(() => {
+  useEffect(() => {
     if (activeWalletId) {
       fetchTransactions(activeWalletId)
     }
-  }, [activeWalletId, fetchTransactions]) */
+  }, [activeWalletId, fetchTransactions])
 
   if (wallets === undefined || wallets?.length === 0) {
     // create link to wallet/manage
@@ -81,7 +82,7 @@ export default function WalletScreen() {
       <View style={styles.accountsSection}>
         <Text style={[styles.accountsHeader, isDark && styles.accountsHeaderDark]}>Accounts</Text>
 
-        {/* <WalletAccounts /> */}
+        <WalletAccounts />
       </View>
     </View>
   )

@@ -2,12 +2,15 @@ import { View, Text, StyleSheet, useColorScheme, Pressable, ActivityIndicator } 
 import colors from '@/shared/theme/colors'
 import SwapIcon from './SwapIcon'
 import useStore from '../store'
+import { formatBalance } from './utils'
 
 export default function WalletBalance() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
   const loading = useStore(state => state.loading)
+  const unit = useStore(state => state.unit)
+  const setUnit = useStore(state => state.setUnit)
   const activeWalletId = useStore(state => state.activeWalletId)
 
   const balance = useStore(
@@ -34,11 +37,16 @@ export default function WalletBalance() {
       >
         <View style={{ flex: 1 }}></View>
 
-        <Text style={[styles.balanceAmount, isDark && styles.balanceAmountDark]}>{balance}</Text>
+        <Text style={[styles.balanceAmount, isDark && styles.balanceAmountDark]}>
+          {formatBalance(balance || 0, unit)}
+        </Text>
         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
-          <Pressable onPress={() => {}} style={styles.unitButton}>
+          <Pressable
+            onPress={() => setUnit(unit === 'BTC' ? 'sats' : 'BTC')}
+            style={styles.unitButton}
+          >
             <View style={styles.unitContainer}>
-              <Text style={styles.balanceCurrency}>{'BTC'}</Text>
+              <Text style={styles.balanceCurrency}>{unit}</Text>
               <SwapIcon size={24} color={colors.primary} />
             </View>
           </Pressable>

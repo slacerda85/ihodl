@@ -105,9 +105,13 @@ function AccountDetails({ account }: { account: Account }) {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const getBalance = useStore(state => state.getBalance)
   const loading = useStore(state => state.loading)
-  const balance = getBalance()
+  const unit = useStore(state => state.unit)
+  const activeWalletId = useStore(state => state.activeWalletId)
+
+  const balance = useStore(
+    state => state.transactions.find(tx => tx.walletId === activeWalletId)?.balance,
+  )
 
   // Format account name using purpose and coin type labels
   const purposeLabel = purposeToLabel[account.purpose] || `Purpose ${account.purpose}`
@@ -143,7 +147,7 @@ function AccountDetails({ account }: { account: Account }) {
               <Text style={[styles.accountBalance, isDark && styles.accountBalanceDark]}>
                 {balance}
               </Text>
-              <Text style={styles.balanceUnit}>{'BTC'}</Text>
+              <Text style={styles.balanceUnit}>{unit}</Text>
             </Fragment>
           )}
         </View>

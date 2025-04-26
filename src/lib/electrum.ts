@@ -360,7 +360,6 @@ async function getAddressTxHistory(
       [scripthash],
       socket,
     )
-    console.log(`[electrum] Found ${data.result?.length || 0} transactions for address ${address}`)
     return data
   } catch (error) {
     console.error('Erro ao buscar histórico de transações do endereço:', error)
