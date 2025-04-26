@@ -14,8 +14,6 @@ import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 import { IconSymbol } from '@/shared/ui/icon-symbol'
 import { useRouter } from 'expo-router'
-import { toMnemonic } from '@/lib/key'
-import { createEntropy, randomUUID } from '@/lib/crypto'
 import useStore from '../store'
 
 export default function CreateWallet() {
@@ -24,21 +22,20 @@ export default function CreateWallet() {
 
   const router = useRouter()
   const createWallet = useStore(state => state.createWallet)
-  const setSelectedWalletId = useStore(state => state.setSelectedWalletId)
+  // const setActiveWalletId = useStore(state => state.setActiveWalletId)
+  const [submitting, setSubmitting] = useState<boolean>(false)
 
   const [offline, setOffline] = useState<boolean>(false)
   const [walletName, setWalletName] = useState<string>('')
-  const [submitting, setSubmitting] = useState<boolean>(false)
 
   function handleCreateWallet() {
+    setSubmitting(true)
+    if (walletName.trim().length === 0) {
+      return
+    }
     try {
-      const walletId = randomUUID()
-      setSubmitting(true)
       createWallet({
-        walletId,
         walletName,
-        cold: offline,
-        seedPhrase: toMnemonic(createEntropy(12)),
         accounts: [
           {
             purpose: 84,
@@ -46,13 +43,13 @@ export default function CreateWallet() {
             accountIndex: 0,
           },
         ],
+        cold: offline,
       })
-      setSelectedWalletId(walletId)
-      router.dismiss(2)
     } catch (error) {
       console.error('Error creating wallet:', error)
     } finally {
       setSubmitting(false)
+      router.dismiss(2)
     }
   }
 
@@ -109,7 +106,6 @@ export default function CreateWallet() {
                 : styles.secondaryButton
               : styles.primaryButton,
           ]}
-          disabled={submitting}
         >
           {submitting ? <ActivityIndicator color={colors.white} /> : null}
           <Text

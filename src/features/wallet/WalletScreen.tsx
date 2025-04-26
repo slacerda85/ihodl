@@ -25,7 +25,7 @@ export default function WalletScreen() {
     // router.push('/transactions/receive')
   }
 
-  const selectedWalletId = useStore(state => state.selectedWalletId)
+  const activeWalletId = useStore(state => state.activeWalletId)
   const wallets = useStore(state => state.wallets)
 
   if (wallets === undefined || wallets?.length === 0) {
@@ -40,7 +40,7 @@ export default function WalletScreen() {
         </View>
       </View>
     )
-  } else if (selectedWalletId === undefined) {
+  } else if (activeWalletId === undefined) {
     // create link to wallet/manage
     return (
       <View style={[styles.root, isDark && styles.rootDark]}>
@@ -58,7 +58,7 @@ export default function WalletScreen() {
 
   return (
     <View style={styles.root}>
-      <WalletBalance />
+      {/* <WalletBalance /> */}
       <View style={styles.actionsSection}>
         <Pressable onPress={handleSend} style={[styles.button, styles.primaryButton]}>
           <Text style={styles.buttonText}>Send</Text>
@@ -74,7 +74,7 @@ export default function WalletScreen() {
       <View style={styles.accountsSection}>
         <Text style={[styles.accountsHeader, isDark && styles.accountsHeaderDark]}>Accounts</Text>
 
-        <WalletAccounts />
+        {/* <WalletAccounts /> */}
       </View>
     </View>
   )

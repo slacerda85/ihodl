@@ -7,11 +7,11 @@ import { StoreState } from './useStore'
 const MAX_BLOCK_INTERVAL = 1000 * 60 * 1
 
 type TransactionsState = {
-  transactions: TxState[]
+  transactions: Transaction[]
   loading: boolean
 }
 
-type TxState = {
+type Transaction = {
   walletId: string
   balance: number
   txHistory: TxHistory[]
@@ -19,9 +19,8 @@ type TxState = {
 }
 
 type TransactionsActions = {
-  getTxStateAsync: () => Promise<void>
-  getTransactions: () => TxHistory[] | undefined
-  getBalance: () => number | undefined
+  setLoading: (loading: boolean) => void
+  fetchTransactions: (walletId: string) => Promise<void>
 }
 
 export type TransactionsSlice = TransactionsState & TransactionsActions
@@ -34,72 +33,39 @@ const createTxSlice: StateCreator<
 > = (set, get) => ({
   transactions: [],
   loading: false,
-  getTxStateAsync: async () => {
-    set({ loading: true })
-    // check if lastupdated is less than max block interval
-    const existingTx = get().transactions.find(tx => tx.walletId === get().selectedWalletId)
-    if (existingTx) {
-      const { lastUpdated } = existingTx
-      const now = Date.now()
-      if (now - lastUpdated < MAX_BLOCK_INTERVAL) {
-        set({ loading: false })
-        return
-      }
-    }
-
-    const selectedWalletId = get().selectedWalletId
-    if (!selectedWalletId) return
-    const wallet = get().getWallet(selectedWalletId)
+  setLoading: loading => {
+    set({ loading })
+  },
+  fetchTransactions: async walletId => {
+    const { wallets } = get()
+    const wallet = wallets.find(w => w.walletId === walletId)
     if (!wallet) return
-    const { seedPhrase, accounts } = wallet
-    const account = accounts[0]
 
-    if (!account) return
-
-    const { purpose, coinType, accountIndex } = account
+    const { accounts, seedPhrase } = wallet
     const entropy = fromMnemonic(seedPhrase)
     const extendedKey = createRootExtendedKey(entropy)
 
-    const { txHistory, balance } = await getTxHistory({
+    const { purpose, coinType, accountIndex } = accounts[0]
+
+    const { balance, txHistory } = await getTxHistory({
       extendedKey,
       purpose,
       coinType,
       accountIndex,
     })
 
-    set(state => {
-      const existingTx = state.transactions.find(tx => tx.walletId === selectedWalletId)
-      if (existingTx) {
-        return {
-          transactions: state.transactions.map(tx =>
-            tx.walletId === selectedWalletId
-              ? { ...tx, txHistory, balance, lastUpdated: Date.now() }
-              : tx,
-          ),
-        }
-      } else {
-        return {
-          transactions: [
-            ...state.transactions,
-            { walletId: selectedWalletId, txHistory, balance, lastUpdated: Date.now() },
-          ],
-        }
-      }
-    })
-    set({ loading: false })
-  },
-  getTransactions: () => {
-    const txState = get().transactions.find(tx => tx.walletId === get().selectedWalletId)
-    if (!txState) return undefined
-    const { txHistory } = txState
-    return txHistory
-  },
-  getBalance: () => {
-    const txState = get().transactions.find(tx => tx.walletId === get().selectedWalletId)
-    if (!txState) return undefined
-    const { txHistory } = txState
-    const { balance } = calculateBalance(txHistory)
-    return balance
+    set(state => ({
+      transactions: [
+        ...state.transactions.filter(t => t.walletId !== walletId),
+        {
+          walletId,
+          balance,
+          txHistory,
+          lastUpdated: Date.now(),
+        },
+      ],
+      loading: false,
+    }))
   },
 })
 

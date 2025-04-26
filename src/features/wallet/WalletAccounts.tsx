@@ -53,9 +53,9 @@ export default function WalletAccounts() {
   const isDark = colorScheme === 'dark'
 
   const wallets = useStore(state => state.wallets)
-  const selectedWalletId = useStore(state => state.selectedWalletId)
+  const activeWalletId = useStore(state => state.activeWalletId)
 
-  if (!selectedWalletId) {
+  if (!activeWalletId) {
     return (
       <View style={styles.loadingContainer}>
         <Text style={[styles.loadingText, isDark && styles.loadingTextDark]}>
@@ -65,7 +65,7 @@ export default function WalletAccounts() {
     )
   }
 
-  const accounts = wallets.find(wallet => wallet.walletId === selectedWalletId)?.accounts || []
+  const accounts = wallets.find(wallet => wallet.walletId === activeWalletId)?.accounts || []
   const renderAccount = ({ item }: { item: Account }) => {
     if (accounts === undefined || accounts.length === 0) {
       return (

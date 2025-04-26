@@ -9,18 +9,26 @@ export default function WalletBalance() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const getTxStateAsync = useStore(state => state.getTxStateAsync)
-  const getBalance = useStore(state => state.getBalance)
+  const activeWalletId = useStore(state => state.activeWalletId)
   const loading = useStore(state => state.loading)
+  const setLoading = useStore(state => state.setLoading)
+  const fetchTransactions = useStore(state => state.fetchTransactions)
 
-  const balance = getBalance() || 0
+  const balance = useStore(
+    state => state.transactions.find(tx => tx.walletId === activeWalletId)?.balance,
+  )
 
-  useEffect(() => {
-    const fetchData = async () => {
-      await getTxStateAsync()
+  /* useEffect(() => {
+    const fetchData = async (walletId: string) => {
+      await fetchTransactions(walletId)
     }
-    fetchData()
-  }, [getTxStateAsync])
+    if (activeWalletId !== undefined) {
+      setLoading(true)
+      fetchData(activeWalletId).finally(() => {
+        setLoading(false)
+      })
+    }
+  }, [activeWalletId, fetchTransactions, setLoading]) */
 
   if (loading) {
     return (

@@ -10,7 +10,7 @@ type WalletStore = {
   createWallet: (wallet: WalletData) => void
   deleteWallet: (walletId: string) => void
   clearWallets: () => void
-  selectedWalletId: string | undefined
+  activeWalletId: string | undefined
   selectWalletId: (walletId: string) => void
   unit: 'BTC' | 'sats'
   setUnit: (unit: 'BTC' | 'sats') => void
@@ -21,8 +21,8 @@ const useWallet = create<WalletStore>()(
     (set, get) => ({
       wallets: [],
       getSelectedWallet: () => {
-        const { selectedWalletId, wallets } = get()
-        return wallets.find(wallet => wallet.walletId === selectedWalletId)
+        const { activeWalletId, wallets } = get()
+        return wallets.find(wallet => wallet.walletId === activeWalletId)
       },
       createWallet: (wallet: Omit<WalletData, 'walletId'>) => {
         const walletId = randomUUID()
@@ -32,24 +32,22 @@ const useWallet = create<WalletStore>()(
         }
         set(state => ({
           wallets: [...state.wallets, newWallet],
-          selectedWalletId: newWallet.walletId, // Set the selected wallet ID to the newly created wallet
+          activeWalletId: newWallet.walletId, // Set the selected wallet ID to the newly created wallet
         }))
       },
       deleteWallet: (walletId: string) => {
         set(state => ({
           wallets: state.wallets.filter(wallet => wallet.walletId !== walletId),
-          selectedWalletId:
-            state.selectedWalletId === walletId
-              ? state.wallets[0].walletId
-              : state.selectedWalletId,
+          activeWalletId:
+            state.activeWalletId === walletId ? state.wallets[0].walletId : state.activeWalletId,
         }))
       },
       clearWallets: () => {
         set({ wallets: [] })
       },
-      selectedWalletId: undefined,
+      activeWalletId: undefined,
       selectWalletId: (walletId: string) => {
-        set({ selectedWalletId: walletId })
+        set({ activeWalletId: walletId })
       },
       unit: 'BTC',
       setUnit: (unit: 'BTC' | 'sats') => {

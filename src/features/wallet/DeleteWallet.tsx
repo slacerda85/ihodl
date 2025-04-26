@@ -8,7 +8,7 @@ import { alpha } from '@/shared/theme/utils'
 import useStore from '../store'
 
 export default function DeleteWallet() {
-  const selectedWalletId = useStore(state => state.selectedWalletId)
+  const activeWalletId = useStore(state => state.activeWalletId)
   const deleteWallet = useStore(state => state.deleteWallet)
   const router = useRouter()
   const colorScheme = useColorScheme()
@@ -19,17 +19,15 @@ export default function DeleteWallet() {
   const handleDeleteWallet = useCallback(async () => {
     try {
       setSubmitting(true)
-      if (!selectedWalletId) return
-      deleteWallet(selectedWalletId)
-      // await revalidateWallets()
-      // await revalidateSelectedWalletId()
-      router.dismiss(2)
+      if (!activeWalletId) return
+      deleteWallet(activeWalletId)
     } catch (error) {
       console.error('Error deleting wallet:', error)
     } finally {
       setSubmitting(false)
+      router.dismiss(2)
     }
-  }, [deleteWallet, router, selectedWalletId])
+  }, [deleteWallet, router, activeWalletId])
 
   return (
     <View style={styles.modalContainer}>

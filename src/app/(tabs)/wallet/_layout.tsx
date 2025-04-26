@@ -60,9 +60,10 @@ const CloseModalButton = ({ title }: { title?: string }) => {
 }
 
 export default function WalletLayout() {
-  const selectedWalletId = useStore(state => state.selectedWalletId)
-  const getSelectedWallet = useStore(state => state.getSelectedWallet)
-  const selectedWallet = getSelectedWallet()
+  const activeWalletId = useStore(state => state.activeWalletId)
+  const selectedWallet = useStore(state =>
+    state.wallets?.find(wallet => wallet.walletId === activeWalletId),
+  )
 
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
@@ -89,7 +90,7 @@ export default function WalletLayout() {
           name="index"
           options={{
             headerLeft: () => headerLeft(),
-            headerRight: selectedWalletId ? () => headerRight() : undefined,
+            headerRight: activeWalletId ? () => headerRight() : undefined,
             // headerShown: false,
             headerTitleAlign: 'center',
             title: selectedWallet?.walletName || 'No wallets found',

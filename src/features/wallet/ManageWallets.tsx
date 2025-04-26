@@ -8,15 +8,15 @@ import Divider from '@/shared/ui/Divider'
 import CreateWalletIcon from './CreateWalletIcon'
 import ImportWalletIcon from './ImportWalletIcon'
 import useStore from '../store'
-// import { setSelectedWalletId } from '@/lib/wallet'
+// import { setActiveWalletId } from '@/lib/wallet'
 
 export default function ManageWallets() {
   const router = useRouter()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
   const wallets = useStore(state => state.wallets)
-  const selectedWalletId = useStore(state => state.selectedWalletId)
-  const setSelectedWalletId = useStore(state => state.setSelectedWalletId)
+  const activeWalletId = useStore(state => state.activeWalletId)
+  const setActiveWalletId = useStore(state => state.setActiveWalletId)
 
   function handleCreateWallet() {
     router.push('/wallet/create')
@@ -28,7 +28,7 @@ export default function ManageWallets() {
 
   function handleSelectWallet(walletId: string) {
     try {
-      setSelectedWalletId(walletId) // Assuming selectWalletId is a synchronous function
+      setActiveWalletId(walletId) // Assuming selectWalletId is a synchronous function
     } catch (error) {
       console.error('Error selecting wallet:', error)
       // Handle error if needed - you could add error state if required
@@ -59,7 +59,7 @@ export default function ManageWallets() {
             ) : wallets.length > 0 ? (
               wallets.map((wallet, index) => {
                 const isSelected =
-                  wallet.walletId === selectedWalletId /* && loadingWalletId === null */
+                  wallet.walletId === activeWalletId /* && loadingWalletId === null */
                 const first = index === 0
                 const last = index === wallets.length - 1
 

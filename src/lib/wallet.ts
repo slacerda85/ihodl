@@ -66,14 +66,14 @@ async function saveWallet(walletData: WalletData) {
   return { success: true }
 }
 
-async function setSelectedWalletId(walletId: string) {
+async function setActiveWalletId(walletId: string) {
   await setItem('selected_wallet_id', walletId)
   return { success: true }
 }
 
 async function getSelectedWalletId(): Promise<string | undefined> {
-  const selectedWalletId = await getItem<string>('selected_wallet_id')
-  return selectedWalletId
+  const activeWalletId = await getItem<string>('selected_wallet_id')
+  return activeWalletId
 }
 
 async function getWallet(id: string): Promise<WalletData | undefined> {
@@ -93,8 +93,8 @@ async function deleteWallet(id: string): Promise<{ success: boolean }> {
   const newWalletIds = walletIds.filter(walletId => walletId !== id)
   await setItem('wallet_ids', newWalletIds)
   // now set the first wallet as selected wallet if it was this one
-  const selectedWalletId = await getSelectedWalletId()
-  if (selectedWalletId === id) {
+  const activeWalletId = await getSelectedWalletId()
+  if (activeWalletId === id) {
     const newSelectedWalletId = newWalletIds[0] || undefined
     await setItem('selected_wallet_id', newSelectedWalletId)
   }
@@ -167,7 +167,7 @@ async function getBalance(wallet: WalletData): Promise<number> {
   saveWallet,
   getWallets,
   deleteWallets,
-  setSelectedWalletId,
+  setActiveWalletId,
   getSelectedWalletId,
   getBalance,
 } */

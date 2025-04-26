@@ -13,13 +13,13 @@ import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 import { useRouter } from 'expo-router'
 import wordlist from 'bip39/src/wordlists/english.json'
-import { randomUUID } from '@/lib/crypto'
+// import { randomUUID } from '@/lib/crypto'
 import useStore from '../store'
+import { WalletData } from '@/models/wallet'
 
 export default function ImportWallet() {
   const router = useRouter()
   const createWallet = useStore(state => state.createWallet)
-  const setSelectedWalletId = useStore(state => state.setSelectedWalletId)
   const [walletName, setWalletName] = useState<string>('')
   const [seedPhrase, setSeedPhrase] = useState<string>('')
   const [currentWord, setCurrentWord] = useState<string>('')
@@ -70,27 +70,28 @@ export default function ImportWallet() {
     return words.length >= 12 && words.length <= 24
   }
 
-  async function handleImportWallet() {
+  function handleImportWallet() {
     if (!walletName.trim() || !isValidSeedPhrase()) {
       return
     }
-    console.log('Importing wallet with name:', walletName)
-    const walletId = randomUUID()
-    createWallet({
-      walletId, // Generate a unique wallet ID
-      walletName,
-      seedPhrase,
-      cold: false, // Assuming this is a hot wallet import
-      accounts: [
-        {
-          purpose: 84,
-          coinType: 0,
-          accountIndex: 0,
-        },
-      ],
-    })
-    setSelectedWalletId(walletId) // Set the selected wallet ID in the store
-    router.dismiss(2)
+    try {
+      createWallet({
+        walletName,
+        seedPhrase,
+        accounts: [
+          {
+            purpose: 84,
+            coinType: 0,
+            accountIndex: 0,
+          },
+        ],
+      } as WalletData)
+    } catch (error) {
+      console.error('Error importing wallet:', error)
+    } finally {
+      // setSubmitting(false)
+      router.dismiss(2)
+    }
   }
 
   // Render suggestion item
