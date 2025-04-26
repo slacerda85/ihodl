@@ -8,11 +8,12 @@ import { alpha } from '@/shared/theme/utils'
 import useStore from '../store'
 
 export default function DeleteWallet() {
-  const { deleteWallet } = useStore()
+  const selectedWalletId = useStore(state => state.selectedWalletId)
+  const deleteWallet = useStore(state => state.deleteWallet)
   const router = useRouter()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
-  const { selectedWalletId /* revalidateWallets, revalidateSelectedWalletId */ } = useStore()
+
   const [submitting, setSubmitting] = useState<boolean>(false)
 
   const handleDeleteWallet = useCallback(async () => {

@@ -5,12 +5,14 @@ import { StoreState } from './useStore'
 
 export type WalletSlice = {
   wallets: WalletData[]
-  getSelectedWallet: () => WalletData | undefined
+  getWallet(walletId: string): WalletData | undefined
+  setWallet(walletId: string, wallet: Partial<WalletData>): void
   createWallet: (wallet: WalletData) => void
   deleteWallet: (walletId: string) => void
   clearWallets: () => void
+  getSelectedWallet: () => WalletData | undefined
   selectedWalletId: string | undefined
-  selectWalletId: (walletId: string) => void
+  setSelectedWalletId: (walletId: string) => void
   unit: 'BTC' | 'sats'
   setUnit: (unit: 'BTC' | 'sats') => void
 }
@@ -22,9 +24,27 @@ const createWalletSlice: StateCreator<
   WalletSlice
 > = (set, get) => ({
   wallets: [],
+  getWallet: (walletId: string) => {
+    const { wallets } = get()
+    return wallets.find(wallet => wallet.walletId === walletId)
+  },
+  setWallet: (walletId: string, wallet: Partial<WalletData>) => {
+    const { wallets } = get()
+    const walletIndex = wallets.findIndex(w => w.walletId === walletId)
+    if (walletIndex !== -1) {
+      const updatedWallets = [...wallets]
+      updatedWallets[walletIndex] = {
+        ...updatedWallets[walletIndex],
+        ...wallet,
+      }
+      set({ wallets: updatedWallets })
+    }
+  },
   getSelectedWallet: () => {
-    const { selectedWalletId, wallets } = get()
-    return wallets.find(wallet => wallet.walletId === selectedWalletId)
+    const { selectedWalletId, getWallet } = get()
+    if (!selectedWalletId) return undefined
+    const selectedWallet = getWallet(selectedWalletId)
+    return selectedWallet
   },
   createWallet: (wallet: Omit<WalletData, 'walletId'>) => {
     const walletId = randomUUID()
@@ -34,8 +54,8 @@ const createWalletSlice: StateCreator<
     }
     set(state => ({
       wallets: [...state.wallets, newWallet],
-      selectedWalletId: newWallet.walletId, // Set the selected wallet ID to the newly created wallet
     }))
+    set({ selectedWalletId: walletId })
   },
   deleteWallet: (walletId: string) => {
     set(state => ({
@@ -48,7 +68,7 @@ const createWalletSlice: StateCreator<
     set({ wallets: [] })
   },
   selectedWalletId: undefined,
-  selectWalletId: (walletId: string) => {
+  setSelectedWalletId: (walletId: string) => {
     set({ selectedWalletId: walletId })
   },
   unit: 'BTC',

@@ -3,20 +3,17 @@ import { Link } from 'expo-router'
 import { StyleSheet, Text, Pressable, useColorScheme, View } from 'react-native'
 import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
+import useStore from '../store'
 
 // Components
 import WalletAccounts from './WalletAccounts'
 import WalletBalance from './WalletBalance'
-import useStore from '../store'
-import { useEffect } from 'react'
+// import useStore from '../store'
 
 export default function WalletScreen() {
   // theme
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
-
-  // wallet provider
-  const { wallets, selectedWalletId, getSelectedWallet, fetchTxHistory } = useStore()
 
   function handleSend() {
     // Navigate to send screen
@@ -28,13 +25,8 @@ export default function WalletScreen() {
     // router.push('/transactions/receive')
   }
 
-  useEffect(() => {
-    const selectedWallet = getSelectedWallet()
-    if (selectedWallet) {
-      const { walletId, seedPhrase, accounts } = selectedWallet
-      fetchTxHistory(walletId, seedPhrase, accounts[0])
-    }
-  }, [getSelectedWallet, fetchTxHistory])
+  const selectedWalletId = useStore(state => state.selectedWalletId)
+  const wallets = useStore(state => state.wallets)
 
   if (wallets === undefined || wallets?.length === 0) {
     // create link to wallet/manage

@@ -52,10 +52,8 @@ export default function WalletAccounts() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const {
-    wallets,
-    selectedWalletId /* selectedWallet, loadingBalance, useSatoshis = , toggleUnit, balance */,
-  } = useStore()
+  const wallets = useStore(state => state.wallets)
+  const selectedWalletId = useStore(state => state.selectedWalletId)
 
   if (!selectedWalletId) {
     return (
@@ -107,10 +105,9 @@ function AccountDetails({ account }: { account: Account }) {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const { selectedWalletId, unit, getBalance, getLoading } = useStore()
-
-  const loading = selectedWalletId ? getLoading(selectedWalletId) : false
-  const balance = selectedWalletId ? getBalance(selectedWalletId) : 0
+  const getBalance = useStore(state => state.getBalance)
+  const loading = useStore(state => state.loading)
+  const balance = getBalance()
 
   // Format account name using purpose and coin type labels
   const purposeLabel = purposeToLabel[account.purpose] || `Purpose ${account.purpose}`
@@ -146,7 +143,7 @@ function AccountDetails({ account }: { account: Account }) {
               <Text style={[styles.accountBalance, isDark && styles.accountBalanceDark]}>
                 {balance}
               </Text>
-              <Text style={styles.balanceUnit}>{unit}</Text>
+              <Text style={styles.balanceUnit}>{'BTC'}</Text>
             </Fragment>
           )}
         </View>

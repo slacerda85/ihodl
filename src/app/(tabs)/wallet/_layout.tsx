@@ -7,10 +7,7 @@ import { useAuth } from '@/features/auth/AuthProvider'
 import { useCallback, useEffect } from 'react'
 import ManageWalletsIcon from '@/features/wallet/ManageWalletsIcon'
 import useStore from '@/features/store'
-
-export default function WalletLayout() {
-  return <WalletScreens />
-}
+// import useStore from '@/features/store'
 
 function headerRight() {
   return (
@@ -62,8 +59,11 @@ const CloseModalButton = ({ title }: { title?: string }) => {
   )
 }
 
-function WalletScreens() {
-  const { selectedWalletId, wallets } = useStore()
+export default function WalletLayout() {
+  const selectedWalletId = useStore(state => state.selectedWalletId)
+  const getSelectedWallet = useStore(state => state.getSelectedWallet)
+  const selectedWallet = getSelectedWallet()
+
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
@@ -92,9 +92,7 @@ function WalletScreens() {
             headerRight: selectedWalletId ? () => headerRight() : undefined,
             // headerShown: false,
             headerTitleAlign: 'center',
-            title:
-              wallets?.find(wallet => wallet.walletId === selectedWalletId)?.walletName ||
-              'No wallets found',
+            title: selectedWallet?.walletName || 'No wallets found',
           }}
         />
         <Stack.Screen

@@ -2,16 +2,25 @@ import { View, Text, StyleSheet, useColorScheme, Pressable, ActivityIndicator } 
 import colors from '@/shared/theme/colors'
 import SwapIcon from './SwapIcon'
 import useStore from '../store'
+import { useEffect, useState } from 'react'
+import { get } from 'react-native/Libraries/TurboModule/TurboModuleRegistry'
 
 export default function WalletBalance() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  // wallet provider
-  const { selectedWalletId, unit, setUnit, getBalance, getLoading } = useStore()
-  // Transactions provider
-  const loading = selectedWalletId ? getLoading(selectedWalletId) : false
-  const balance = selectedWalletId ? getBalance(selectedWalletId) : 0
+  const getTxStateAsync = useStore(state => state.getTxStateAsync)
+  const getBalance = useStore(state => state.getBalance)
+  const loading = useStore(state => state.loading)
+
+  const balance = getBalance() || 0
+
+  useEffect(() => {
+    const fetchData = async () => {
+      await getTxStateAsync()
+    }
+    fetchData()
+  }, [getTxStateAsync])
 
   if (loading) {
     return (
@@ -35,16 +44,9 @@ export default function WalletBalance() {
 
         <Text style={[styles.balanceAmount, isDark && styles.balanceAmountDark]}>{balance}</Text>
         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
-          <Pressable
-            onPress={() => {
-              if (selectedWalletId) {
-                setUnit(unit === 'BTC' ? 'sats' : 'BTC')
-              }
-            }}
-            style={styles.unitButton}
-          >
+          <Pressable onPress={() => {}} style={styles.unitButton}>
             <View style={styles.unitContainer}>
-              <Text style={styles.balanceCurrency}>{unit}</Text>
+              <Text style={styles.balanceCurrency}>{'BTC'}</Text>
               <SwapIcon size={24} color={colors.primary} />
             </View>
           </Pressable>

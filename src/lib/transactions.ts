@@ -13,7 +13,7 @@ interface GetTxHistoryParams {
   extendedKey: Uint8Array
   purpose: Purpose
   coinType: CoinType
-  accountStartIndex?: number
+  accountIndex?: number
   gapLimit?: number
 }
 
@@ -39,7 +39,7 @@ async function getTxHistory({
   extendedKey,
   purpose = 84,
   coinType = 0,
-  accountStartIndex = 0,
+  accountIndex = 0,
   gapLimit = 20,
   // multiAccount = false,
 }: GetTxHistoryParams): Promise<GetTxHistoryResponse> {
@@ -55,7 +55,7 @@ async function getTxHistory({
     const coinTypeExtendedKey = deriveChildPrivateKey(purposeExtendedKey, coinTypeIndex)
 
     // accountIndex
-    const accountIndex = createHardenedIndex(accountStartIndex)
+    /* const accountIndex = */ createHardenedIndex(accountIndex)
     const accountExtendedKey = deriveChildPrivateKey(coinTypeExtendedKey, accountIndex)
 
     // receiving (change 0)

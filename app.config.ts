@@ -6,14 +6,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   slug: 'ihodl',
   scheme: 'ihodl',
   version: '1.0.0',
+  icon: './assets/images/icon.png',
   orientation: 'portrait',
   owner: 'slacerda85',
   userInterfaceStyle: 'automatic',
   newArchEnabled: true,
-  splash: {
-    resizeMode: 'cover',
-    backgroundColor: '#ffffff',
-  },
   ios: {
     supportsTablet: true,
     infoPlist: {
@@ -32,11 +29,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     permissions: ['android.permission.USE_BIOMETRIC', 'android.permission.USE_FINGERPRINT'],
     package: 'app.ihodl.wallet',
     splash: {
-      image: './assets/splash_screen_white.png',
+      image: './assets/images/splash-icon.png',
       resizeMode: 'contain',
       backgroundColor: '#ffffff',
       dark: {
-        image: './assets/splash_screen_dark.png',
+        image: './assets/images/splash-icon.png',
         resizeMode: 'contain',
         backgroundColor: '#000000',
       },
@@ -56,14 +53,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     [
       'expo-splash-screen',
       {
-        image: './assets/splash_screen_white.png',
-        resizeMode: 'contain',
+        image: './assets/images/splash-icon.png',
         backgroundColor: '#ffffff',
         dark: {
-          image: './assets/splash_screen_dark.png',
-          resizeMode: 'contain',
+          image: './assets/images/splash-icon.png',
           backgroundColor: '#000000',
         },
+        imageWidth: 200,
       },
     ],
     [

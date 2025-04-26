@@ -1,10 +1,9 @@
-import React, { Fragment, useState } from 'react'
-import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator } from 'react-native'
+import React, { Fragment } from 'react'
+import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native'
 import { useColorScheme } from 'react-native'
 import colors from '@/shared/theme/colors'
 import { useRouter } from 'expo-router'
 import { alpha } from '@/shared/theme/utils'
-import useWallet from './useWallet'
 import Divider from '@/shared/ui/Divider'
 import CreateWalletIcon from './CreateWalletIcon'
 import ImportWalletIcon from './ImportWalletIcon'
@@ -15,8 +14,9 @@ export default function ManageWallets() {
   const router = useRouter()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
-  const { wallets, selectedWalletId, selectWalletId } = useStore()
-  // const [loadingWalletId, setLoadingWalletId] = useState<string | null>(null)
+  const wallets = useStore(state => state.wallets)
+  const selectedWalletId = useStore(state => state.selectedWalletId)
+  const setSelectedWalletId = useStore(state => state.setSelectedWalletId)
 
   function handleCreateWallet() {
     router.push('/wallet/create')
@@ -28,11 +28,7 @@ export default function ManageWallets() {
 
   function handleSelectWallet(walletId: string) {
     try {
-      // setLoadingWalletId(walletId)
-      selectWalletId(walletId) // Assuming selectWalletId is a synchronous function
-      // Assuming selectWalletId is or can be modified to return a Promise
-      // await setSelectedWalletId(walletId)
-      // await revalidateSelectedWalletId()
+      setSelectedWalletId(walletId) // Assuming selectWalletId is a synchronous function
     } catch (error) {
       console.error('Error selecting wallet:', error)
       // Handle error if needed - you could add error state if required

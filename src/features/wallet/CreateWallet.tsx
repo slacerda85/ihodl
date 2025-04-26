@@ -23,16 +23,19 @@ export default function CreateWallet() {
   const isDark = colorScheme === 'dark'
 
   const router = useRouter()
-  const { createWallet } = useStore()
+  const createWallet = useStore(state => state.createWallet)
+  const setSelectedWalletId = useStore(state => state.setSelectedWalletId)
+
   const [offline, setOffline] = useState<boolean>(false)
   const [walletName, setWalletName] = useState<string>('')
   const [submitting, setSubmitting] = useState<boolean>(false)
 
-  async function handleCreateWallet() {
+  function handleCreateWallet() {
     try {
+      const walletId = randomUUID()
       setSubmitting(true)
       createWallet({
-        walletId: randomUUID(),
+        walletId,
         walletName,
         cold: offline,
         seedPhrase: toMnemonic(createEntropy(12)),
@@ -44,6 +47,7 @@ export default function CreateWallet() {
           },
         ],
       })
+      setSelectedWalletId(walletId)
       router.dismiss(2)
     } catch (error) {
       console.error('Error creating wallet:', error)

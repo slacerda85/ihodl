@@ -11,17 +11,15 @@ import {
 } from 'react-native'
 import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
-// import { useWallet } from './wallet-provider'
 import { useRouter } from 'expo-router'
 import wordlist from 'bip39/src/wordlists/english.json'
-// import { createWallet } from '@/lib/wallet'
-import useWallet from './useWallet'
 import { randomUUID } from '@/lib/crypto'
 import useStore from '../store'
 
 export default function ImportWallet() {
   const router = useRouter()
-  const { createWallet } = useStore()
+  const createWallet = useStore(state => state.createWallet)
+  const setSelectedWalletId = useStore(state => state.setSelectedWalletId)
   const [walletName, setWalletName] = useState<string>('')
   const [seedPhrase, setSeedPhrase] = useState<string>('')
   const [currentWord, setCurrentWord] = useState<string>('')
@@ -77,9 +75,9 @@ export default function ImportWallet() {
       return
     }
     console.log('Importing wallet with name:', walletName)
-
+    const walletId = randomUUID()
     createWallet({
-      walletId: randomUUID(), // Generate a unique wallet ID
+      walletId, // Generate a unique wallet ID
       walletName,
       seedPhrase,
       cold: false, // Assuming this is a hot wallet import
@@ -91,7 +89,7 @@ export default function ImportWallet() {
         },
       ],
     })
-
+    setSelectedWalletId(walletId) // Set the selected wallet ID in the store
     router.dismiss(2)
   }
 

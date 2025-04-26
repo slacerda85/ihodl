@@ -8,8 +8,6 @@ import colors from '@/shared/theme/colors'
 import * as SplashScreen from 'expo-splash-screen'
 import { useEffect, useState } from 'react'
 import AuthScreen from '@/features/auth/AuthScreen'
-// import WalletProvider from '@/features/wallet/WalletProvider'
-import useWalletStore from '@/features/wallet/useWallet'
 
 SplashScreen.preventAutoHideAsync()
 
@@ -23,30 +21,23 @@ export default function RootLayout() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const [loaded, setLoaded] = useState(false)
+  const defaultStyle = {
+    backgroundColor: isDark ? colors.background.dark : colors.background.light,
+  }
+
+  const defaultScreenOptions = {
+    headerShown: false,
+    headerStyle: defaultStyle,
+    contentStyle: defaultStyle,
+  }
+
+  const [loaded] = useState(true)
 
   useEffect(() => {
-    const loadResources = async () => {
-      try {
-        // Load any resources or data that you need before rendering the app
-        // loadWallets()
-      } catch (e) {
-        console.warn(e)
-      } finally {
-        setLoaded(true)
-        // Hide the splash screen once the resources are loaded
-        await SplashScreen.hideAsync()
-      }
-    }
-
-    loadResources()
-  }, [])
-
-  /* useEffect(() => {
     if (loaded) {
       SplashScreen.hideAsync()
     }
-  }, [loaded]) */
+  }, [loaded])
 
   if (!loaded) {
     return null
@@ -58,14 +49,8 @@ export default function RootLayout() {
         {/* <WalletProvider> */}
         <Stack
           screenOptions={{
+            ...defaultScreenOptions,
             animation: 'fade',
-            headerShown: false,
-            headerStyle: {
-              backgroundColor: isDark ? colors.background.dark : colors.background.light,
-            },
-            contentStyle: {
-              backgroundColor: isDark ? colors.background.dark : colors.background.light,
-            },
           }}
         >
           <Stack.Screen
@@ -73,18 +58,7 @@ export default function RootLayout() {
             options={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}
           />
 
-          <Stack.Screen
-            name="(tabs)"
-            options={{
-              headerShown: false,
-              headerStyle: {
-                backgroundColor: isDark ? colors.background.dark : colors.background.light,
-              },
-              contentStyle: {
-                backgroundColor: isDark ? colors.background.dark : colors.background.light,
-              },
-            }}
-          />
+          <Stack.Screen name="(tabs)" options={defaultScreenOptions} />
         </Stack>
         <InactivityOverlay />
         <AuthScreen />
