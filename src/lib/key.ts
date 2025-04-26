@@ -13,7 +13,6 @@ import { CoinType, Purpose } from '@/models/account'
 import { KEY_VERSIONS } from '@/models/key'
 
 function toMnemonic(entropy: Uint8Array): string {
-  console.log('entropy', entropy.length)
   // check if nBytes is a valid length of 128, 160, 192, 224, or 256 bits
   if (entropy.length % 4 !== 0 || entropy.length < 12 || entropy.length > 24) {
     throw new Error('Invalid mnemonic length')
