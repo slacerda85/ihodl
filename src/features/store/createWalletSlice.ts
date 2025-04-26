@@ -40,7 +40,7 @@ const createWalletSlice: StateCreator<
     }
     const walletId = randomUUID()
     const walletName = wallet.walletName ?? `Wallet ${get().wallets.length + 1}`
-    const seedPhrase = wallet.seedPhrase ?? toMnemonic(createEntropy(12))
+    const seedPhrase = wallet.seedPhrase ?? toMnemonic(createEntropy(16))
     const cold = wallet.cold ?? false
     const accounts =
       wallet.accounts.length > 0
@@ -53,6 +53,7 @@ const createWalletSlice: StateCreator<
       cold,
       accounts,
     }
+    console.log('newWallet', newWallet)
     set(state => ({
       wallets: [...state.wallets, newWallet],
       activeWalletId: newWallet.walletId, // Set the selected wallet ID to the newly created wallet

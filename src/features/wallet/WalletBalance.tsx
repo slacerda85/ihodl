@@ -2,33 +2,17 @@ import { View, Text, StyleSheet, useColorScheme, Pressable, ActivityIndicator } 
 import colors from '@/shared/theme/colors'
 import SwapIcon from './SwapIcon'
 import useStore from '../store'
-import { useEffect, useState } from 'react'
-import { get } from 'react-native/Libraries/TurboModule/TurboModuleRegistry'
 
 export default function WalletBalance() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const activeWalletId = useStore(state => state.activeWalletId)
   const loading = useStore(state => state.loading)
-  const setLoading = useStore(state => state.setLoading)
-  const fetchTransactions = useStore(state => state.fetchTransactions)
+  const activeWalletId = useStore(state => state.activeWalletId)
 
   const balance = useStore(
     state => state.transactions.find(tx => tx.walletId === activeWalletId)?.balance,
   )
-
-  /* useEffect(() => {
-    const fetchData = async (walletId: string) => {
-      await fetchTransactions(walletId)
-    }
-    if (activeWalletId !== undefined) {
-      setLoading(true)
-      fetchData(activeWalletId).finally(() => {
-        setLoading(false)
-      })
-    }
-  }, [activeWalletId, fetchTransactions, setLoading]) */
 
   if (loading) {
     return (

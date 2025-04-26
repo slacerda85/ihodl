@@ -22,7 +22,6 @@ export default function CreateWallet() {
 
   const router = useRouter()
   const createWallet = useStore(state => state.createWallet)
-  // const setActiveWalletId = useStore(state => state.setActiveWalletId)
   const [submitting, setSubmitting] = useState<boolean>(false)
 
   const [offline, setOffline] = useState<boolean>(false)

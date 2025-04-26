@@ -6,8 +6,8 @@ import { alpha } from '@/shared/theme/utils'
 import useStore from '../store'
 
 // Components
-import WalletAccounts from './WalletAccounts'
 import WalletBalance from './WalletBalance'
+import { useEffect } from 'react'
 // import useStore from '../store'
 
 export default function WalletScreen() {
@@ -26,7 +26,14 @@ export default function WalletScreen() {
   }
 
   const activeWalletId = useStore(state => state.activeWalletId)
+  // const fetchTransactions = useStore(state => state.fetchTransactions)
   const wallets = useStore(state => state.wallets)
+
+  /* useEffect(() => {
+    if (activeWalletId) {
+      fetchTransactions(activeWalletId)
+    }
+  }, [activeWalletId, fetchTransactions]) */
 
   if (wallets === undefined || wallets?.length === 0) {
     // create link to wallet/manage
@@ -58,7 +65,7 @@ export default function WalletScreen() {
 
   return (
     <View style={styles.root}>
-      {/* <WalletBalance /> */}
+      <WalletBalance />
       <View style={styles.actionsSection}>
         <Pressable onPress={handleSend} style={[styles.button, styles.primaryButton]}>
           <Text style={styles.buttonText}>Send</Text>

@@ -1,4 +1,4 @@
-import { createRootExtendedKey, fromMnemonic } from '@/lib/key'
+import { createRootExtendedKey, fromMnemonic, verifyExtendedKey } from '@/lib/key'
 import { getTxHistory, calculateBalance } from '@/lib/transactions'
 import { TxHistory } from '@/models/transaction'
 import { StateCreator } from 'zustand'
@@ -34,10 +34,11 @@ const createTxSlice: StateCreator<
   transactions: [],
   loading: false,
   setLoading: loading => {
-    set({ loading })
+    set(() => ({ loading }))
   },
   fetchTransactions: async walletId => {
-    const { wallets } = get()
+    set(() => ({ loading: true }))
+    const wallets = get().wallets
     const wallet = wallets.find(w => w.walletId === walletId)
     if (!wallet) return
 
@@ -53,6 +54,8 @@ const createTxSlice: StateCreator<
       coinType,
       accountIndex,
     })
+    console.log('balance', balance)
+    console.log('txHistory', txHistory)
 
     set(state => ({
       transactions: [
@@ -64,8 +67,8 @@ const createTxSlice: StateCreator<
           lastUpdated: Date.now(),
         },
       ],
-      loading: false,
     }))
+    set(() => ({ loading: false }))
   },
 })
 

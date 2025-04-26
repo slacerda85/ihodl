@@ -10,6 +10,10 @@ import useStore from '../store'
 export default function DeleteWallet() {
   const activeWalletId = useStore(state => state.activeWalletId)
   const deleteWallet = useStore(state => state.deleteWallet)
+  const walletName = useStore(
+    state => state.wallets.find(w => w.walletId === activeWalletId)?.walletName,
+  )
+
   const router = useRouter()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
@@ -32,7 +36,7 @@ export default function DeleteWallet() {
   return (
     <View style={styles.modalContainer}>
       <Text style={[styles.modalText, isDark && styles.modalTextDark]}>
-        Are you sure you want to delete this wallet?
+        {`Unlink wallet "${walletName}" from this app?`}
       </Text>
       <Pressable
         style={[styles.button, styles.buttonFirst, styles.buttonLast, isDark && styles.buttonDark]}

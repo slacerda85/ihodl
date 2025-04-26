@@ -85,7 +85,7 @@ export default function ImportWallet() {
             accountIndex: 0,
           },
         ],
-      } as WalletData)
+      })
     } catch (error) {
       console.error('Error importing wallet:', error)
     } finally {
