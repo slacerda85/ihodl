@@ -1,6 +1,6 @@
 // React and React Native
 import { Link } from 'expo-router'
-import { StyleSheet, Text, Pressable, useColorScheme, View } from 'react-native'
+import { StyleSheet, Text, Pressable, useColorScheme, View, SafeAreaView } from 'react-native'
 import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 import useStore from '../store'
@@ -9,9 +9,13 @@ import useStore from '../store'
 import WalletBalance from './WalletBalance'
 import { useEffect } from 'react'
 import WalletAccounts from './WalletAccounts'
+import { useHeaderHeight } from '@react-navigation/elements'
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
 // import useStore from '../store'
 
 export default function WalletScreen() {
+  const headerHeight = useHeaderHeight()
+  const tabBarHeight = useBottomTabBarHeight()
   // theme
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
@@ -65,7 +69,15 @@ export default function WalletScreen() {
   }
 
   return (
-    <View style={styles.root}>
+    <View
+      style={{
+        flex: 1,
+        padding: 16,
+        gap: 32,
+        paddingTop: headerHeight + 16,
+        paddingBottom: tabBarHeight + 16,
+      }}
+    >
       <WalletBalance />
       <View style={styles.actionsSection}>
         <Pressable onPress={handleSend} style={[styles.button, styles.primaryButton]}>
@@ -90,13 +102,12 @@ export default function WalletScreen() {
 
 const styles = StyleSheet.create({
   root: {
-    // backgroundColor: 'blue',
     flex: 1,
     padding: 16,
     gap: 32,
   },
   rootDark: {
-    backgroundColor: colors.background.dark,
+    // backgroundColor: colors.background.dark,
   },
   section: {
     marginBottom: 0,
@@ -113,7 +124,7 @@ const styles = StyleSheet.create({
   offlineIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: alpha(colors.secondary, 0.1),
+    // backgroundColor: alpha(colors.secondary, 0.1),
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 12,

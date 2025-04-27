@@ -1,4 +1,4 @@
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons'
+import AntDesign from '@expo/vector-icons/AntDesign'
 import colors from '@/shared/theme/colors'
 
 export default function SwapIcon({
@@ -8,5 +8,5 @@ export default function SwapIcon({
   color: string
   size: number
 }) {
-  return <MaterialCommunityIcons name="menu-swap" size={size} color={color} />
+  return <AntDesign name="caretdown" size={size} color={color} />
 }

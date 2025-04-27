@@ -42,12 +42,12 @@ export default function WalletBalance() {
         </Text>
         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
           <Pressable
-            onPress={() => setUnit(unit === 'BTC' ? 'sats' : 'BTC')}
+            onPress={() => setUnit(unit === 'BTC' ? 'Sats' : 'BTC')}
             style={styles.unitButton}
           >
             <View style={styles.unitContainer}>
               <Text style={styles.balanceCurrency}>{unit}</Text>
-              <SwapIcon size={24} color={colors.primary} />
+              <SwapIcon size={12} color={colors.primary} />
             </View>
           </Pressable>
           <View style={{ flex: 1 }}></View>
@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
   unitContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    // gap: 2,
+    gap: 4,
   },
   unitButton: {
     borderRadius: 8,

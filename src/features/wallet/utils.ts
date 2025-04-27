@@ -1,5 +1,5 @@
-const formatBalance = (balance: number, unit: string) => {
-  if (unit === 'sats') {
+const formatBalance = (balance: number = 0, unit: 'BTC' | 'Sats') => {
+  if (unit === 'Sats') {
     return `${(balance * 1e8).toLocaleString(undefined, {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,

@@ -4,7 +4,7 @@ import { TxHistory } from '@/models/transaction'
 import { StateCreator } from 'zustand'
 import { StoreState } from './useStore'
 
-const FETCH_INTERVAL = 1000 * 60 * 10
+const FETCH_INTERVAL = 1000 * 60 * 1
 
 type TransactionsState = {
   transactions: Transaction[]
@@ -37,43 +37,46 @@ const createTxSlice: StateCreator<
     set(() => ({ loading }))
   },
   fetchTransactions: async walletId => {
-    // check if last fetch was less then 10 minutes from lastUpdated, using fetch interval
-    const transactions = get().transactions
-    const transaction = transactions.find(t => t.walletId === walletId)
-    if (transaction !== undefined && Date.now() - transaction.lastUpdated < FETCH_INTERVAL) {
-      return
-    }
-
     set(() => ({ loading: true }))
-    const wallets = get().wallets
-    const wallet = wallets.find(w => w.walletId === walletId)
-    if (!wallet) return
+    try {
+      // check if last fetch was less then 10 minutes from lastUpdated, using fetch interval
+      const transactions = get().transactions
+      const transaction = transactions.find(t => t.walletId === walletId)
+      if (transaction !== undefined && Date.now() - transaction.lastUpdated < FETCH_INTERVAL) {
+        return
+      }
 
-    const { accounts, seedPhrase } = wallet
-    const entropy = fromMnemonic(seedPhrase)
-    const extendedKey = createRootExtendedKey(entropy)
+      const wallets = get().wallets
+      const wallet = wallets.find(w => w.walletId === walletId)
+      if (!wallet) return
 
-    const { purpose, coinType, accountIndex } = accounts[0]
+      const { accounts, seedPhrase } = wallet
+      const entropy = fromMnemonic(seedPhrase)
+      const extendedKey = createRootExtendedKey(entropy)
+      const { purpose, coinType, accountIndex } = accounts[0] // todo: support multiple accounts
+      const { balance, txHistory } = await getTxHistory({
+        extendedKey,
+        purpose,
+        coinType,
+        accountStartIndex: accountIndex,
+      })
 
-    const { balance, txHistory } = await getTxHistory({
-      extendedKey,
-      purpose,
-      coinType,
-      accountStartIndex: accountIndex,
-    })
-
-    set(state => ({
-      transactions: [
-        ...state.transactions.filter(t => t.walletId !== walletId),
-        {
-          walletId,
-          balance,
-          txHistory,
-          lastUpdated: Date.now(),
-        },
-      ],
-    }))
-    set(() => ({ loading: false }))
+      set(state => ({
+        transactions: [
+          ...state.transactions.filter(t => t.walletId !== walletId),
+          {
+            walletId,
+            balance,
+            txHistory,
+            lastUpdated: Date.now(),
+          },
+        ],
+      }))
+    } catch (error) {
+      console.error('Error fetching transactions:', error)
+    } finally {
+      set(() => ({ loading: false }))
+    }
   },
 })
 

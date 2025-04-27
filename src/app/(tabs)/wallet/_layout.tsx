@@ -1,6 +1,5 @@
 import { Link, Stack, useRouter } from 'expo-router'
 import { useColorScheme, StyleSheet, Text, Pressable, Platform } from 'react-native'
-import { SafeAreaView } from 'react-native'
 import colors from '@/shared/theme/colors'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@/features/auth/AuthProvider'
@@ -68,123 +67,107 @@ export default function WalletLayout() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  // show headers only when there are wallets
-  // const showHeaders = useMemo(() => wallets !== undefined, [wallets])
+  const modalOptions = {
+    headerBlurEffect: undefined,
+    headerTransparent: false,
+    headerStyle: {
+      backgroundColor: colors.background[isDark ? 'dark' : 'light'],
+    },
+    contentStyle: {
+      backgroundColor: colors.background[isDark ? 'dark' : 'light'],
+    },
+  }
 
   return (
-    <SafeAreaView style={[styles.container, isDark ? styles.darkContainer : styles.lightContainer]}>
-      <Stack
-        screenOptions={{
-          headerShadowVisible: false,
-          headerBackButtonDisplayMode: 'minimal',
-          headerTintColor: colors.primary,
-          headerStyle: {
-            backgroundColor: colors.background[isDark ? 'dark' : 'light'],
-          },
-          contentStyle: {
-            backgroundColor: colors.background[isDark ? 'dark' : 'light'],
-          },
+    <Stack
+      screenOptions={{
+        headerShadowVisible: false,
+        headerBackButtonDisplayMode: 'minimal',
+        headerTintColor: colors.primary,
+        headerBlurEffect: isDark ? 'dark' : 'light',
+        headerTransparent: true,
+        contentStyle: {
+          backgroundColor: colors.background[isDark ? 'dark' : 'light'],
+        },
+        // headerTransparent: true,
+        /* headerStyle: {
+          backgroundColor: colors.background[isDark ? 'dark' : 'light'],
+        },
+        contentStyle: {
+          backgroundColor: colors.background[isDark ? 'dark' : 'light'],
+        }, */
+      }}
+    >
+      <Stack.Screen
+        name="index"
+        options={{
+          headerBlurEffect: 'none',
+          headerLeft: () => headerLeft(),
+          headerRight: activeWalletId ? () => headerRight() : undefined,
+          headerTitleAlign: 'center',
+          title: selectedWallet?.walletName || 'No wallets found',
         }}
-      >
-        <Stack.Screen
-          name="index"
-          options={{
-            headerLeft: () => headerLeft(),
-            headerRight: activeWalletId ? () => headerRight() : undefined,
-            // headerShown: false,
-            headerTitleAlign: 'center',
-            title: selectedWallet?.walletName || 'No wallets found',
-          }}
-        />
-        <Stack.Screen
-          name="actions"
-          options={{
-            headerStyle: {
-              backgroundColor: colors.background[isDark ? 'dark' : 'light'],
-            },
-            contentStyle: {
-              backgroundColor: colors.background[isDark ? 'dark' : 'light'],
-            },
-            presentation: 'modal',
-            animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
-            title: 'Wallet actions',
-            headerRight:
-              Platform.OS === 'ios' ? () => <CloseModalButton title="Done" /> : undefined,
-          }}
-        />
-        <Stack.Screen
-          name="create"
-          options={{
-            headerStyle: {
-              backgroundColor: colors.background[isDark ? 'dark' : 'light'],
-            },
-            contentStyle: {
-              backgroundColor: colors.background[isDark ? 'dark' : 'light'],
-            },
-            presentation: Platform.select({
-              ios: 'modal',
-              default: 'modal',
-            }),
-            animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
-            title: 'Create wallet',
-            headerRight:
-              Platform.OS === 'ios' ? () => <CloseModalButton title="Cancel" /> : undefined,
-          }}
-        />
-        <Stack.Screen
-          name="import"
-          options={{
-            presentation: 'modal',
-            title: 'Import wallet',
-            headerRight: () => <CloseModalButton title="Cancel" />,
-          }}
-        />
-        <Stack.Screen
-          name="manage"
-          options={{
-            headerStyle: {
-              backgroundColor: colors.background[isDark ? 'dark' : 'light'],
-            },
-            contentStyle: {
-              backgroundColor: colors.background[isDark ? 'dark' : 'light'],
-            },
-            presentation: Platform.select({
-              ios: 'modal',
-              default: 'transparentModal',
-            }),
-            animation: Platform.OS === 'android' ? 'slide_from_left' : undefined,
-            title: 'Manage wallets',
-            headerRight:
-              Platform.OS === 'ios' ? () => <CloseModalButton title="Done" /> : undefined,
-          }}
-        />
-        <Stack.Screen
-          name="delete"
-          options={{
-            headerStyle: {
-              backgroundColor: colors.background[isDark ? 'dark' : 'light'],
-            },
-            contentStyle: {
-              backgroundColor: colors.background[isDark ? 'dark' : 'light'],
-            },
-            presentation: Platform.select({
-              ios: 'modal',
-              default: 'transparentModal',
-            }),
-            animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
-            title: 'Delete wallet',
-            headerRight: Platform.OS === 'ios' ? () => <CloseModalButton /> : undefined,
-          }}
-        />
-
-        {/* <Stack.Screen
-          name="transactions"
-          options={{
-            title: 'Transactions',
-          }}
-        /> */}
-      </Stack>
-    </SafeAreaView>
+      />
+      <Stack.Screen
+        name="actions"
+        options={{
+          ...modalOptions,
+          presentation: 'modal',
+          animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
+          title: 'Wallet actions',
+          headerRight: Platform.OS === 'ios' ? () => <CloseModalButton title="Done" /> : undefined,
+        }}
+      />
+      <Stack.Screen
+        name="create"
+        options={{
+          ...modalOptions,
+          presentation: Platform.select({
+            ios: 'modal',
+            default: 'modal',
+          }),
+          animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
+          title: 'Create wallet',
+          headerRight:
+            Platform.OS === 'ios' ? () => <CloseModalButton title="Cancel" /> : undefined,
+        }}
+      />
+      <Stack.Screen
+        name="import"
+        options={{
+          ...modalOptions,
+          presentation: 'modal',
+          title: 'Import wallet',
+          headerRight: () => <CloseModalButton title="Cancel" />,
+        }}
+      />
+      <Stack.Screen
+        name="manage"
+        options={{
+          ...modalOptions,
+          presentation: Platform.select({
+            ios: 'modal',
+            default: 'transparentModal',
+          }),
+          animation: Platform.OS === 'android' ? 'slide_from_left' : undefined,
+          title: 'Manage wallets',
+          headerRight: Platform.OS === 'ios' ? () => <CloseModalButton title="Done" /> : undefined,
+        }}
+      />
+      <Stack.Screen
+        name="delete"
+        options={{
+          ...modalOptions,
+          presentation: Platform.select({
+            ios: 'modal',
+            default: 'transparentModal',
+          }),
+          animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
+          title: 'Delete wallet',
+          headerRight: Platform.OS === 'ios' ? () => <CloseModalButton /> : undefined,
+        }}
+      />
+    </Stack>
   )
 }
 

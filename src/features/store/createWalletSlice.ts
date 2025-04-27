@@ -8,7 +8,7 @@ import { CoinType, Purpose } from '@/models/account'
 export type WalletState = {
   wallets: WalletData[]
   activeWalletId: string | undefined
-  unit: 'BTC' | 'sats'
+  unit: 'BTC' | 'Sats'
 }
 
 type WalletActions = {
@@ -17,7 +17,7 @@ type WalletActions = {
   deleteWallet: (walletId: string) => void
   clearWallets: () => void
   setActiveWalletId: (walletId: string) => void
-  setUnit: (unit: 'BTC' | 'sats') => void
+  setUnit: (unit: 'BTC' | 'Sats') => void
 }
 
 export type WalletSlice = WalletState & WalletActions
@@ -102,7 +102,7 @@ const createWalletSlice: StateCreator<
   setActiveWalletId: walletId => {
     set(() => ({ activeWalletId: walletId }))
   },
-  setUnit: (unit: 'BTC' | 'sats') => {
+  setUnit: (unit: 'BTC' | 'Sats') => {
     set(() => ({ unit }))
   },
 })

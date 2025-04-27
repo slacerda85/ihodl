@@ -29,12 +29,12 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background.light,
+    // backgroundColor: colors.background.light,
     alignItems: 'center',
     justifyContent: 'center',
   },
   containerDark: {
-    backgroundColor: colors.background.dark,
+    // backgroundColor: colors.background.dark,
   },
   title: {
     fontWeight: 'bold',

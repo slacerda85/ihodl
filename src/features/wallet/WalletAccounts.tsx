@@ -1,33 +1,27 @@
 import {
   View,
   Text,
-  Pressable,
   Image,
   useColorScheme,
   StyleSheet,
   FlatList,
   ActivityIndicator,
+  Pressable,
 } from 'react-native'
-import { Account } from '@/models/account'
+import { Account, CoinType } from '@/models/account'
 import BitcoinLogo from '@/shared/assets/bitcoin-logo'
-import { Fragment, Key, ReactNode, useEffect, useState } from 'react'
+import { ReactNode } from 'react'
 import { alpha } from '@/shared/theme/utils'
 import colors from '@/shared/theme/colors'
-import { WalletData } from '@/models/wallet'
-import useWallet from './useWallet'
-import { createRootExtendedKey, fromMnemonic } from '@/lib/key'
-import { getTxHistory } from '@/lib/transactions'
-import useTransactions from '../transactions/useTransactions'
 import useStore from '../store'
-
-interface WalletAccountsProps {
-  wallet: WalletData
-}
+import { Link, useRouter } from 'expo-router'
+import { Ionicons } from '@expo/vector-icons'
+import { formatBalance } from './utils'
 
 const purposeToLabel: Record<number, string> = {
   44: 'Legacy',
   49: 'SegWit',
-  84: 'BIP84',
+  84: 'Native SegWit',
   // Add more purposes as needed
 }
 
@@ -42,6 +36,10 @@ const purposeToIcon: Record<number, ReactNode> = {
     />
   ),
   // Add more purposes as needed
+}
+
+const coinTypetoLabel: Record<CoinType, string> = {
+  0: 'BTC',
 }
 
 function getPurposeIcon(purpose: number) {
@@ -77,14 +75,7 @@ export default function WalletAccounts() {
       )
     }
 
-    return (
-      <AccountDetails
-        account={item}
-        // balance={balance}
-        // useSatoshis={false}
-        // loading={loadingBalance}
-      />
-    )
+    return <AccountDetails account={item} />
   }
 
   return (
@@ -104,6 +95,7 @@ export default function WalletAccounts() {
 function AccountDetails({ account }: { account: Account }) {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
+  const router = useRouter()
 
   const loading = useStore(state => state.loading)
   const unit = useStore(state => state.unit)
@@ -121,38 +113,44 @@ function AccountDetails({ account }: { account: Account }) {
   // Get the appropriate icon
   const accountIcon = getPurposeIcon(account.purpose)
 
-  const handleAccountPress = (accountIndex: number) => {
-    // Handle account press logic here
-    console.log(`Account ${accountIndex} pressed`)
+  const handleNavigate = () => {
+    // Navigate to account details screen
+    router.push('/transactions')
   }
 
   return (
-    <View style={[styles.accountContainer, isDark && styles.accountContainerDark]}>
-      <Pressable
-        style={[styles.accountHeader, isDark && styles.accountHeaderDark]}
-        onPress={() => handleAccountPress(account.accountIndex)}
-      >
-        <View style={styles.accountIconContainer}>{accountIcon}</View>
+    <Pressable
+      style={[styles.accountContainer, isDark && styles.accountContainerDark]}
+      onPress={handleNavigate}
+    >
+      <View style={[styles.accountSection, isDark && styles.accountSectionDark]}>
+        <View style={styles.accountIcon}>{accountIcon}</View>
         <View style={styles.accountDetails}>
           <Text style={styles.accountUnit}>{'BTC'}</Text>
           <Text style={[styles.accountTitle, isDark && styles.accountTitleDark]}>
             {accountName}
           </Text>
         </View>
-        <View style={styles.accountBalanceWrapper}>
-          {loading ? (
-            <ActivityIndicator size="small" color={colors.primary} />
-          ) : (
-            <Fragment>
-              <Text style={[styles.accountBalance, isDark && styles.accountBalanceDark]}>
-                {balance}
-              </Text>
-              <Text style={styles.balanceUnit}>{unit}</Text>
-            </Fragment>
-          )}
-        </View>
-      </Pressable>
-    </View>
+      </View>
+      <View style={styles.accountSection}>
+        {loading ? (
+          <ActivityIndicator size="small" color={colors.primary} />
+        ) : (
+          <View style={styles.accountDetails}>
+            <Text style={[styles.accountBalance, isDark && styles.accountBalanceDark]}>
+              {formatBalance(balance, unit)}
+            </Text>
+            <Text style={styles.balanceUnit}>{unit}</Text>
+            <Ionicons
+              name="chevron-forward"
+              size={24}
+              color={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
+              style={styles.navigateRight}
+            />
+          </View>
+        )}
+      </View>
+    </Pressable>
   )
 }
 
@@ -184,7 +182,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary.dark,
   },
   flatList: {
-    paddingBottom: 48,
+    // paddingBottom: 48,
     gap: 1,
   },
   accountsList: {
@@ -193,26 +191,32 @@ const styles = StyleSheet.create({
   accountContainer: {
     backgroundColor: colors.white,
     borderRadius: 16,
-    marginBottom: 12,
-    overflow: 'hidden',
+    padding: 16,
+    flexDirection: 'row',
+    gap: 24,
+    // marginBottom: 12,
+    // overflow: 'hidden',
+    // flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   accountContainerDark: {
     backgroundColor: alpha(colors.background.light, 0.05),
   },
-  accountHeader: {
+  accountSection: {
+    // backgroundColor: '#ff0000',
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
     gap: 4,
   },
-  accountHeaderDark: {
+  accountSectionDark: {
     backgroundColor: alpha(colors.background.light, 0.01),
   },
   accountTitle: {
     backgroundColor: alpha(colors.black, 0.1),
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
     fontSize: 10,
     fontWeight: 'bold',
     color: colors.textSecondary.light,
@@ -222,11 +226,11 @@ const styles = StyleSheet.create({
     color: colors.text.dark,
   },
   accountUnit: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
     color: colors.primary,
   },
-  accountIconContainer: {
+  accountIcon: {
     width: 32,
     height: 32,
     alignItems: 'center',
@@ -234,15 +238,16 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   accountDetails: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  accountBalanceWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+  },
+  accountBalanceWrapper: {
+    backgroundColor: '#ff0000',
+    // flexDirection: 'row',
+    // alignItems: 'center',
+    // gap: 4,
+    // padding: 16,
   },
   accountBalance: {
     fontSize: 14,
@@ -256,6 +261,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.primary,
   },
+  navigateRight: {},
   /* accountSummary: {
     flexDirection: 'row',
     alignItems: 'center',

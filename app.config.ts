@@ -6,7 +6,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   slug: 'ihodl',
   scheme: 'ihodl',
   version: '1.0.0',
-  icon: './assets/images/icon.png',
+  icon: './assets/images/splash-icon.png',
   orientation: 'portrait',
   owner: 'slacerda85',
   userInterfaceStyle: 'automatic',

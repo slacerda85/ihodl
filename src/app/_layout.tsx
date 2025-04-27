@@ -3,11 +3,13 @@ import AuthProvider from '@/features/auth/AuthProvider'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import InactivityOverlay from '@/features/auth/InactivityOverlay'
-import { useColorScheme } from 'react-native'
+import { StyleSheet, useColorScheme } from 'react-native'
 import colors from '@/shared/theme/colors'
 import * as SplashScreen from 'expo-splash-screen'
 import { useEffect, useState } from 'react'
 import AuthScreen from '@/features/auth/AuthScreen'
+import { BlurView } from 'expo-blur'
+import { alpha } from '@/shared/theme/utils'
 
 SplashScreen.preventAutoHideAsync()
 
@@ -49,8 +51,9 @@ export default function RootLayout() {
         {/* <WalletProvider> */}
         <Stack
           screenOptions={{
-            ...defaultScreenOptions,
+            // ...defaultScreenOptions,
             animation: 'fade',
+            // headerTransparent: true,
           }}
         >
           <Stack.Screen
