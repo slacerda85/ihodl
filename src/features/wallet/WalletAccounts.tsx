@@ -123,7 +123,7 @@ function AccountDetails({ account }: { account: Account }) {
       style={[styles.accountContainer, isDark && styles.accountContainerDark]}
       onPress={handleNavigate}
     >
-      <View style={[styles.accountSection, isDark && styles.accountSectionDark]}>
+      <View style={styles.accountSection}>
         <View style={styles.accountIcon}>{accountIcon}</View>
         <View style={styles.accountDetails}>
           <Text style={styles.accountUnit}>{'BTC'}</Text>
@@ -138,9 +138,8 @@ function AccountDetails({ account }: { account: Account }) {
         ) : (
           <View style={styles.accountDetails}>
             <Text style={[styles.accountBalance, isDark && styles.accountBalanceDark]}>
-              {formatBalance(balance, unit)}
+              {`${formatBalance(balance, unit)} ${unit}`}
             </Text>
-            <Text style={styles.balanceUnit}>{unit}</Text>
             <Ionicons
               name="chevron-forward"
               size={24}
@@ -204,13 +203,9 @@ const styles = StyleSheet.create({
     backgroundColor: alpha(colors.background.light, 0.05),
   },
   accountSection: {
-    // backgroundColor: '#ff0000',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-  },
-  accountSectionDark: {
-    backgroundColor: alpha(colors.background.light, 0.01),
   },
   accountTitle: {
     backgroundColor: alpha(colors.black, 0.1),

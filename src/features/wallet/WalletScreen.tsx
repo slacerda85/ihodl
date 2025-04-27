@@ -163,14 +163,14 @@ const styles = StyleSheet.create({
   },
   actionsSection: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     gap: 12,
   },
   buttonIcon: {
     marginRight: 8,
   },
   button: {
-    flexGrow: 1,
+    flex: 1,
     padding: 16,
     borderRadius: 16,
     alignItems: 'center',

@@ -255,7 +255,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   transactionsPressableDark: {
-    backgroundColor: alpha(colors.white, 0.1),
+    backgroundColor: alpha(colors.white, 0.05),
   },
   balance: {
     fontSize: 16,
