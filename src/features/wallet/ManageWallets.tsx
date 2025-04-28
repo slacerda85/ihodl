@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   walletName: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '400',
     color: colors.textSecondary.light,
   },

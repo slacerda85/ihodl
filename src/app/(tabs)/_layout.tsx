@@ -42,22 +42,22 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="wallet"
         options={{
-          tabBarShowLabel: false,
-          tabBarIcon: ({ color }) => <WalletTabIcon color={color} />,
+          tabBarShowLabel: true,
+          tabBarIcon: ({ color, focused }) => <WalletTabIcon color={color} filled={focused} />,
         }}
       />
       <Tabs.Screen
         name="transactions"
         options={{
-          tabBarShowLabel: false,
-          tabBarIcon: ({ color }) => <TransactionsTabIcon filled color={color} />,
+          tabBarShowLabel: true,
+          tabBarIcon: ({ color, focused }) => <TransactionsTabIcon color={color} filled />,
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
-          tabBarShowLabel: false,
-          tabBarIcon: ({ color }) => <SettingsTabIcon color={color} />,
+          tabBarShowLabel: true,
+          tabBarIcon: ({ color, focused }) => <SettingsTabIcon color={color} />,
         }}
       />
     </Tabs>

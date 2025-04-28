@@ -46,28 +46,24 @@ export default function RootLayout() {
   }
 
   return (
-    <>
-      <AuthProvider>
-        {/* <WalletProvider> */}
-        <Stack
-          screenOptions={{
-            // ...defaultScreenOptions,
-            animation: 'fade',
-            // headerTransparent: true,
-          }}
-        >
-          <Stack.Screen
-            name="index"
-            options={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}
-          />
+    <AuthProvider>
+      <Stack
+        screenOptions={{
+          // ...defaultScreenOptions,
+          animation: 'fade',
+          // headerTransparent: true,
+        }}
+      >
+        <Stack.Screen
+          name="index"
+          options={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}
+        />
 
-          <Stack.Screen name="(tabs)" options={defaultScreenOptions} />
-        </Stack>
-        <InactivityOverlay />
-        <AuthScreen />
-        {/*  </WalletProvider> */}
-      </AuthProvider>
+        <Stack.Screen name="(tabs)" options={defaultScreenOptions} />
+      </Stack>
+      <InactivityOverlay />
+      <AuthScreen />
       <StatusBar style="auto" />
-    </>
+    </AuthProvider>
   )
 }

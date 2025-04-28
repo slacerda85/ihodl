@@ -60,9 +60,9 @@ export default function TransactionsScreen() {
   const isDark = colorScheme === 'dark'
 
   const activeWalletId = useStore(state => state.activeWalletId)
-  const txHistory = useStore(
-    state => state.transactions.find(item => item.walletId === activeWalletId)?.txHistory || [],
-  )
+  const transactions = useStore(state => state.transactions)
+  const txHistory = transactions.find(item => item.walletId === activeWalletId)?.txHistory || []
+
   const loading = useStore(state => state.loading)
   const unit = useStore(state => state.unit)
   if (loading) {
@@ -200,8 +200,12 @@ export default function TransactionsScreen() {
         keyExtractor={item => (item.isDate ? item.date : item.tx.txid)}
         renderItem={renderItem}
         ListEmptyComponent={
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <Text>No transactions found</Text>
+          <View style={[styles.empty, isDark && styles.emptyDark]}>
+            <Text style={[styles.emptyText, isDark && styles.emptyTextDark]}>
+              {activeWalletId === undefined
+                ? 'Select a wallet to view transactions'
+                : 'No transactions found'}
+            </Text>
           </View>
         }
         showsVerticalScrollIndicator={false}
@@ -264,5 +268,22 @@ const styles = StyleSheet.create({
   },
   balanceDark: {
     color: colors.text.dark,
+  },
+  empty: {
+    height: 128,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.white,
+  },
+  emptyDark: {
+    backgroundColor: alpha(colors.background.light, 0.05),
+  },
+  emptyText: {
+    fontSize: 16,
+    color: colors.textSecondary.light,
+  },
+  emptyTextDark: {
+    color: colors.textSecondary.dark,
   },
 })

@@ -1,6 +1,6 @@
 // React and React Native
-import { Link } from 'expo-router'
-import { StyleSheet, Text, Pressable, useColorScheme, View, SafeAreaView } from 'react-native'
+import { Link, useRouter } from 'expo-router'
+import { StyleSheet, Text, Pressable, useColorScheme, View } from 'react-native'
 import colors from '@/shared/theme/colors'
 import { alpha } from '@/shared/theme/utils'
 import useStore from '../store'
@@ -11,9 +11,13 @@ import { useEffect } from 'react'
 import WalletAccounts from './WalletAccounts'
 import { useHeaderHeight } from '@react-navigation/elements'
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
+import Divider from '@/shared/ui/Divider'
+import CreateWalletIcon from './CreateWalletIcon'
+import ImportWalletIcon from './ImportWalletIcon'
 // import useStore from '../store'
 
 export default function WalletScreen() {
+  const router = useRouter()
   const headerHeight = useHeaderHeight()
   const tabBarHeight = useBottomTabBarHeight()
   // theme
@@ -30,6 +34,14 @@ export default function WalletScreen() {
     // router.push('/transactions/receive')
   }
 
+  function handleCreateWallet() {
+    router.push('/wallet/create')
+  }
+
+  function handleImportWallet() {
+    router.push('/wallet/import')
+  }
+
   const activeWalletId = useStore(state => state.activeWalletId)
   const fetchTransactions = useStore(state => state.fetchTransactions)
   const wallets = useStore(state => state.wallets)
@@ -43,41 +55,75 @@ export default function WalletScreen() {
   if (wallets === undefined || wallets?.length === 0) {
     // create link to wallet/manage
     return (
-      <View style={[styles.root, isDark && styles.rootDark]}>
+      <Container>
         <View style={[styles.emptyState, isDark && styles.emptyStateDark]}>
           <Text style={[styles.walletName, isDark && styles.walletNameDark]}>No wallets found</Text>
-          <Link href="/wallet/create" style={[styles.button, styles.primaryButton]}>
-            <Text style={styles.buttonText}>Create a wallet</Text>
-          </Link>
+          <Divider
+            orientation="horizontal"
+            color={
+              isDark ? alpha(colors.background.light, 0.05) : alpha(colors.background.dark, 0.05)
+            }
+          />
+          <View>
+            <Pressable
+              onPress={handleCreateWallet}
+              style={[
+                styles.neutralButton,
+                styles.neutralButtonFirst,
+                isDark && styles.neutralButtonDark,
+              ]}
+            >
+              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <CreateWalletIcon size={24} color={colors.primary} />
+                <Text style={styles.neutralButtonText}>Create New Wallet</Text>
+              </View>
+            </Pressable>
+            <Divider
+              orientation="horizontal"
+              color={isDark ? alpha(colors.background.light, 0.1) : colors.background.light}
+            />
+
+            <Pressable
+              onPress={handleImportWallet}
+              style={[
+                styles.neutralButton,
+                styles.neutralButtonLast,
+                // styles.secondaryButton,
+                isDark && styles.neutralButtonDark,
+              ]}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <ImportWalletIcon size={24} color={colors.primary} />
+
+                <Text style={styles.neutralButtonText}>Import Wallet</Text>
+              </View>
+            </Pressable>
+          </View>
         </View>
-      </View>
+      </Container>
     )
   } else if (activeWalletId === undefined) {
     // create link to wallet/manage
     return (
-      <View style={[styles.root, isDark && styles.rootDark]}>
+      <Container>
         <View style={[styles.emptyState, isDark && styles.emptyStateDark]}>
           <Text style={[styles.walletName, isDark && styles.walletNameDark]}>
             No wallet selected
           </Text>
-          <Link href="/wallet/manage" style={[styles.button, styles.primaryButton]}>
-            <Text style={styles.buttonText}>Select a wallet</Text>
-          </Link>
+          <View style={[styles.button, styles.primaryButton]}>
+            <Link href="/wallet/manage">
+              <Text style={[styles.buttonText, isDark && styles.buttonTextSecondary]}>
+                Select a wallet
+              </Text>
+            </Link>
+          </View>
         </View>
-      </View>
+      </Container>
     )
   }
 
   return (
-    <View
-      style={{
-        flex: 1,
-        padding: 16,
-        gap: 32,
-        paddingTop: headerHeight + 16,
-        paddingBottom: tabBarHeight + 16,
-      }}
-    >
+    <Container>
       <WalletBalance />
       <View style={styles.actionsSection}>
         <Pressable onPress={handleSend} style={[styles.button, styles.primaryButton]}>
@@ -88,7 +134,7 @@ export default function WalletScreen() {
           onPress={handleReceive}
           style={[styles.button, isDark ? styles.secondaryButtonDark : styles.secondaryButton]}
         >
-          <Text style={[styles.buttonText, isDark && styles.buttonTextDark]}>Receive</Text>
+          <Text style={[styles.buttonText, isDark && styles.buttonTextSecondary]}>Receive</Text>
         </Pressable>
       </View>
       <View style={styles.accountsSection}>
@@ -96,6 +142,28 @@ export default function WalletScreen() {
 
         <WalletAccounts />
       </View>
+    </Container>
+  )
+}
+
+function Container({ children }: { children: React.ReactNode }) {
+  const headerHeight = useHeaderHeight()
+  const tabBarHeight = useBottomTabBarHeight()
+  const colorScheme = useColorScheme()
+  const isDark = colorScheme === 'dark'
+
+  return (
+    <View
+      style={[
+        styles.root,
+        isDark && styles.rootDark,
+        {
+          paddingTop: headerHeight + 16,
+          paddingBottom: tabBarHeight + 16,
+        },
+      ]}
+    >
+      {children}
     </View>
   )
 }
@@ -185,20 +253,14 @@ const styles = StyleSheet.create({
   secondaryButtonDark: {
     backgroundColor: colors.background.light,
   },
-  neutralButton: {
-    backgroundColor: alpha(colors.black, 0.2),
-  },
-  neutralButtonDark: {
-    backgroundColor: alpha(colors.white, 0.2),
-  },
   buttonText: {
-    color: colors.white,
+    color: colors.text.light,
     textAlign: 'center',
     fontWeight: '500',
     fontSize: 16,
   },
-  buttonTextDark: {
-    color: colors.black,
+  buttonTextSecondary: {
+    color: colors.text.dark,
   },
   accountsSection: {
     flexGrow: 1,
@@ -222,12 +284,13 @@ const styles = StyleSheet.create({
     color: colors.text.dark,
   },
   emptyState: {
-    alignItems: 'center',
+    /* alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 40,
     borderWidth: 1,
     borderColor: alpha(colors.border.light, 0.2),
-    borderRadius: 8,
+    borderRadius: 8, */
+    paddingHorizontal: 16,
     gap: 24,
   },
   emptyStateDark: {
@@ -241,5 +304,41 @@ const styles = StyleSheet.create({
   },
   emptyStateTextDark: {
     color: colors.textSecondary.dark,
+  },
+  // wallet box
+  neutralButton: {
+    backgroundColor: colors.white,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  neutralButtonDark: {
+    backgroundColor: alpha(colors.background.light, 0.05),
+  },
+  neutralButtonFirst: {
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  neutralButtonLast: {
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+  },
+  neutralButtonText: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: colors.primary,
+  },
+  selectedWalletBox: {
+    backgroundColor: colors.border.light, // alpha(colors.primary, 0.1),
+    // borderColor: alpha(colors.primary, 0.2),
+    // borderWidth: 1,
+  },
+  selectedWalletBoxDark: {
+    backgroundColor: colors.border.dark,
+  },
+  neutralButtonLoading: {
+    opacity: 0.5,
   },
 })

@@ -74,5 +74,14 @@
   "react-native": {
     "net": "react-native-tcp-socket",
     "tls": "react-native-tcp-socket"
+  },
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": [
+          "@noble/hashes", "bech32", "bip39", "bitcoinjs-lib", "bs58", "bs58check", "buffer", "eslint-config-expo", "secp256k1", "swr", "tls"
+        ]
+      }
+    }
   }
 }

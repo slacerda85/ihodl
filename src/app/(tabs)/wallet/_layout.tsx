@@ -105,7 +105,7 @@ export default function WalletLayout() {
           headerLeft: () => headerLeft(),
           headerRight: activeWalletId ? () => headerRight() : undefined,
           headerTitleAlign: 'center',
-          title: selectedWallet?.walletName || 'No wallets found',
+          title: selectedWallet?.walletName || '',
         }}
       />
       <Stack.Screen
