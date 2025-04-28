@@ -4,6 +4,10 @@ export type WalletData = {
   walletId: string
   walletName: string
   cold: boolean
-  seedPhrase: string
+  entropy: Uint8Array
   accounts: Account[]
+  /**
+   * @deprecated Usar `entropy`
+   */
+  seedPhrase?: string
 }

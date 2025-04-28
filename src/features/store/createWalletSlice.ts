@@ -4,6 +4,7 @@ import { StoreState } from './useStore'
 import { createEntropy, randomUUID } from '@/lib/crypto'
 import { toMnemonic } from '@/lib/key'
 import { CoinType, Purpose } from '@/models/account'
+import { createWallet, CreateWalletParams } from '@/lib/wallet'
 
 export type WalletState = {
   wallets: WalletData[]
@@ -12,7 +13,7 @@ export type WalletState = {
 }
 
 type WalletActions = {
-  createWallet: (wallet: Partial<WalletData>) => void
+  createWallet: (wallet: CreateWalletParams) => void
   editWallet: (wallet: Partial<WalletData>) => void
   deleteWallet: (walletId: string) => void
   clearWallets: () => void
@@ -32,27 +33,39 @@ const createWalletSlice: StateCreator<
   wallets: [],
   activeWalletId: undefined,
   unit: 'BTC',
-  createWallet: wallet => {
+  createWallet: ({
+    accounts,
+    cold,
+    walletName = `Wallet ${get().wallets.length + 1}`,
+    seedPhrase,
+  }) => {
     // check if wallet has enough data
-    if (!wallet.accounts || wallet.accounts.length === 0) {
+    if (!accounts || accounts.length === 0) {
       console.error('Wallet accounts are required')
       return
     }
-    const walletId = randomUUID()
-    const walletName = wallet.walletName ?? `Wallet ${get().wallets.length + 1}`
-    const seedPhrase = wallet.seedPhrase ?? toMnemonic(createEntropy(16))
-    const cold = wallet.cold ?? false
-    const accounts =
+    // const walletId = randomUUID()
+    // const walletName = walletName ??
+    // const seedPhrase = wallet.seedPhrase ?? toMnemonic(createEntropy(16))
+    // const cold = cold ?? false
+    const newWallet = createWallet({
+      walletName,
+      seedPhrase: seedPhrase,
+      cold,
+      accounts: accounts,
+    })
+
+    /* const accounts =
       wallet.accounts.length > 0
         ? wallet.accounts
-        : [{ purpose: 84 as Purpose, coinType: 0 as CoinType, accountIndex: 0 }]
-    const newWallet: WalletData = {
+        : [{ purpose: 84 as Purpose, coinType: 0 as CoinType, accountIndex: 0 }] */
+    /* const newWallet: WalletData = {
       walletId,
       walletName,
       seedPhrase,
       cold,
       accounts,
-    }
+    } */
     console.log('newWallet', newWallet)
     set(state => ({
       wallets: [...state.wallets, newWallet],

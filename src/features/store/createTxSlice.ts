@@ -50,8 +50,7 @@ const createTxSlice: StateCreator<
       const wallet = wallets.find(w => w.walletId === walletId)
       if (!wallet) return
 
-      const { accounts, seedPhrase } = wallet
-      const entropy = fromMnemonic(seedPhrase)
+      const { accounts, entropy } = wallet
       const extendedKey = createRootExtendedKey(entropy)
       const { purpose, coinType, accountIndex } = accounts[0] // todo: support multiple accounts
       const { balance, txHistory } = await getTxHistory({
