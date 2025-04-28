@@ -21,21 +21,21 @@ export default function TabsLayout() {
         tabBarButton: HapticTab,
         tabBarBackground: () => (
           <BlurView
-            intensity={100}
+            experimentalBlurMethod="dimezisBlurView"
+            intensity={50}
             style={{
               ...StyleSheet.absoluteFillObject,
-              backgroundColor: 'transparent',
+              borderTopWidth: 1,
+              borderTopColor: isDark
+                ? alpha(colors.background.light, 0.1)
+                : alpha(colors.background.dark, 0.1),
             }}
+            tint={isDark ? 'dark' : 'light'}
           />
         ),
         tabBarStyle: {
           backgroundColor: 'transparent',
-          position: 'absolute',
-          borderTopColor: isDark
-            ? alpha(colors.background.light, 0.1)
-            : alpha(colors.background.dark, 0.1),
-          borderTopWidth: 1,
-          // height: Platform.OS === 'ios' ? 80 : 60,
+          borderTopWidth: 0,
         },
       }}
     >

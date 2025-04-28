@@ -17,7 +17,7 @@ function headerRight() {
 }
 
 // link to [id]/manage
-function headerLeft() {
+function manageWallets() {
   return (
     <Link style={{ padding: 8, borderRadius: 24 }} href="/wallet/manage">
       <ManageWalletsIcon color={colors.primary} />
@@ -60,9 +60,9 @@ const CloseModalButton = ({ title }: { title?: string }) => {
 
 export default function WalletLayout() {
   const activeWalletId = useStore(state => state.activeWalletId)
-  const selectedWallet = useStore(state =>
-    state.wallets?.find(wallet => wallet.walletId === activeWalletId),
-  )
+  const wallets = useStore(state => state.wallets)
+  const selectedWallet = wallets?.find(wallet => wallet.walletId === activeWalletId)
+  const empty = wallets === undefined || wallets?.length === 0
 
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
@@ -102,7 +102,7 @@ export default function WalletLayout() {
         name="index"
         options={{
           headerBlurEffect: 'none',
-          headerLeft: () => headerLeft(),
+          headerLeft: empty ? undefined : () => manageWallets(),
           headerRight: activeWalletId ? () => headerRight() : undefined,
           headerTitleAlign: 'center',
           title: selectedWallet?.walletName || '',

@@ -5,6 +5,9 @@
   "scripts": {
     "dev": "expo start",
     "start": "expo start",
+    "prebuild:dev": "expo prebuild --device android --profile development",
+    "prebuild:prev": "expo prebuild --device android --profile preview",
+    "prebuild:prod": "expo prebuild --device android --profile production",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",

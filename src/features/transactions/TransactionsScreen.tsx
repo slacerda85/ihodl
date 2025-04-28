@@ -9,6 +9,7 @@ import { formatBalance } from '../wallet/utils'
 import { alpha } from '@/shared/theme/utils'
 import { useHeaderHeight } from '@react-navigation/elements'
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
+import ScreenContainer from '@/shared/ui/ScreenContainer'
 
 const purposeToLabel: Record<number, string> = {
   44: 'Legacy',
@@ -184,16 +185,11 @@ export default function TransactionsScreen() {
   }
 
   return (
-    <View
-      style={{
-        flex: 1,
-        paddingHorizontal: 16,
-      }}
-    >
+    <View style={styles.container}>
       <FlatList
         contentContainerStyle={{
           paddingTop: headerHeight,
-          paddingBottom: tabBarHeight + 16,
+          paddingBottom: tabBarHeight,
           gap: 8,
         }}
         data={data}
@@ -219,12 +215,7 @@ export default function TransactionsScreen() {
 const styles = StyleSheet.create({
   // Define your styles here
   container: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  contentContainer: {
-    gap: 8,
-    overflowY: 'hidden',
+    padding: 16,
   },
   date: {
     marginTop: 16,

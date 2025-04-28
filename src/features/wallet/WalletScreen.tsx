@@ -14,6 +14,7 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
 import Divider from '@/shared/ui/Divider'
 import CreateWalletIcon from './CreateWalletIcon'
 import ImportWalletIcon from './ImportWalletIcon'
+import ScreenContainer from '@/shared/ui/ScreenContainer'
 // import useStore from '../store'
 
 export default function WalletScreen() {
@@ -55,7 +56,7 @@ export default function WalletScreen() {
   if (wallets === undefined || wallets?.length === 0) {
     // create link to wallet/manage
     return (
-      <Container>
+      <ScreenContainer>
         <View style={[styles.emptyState, isDark && styles.emptyStateDark]}>
           <Text style={[styles.walletName, isDark && styles.walletNameDark]}>No wallets found</Text>
           <Divider
@@ -100,12 +101,12 @@ export default function WalletScreen() {
             </Pressable>
           </View>
         </View>
-      </Container>
+      </ScreenContainer>
     )
   } else if (activeWalletId === undefined) {
     // create link to wallet/manage
     return (
-      <Container>
+      <ScreenContainer>
         <View style={[styles.emptyState, isDark && styles.emptyStateDark]}>
           <Text style={[styles.walletName, isDark && styles.walletNameDark]}>
             No wallet selected
@@ -118,12 +119,12 @@ export default function WalletScreen() {
             </Link>
           </View>
         </View>
-      </Container>
+      </ScreenContainer>
     )
   }
 
   return (
-    <Container>
+    <ScreenContainer>
       <WalletBalance />
       <View style={styles.actionsSection}>
         <Pressable onPress={handleSend} style={[styles.button, styles.primaryButton]}>
@@ -142,41 +143,11 @@ export default function WalletScreen() {
 
         <WalletAccounts />
       </View>
-    </Container>
-  )
-}
-
-function Container({ children }: { children: React.ReactNode }) {
-  const headerHeight = useHeaderHeight()
-  const tabBarHeight = useBottomTabBarHeight()
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === 'dark'
-
-  return (
-    <View
-      style={[
-        styles.root,
-        isDark && styles.rootDark,
-        {
-          paddingTop: headerHeight + 16,
-          paddingBottom: tabBarHeight + 16,
-        },
-      ]}
-    >
-      {children}
-    </View>
+    </ScreenContainer>
   )
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    padding: 16,
-    gap: 32,
-  },
-  rootDark: {
-    // backgroundColor: colors.background.dark,
-  },
   section: {
     marginBottom: 0,
   },
