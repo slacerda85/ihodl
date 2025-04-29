@@ -112,7 +112,10 @@ export default function WalletLayout() {
         name="actions"
         options={{
           ...modalOptions,
-          presentation: 'modal',
+          presentation: Platform.select({
+            ios: 'modal',
+            default: 'transparentModal',
+          }),
           animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
           title: 'Wallet actions',
           headerRight: Platform.OS === 'ios' ? () => <CloseModalButton title="Done" /> : undefined,

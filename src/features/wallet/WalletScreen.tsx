@@ -57,7 +57,7 @@ export default function WalletScreen() {
     // create link to wallet/manage
     return (
       <ScreenContainer>
-        <View style={[styles.emptyState, isDark && styles.emptyStateDark]}>
+        <View style={styles.emptyState}>
           <Text style={[styles.walletName, isDark && styles.walletNameDark]}>No wallets found</Text>
           <Divider
             orientation="horizontal"
@@ -107,7 +107,7 @@ export default function WalletScreen() {
     // create link to wallet/manage
     return (
       <ScreenContainer>
-        <View style={[styles.emptyState, isDark && styles.emptyStateDark]}>
+        <View style={styles.emptyState}>
           <Text style={[styles.walletName, isDark && styles.walletNameDark]}>
             No wallet selected
           </Text>
@@ -135,7 +135,9 @@ export default function WalletScreen() {
           onPress={handleReceive}
           style={[styles.button, isDark ? styles.secondaryButtonDark : styles.secondaryButton]}
         >
-          <Text style={[styles.buttonText, isDark && styles.buttonTextSecondary]}>Receive</Text>
+          <Text style={[styles.buttonTextSecondary, isDark && styles.buttonTextSecondaryDark]}>
+            Receive
+          </Text>
         </Pressable>
       </View>
       <View style={styles.accountsSection}>
@@ -225,13 +227,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.light,
   },
   buttonText: {
-    color: colors.text.light,
+    color: colors.white,
     textAlign: 'center',
     fontWeight: '500',
     fontSize: 16,
   },
   buttonTextSecondary: {
+    textAlign: 'center',
+    fontWeight: '500',
+    fontSize: 16,
     color: colors.text.dark,
+  },
+  buttonTextSecondaryDark: {
+    color: colors.text.light,
   },
   accountsSection: {
     flexGrow: 1,
@@ -255,19 +263,8 @@ const styles = StyleSheet.create({
     color: colors.text.dark,
   },
   emptyState: {
-    /* alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-    borderWidth: 1,
-    borderColor: alpha(colors.border.light, 0.2),
-    borderRadius: 8, */
     paddingHorizontal: 16,
     gap: 24,
-  },
-  emptyStateDark: {
-    borderColor: alpha(colors.border.dark, 0.2),
-    borderRadius: 8,
-    borderWidth: 1,
   },
   emptyStateText: {
     fontSize: 20,
