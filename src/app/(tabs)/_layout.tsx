@@ -6,7 +6,7 @@ import { alpha } from '@/shared/theme/utils'
 import { HapticTab } from '@/shared/ui/haptic-tab'
 import { BlurView } from 'expo-blur'
 import { Tabs } from 'expo-router'
-import { StyleSheet, useColorScheme } from 'react-native'
+import { Platform, StyleSheet, useColorScheme } from 'react-native'
 
 export default function TabsLayout() {
   const colorScheme = useColorScheme()
@@ -22,9 +22,10 @@ export default function TabsLayout() {
         tabBarBackground: () => (
           <BlurView
             experimentalBlurMethod="dimezisBlurView"
-            intensity={50}
+            intensity={100}
             style={{
               ...StyleSheet.absoluteFillObject,
+              backgroundColor: 'transparent',
               borderTopWidth: 1,
               borderTopColor: isDark
                 ? alpha(colors.background.light, 0.1)
@@ -33,10 +34,16 @@ export default function TabsLayout() {
             tint={isDark ? 'dark' : 'light'}
           />
         ),
-        tabBarStyle: {
-          backgroundColor: 'transparent',
-          borderTopWidth: 0,
-        },
+        tabBarStyle: Platform.select({
+          ios: {
+            position: 'absolute',
+            borderTopWidth: 0,
+          },
+          android: {
+            backgroundColor: 'transparent',
+            borderTopWidth: 0,
+          },
+        }),
       }}
     >
       <Tabs.Screen
