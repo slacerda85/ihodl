@@ -97,7 +97,9 @@ function AccountDetails({ account }: { account: Account }) {
   const isDark = colorScheme === 'dark'
   const router = useRouter()
 
-  const loading = useStore(state => state.loading)
+  const loadingWallet = useStore(state => state.loadingWalletState)
+  const loadingTransactions = useStore(state => state.loadingTxState)
+  const loading = loadingWallet || loadingTransactions
   const unit = useStore(state => state.unit)
   const activeWalletId = useStore(state => state.activeWalletId)
 
@@ -133,21 +135,20 @@ function AccountDetails({ account }: { account: Account }) {
         </View>
       </View>
       <View style={styles.accountSection}>
-        {loading ? (
-          <ActivityIndicator size="small" color={colors.primary} />
-        ) : (
-          <View style={styles.accountDetails}>
+        <View style={styles.accountDetails}>
+          {loading ? (
+            <ActivityIndicator size="small" color={colors.primary} />
+          ) : (
             <Text style={[styles.accountBalance, isDark && styles.accountBalanceDark]}>
               {`${formatBalance(balance, unit)} ${unit}`}
             </Text>
-            <Ionicons
-              name="chevron-forward"
-              size={24}
-              color={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
-              style={styles.navigateRight}
-            />
-          </View>
-        )}
+          )}
+          <Ionicons
+            name="chevron-forward"
+            size={24}
+            color={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
+          />
+        </View>
       </View>
     </Pressable>
   )
@@ -238,7 +239,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   accountBalanceWrapper: {
-    backgroundColor: '#ff0000',
+    // backgroundColor: '',
     // flexDirection: 'row',
     // alignItems: 'center',
     // gap: 4,
@@ -256,25 +257,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.primary,
   },
-  navigateRight: {},
-  /* accountSummary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  }, */
-  /* 
-  accountBalanceWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-   */
-
-  /* summaryText: {
-    fontSize: 14,
-    color: colors.textSecondary.light,
-  },
-  summaryTextDark: {
-    color: colors.textSecondary.dark,
-  }, */
 })

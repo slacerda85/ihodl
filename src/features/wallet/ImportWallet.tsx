@@ -78,6 +78,7 @@ export default function ImportWallet() {
       createWallet({
         walletName,
         seedPhrase,
+        cold: false,
         accounts: [
           {
             purpose: 84,

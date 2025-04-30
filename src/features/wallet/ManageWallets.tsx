@@ -1,5 +1,5 @@
 import React, { Fragment } from 'react'
-import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native'
+import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator } from 'react-native'
 import { useColorScheme } from 'react-native'
 import colors from '@/shared/theme/colors'
 import { useRouter } from 'expo-router'
@@ -17,6 +17,8 @@ export default function ManageWallets() {
   const wallets = useStore(state => state.wallets)
   const activeWalletId = useStore(state => state.activeWalletId)
   const setActiveWalletId = useStore(state => state.setActiveWalletId)
+  const loadingWallet = useStore(state => state.loadingWalletState)
+  const setLoadingWallets = useStore(state => state.setLoadingWalletState)
 
   function handleCreateWallet() {
     router.push('/wallet/create')
@@ -28,12 +30,16 @@ export default function ManageWallets() {
 
   function handleSelectWallet(walletId: string) {
     try {
+      setLoadingWallets(true)
       setActiveWalletId(walletId) // Assuming selectWalletId is a synchronous function
     } catch (error) {
       console.error('Error selecting wallet:', error)
       // Handle error if needed - you could add error state if required
     } finally {
       router.dismiss()
+      setTimeout(() => {
+        setLoadingWallets(false)
+      }, 0)
     }
   }
 
@@ -41,95 +47,77 @@ export default function ManageWallets() {
     <ScrollView style={styles.container}>
       <View style={[styles.contentWrapper, isDark && styles.contentWrapperDark]}>
         <View style={styles.walletList}>
-          {
-            /* loadingWallets ? (
+          {wallets === undefined ? (
             <View style={[styles.walletBox, isDark && styles.walletBoxDark]}>
               <View style={styles.emptyWalletBox}>
-                <Text style={[styles.subText, isDark && styles.subTextDark]}>
-                  Loading wallets...
-                </Text>
+                <Text style={[styles.subText, isDark && styles.subTextDark]}>No wallets </Text>
               </View>
             </View>
-          ) :  */ wallets === undefined ? (
-              <View style={[styles.walletBox, isDark && styles.walletBoxDark]}>
-                <View style={styles.emptyWalletBox}>
-                  <Text style={[styles.subText, isDark && styles.subTextDark]}>No wallets </Text>
-                </View>
-              </View>
-            ) : wallets.length > 0 ? (
-              wallets.map((wallet, index) => {
-                const isSelected =
-                  wallet.walletId === activeWalletId /* && loadingWalletId === null */
-                const first = index === 0
-                const last = index === wallets.length - 1
+          ) : wallets.length > 0 ? (
+            wallets.map((wallet, index) => {
+              const isSelected =
+                wallet.walletId === activeWalletId /* && loadingWalletId === null */
+              const first = index === 0
+              const last = index === wallets.length - 1
 
-                return (
-                  <Fragment key={index}>
-                    <Pressable
-                      key={wallet.walletId}
-                      style={[
-                        styles.walletBox,
-                        first && styles.walletBoxFirst,
-                        last && styles.walletBoxLast,
-                        isDark && styles.walletBoxDark,
-                        // loadingWallets && styles.walletBoxLoading,
-                        // isSelected && styles.selectedWalletBox,
-                        // isDark && isSelected && styles.selectedWalletBoxDark,
-                        // wallet.walletId === loadingWalletId && styles.walletBoxLoading,
-                      ]}
-                      onPress={() => handleSelectWallet(wallet.walletId)}
-                      // disabled={loadingWalletId !== null} // Disable all selections during loading
-                    >
-                      <View style={{ flex: 1 }}>
-                        <View style={styles.walletHeader}>
-                          {
-                            /* wallet.walletId === loadingWalletId ? (
-                            <ActivityIndicator size={20} color={colors.primary} />
-                          ) :  */ <View style={styles.radioContainer}>
-                              <View
-                                style={[
-                                  styles.radioOuter,
-                                  isDark && styles.radioOuterDark,
-                                  isSelected && styles.radioOuterSelected,
-                                ]}
-                              >
-                                {isSelected && <View style={styles.radioInner} />}
-                              </View>
+              return (
+                <Fragment key={index}>
+                  <Pressable
+                    key={wallet.walletId}
+                    style={[
+                      styles.walletBox,
+                      first && styles.walletBoxFirst,
+                      last && styles.walletBoxLast,
+                      isDark && styles.walletBoxDark,
+                    ]}
+                    onPress={() => handleSelectWallet(wallet.walletId)}
+                    // disabled={loadingWalletId !== null} // Disable all selections during loading
+                  >
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.walletHeader}>
+                        {loadingWallet ? (
+                          <ActivityIndicator size={20} color={colors.primary} />
+                        ) : (
+                          <View style={styles.radioContainer}>
+                            <View
+                              style={[
+                                styles.radioOuter,
+                                isDark && styles.radioOuterDark,
+                                isSelected && styles.radioOuterSelected,
+                              ]}
+                            >
+                              {isSelected && <View style={styles.radioInner} />}
                             </View>
-                          }
-                          <Text
-                            style={[
-                              styles.walletName,
-                              isDark && styles.walletNameDark,
-                              isSelected && styles.walletNameSelected,
-                            ]}
-                          >
-                            {wallet.walletName}
-                          </Text>
-                        </View>
+                          </View>
+                        )}
+                        <Text
+                          style={[
+                            styles.walletName,
+                            isDark && styles.walletNameDark,
+                            isSelected && styles.walletNameSelected,
+                          ]}
+                        >
+                          {wallet.walletName}
+                        </Text>
                       </View>
-                    </Pressable>
-                    {!last ? (
-                      <Divider
-                        orientation="horizontal"
-                        color={
-                          isDark ? alpha(colors.background.light, 0.1) : colors.background.light
-                        }
-                      />
-                    ) : null}
-                  </Fragment>
-                )
-              })
-            ) : (
-              <View style={[styles.walletBox, isDark && styles.walletBoxDark]}>
-                <View style={styles.emptyWalletBox}>
-                  <Text style={[styles.subText, isDark && styles.subTextDark]}>
-                    No wallets found
-                  </Text>
-                </View>
+                    </View>
+                  </Pressable>
+                  {!last ? (
+                    <Divider
+                      orientation="horizontal"
+                      color={isDark ? alpha(colors.background.light, 0.1) : colors.background.light}
+                    />
+                  ) : null}
+                </Fragment>
+              )
+            })
+          ) : (
+            <View style={[styles.walletBox, isDark && styles.walletBoxDark]}>
+              <View style={styles.emptyWalletBox}>
+                <Text style={[styles.subText, isDark && styles.subTextDark]}>No wallets found</Text>
               </View>
-            )
-          }
+            </View>
+          )}
         </View>
         <Divider
           orientation="horizontal"

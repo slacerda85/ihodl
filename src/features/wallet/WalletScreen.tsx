@@ -19,8 +19,6 @@ import ScreenContainer from '@/shared/ui/ScreenContainer'
 
 export default function WalletScreen() {
   const router = useRouter()
-  const headerHeight = useHeaderHeight()
-  const tabBarHeight = useBottomTabBarHeight()
   // theme
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
@@ -44,14 +42,15 @@ export default function WalletScreen() {
   }
 
   const activeWalletId = useStore(state => state.activeWalletId)
+  const loadingWallet = useStore(state => state.loadingWalletState)
   const fetchTransactions = useStore(state => state.fetchTransactions)
   const wallets = useStore(state => state.wallets)
 
   useEffect(() => {
-    if (activeWalletId) {
+    if (activeWalletId !== undefined && !loadingWallet) {
       fetchTransactions(activeWalletId)
     }
-  }, [activeWalletId, fetchTransactions])
+  }, [activeWalletId, fetchTransactions, loadingWallet])
 
   if (wallets === undefined || wallets?.length === 0) {
     // create link to wallet/manage

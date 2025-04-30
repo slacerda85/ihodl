@@ -7,6 +7,7 @@ export type WalletState = {
   wallets: WalletData[]
   activeWalletId: string | undefined
   unit: 'BTC' | 'Sats'
+  loadingWalletState: boolean
 }
 
 type WalletActions = {
@@ -16,6 +17,7 @@ type WalletActions = {
   clearWallets: () => void
   setActiveWalletId: (walletId: string) => void
   setUnit: (unit: 'BTC' | 'Sats') => void
+  setLoadingWalletState: (loading: boolean) => void
 }
 
 export type WalletSlice = WalletState & WalletActions
@@ -30,6 +32,11 @@ const createWalletSlice: StateCreator<
   wallets: [],
   activeWalletId: undefined,
   unit: 'BTC',
+  loadingWalletState: false,
+  setLoadingWalletState: loading => {
+    set(() => ({ loadingWalletState: loading }))
+  },
+  // actions
   createWallet: ({
     accounts,
     cold,

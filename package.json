@@ -17,9 +17,9 @@
     "@expo/metro-runtime": "~4.0.1",
     "@expo/vector-icons": "^14.0.2",
     "@noble/hashes": "^1.7.1",
-    "@react-navigation/bottom-tabs": "^7.3.10",
+    "@react-navigation/bottom-tabs": "^7.2.0",
     "@react-navigation/elements": "^2.3.8",
-    "@react-navigation/native": "^7.1.6",
+    "@react-navigation/native": "^7.0.14",
     "axios": "^1.8.4",
     "bech32": "^2.0.0",
     "bip39": "^3.1.0",
@@ -48,6 +48,7 @@
     "react-native": "0.76.9",
     "react-native-keyboard-accessory": "^0.1.16",
     "react-native-mmkv": "^3.2.0",
+    "react-native-quick-crypto": "^0.7.13",
     "react-native-safe-area-context": "4.12.0",
     "react-native-screens": "~4.4.0",
     "react-native-svg": "15.8.0",
@@ -82,7 +83,17 @@
     "doctor": {
       "reactNativeDirectoryCheck": {
         "exclude": [
-          "@noble/hashes", "bech32", "bip39", "bitcoinjs-lib", "bs58", "bs58check", "buffer", "eslint-config-expo", "secp256k1", "swr", "tls"
+          "@noble/hashes",
+          "bech32",
+          "bip39",
+          "bitcoinjs-lib",
+          "bs58",
+          "bs58check",
+          "buffer",
+          "eslint-config-expo",
+          "secp256k1",
+          "swr",
+          "tls"
         ]
       }
     }

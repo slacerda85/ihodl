@@ -8,7 +8,7 @@ const FETCH_INTERVAL = 1000 * 60 * 1
 
 type TransactionsState = {
   transactions: Transaction[]
-  loading: boolean
+  loadingTxState: boolean
 }
 
 type Transaction = {
@@ -19,7 +19,7 @@ type Transaction = {
 }
 
 type TransactionsActions = {
-  setLoading: (loading: boolean) => void
+  setLoadingTransactions: (loading: boolean) => void
   fetchTransactions: (walletId: string) => Promise<void>
 }
 
@@ -32,12 +32,12 @@ const createTxSlice: StateCreator<
   TransactionsSlice
 > = (set, get) => ({
   transactions: [],
-  loading: false,
-  setLoading: loading => {
-    set(() => ({ loading }))
+  loadingTxState: false,
+  setLoadingTransactions: loadingTx => {
+    set(() => ({ loadingTxState: loadingTx }))
   },
   fetchTransactions: async walletId => {
-    set(() => ({ loading: true }))
+    set(() => ({ loadingTxState: true }))
     try {
       // check if last fetch was less then 10 minutes from lastUpdated, using fetch interval
       const transactions = get().transactions
@@ -75,7 +75,7 @@ const createTxSlice: StateCreator<
     } catch (error) {
       console.error('Error fetching transactions:', error)
     } finally {
-      set(() => ({ loading: false }))
+      set(() => ({ loadingTxState: false }))
     }
   },
 })

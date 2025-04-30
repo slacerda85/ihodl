@@ -6,19 +6,15 @@ import { sha512 } from '@noble/hashes/sha512'
 import { sha256 as nobleSha256 } from '@noble/hashes/sha256'
 import { ripemd160 } from '@noble/hashes/ripemd160'
 import { randomUUID as expoRandomUUID } from 'expo-crypto'
+import QuickCrypto from 'react-native-quick-crypto'
 
 // hash functions
 function createEntropy(size: number): Uint8Array {
   return Crypto.getRandomValues(new Uint8Array(size))
 }
 function hmacSeed(seed: Uint8Array): Uint8Array {
-  // cant use Buffer
   const extendedSeed = hmac.create(sha512, 'Bitcoin seed').update(seed).digest()
-
   return extendedSeed
-
-  // const key = Buffer.from(new TextEncoder().encode("Bitcoin seed"));
-  // return createHmac("sha512", key).update(Buffer.from(seed)).digest();
 }
 
 function arrayToHex(array: Uint8Array): string {
@@ -111,6 +107,76 @@ function randomUUID() {
   return expoRandomUUID()
 }
 
+function encryptSeedPhrase(password: string, seedPhrase: string): string {
+  try {
+    const algorithm = 'aes-256-gcm'
+
+    // Generate a random 16-byte salt for key derivation
+    const salt = QuickCrypto.randomBytes(16)
+
+    // Derive a 32-byte key from the password using PBKDF2
+    const key = QuickCrypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256')
+
+    // Generate a random 12-byte nonce (IV)
+    const nonce = QuickCrypto.randomBytes(12)
+
+    // Create the cipher with AES-256-GCM
+    const cipher = QuickCrypto.createCipheriv(algorithm, key, nonce)
+
+    // Encrypt the seed phrase
+    let encrypted = cipher.update(seedPhrase, 'utf8')
+    encrypted = Buffer.concat([encrypted, cipher.final()])
+
+    // Get the authentication tag (16 bytes)
+    const authTag = cipher.getAuthTag()
+
+    // Combine salt, nonce, encrypted data, and authTag into a single string
+    return (
+      salt.toString('hex') +
+      ':' +
+      nonce.toString('hex') +
+      ':' +
+      encrypted.toString('hex') +
+      ':' +
+      authTag.toString('hex')
+    )
+  } catch (error) {
+    console.error('Error encrypting seed phrase:', error)
+    throw new Error('Encryption failed')
+  }
+}
+
+function decryptSeedPhrase(password: string, encryptedSeedPhrase: string): string {
+  try {
+    const algorithm = 'aes-256-gcm'
+
+    // Split the input string into salt, nonce, encrypted data, and authTag
+    const [saltHex, nonceHex, encryptedHex, authTagHex] = encryptedSeedPhrase.split(':')
+    const salt = Buffer.from(saltHex, 'hex')
+    const nonce = Buffer.from(nonceHex, 'hex')
+    const encrypted = Buffer.from(encryptedHex, 'hex')
+    const authTag = Buffer.from(authTagHex, 'hex')
+
+    // Derive the same 32-byte key from the password and salt
+    const key = QuickCrypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256')
+
+    // Create the decipher with AES-256-GCM
+    const decipher = QuickCrypto.createDecipheriv(algorithm, key, nonce)
+
+    // Set the authentication tag for verification
+    decipher.setAuthTag(authTag)
+
+    // Decrypt the data
+    let decrypted = decipher.update(encrypted)
+    decrypted = Buffer.concat([decrypted, decipher.final()])
+
+    return decrypted.toString('utf8')
+  } catch (error) {
+    console.error('Error decrypting seed phrase:', error)
+    throw new Error('Decryption failed')
+  }
+}
+
 export {
   createEntropy,
   hmacSeed,
@@ -127,4 +193,6 @@ export {
   hexToUint8Array,
   uint8ArrayToHex,
   randomUUID,
+  encryptSeedPhrase,
+  decryptSeedPhrase,
 }
