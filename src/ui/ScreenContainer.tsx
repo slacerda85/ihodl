@@ -10,14 +10,11 @@ export default function ScreenContainer({ children }: { children: React.ReactNod
 
   return (
     <View
-      style={[
-        styles.root,
-        isDark && styles.rootDark,
-        {
-          paddingTop: headerHeight,
-          paddingBottom: tabBarHeight,
-        },
-      ]}
+      style={{
+        ...styles.root,
+        paddingTop: headerHeight + 16,
+        paddingBottom: tabBarHeight + 16,
+      }}
     >
       {children}
     </View>
@@ -27,8 +24,8 @@ export default function ScreenContainer({ children }: { children: React.ReactNod
 const styles = StyleSheet.create({
   root: {
     backgroundColor: 'transparent',
+    paddingHorizontal: 16,
     flex: 1,
-    padding: 16,
     gap: 32,
   },
   rootDark: {

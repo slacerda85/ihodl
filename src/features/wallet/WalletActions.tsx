@@ -1,27 +1,51 @@
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { Link } from 'expo-router'
-import { ScrollView, StyleSheet, Text, useColorScheme } from 'react-native'
+import { StyleSheet, Text, useColorScheme, View } from 'react-native'
 
 export default function WalletActions() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
   return (
-    <ScrollView style={styles.container}>
-      <Link
-        href="/wallet/delete"
-        style={[styles.button, styles.buttonFirst, styles.buttonLast, isDark && styles.buttonDark]}
-      >
-        <Text style={styles.text}>Delete wallet</Text>
-      </Link>
-    </ScrollView>
+    <View style={styles.container}>
+      {/* Seed phrase */}
+      <View>
+        <Link
+          href="/wallet/seed"
+          style={[
+            styles.button,
+            styles.buttonFirst,
+            styles.buttonLast,
+            isDark && styles.buttonDark,
+          ]}
+        >
+          <Text style={[styles.text, isDark && styles.textDark]}>View seed phrase</Text>
+        </Link>
+      </View>
+      {/* delete */}
+      <View>
+        <Link
+          href="/wallet/delete"
+          style={[
+            styles.button,
+            styles.buttonFirst,
+            styles.buttonLast,
+            isDark && styles.buttonDark,
+          ]}
+        >
+          <Text style={[styles.text, styles.errorText]}>Delete wallet</Text>
+        </Link>
+      </View>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
   container: {
-    padding: 24,
+    padding: 16,
+    flexDirection: 'column',
+    gap: 16,
   },
   button: {
     backgroundColor: colors.white,
@@ -53,12 +77,14 @@ const styles = StyleSheet.create({
     backgroundColor: alpha(colors.white, 0.2),
   },
   text: {
-    color: colors.error,
     fontSize: 16,
     textAlign: 'center',
   },
+  errorText: {
+    color: colors.error,
+  },
   textDark: {
-    color: '#fff',
+    color: colors.text.dark,
   },
   walletBox: {
     backgroundColor: colors.white,

@@ -82,6 +82,7 @@ export default function WalletAccounts() {
         contentContainerStyle={styles.flatList}
         style={styles.accountsList}
         showsVerticalScrollIndicator={false}
+        scrollEnabled={false}
       />
     </View>
   )

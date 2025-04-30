@@ -158,6 +158,20 @@ export default function WalletLayout() {
         }}
       />
       <Stack.Screen
+        name="seed"
+        options={{
+          ...modalOptions,
+
+          presentation: Platform.select({
+            ios: 'modal',
+            default: 'transparentModal',
+          }),
+          animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
+          title: 'Wallet seed',
+          headerRight: Platform.OS === 'ios' ? () => <CloseModalButton title="Done" /> : undefined,
+        }}
+      />
+      <Stack.Screen
         name="delete"
         options={{
           ...modalOptions,
