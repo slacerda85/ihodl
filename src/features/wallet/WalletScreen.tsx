@@ -1,8 +1,8 @@
 // React and React Native
 import { Link, useRouter } from 'expo-router'
 import { StyleSheet, Text, Pressable, useColorScheme, View } from 'react-native'
-import colors from '@/shared/theme/colors'
-import { alpha } from '@/shared/theme/utils'
+import colors from '@/ui/colors'
+import { alpha } from '@/ui/utils'
 import useStore from '../store'
 
 // Components
@@ -11,10 +11,10 @@ import { useEffect } from 'react'
 import WalletAccounts from './WalletAccounts'
 import { useHeaderHeight } from '@react-navigation/elements'
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
-import Divider from '@/shared/ui/Divider'
+import Divider from '@/ui/Divider'
 import CreateWalletIcon from './CreateWalletIcon'
 import ImportWalletIcon from './ImportWalletIcon'
-import ScreenContainer from '@/shared/ui/ScreenContainer'
+import ScreenContainer from '@/ui/ScreenContainer'
 // import useStore from '../store'
 
 export default function WalletScreen() {

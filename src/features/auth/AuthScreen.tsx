@@ -3,8 +3,8 @@ import { Modal } from 'react-native'
 import React, { useState, useRef } from 'react'
 import { Text, View, StyleSheet, useColorScheme, Pressable, Animated } from 'react-native'
 import { Ionicons } from '@expo/vector-icons' // Assuming you have react-native-vector-icons installed
-import BitcoinLogo from '@/shared/assets/bitcoin-logo'
-import colors from '@/shared/theme/colors'
+import BitcoinLogo from '@/assets/bitcoin-logo'
+import colors from '@/ui/colors'
 
 export default function AuthScreen() {
   const { auth, authenticated } = useAuth()

@@ -10,9 +10,9 @@ import {
   useColorScheme,
   ActivityIndicator,
 } from 'react-native'
-import colors from '@/shared/theme/colors'
-import { alpha } from '@/shared/theme/utils'
-import { IconSymbol } from '@/shared/ui/icon-symbol'
+import colors from '@/ui/colors'
+import { alpha } from '@/ui/utils'
+import { IconSymbol } from '@/ui/icon-symbol'
 import { useRouter } from 'expo-router'
 import useStore from '../store'
 

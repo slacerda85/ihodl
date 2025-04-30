@@ -1,5 +1,5 @@
 import AntDesign from '@expo/vector-icons/AntDesign'
-import colors from '@/shared/theme/colors'
+import colors from '@/ui/colors'
 
 export default function SwapIcon({
   color = colors.primary,

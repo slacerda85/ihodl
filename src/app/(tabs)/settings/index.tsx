@@ -1,4 +1,4 @@
-import colors from '@/shared/theme/colors'
+import colors from '@/ui/colors'
 import { View, Text, StyleSheet, useColorScheme } from 'react-native'
 
 export default function SettingsRoute() {

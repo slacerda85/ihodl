@@ -1,6 +1,6 @@
 import { Link, Stack, useRouter } from 'expo-router'
 import { useColorScheme, StyleSheet, Text, Pressable, Platform } from 'react-native'
-import colors from '@/shared/theme/colors'
+import colors from '@/ui/colors'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { useCallback, useEffect } from 'react'

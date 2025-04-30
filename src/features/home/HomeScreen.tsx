@@ -1,7 +1,7 @@
-import BitcoinLogo from '@/shared/assets/bitcoin-logo'
+import BitcoinLogo from '@/assets/bitcoin-logo'
 import { useEffect } from 'react'
 import { StyleSheet, Text, View, useColorScheme } from 'react-native'
-import colors from '@/shared/theme/colors'
+import colors from '@/ui/colors'
 import { router, useSegments } from 'expo-router'
 import { useAuth } from '../auth/AuthProvider'
 

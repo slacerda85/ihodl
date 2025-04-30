@@ -1,10 +1,10 @@
-import colors from '@/shared/theme/colors'
+import colors from '@/ui/colors'
 import { Pressable, StyleSheet, Text, useColorScheme, View, ActivityIndicator } from 'react-native'
 
 import { useCallback, useState } from 'react'
 import { useRouter } from 'expo-router'
 // import { deleteWallet } from '@/lib/wallet'
-import { alpha } from '@/shared/theme/utils'
+import { alpha } from '@/ui/utils'
 import useStore from '../store'
 
 export default function DeleteWallet() {

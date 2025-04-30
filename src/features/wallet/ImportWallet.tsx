@@ -9,8 +9,8 @@ import {
   useColorScheme,
   FlatList,
 } from 'react-native'
-import colors from '@/shared/theme/colors'
-import { alpha } from '@/shared/theme/utils'
+import colors from '@/ui/colors'
+import { alpha } from '@/ui/utils'
 import { useRouter } from 'expo-router'
 import wordlist from 'bip39/src/wordlists/english.json'
 // import { randomUUID } from '@/lib/crypto'

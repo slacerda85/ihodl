@@ -1,4 +1,4 @@
-// import { IconSymbol } from '@/shared/ui/icon-symbol'
+// import { IconSymbol } from '@/ui/icon-symbol'
 import Ionicons from '@expo/vector-icons/Ionicons'
 
 export default function CreateWalletIcon({

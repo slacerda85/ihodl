@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, useColorScheme, Pressable, ActivityIndicator } from 'react-native'
-import colors from '@/shared/theme/colors'
+import colors from '@/ui/colors'
 import SwapIcon from './SwapIcon'
 import useStore from '../store'
 import { formatBalance } from './utils'

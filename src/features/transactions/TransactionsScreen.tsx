@@ -1,15 +1,15 @@
 import { Tx, TxHistory, UTXO, Vin, Vout } from '@/models/transaction'
 import { Text, View, Pressable, FlatList, StyleSheet, Image, useColorScheme } from 'react-native'
 import useStore from '../store'
-import colors from '@/shared/theme/colors'
+import colors from '@/ui/colors'
 import { truncateAddress } from './utils'
-import BitcoinLogo from '@/shared/assets/bitcoin-logo'
-import { ReactNode } from 'react'
+import BitcoinLogo from '@/assets/bitcoin-logo'
+// import { ReactNode } from 'react'
 import { formatBalance } from '../wallet/utils'
-import { alpha } from '@/shared/theme/utils'
+import { alpha } from '@/ui/utils'
 import { useHeaderHeight } from '@react-navigation/elements'
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
-import ScreenContainer from '@/shared/ui/ScreenContainer'
+/* import ScreenContainer from '@/ui/ScreenContainer'
 
 const purposeToLabel: Record<number, string> = {
   44: 'Legacy',
@@ -22,14 +22,9 @@ const purposeToIcon: Record<number, ReactNode> = {
   44: <BitcoinLogo width={32} height={32} />,
   49: <BitcoinLogo width={32} height={32} />,
   84: <BitcoinLogo width={32} height={32} />,
-  86: (
-    <Image
-      source={require('@/shared/assets/lightning-logo.png')}
-      style={{ width: 32, height: 32 }}
-    />
-  ),
+  86: <Image source={require('@/assets/lightning-logo.png')} style={{ width: 32, height: 32 }} />,
   // Add more purposes as needed
-}
+} */
 
 // Define types for our transaction list items
 type DateHeader = {
@@ -64,7 +59,9 @@ export default function TransactionsScreen() {
   const transactions = useStore(state => state.transactions)
   const txHistory = transactions.find(item => item.walletId === activeWalletId)?.txHistory || []
 
-  const loading = useStore(state => state.loading)
+  const loadingWallet = useStore(state => state.loadingWalletState)
+  const loadingTx = useStore(state => state.loadingTxState)
+  const loading = loadingWallet || loadingTx
   const unit = useStore(state => state.unit)
   if (loading) {
     return (

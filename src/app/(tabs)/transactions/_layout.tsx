@@ -1,7 +1,7 @@
 import { Link, Stack } from 'expo-router'
 import MaterialIcons from '@expo/vector-icons/MaterialIcons'
 import { useColorScheme } from 'react-native'
-import colors from '@/shared/theme/colors'
+import colors from '@/ui/colors'
 
 export default function TransactionsLayout() {
   const colorScheme = useColorScheme()

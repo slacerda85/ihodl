@@ -1,5 +1,5 @@
-import colors from '@/shared/theme/colors'
-import { alpha } from '@/shared/theme/utils'
+import colors from '@/ui/colors'
+import { alpha } from '@/ui/utils'
 import { Link } from 'expo-router'
 import { ScrollView, StyleSheet, Text, useColorScheme } from 'react-native'
 

@@ -9,10 +9,10 @@ import {
   Pressable,
 } from 'react-native'
 import { Account, CoinType } from '@/models/account'
-import BitcoinLogo from '@/shared/assets/bitcoin-logo'
+import BitcoinLogo from '@/assets/bitcoin-logo'
 import { ReactNode } from 'react'
-import { alpha } from '@/shared/theme/utils'
-import colors from '@/shared/theme/colors'
+import { alpha } from '@/ui/utils'
+import colors from '@/ui/colors'
 import useStore from '../store'
 import { Link, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -29,12 +29,7 @@ const purposeToIcon: Record<number, ReactNode> = {
   44: <BitcoinLogo width={32} height={32} />,
   49: <BitcoinLogo width={32} height={32} />,
   84: <BitcoinLogo width={32} height={32} />,
-  86: (
-    <Image
-      source={require('@/shared/assets/lightning-logo.png')}
-      style={{ width: 32, height: 32 }}
-    />
-  ),
+  86: <Image source={require('@/assets/lightning-logo.png')} style={{ width: 32, height: 32 }} />,
   // Add more purposes as needed
 }
 

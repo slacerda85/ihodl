@@ -1,4 +1,4 @@
-import colors from '@/shared/theme/colors'
+import colors from '@/ui/colors'
 import { Stack } from 'expo-router'
 import { useColorScheme, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native'

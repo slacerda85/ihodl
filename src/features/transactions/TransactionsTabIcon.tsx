@@ -1,4 +1,4 @@
-// import { IconSymbol } from '@/shared/ui/icon-symbol'
+// import { IconSymbol } from '@/ui/icon-symbol'
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons'
 
 export default function TransactionsTabIcon({

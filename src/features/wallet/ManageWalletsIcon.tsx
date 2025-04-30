@@ -1,8 +1,8 @@
-// import { IconSymbol } from '@/shared/ui/icon-symbol'
+// import { IconSymbol } from '@/ui/icon-symbol'
 import Ionicons from '@expo/vector-icons/Ionicons'
 import Entypo from '@expo/vector-icons/Entypo'
 import { useColorScheme, View } from 'react-native'
-import colors from '@/shared/theme/colors'
+import colors from '@/ui/colors'
 
 export default function ManageWalletsIcon({
   size = 24,
