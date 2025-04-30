@@ -1,5 +1,5 @@
 import { Link, Stack, useRouter } from 'expo-router'
-import { useColorScheme, StyleSheet, Text, Pressable, Platform } from 'react-native'
+import { useColorScheme, Text, Pressable, Platform } from 'react-native'
 import colors from '@/ui/colors'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@/features/auth/AuthProvider'
@@ -173,15 +173,3 @@ export default function WalletLayout() {
     </Stack>
   )
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  lightContainer: {
-    backgroundColor: colors.background.light,
-  },
-  darkContainer: {
-    backgroundColor: colors.background.dark,
-  },
-})

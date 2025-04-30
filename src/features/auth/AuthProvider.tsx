@@ -1,5 +1,5 @@
 import { createContext, useState, useContext, useRef, useEffect, useCallback } from 'react'
-import { AppState, AppStateStatus, Modal } from 'react-native' /* 
+import { AppState, AppStateStatus } from 'react-native' /* 
 import { Href, useSegments } from 'expo-router' */
 import { checkHardware, checkPermissions, authenticate } from './utils'
 

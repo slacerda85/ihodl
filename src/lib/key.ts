@@ -206,6 +206,7 @@ function getParentFingerprint(publicKey: Uint8Array): number {
  * @throws Will throw an error if the extended key is invalid.
  * @returns An object containing the derived account information.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function deriveAccount(
   extendedKey: Uint8Array,
   purpose: Purpose = 84,

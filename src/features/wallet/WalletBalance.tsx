@@ -8,7 +8,7 @@ export default function WalletBalance() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const loading = useStore(state => state.loading)
+  const loading = useStore(state => state.loadingTxState)
   const unit = useStore(state => state.unit)
   const setUnit = useStore(state => state.setUnit)
   const activeWalletId = useStore(state => state.activeWalletId)

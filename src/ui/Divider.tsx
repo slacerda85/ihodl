@@ -1,6 +1,6 @@
 // react native divider component
 import { View } from 'react-native'
-import colors from '../shared/theme/colors'
+import colors from '@/ui/colors'
 
 interface DividerProps {
   orientation?: 'horizontal' | 'vertical'

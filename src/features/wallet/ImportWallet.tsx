@@ -15,7 +15,6 @@ import { useRouter } from 'expo-router'
 import wordlist from 'bip39/src/wordlists/english.json'
 // import { randomUUID } from '@/lib/crypto'
 import useStore from '../store'
-import { WalletData } from '@/models/wallet'
 
 export default function ImportWallet() {
   const router = useRouter()

@@ -124,9 +124,4 @@ function toScriptHash(address: string): string {
     .join('')
 }
 
-export {
-  createSegwitAddress,
-  fromBech32,
-  toScriptHash,
-  /* fromBech32, toBech32, toBase58check, fromBase58check */
-}
+export { createSegwitAddress, fromBech32, toScriptHash, toBech32, toBase58check, fromBase58check }

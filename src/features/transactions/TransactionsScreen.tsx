@@ -1,5 +1,5 @@
-import { Tx, TxHistory, UTXO, Vin, Vout } from '@/models/transaction'
-import { Text, View, Pressable, FlatList, StyleSheet, Image, useColorScheme } from 'react-native'
+import { Tx } from '@/models/transaction'
+import { Text, View, Pressable, FlatList, StyleSheet, useColorScheme } from 'react-native'
 import useStore from '../store'
 import colors from '@/ui/colors'
 import { truncateAddress } from './utils'

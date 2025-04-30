@@ -189,7 +189,12 @@ export function validateMnemonic(mnemonic: string, wordlist?: string[]): boolean
   try {
     mnemonicToEntropy(mnemonic, wordlist)
   } catch (e) {
-    return false
+    if (e instanceof TypeError) {
+      return false
+    }
+    if (e instanceof Error) {
+      return false
+    }
   }
 
   return true
