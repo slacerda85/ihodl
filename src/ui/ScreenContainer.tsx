@@ -1,15 +1,13 @@
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
 import { useHeaderHeight } from '@react-navigation/elements'
-import { StyleSheet, useColorScheme, View } from 'react-native'
+import { SafeAreaView, StyleSheet, View } from 'react-native'
 
 export default function ScreenContainer({ children }: { children: React.ReactNode }) {
   const headerHeight = useHeaderHeight()
   const tabBarHeight = useBottomTabBarHeight()
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === 'dark'
 
   return (
-    <View
+    <SafeAreaView
       style={{
         ...styles.root,
         paddingTop: headerHeight + 16,
@@ -17,7 +15,7 @@ export default function ScreenContainer({ children }: { children: React.ReactNod
       }}
     >
       {children}
-    </View>
+    </SafeAreaView>
   )
 }
 

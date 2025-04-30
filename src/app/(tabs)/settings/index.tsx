@@ -1,23 +1,19 @@
 import colors from '@/ui/colors'
-import { View, Text, StyleSheet, useColorScheme } from 'react-native'
+import ScreenContainer from '@/ui/ScreenContainer'
+import { Text, StyleSheet, useColorScheme } from 'react-native'
 
 export default function SettingsRoute() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
   return (
-    <View style={styles.container}>
+    <ScreenContainer>
       <Text style={[styles.title, isDark && styles.titleDark]}>Settings</Text>
-    </View>
+    </ScreenContainer>
   )
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   title: {
     fontSize: 48,
     fontWeight: 'bold',

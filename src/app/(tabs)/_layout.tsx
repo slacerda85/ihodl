@@ -1,4 +1,4 @@
-import SettingsTabIcon from '@/features/settings/settings-tab-icon'
+import SettingsTabIcon from '@/features/settings/SettingsTabIcon'
 import TransactionsTabIcon from '@/features/transactions/TransactionsTabIcon'
 import WalletTabIcon from '@/features/wallet/WalletTabIcon'
 import colors from '@/ui/colors'
@@ -64,7 +64,7 @@ export default function TabsLayout() {
         name="settings"
         options={{
           tabBarShowLabel: true,
-          tabBarIcon: ({ color, focused }) => <SettingsTabIcon color={color} />,
+          tabBarIcon: ({ color, focused }) => <SettingsTabIcon color={color} filled={focused} />,
         }}
       />
     </Tabs>

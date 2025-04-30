@@ -12,6 +12,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   userInterfaceStyle: 'automatic',
   newArchEnabled: true,
   ios: {
+    icon: {
+      dark: './assets/images/icon.png',
+      light: './assets/images/icon.png',
+      tinted: './assets/images/icon-tinted.png',
+    },
     supportsTablet: true,
     infoPlist: {
       NSFaceIDUsageDescription: 'This app uses Face ID to secure your data',
