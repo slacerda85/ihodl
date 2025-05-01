@@ -11,8 +11,7 @@
       "developmentClient": true
     },
     "preview": {      
-      "distribution": "internal",
-      "credentialsSource": "local"      
+      "distribution": "internal"        
     },
     "production": {
       "autoIncrement": true
