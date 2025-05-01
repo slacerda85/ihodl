@@ -10,8 +10,9 @@
       "credentialsSource": "local",
       "developmentClient": true
     },
-    "preview": {
-      "distribution": "internal"
+    "preview": {      
+      "distribution": "internal",
+      "credentialsSource": "local"      
     },
     "production": {
       "autoIncrement": true
