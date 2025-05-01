@@ -152,11 +152,12 @@ function AccountDetails({ account }: { account: Account }) {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    // flex: 1,
+    // backgroundColor: '#ff0000',
     // padding: 16,
   },
   loadingContainer: {
-    flex: 1,
+    // flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -182,7 +183,7 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   accountsList: {
-    flex: 1,
+    // flex: 1,
   },
   accountContainer: {
     backgroundColor: colors.white,

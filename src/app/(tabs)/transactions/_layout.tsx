@@ -19,7 +19,7 @@ export default function TransactionsLayout() {
   return (
     <Stack
       screenOptions={{
-        headerShadowVisible: false,
+        headerShadowVisible: true,
         headerBackButtonDisplayMode: 'minimal',
         headerTintColor: colors.primary,
         headerBlurEffect: isDark ? 'dark' : 'light',

@@ -12,7 +12,7 @@ import WalletAccounts from './WalletAccounts'
 import Divider from '@/ui/Divider'
 import CreateWalletIcon from './CreateWalletIcon'
 import ImportWalletIcon from './ImportWalletIcon'
-import ScreenContainer from '@/ui/ScreenContainer'
+import ScreenContainer from '@/ui/ContentContainer'
 // import useStore from '../store'
 
 export default function WalletScreen() {
@@ -122,25 +122,27 @@ export default function WalletScreen() {
 
   return (
     <ScreenContainer>
-      <WalletBalance />
-      <View style={styles.actionsSection}>
-        <Pressable onPress={handleSend} style={[styles.button, styles.primaryButton]}>
-          <Text style={styles.buttonText}>Send</Text>
-        </Pressable>
+      <View style={{ gap: 32 }}>
+        <WalletBalance />
+        <View style={styles.actionsSection}>
+          <Pressable onPress={handleSend} style={[styles.button, styles.primaryButton]}>
+            <Text style={styles.buttonText}>Send</Text>
+          </Pressable>
 
-        <Pressable
-          onPress={handleReceive}
-          style={[styles.button, isDark ? styles.secondaryButtonDark : styles.secondaryButton]}
-        >
-          <Text style={[styles.buttonTextSecondary, isDark && styles.buttonTextSecondaryDark]}>
-            Receive
-          </Text>
-        </Pressable>
-      </View>
-      <View style={styles.accountsSection}>
-        <Text style={[styles.accountsHeader, isDark && styles.accountsHeaderDark]}>Accounts</Text>
+          <Pressable
+            onPress={handleReceive}
+            style={[styles.button, isDark ? styles.secondaryButtonDark : styles.secondaryButton]}
+          >
+            <Text style={[styles.buttonTextSecondary, isDark && styles.buttonTextSecondaryDark]}>
+              Receive
+            </Text>
+          </Pressable>
+        </View>
+        <View style={styles.accountsSection}>
+          <Text style={[styles.accountsHeader, isDark && styles.accountsHeaderDark]}>Accounts</Text>
 
-        <WalletAccounts />
+          <WalletAccounts />
+        </View>
       </View>
     </ScreenContainer>
   )
@@ -239,7 +241,7 @@ const styles = StyleSheet.create({
     color: colors.text.light,
   },
   accountsSection: {
-    flexGrow: 1,
+    // backgroundColor: 'red',
   },
   accountsHeader: {
     fontSize: 18,

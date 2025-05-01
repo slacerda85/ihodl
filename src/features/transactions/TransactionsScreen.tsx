@@ -9,7 +9,8 @@ import { formatBalance } from '../wallet/utils'
 import { alpha } from '@/ui/utils'
 import { useHeaderHeight } from '@react-navigation/elements'
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
-/* import ScreenContainer from '@/ui/ScreenContainer'
+import Divider from '@/ui/Divider'
+/* import ContentContaine from '@/ui/ContentContaine'
 
 const purposeToLabel: Record<number, string> = {
   44: 'Legacy',
@@ -150,14 +151,26 @@ export default function TransactionsScreen() {
     }
   }
 
-  const renderItem = ({ item }: { item: ListItem }) => {
+  const renderItem = ({ item, index }: { item: ListItem; index: number }) => {
     if (item.isDate) {
       return <Text style={styles.date}>{item.date}</Text>
     } else {
+      // Check if previous item is a date header (making this the first in its group)
+      const isFirstInGroup = index === 0 || data[index - 1].isDate
+
+      // Check if next item is a date header or doesn't exist (making this the last in its group)
+      const isLastInGroup =
+        index === data.length - 1 || (index + 1 < data.length && data[index + 1].isDate)
+
       return (
         <View>
           <Pressable
-            style={[styles.transactionPressable, isDark && styles.transactionsPressableDark]}
+            style={[
+              styles.transactionPressable,
+              isDark && styles.transactionsPressableDark,
+              isFirstInGroup && styles.first,
+              isLastInGroup && styles.last,
+            ]}
             onPress={() => {
               // Handle transaction press (e.g., navigate to details)
             }}
@@ -182,12 +195,12 @@ export default function TransactionsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={{ paddingLeft: 16, paddingRight: 16 }}>
       <FlatList
         contentContainerStyle={{
-          paddingTop: headerHeight,
-          paddingBottom: tabBarHeight,
-          gap: 8,
+          paddingTop: headerHeight + 16,
+          paddingBottom: tabBarHeight + 16,
+          gap: 1,
         }}
         data={data}
         keyExtractor={item => (item.isDate ? item.date : item.tx.txid)}
@@ -215,7 +228,8 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   date: {
-    marginTop: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
     fontSize: 14,
     fontWeight: 'semibold',
     color: colors.textSecondary.light,
@@ -240,7 +254,7 @@ const styles = StyleSheet.create({
   },
   transactionPressable: {
     backgroundColor: colors.white,
-    borderRadius: 16,
+    // borderRadius: 16,
     padding: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -248,6 +262,14 @@ const styles = StyleSheet.create({
   },
   transactionsPressableDark: {
     backgroundColor: alpha(colors.white, 0.05),
+  },
+  first: {
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  last: {
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
   },
   balance: {
     fontSize: 16,

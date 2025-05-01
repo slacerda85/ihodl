@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
     // borderColor: colors.primary,
     // borderRadius: '50%',
     alignItems: 'center',
-    padding: 24,
+    padding: 16,
   },
   iconButton: {
     // backgroundColor: colors.primary,

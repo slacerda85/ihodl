@@ -25,7 +25,7 @@ function SettingsScreens() {
       <Stack.Screen
         name="index"
         options={{
-          headerShown: false,
+          headerShown: true,
           title: 'Settings',
           /* headerStyle: {
             backgroundColor: isDark ? colors.background.dark : colors.background.light,

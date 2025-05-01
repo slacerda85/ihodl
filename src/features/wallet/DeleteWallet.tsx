@@ -59,7 +59,7 @@ export default function DeleteWallet() {
 
 const styles = StyleSheet.create({
   modalContainer: {
-    padding: 24,
+    padding: 16,
   },
   modalTitle: {
     fontSize: 18,
