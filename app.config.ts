@@ -12,6 +12,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   userInterfaceStyle: 'automatic',
   newArchEnabled: true,
   ios: {
+    runtimeVersion: {
+      policy: 'appVersion',
+    },
     icon: {
       dark: './assets/images/icon.png',
       light: './assets/images/icon.png',
@@ -33,6 +36,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
     permissions: ['android.permission.USE_BIOMETRIC', 'android.permission.USE_FINGERPRINT'],
     package: 'app.ihodl.wallet',
+    runtimeVersion: '1.0.0',
     splash: {
       image: './assets/images/splash-icon.png',
       resizeMode: 'contain',
@@ -85,5 +89,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     eas: {
       projectId: 'e8ba22be-1b9a-41d5-aded-20d2c498eb5c',
     },
+  },
+  updates: {
+    url: 'https://u.expo.dev/e8ba22be-1b9a-41d5-aded-20d2c498eb5c',
   },
 })
