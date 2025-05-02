@@ -1,8 +1,6 @@
 import { StateCreator } from 'zustand'
 import { StoreState } from './useStorage'
-
-type ColorMode = 'light' | 'dark'
-
+import { ColorMode } from '@/models/settings'
 type SettingsState = {
   colorMode: ColorMode
 }
