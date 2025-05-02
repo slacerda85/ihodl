@@ -1,6 +1,6 @@
 import { Tx } from '@/models/transaction'
 import { Text, View, Pressable, FlatList, StyleSheet, useColorScheme } from 'react-native'
-import useStorage from '../store'
+import useStorage from '../storage'
 import colors from '@/ui/colors'
 import { truncateAddress } from './utils'
 import BitcoinLogo from '@/assets/bitcoin-logo'

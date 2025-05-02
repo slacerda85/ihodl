@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { useCallback, useEffect } from 'react'
 import ManageWalletsIcon from '@/features/wallet/ManageWalletsIcon'
-import useStorage from '@/features/store'
+import useStorage from '@/features/storage'
 // import useStorage from '@/features/store'
 
 function headerRight() {

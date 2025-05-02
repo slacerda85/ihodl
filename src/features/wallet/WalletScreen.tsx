@@ -3,7 +3,7 @@ import { Link, useRouter } from 'expo-router'
 import { StyleSheet, Text, Pressable, useColorScheme, View } from 'react-native'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
-import useStorage from '../store'
+import useStorage from '../storage'
 
 // Components
 import WalletBalance from './WalletBalance'

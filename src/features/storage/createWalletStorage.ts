@@ -20,13 +20,13 @@ type WalletActions = {
   setLoadingWalletState: (loading: boolean) => void
 }
 
-export type WalletSlice = WalletState & WalletActions
+export type WalletStorage = WalletState & WalletActions
 
-const createWalletSlice: StateCreator<
+const createWalletStorage: StateCreator<
   StoreState,
   [['zustand/persist', unknown]],
   [],
-  WalletSlice
+  WalletStorage
 > = (set, get) => ({
   // state
   wallets: [],
@@ -107,4 +107,4 @@ const createWalletSlice: StateCreator<
   },
 })
 
-export default createWalletSlice
+export default createWalletStorage

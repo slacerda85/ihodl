@@ -14,7 +14,7 @@ import { alpha } from '@/ui/utils'
 import { useRouter } from 'expo-router'
 import wordlist from 'bip39/src/wordlists/english.json'
 // import { randomUUID } from '@/lib/crypto'
-import useStorage from '../store'
+import useStorage from '../storage'
 
 export default function ImportWallet() {
   const router = useRouter()

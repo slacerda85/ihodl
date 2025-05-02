@@ -1,6 +1,6 @@
 import React from 'react'
 import { useColorScheme, View, Text, StyleSheet, ScrollView } from 'react-native'
-import useStorage from '@/features/store'
+import useStorage from '@/features/storage'
 import { alpha } from '@/ui/utils'
 import colors from '@/ui/colors'
 import Divider from '@/ui/Divider'

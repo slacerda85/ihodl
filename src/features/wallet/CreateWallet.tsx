@@ -14,7 +14,7 @@ import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/icon-symbol'
 import { useRouter } from 'expo-router'
-import useStorage from '../store'
+import useStorage from '../storage'
 
 export default function CreateWallet() {
   const colorScheme = useColorScheme()

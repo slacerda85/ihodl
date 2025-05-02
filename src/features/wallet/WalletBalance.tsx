@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, useColorScheme, Pressable, ActivityIndicator } from 'react-native'
 import colors from '@/ui/colors'
 import SwapIcon from './SwapIcon'
-import useStorage from '../store'
+import useStorage from '../storage'
 import { formatBalance } from './utils'
 
 export default function WalletBalance() {

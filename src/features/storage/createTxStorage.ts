@@ -23,14 +23,12 @@ type TransactionsActions = {
   fetchTransactions: (walletId: string) => Promise<void>
 }
 
-export type TransactionsSlice = TransactionsState & TransactionsActions
+export type TxStorage = TransactionsState & TransactionsActions
 
-const createTxSlice: StateCreator<
-  StoreState,
-  [['zustand/persist', unknown]],
-  [],
-  TransactionsSlice
-> = (set, get) => ({
+const createTxStorage: StateCreator<StoreState, [['zustand/persist', unknown]], [], TxStorage> = (
+  set,
+  get,
+) => ({
   transactions: [],
   loadingTxState: false,
   setLoadingTransactions: loadingTx => {
@@ -80,4 +78,4 @@ const createTxSlice: StateCreator<
   },
 })
 
-export default createTxSlice
+export default createTxStorage
