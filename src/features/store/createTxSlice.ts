@@ -2,7 +2,7 @@ import { createRootExtendedKey, fromMnemonic } from '@/lib/key'
 import { getTxHistory } from '@/lib/transactions'
 import { TxHistory } from '@/models/transaction'
 import { StateCreator } from 'zustand'
-import { StoreState } from './useStore'
+import { StoreState } from './useStorage'
 
 const FETCH_INTERVAL = 1000 * 60 * 1
 

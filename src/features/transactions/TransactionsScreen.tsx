@@ -1,6 +1,6 @@
 import { Tx } from '@/models/transaction'
 import { Text, View, Pressable, FlatList, StyleSheet, useColorScheme } from 'react-native'
-import useStore from '../store'
+import useStorage from '../store'
 import colors from '@/ui/colors'
 import { truncateAddress } from './utils'
 import BitcoinLogo from '@/assets/bitcoin-logo'
@@ -56,14 +56,14 @@ export default function TransactionsScreen() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const activeWalletId = useStore(state => state.activeWalletId)
-  const transactions = useStore(state => state.transactions)
+  const activeWalletId = useStorage(state => state.activeWalletId)
+  const transactions = useStorage(state => state.transactions)
   const txHistory = transactions.find(item => item.walletId === activeWalletId)?.txHistory || []
 
-  const loadingWallet = useStore(state => state.loadingWalletState)
-  const loadingTx = useStore(state => state.loadingTxState)
+  const loadingWallet = useStorage(state => state.loadingWalletState)
+  const loadingTx = useStorage(state => state.loadingTxState)
   const loading = loadingWallet || loadingTx
-  const unit = useStore(state => state.unit)
+  const unit = useStorage(state => state.unit)
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -104,7 +104,92 @@ export default function TransactionsScreen() {
     const outputsToExternal = tx.vout.filter(
       vout => !walletAddresses.has(vout.scriptPubKey.address),
     )
+    // Function to determine transaction details
+    function getTxDetails(tx: Tx): TransactionDetails {
+      const inputsFromWallet = tx.vin.filter(vin => {
+        const prevAddress = utxoMap[`${vin.txid}-${vin.vout}`]
+        return prevAddress && walletAddresses.has(prevAddress)
+      })
+      const outputsToWallet = tx.vout.filter(vout => walletAddresses.has(vout.scriptPubKey.address))
+      const outputsToExternal = tx.vout.filter(
+        vout => !walletAddresses.has(vout.scriptPubKey.address),
+      )
 
+      // If no inputs from wallet but has outputs to wallet, it's a received transaction
+      if (inputsFromWallet.length === 0 && outputsToWallet.length > 0) {
+        const amount = outputsToWallet.reduce((sum, vout) => sum + vout.value, 0)
+        return { type: 'Received', amount, address: outputsToWallet[0].scriptPubKey.address }
+      }
+      // Otherwise it's a sent transaction (including self-transfers)
+      else {
+        // Calculate total input amount from wallet
+        const inputAmount = inputsFromWallet.reduce((sum, vin) => {
+          const prevOutput = utxoMap[`${vin.txid}-${vin.vout}`]
+          // Find the output value from the referenced transaction
+          const prevTx = allTxs.find(t => t.txid === vin.txid)
+          if (prevTx) {
+            const prevVout = prevTx.vout.find(v => v.n === vin.vout)
+            if (prevVout) {
+              return sum + prevVout.value
+            }
+          }
+          return sum
+        }, 0)
+
+        // Calculate total output amount back to wallet (change)
+        const changeAmount = outputsToWallet.reduce((sum, vout) => sum + vout.value, 0)
+
+        // Actual sent amount = inputs from wallet - outputs back to wallet
+        const amount = inputAmount - changeAmount
+
+        // If no external outputs, it's a self-transfer
+        if (outputsToExternal.length === 0) {
+          return { type: 'Sent', amount, address: 'self' }
+        } else {
+          // Regular send to external address
+          return {
+            type: 'Sent',
+            amount,
+            address: outputsToExternal[0].scriptPubKey.address,
+          }
+        }
+      }
+    }
+
+    // Group transactions by date using ISO format for reliable sorting
+    const grouped: Record<string, Tx[]> = {}
+    for (const tx of allTxs) {
+      // Use ISO date format for consistent sorting
+      const date = new Date(tx.blocktime * 1000).toISOString().split('T')[0]
+      if (!grouped[date]) {
+        grouped[date] = []
+      }
+      grouped[date].push(tx)
+    }
+
+    // Sort transactions within each date by blocktime (newest first)
+    for (const date in grouped) {
+      grouped[date].sort((a, b) => b.blocktime - a.blocktime)
+    }
+
+    // Prepare data for FlatList with date headers
+    const data: ListItem[] = []
+    // Sort dates newest to oldest using ISO format
+    const sortedDates = Object.keys(grouped).sort((a, b) => a.localeCompare(b))
+
+    for (const date of sortedDates) {
+      // Format the date for display after sorting
+      const displayDate = new Date(date).toLocaleDateString('pt-BR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      })
+      data.push({ isDate: true, date: displayDate })
+      for (const tx of grouped[date]) {
+        const details = getTxDetails(tx)
+        data.push({ isDate: false, tx, ...details })
+      }
+    }
     if (inputsFromWallet.length === 0 && outputsToWallet.length > 0) {
       const amount = outputsToWallet.reduce((sum, vout) => sum + vout.value, 0)
       return { type: 'Received', amount, address: 'external' }
@@ -186,8 +271,12 @@ export default function TransactionsScreen() {
               </View>
             </View>
             <Text
-              style={(styles.balance, isDark && styles.balanceDark)}
-            >{`${formatBalance(item.amount, unit)} ${unit}`}</Text>
+              style={
+                (styles.balance,
+                isDark && styles.balanceDark,
+                item.type === 'Received' ? styles.balancePositive : styles.balanceNegative)
+              }
+            >{`${item.type === 'Received' ? '+' : '-'}${formatBalance(item.amount, unit)} ${unit}`}</Text>
           </Pressable>
         </View>
       )
@@ -205,6 +294,23 @@ export default function TransactionsScreen() {
         data={data}
         keyExtractor={item => (item.isDate ? item.date : item.tx.txid)}
         renderItem={renderItem}
+        ListHeaderComponent={
+          <View
+            style={{
+              paddingBottom: 16,
+            }}
+          >
+            <Text style={{ color: isDark ? colors.text.dark : colors.text.light }}>
+              {`Received: ${data.reduce((acc, item) => {
+                if (item.isDate) return acc
+                return acc + (item.type === 'Received' ? 1 : 0)
+              }, 0)} | Sent: ${data.reduce((acc, item) => {
+                if (item.isDate) return acc
+                return acc + (item.type === 'Sent' ? 1 : 0)
+              }, 0)}`}
+            </Text>
+          </View>
+        }
         ListEmptyComponent={
           <View style={[styles.empty, isDark && styles.emptyDark]}>
             <Text style={[styles.emptyText, isDark && styles.emptyTextDark]}>
@@ -278,6 +384,12 @@ const styles = StyleSheet.create({
   },
   balanceDark: {
     color: colors.text.dark,
+  },
+  balancePositive: {
+    color: colors.success,
+  },
+  balanceNegative: {
+    color: colors.error,
   },
   empty: {
     height: 128,

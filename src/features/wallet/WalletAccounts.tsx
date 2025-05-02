@@ -13,7 +13,7 @@ import BitcoinLogo from '@/assets/bitcoin-logo'
 import { ReactNode } from 'react'
 import { alpha } from '@/ui/utils'
 import colors from '@/ui/colors'
-import useStore from '../store'
+import useStorage from '../store'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { formatBalance } from './utils'
@@ -45,8 +45,8 @@ export default function WalletAccounts() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const wallets = useStore(state => state.wallets)
-  const activeWalletId = useStore(state => state.activeWalletId)
+  const wallets = useStorage(state => state.wallets)
+  const activeWalletId = useStorage(state => state.activeWalletId)
 
   if (!activeWalletId) {
     return (
@@ -93,13 +93,13 @@ function AccountDetails({ account }: { account: Account }) {
   const isDark = colorScheme === 'dark'
   const router = useRouter()
 
-  const loadingWallet = useStore(state => state.loadingWalletState)
-  const loadingTransactions = useStore(state => state.loadingTxState)
+  const loadingWallet = useStorage(state => state.loadingWalletState)
+  const loadingTransactions = useStorage(state => state.loadingTxState)
   const loading = loadingWallet || loadingTransactions
-  const unit = useStore(state => state.unit)
-  const activeWalletId = useStore(state => state.activeWalletId)
+  const unit = useStorage(state => state.unit)
+  const activeWalletId = useStorage(state => state.activeWalletId)
 
-  const balance = useStore(
+  const balance = useStorage(
     state => state.transactions.find(tx => tx.walletId === activeWalletId)?.balance,
   )
 

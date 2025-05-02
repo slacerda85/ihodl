@@ -7,18 +7,18 @@ import { alpha } from '@/ui/utils'
 import Divider from '@/ui/Divider'
 import CreateWalletIcon from './CreateWalletIcon'
 import ImportWalletIcon from './ImportWalletIcon'
-import useStore from '../store'
+import useStorage from '../store'
 // import { setActiveWalletId } from '@/lib/wallet'
 
 export default function ManageWallets() {
   const router = useRouter()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
-  const wallets = useStore(state => state.wallets)
-  const activeWalletId = useStore(state => state.activeWalletId)
-  const setActiveWalletId = useStore(state => state.setActiveWalletId)
-  const loadingWallet = useStore(state => state.loadingWalletState)
-  const setLoadingWallets = useStore(state => state.setLoadingWalletState)
+  const wallets = useStorage(state => state.wallets)
+  const activeWalletId = useStorage(state => state.activeWalletId)
+  const setActiveWalletId = useStorage(state => state.setActiveWalletId)
+  const loadingWallet = useStorage(state => state.loadingWalletState)
+  const setLoadingWallets = useStorage(state => state.setLoadingWalletState)
 
   function handleCreateWallet() {
     router.push('/wallet/create')

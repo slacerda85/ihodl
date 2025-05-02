@@ -14,14 +14,14 @@ import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/icon-symbol'
 import { useRouter } from 'expo-router'
-import useStore from '../store'
+import useStorage from '../store'
 
 export default function CreateWallet() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
   const router = useRouter()
-  const createWallet = useStore(state => state.createWallet)
+  const createWallet = useStorage(state => state.createWallet)
   const [submitting, setSubmitting] = useState<boolean>(false)
 
   const [offline, setOffline] = useState<boolean>(false)

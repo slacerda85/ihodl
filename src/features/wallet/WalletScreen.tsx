@@ -3,7 +3,7 @@ import { Link, useRouter } from 'expo-router'
 import { StyleSheet, Text, Pressable, useColorScheme, View } from 'react-native'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
-import useStore from '../store'
+import useStorage from '../store'
 
 // Components
 import WalletBalance from './WalletBalance'
@@ -13,7 +13,7 @@ import Divider from '@/ui/Divider'
 import CreateWalletIcon from './CreateWalletIcon'
 import ImportWalletIcon from './ImportWalletIcon'
 import ScreenContainer from '@/ui/ContentContainer'
-// import useStore from '../store'
+// import useStorage from '../store'
 
 export default function WalletScreen() {
   const router = useRouter()
@@ -39,10 +39,10 @@ export default function WalletScreen() {
     router.push('/wallet/import')
   }
 
-  const activeWalletId = useStore(state => state.activeWalletId)
-  const loadingWallet = useStore(state => state.loadingWalletState)
-  const fetchTransactions = useStore(state => state.fetchTransactions)
-  const wallets = useStore(state => state.wallets)
+  const activeWalletId = useStorage(state => state.activeWalletId)
+  const loadingWallet = useStorage(state => state.loadingWalletState)
+  const fetchTransactions = useStorage(state => state.fetchTransactions)
+  const wallets = useStorage(state => state.wallets)
 
   useEffect(() => {
     if (activeWalletId !== undefined && !loadingWallet) {

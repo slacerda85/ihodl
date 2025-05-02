@@ -14,11 +14,11 @@ import { alpha } from '@/ui/utils'
 import { useRouter } from 'expo-router'
 import wordlist from 'bip39/src/wordlists/english.json'
 // import { randomUUID } from '@/lib/crypto'
-import useStore from '../store'
+import useStorage from '../store'
 
 export default function ImportWallet() {
   const router = useRouter()
-  const createWallet = useStore(state => state.createWallet)
+  const createWallet = useStorage(state => state.createWallet)
   const [walletName, setWalletName] = useState<string>('')
   const [seedPhrase, setSeedPhrase] = useState<string>('')
   const [currentWord, setCurrentWord] = useState<string>('')

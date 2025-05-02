@@ -1,19 +1,19 @@
 import { View, Text, StyleSheet, useColorScheme, Pressable, ActivityIndicator } from 'react-native'
 import colors from '@/ui/colors'
 import SwapIcon from './SwapIcon'
-import useStore from '../store'
+import useStorage from '../store'
 import { formatBalance } from './utils'
 
 export default function WalletBalance() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const loading = useStore(state => state.loadingTxState)
-  const unit = useStore(state => state.unit)
-  const setUnit = useStore(state => state.setUnit)
-  const activeWalletId = useStore(state => state.activeWalletId)
+  const loading = useStorage(state => state.loadingTxState)
+  const unit = useStorage(state => state.unit)
+  const setUnit = useStorage(state => state.setUnit)
+  const activeWalletId = useStorage(state => state.activeWalletId)
 
-  const balance = useStore(
+  const balance = useStorage(
     state => state.transactions.find(tx => tx.walletId === activeWalletId)?.balance,
   )
 

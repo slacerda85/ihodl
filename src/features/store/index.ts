@@ -1,1 +1,1 @@
-export { default } from './useStore'
+export { default } from './useStorage'

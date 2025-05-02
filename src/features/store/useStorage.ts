@@ -2,11 +2,11 @@ import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import createWalletSlice, { WalletSlice } from './createWalletSlice'
 import createTxSlice, { TransactionsSlice } from './createTxSlice'
-import store from '@/lib/store'
+import storage from '@/lib/storage'
 
 export type StoreState = WalletSlice & TransactionsSlice
 
-const useStore = create<StoreState>()(
+const useStorage = create<StoreState>()(
   persist(
     (...a) => ({
       ...createWalletSlice(...a),
@@ -14,9 +14,9 @@ const useStore = create<StoreState>()(
     }),
     {
       name: 'app-storage',
-      storage: createJSONStorage(() => store),
+      storage: createJSONStorage(() => storage),
     },
   ),
 )
 
-export default useStore
+export default useStorage

@@ -5,8 +5,8 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { useCallback, useEffect } from 'react'
 import ManageWalletsIcon from '@/features/wallet/ManageWalletsIcon'
-import useStore from '@/features/store'
-// import useStore from '@/features/store'
+import useStorage from '@/features/store'
+// import useStorage from '@/features/store'
 
 function headerRight() {
   return (
@@ -59,8 +59,8 @@ const CloseModalButton = ({ title }: { title?: string }) => {
 }
 
 export default function WalletLayout() {
-  const activeWalletId = useStore(state => state.activeWalletId)
-  const wallets = useStore(state => state.wallets)
+  const activeWalletId = useStorage(state => state.activeWalletId)
+  const wallets = useStorage(state => state.wallets)
   const selectedWallet = wallets?.find(wallet => wallet.walletId === activeWalletId)
   const empty = wallets === undefined || wallets?.length === 0
 

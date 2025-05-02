@@ -5,12 +5,12 @@ import { useCallback, useState } from 'react'
 import { useRouter } from 'expo-router'
 // import { deleteWallet } from '@/lib/wallet'
 import { alpha } from '@/ui/utils'
-import useStore from '../store'
+import useStorage from '../store'
 
 export default function DeleteWallet() {
-  const activeWalletId = useStore(state => state.activeWalletId)
-  const deleteWallet = useStore(state => state.deleteWallet)
-  const walletName = useStore(
+  const activeWalletId = useStorage(state => state.activeWalletId)
+  const deleteWallet = useStorage(state => state.deleteWallet)
+  const walletName = useStorage(
     state => state.wallets.find(w => w.walletId === activeWalletId)?.walletName,
   )
 

@@ -1,6 +1,6 @@
 import { WalletData } from '@/models/wallet'
 import { StateCreator } from 'zustand'
-import { StoreState } from './useStore'
+import { StoreState } from './useStorage'
 import { createWallet, CreateWalletParams } from '@/lib/wallet'
 
 export type WalletState = {
