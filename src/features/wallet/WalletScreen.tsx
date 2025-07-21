@@ -3,16 +3,16 @@ import { Link, useRouter } from 'expo-router'
 import { StyleSheet, Text, Pressable, useColorScheme, View } from 'react-native'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
-import useStorage from '../storage'
+import useStorage, { useInitialize } from '../storage'
 
 // Components
 import WalletBalance from './WalletBalance'
-import { useEffect } from 'react'
 import WalletAccounts from './WalletAccounts'
 import Divider from '@/ui/Divider'
 import CreateWalletIcon from './CreateWalletIcon'
 import ImportWalletIcon from './ImportWalletIcon'
 import ScreenContainer from '@/ui/ContentContainer'
+import { useTransactionSync } from './hooks/useTransactionSync'
 // import useStorage from '../store'
 
 export default function WalletScreen() {
@@ -20,6 +20,9 @@ export default function WalletScreen() {
   // theme
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
+
+  // Hook de inicialização para carregar transações automaticamente
+  useInitialize()
 
   function handleSend() {
     // Navigate to send screen
@@ -40,15 +43,10 @@ export default function WalletScreen() {
   }
 
   const activeWalletId = useStorage(state => state.activeWalletId)
-  const loadingWallet = useStorage(state => state.loadingWalletState)
-  const fetchTransactions = useStorage(state => state.fetchTransactions)
   const wallets = useStorage(state => state.wallets)
 
-  useEffect(() => {
-    if (activeWalletId !== undefined && !loadingWallet) {
-      fetchTransactions(activeWalletId)
-    }
-  }, [activeWalletId, fetchTransactions, loadingWallet])
+  // Use custom hook to manage transaction syncing - this handles the fetchTransactions logic
+  useTransactionSync(activeWalletId)
 
   if (wallets === undefined || wallets?.length === 0) {
     // create link to wallet/manage

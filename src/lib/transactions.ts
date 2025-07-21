@@ -7,12 +7,12 @@ import {
 } from '@/lib/key'
 import { connect, getTransactions } from './electrum'
 import { createSegwitAddress } from './address'
-import { Tx, TxHistory } from '@/models/transaction'
+import { Tx, TxHistory, UTXO, WalletTransaction } from '@/models/transaction'
 
 interface GetTxHistoryParams {
   extendedKey: Uint8Array
-  purpose: Purpose
-  coinType: CoinType
+  purpose?: Purpose
+  coinType?: CoinType
   accountStartIndex?: number
   gapLimit?: number
 }
@@ -149,5 +149,113 @@ function calculateBalance(txHistory: TxHistory[]): {
     utxos,
   }
 }
+
+type GetWalletAddressesRequest = {
+  extendedKey: Uint8Array
+  purpose: Purpose
+  coinType: CoinType
+  accountStartIndex?: number
+  gapLimit?: number
+}
+
+/* async function getWalletAddresses({
+  extendedKey,
+  purpose = 84,
+  coinType = 0,
+  accountStartIndex = 0,
+  gapLimit = 20,
+  // multiAccount = false,
+}: GetWalletAddressesRequest): string[] {
+  try {
+  } catch (error) {}
+} */
+/* 
+async function processWalletTransactions(walletAddresses: Set<string>): Promise<{
+  balance: number
+  utxos: UTXO[]
+  walletTransactions: WalletTransaction[]
+}> {
+  // Assume existing code fetches allTxs and builds allTxsMap, calculates balance and utxos
+  // For example:
+  // const allTxs = await fetchTransactions(walletAddresses);
+  // const allTxsMap = new Map(allTxs.map(tx => [tx.txid, tx]));
+  // const { balance, utxos } = calculateBalanceAndUtxos(allTxs, walletAddresses);
+
+  const walletTransactions: WalletTransaction[] = allTxs.map(tx => {
+    // Determine if transaction spends wallet funds (i.e., 'sent')
+    const isSent = tx.vin.some(vin => {
+      const prevTx = allTxsMap.get(vin.txid)
+      return prevTx && walletAddresses.has(prevTx.vout[vin.vout].scriptPubKey.address)
+    })
+    const type: 'sent' | 'received' = isSent ? 'sent' : 'received'
+
+    // Calculate amount based on type
+    const amount = tx.vout.reduce((sum, vout) => {
+      const address = vout.scriptPubKey.address
+      if (
+        (type === 'received' && walletAddresses.has(address)) ||
+        (type === 'sent' && !walletAddresses.has(address))
+      ) {
+        return sum + vout.value
+      }
+      return sum
+    }, 0)
+
+    // Set fromAddress
+    let fromAddress = type === 'received' ? 'External' : ''
+    if (type === 'sent') {
+      for (const vin of tx.vin) {
+        const prevTx = allTxsMap.get(vin.txid)
+        if (prevTx) {
+          const address = prevTx.vout[vin.vout].scriptPubKey.address
+          if (walletAddresses.has(address)) {
+            fromAddress = address
+            break
+          }
+        }
+      }
+    }
+
+    // Set toAddress
+    let toAddress = ''
+    for (const vout of tx.vout) {
+      const address = vout.scriptPubKey.address
+      if (
+        (type === 'received' && walletAddresses.has(address)) ||
+        (type === 'sent' && !walletAddresses.has(address))
+      ) {
+        toAddress = address
+        break
+      }
+    }
+
+    // Convert timestamp to date string
+    const timestamp = tx.time || tx.blocktime
+    const date = new Date(timestamp * 1000).toISOString()
+
+    // Determine status based on confirmations
+    const confirmations = tx.confirmations || 0
+    let status: 'pending' | 'processing' | 'confirmed'
+    if (confirmations === 0) {
+      status = 'pending'
+    } else if (confirmations < 6) {
+      status = 'processing'
+    } else {
+      status = 'confirmed'
+    }
+
+    return {
+      txid: tx.txid,
+      date,
+      type,
+      fromAddress,
+      toAddress,
+      amount,
+      status,
+    }
+  })
+
+  return { balance, utxos, walletTransactions }
+} */
 
 export { getTxHistory, calculateBalance }

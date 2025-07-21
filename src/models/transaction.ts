@@ -57,3 +57,16 @@ export type Vout = {
     address: string
   }
 }
+
+type TransactionType = 'received' | 'sent'
+type TransactionStatus = 'pending' | 'processing' | 'confirmed'
+
+export type WalletTransaction = {
+  txid: string
+  date: string
+  type: TransactionType
+  fromAddress: string
+  toAddress: string
+  amount: number
+  status: TransactionStatus
+}

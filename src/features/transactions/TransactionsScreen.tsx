@@ -1,31 +1,22 @@
 import { Tx } from '@/models/transaction'
-import { Text, View, Pressable, FlatList, StyleSheet, useColorScheme } from 'react-native'
+import {
+  Text,
+  View,
+  Pressable,
+  FlatList,
+  StyleSheet,
+  useColorScheme,
+  ActivityIndicator,
+} from 'react-native'
+import { useEffect } from 'react'
 import useStorage from '../storage'
 import colors from '@/ui/colors'
 import { truncateAddress } from './utils'
 import BitcoinLogo from '@/assets/bitcoin-logo'
-// import { ReactNode } from 'react'
 import { formatBalance } from '../wallet/utils'
 import { alpha } from '@/ui/utils'
 import { useHeaderHeight } from '@react-navigation/elements'
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
-import Divider from '@/ui/Divider'
-/* import ContentContaine from '@/ui/ContentContaine'
-
-const purposeToLabel: Record<number, string> = {
-  44: 'Legacy',
-  49: 'SegWit',
-  84: 'Native SegWit',
-  // Add more purposes as needed
-}
-
-const purposeToIcon: Record<number, ReactNode> = {
-  44: <BitcoinLogo width={32} height={32} />,
-  49: <BitcoinLogo width={32} height={32} />,
-  84: <BitcoinLogo width={32} height={32} />,
-  86: <Image source={require('@/assets/lightning-logo.png')} style={{ width: 32, height: 32 }} />,
-  // Add more purposes as needed
-} */
 
 // Define types for our transaction list items
 type DateHeader = {
@@ -36,19 +27,12 @@ type DateHeader = {
 type TransactionItem = {
   isDate: false
   tx: Tx
-  type: 'Received' | 'Sent'
+  type: 'received' | 'sent' | 'self'
   amount: number
   address: string
 }
 
 type ListItem = DateHeader | TransactionItem
-
-// Type for transaction details
-interface TransactionDetails {
-  type: 'Received' | 'Sent'
-  amount: number
-  address: string
-}
 
 export default function TransactionsScreen() {
   const headerHeight = useHeaderHeight()
@@ -57,195 +41,178 @@ export default function TransactionsScreen() {
   const isDark = colorScheme === 'dark'
 
   const activeWalletId = useStorage(state => state.activeWalletId)
-  const transactions = useStorage(state => state.transactions)
-  const txHistory = transactions.find(item => item.walletId === activeWalletId)?.txHistory || []
+  const getTransactionAnalysis = useStorage(state => state.tx.getTransactionAnalysis)
+  const walletCaches = useStorage(state => state.tx.walletCaches)
+  const fetchTransactions = useStorage(state => state.tx.fetchTransactions)
 
   const loadingWallet = useStorage(state => state.loadingWalletState)
-  const loadingTx = useStorage(state => state.loadingTxState)
+  const loadingTx = useStorage(state => state.tx.loadingTxState)
   const loading = loadingWallet || loadingTx
   const unit = useStorage(state => state.unit)
+
+  // Check if we have cached data for the active wallet
+  const hasTransactionData = activeWalletId
+    ? walletCaches.some(cache => cache.walletId === activeWalletId)
+    : false
+
+  // Trigger fetch transactions if we don't have data
+  useEffect(() => {
+    if (
+      activeWalletId &&
+      !loading &&
+      !hasTransactionData &&
+      fetchTransactions &&
+      typeof fetchTransactions === 'function'
+    ) {
+      fetchTransactions(activeWalletId)
+    }
+  }, [activeWalletId, loading, hasTransactionData, fetchTransactions])
+
+  // Loading state - show this prominently
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <Text>Loading...</Text>
+      <View style={[styles.loadingContainer, { paddingTop: headerHeight + 16 }]}>
+        <View style={[styles.loadingBox, isDark && styles.loadingBoxDark]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, isDark && styles.loadingTextDark]}>
+            {loadingWallet ? 'Loading wallet...' : 'Syncing transactions...'}
+          </Text>
+          <Text style={[styles.loadingSubText, isDark && styles.loadingSubTextDark]}>
+            This may take a few moments
+          </Text>
+        </View>
       </View>
     )
   }
 
-  // Collect all wallet addresses
-  const walletAddresses = new Set(
-    txHistory.flatMap(item => [item.receivingAddress, item.changeAddress]),
-  )
-
-  // Deduplicate transactions by txid
-  const allTxsMap = new Map<string, Tx>()
-  for (const item of txHistory) {
-    for (const tx of item.txs) {
-      allTxsMap.set(tx.txid, tx)
-    }
-  }
-  const allTxs = Array.from(allTxsMap.values())
-
-  // Create UTXO map for input address lookup
-  const utxoMap: Record<string, string> = {}
-  for (const tx of allTxs) {
-    for (const vout of tx.vout) {
-      utxoMap[`${tx.txid}-${vout.n}`] = vout.scriptPubKey.address
-    }
-  }
-
-  // Function to determine transaction details
-  function getTxDetails(tx: Tx): TransactionDetails {
-    const inputsFromWallet = tx.vin.filter(vin => {
-      const prevAddress = utxoMap[`${vin.txid}-${vin.vout}`]
-      return prevAddress && walletAddresses.has(prevAddress)
-    })
-    const outputsToWallet = tx.vout.filter(vout => walletAddresses.has(vout.scriptPubKey.address))
-    const outputsToExternal = tx.vout.filter(
-      vout => !walletAddresses.has(vout.scriptPubKey.address),
+  // No wallet selected
+  if (!activeWalletId) {
+    return (
+      <View style={[styles.emptyContainer, { paddingTop: headerHeight + 16 }]}>
+        <View style={[styles.empty, isDark && styles.emptyDark]}>
+          <Text style={[styles.emptyText, isDark && styles.emptyTextDark]}>
+            Select a wallet to view transactions
+          </Text>
+        </View>
+      </View>
     )
-    // Function to determine transaction details
-    function getTxDetails(tx: Tx): TransactionDetails {
-      const inputsFromWallet = tx.vin.filter(vin => {
-        const prevAddress = utxoMap[`${vin.txid}-${vin.vout}`]
-        return prevAddress && walletAddresses.has(prevAddress)
-      })
-      const outputsToWallet = tx.vout.filter(vout => walletAddresses.has(vout.scriptPubKey.address))
-      const outputsToExternal = tx.vout.filter(
-        vout => !walletAddresses.has(vout.scriptPubKey.address),
-      )
-
-      // If no inputs from wallet but has outputs to wallet, it's a received transaction
-      if (inputsFromWallet.length === 0 && outputsToWallet.length > 0) {
-        const amount = outputsToWallet.reduce((sum, vout) => sum + vout.value, 0)
-        return { type: 'Received', amount, address: outputsToWallet[0].scriptPubKey.address }
-      }
-      // Otherwise it's a sent transaction (including self-transfers)
-      else {
-        // Calculate total input amount from wallet
-        const inputAmount = inputsFromWallet.reduce((sum, vin) => {
-          const prevOutput = utxoMap[`${vin.txid}-${vin.vout}`]
-          // Find the output value from the referenced transaction
-          const prevTx = allTxs.find(t => t.txid === vin.txid)
-          if (prevTx) {
-            const prevVout = prevTx.vout.find(v => v.n === vin.vout)
-            if (prevVout) {
-              return sum + prevVout.value
-            }
-          }
-          return sum
-        }, 0)
-
-        // Calculate total output amount back to wallet (change)
-        const changeAmount = outputsToWallet.reduce((sum, vout) => sum + vout.value, 0)
-
-        // Actual sent amount = inputs from wallet - outputs back to wallet
-        const amount = inputAmount - changeAmount
-
-        // If no external outputs, it's a self-transfer
-        if (outputsToExternal.length === 0) {
-          return { type: 'Sent', amount, address: 'self' }
-        } else {
-          // Regular send to external address
-          return {
-            type: 'Sent',
-            amount,
-            address: outputsToExternal[0].scriptPubKey.address,
-          }
-        }
-      }
-    }
-
-    // Group transactions by date using ISO format for reliable sorting
-    const grouped: Record<string, Tx[]> = {}
-    for (const tx of allTxs) {
-      // Use ISO date format for consistent sorting
-      const date = new Date(tx.blocktime * 1000).toISOString().split('T')[0]
-      if (!grouped[date]) {
-        grouped[date] = []
-      }
-      grouped[date].push(tx)
-    }
-
-    // Sort transactions within each date by blocktime (newest first)
-    for (const date in grouped) {
-      grouped[date].sort((a, b) => b.blocktime - a.blocktime)
-    }
-
-    // Prepare data for FlatList with date headers
-    const data: ListItem[] = []
-    // Sort dates newest to oldest using ISO format
-    const sortedDates = Object.keys(grouped).sort((a, b) => a.localeCompare(b))
-
-    for (const date of sortedDates) {
-      // Format the date for display after sorting
-      const displayDate = new Date(date).toLocaleDateString('pt-BR', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      })
-      data.push({ isDate: true, date: displayDate })
-      for (const tx of grouped[date]) {
-        const details = getTxDetails(tx)
-        data.push({ isDate: false, tx, ...details })
-      }
-    }
-    if (inputsFromWallet.length === 0 && outputsToWallet.length > 0) {
-      const amount = outputsToWallet.reduce((sum, vout) => sum + vout.value, 0)
-      return { type: 'Received', amount, address: 'external' }
-    } else {
-      if (outputsToExternal.length > 0) {
-        const amount = outputsToExternal.reduce((sum, vout) => sum + vout.value, 0)
-        const address = outputsToExternal[0].scriptPubKey.address
-        return { type: 'Sent', amount, address }
-      } else {
-        return { type: 'Sent', amount: 0, address: 'self' }
-      }
-    }
   }
 
-  // Group transactions by date
-  const grouped: Record<string, Tx[]> = {}
-  for (const tx of allTxs) {
-    const date = new Date(tx.blocktime * 1000).toLocaleDateString('pt-BR', {
+  // No transaction data available yet - show loading
+  if (!hasTransactionData) {
+    return (
+      <View style={[styles.emptyContainer, { paddingTop: headerHeight + 16 }]}>
+        <View style={[styles.empty, isDark && styles.emptyDark]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.emptyText, isDark && styles.emptyTextDark]}>
+            Loading transactions...
+          </Text>
+          <Text style={[styles.emptySubText, isDark && styles.emptySubTextDark]}>
+            Please wait while we sync your wallet
+          </Text>
+        </View>
+      </View>
+    )
+  }
+
+  // Get transaction analysis - this is optional, if it fails we show empty state
+  let transactionAnalysis = null
+  try {
+    transactionAnalysis =
+      activeWalletId && getTransactionAnalysis && typeof getTransactionAnalysis === 'function'
+        ? getTransactionAnalysis(activeWalletId)
+        : null
+  } catch (error) {
+    console.log('Error getting transaction analysis:', error)
+  }
+
+  // No transaction analysis or no transactions
+  if (
+    !transactionAnalysis ||
+    !transactionAnalysis.transactions ||
+    transactionAnalysis.transactions.length === 0
+  ) {
+    return (
+      <View style={[styles.emptyContainer, { paddingTop: headerHeight + 16 }]}>
+        <View style={[styles.empty, isDark && styles.emptyDark]}>
+          <Text style={[styles.emptyText, isDark && styles.emptyTextDark]}>
+            No transactions found
+          </Text>
+          <Text style={[styles.emptySubText, isDark && styles.emptySubTextDark]}>
+            Transactions will appear here when you receive or send Bitcoin
+          </Text>
+        </View>
+      </View>
+    )
+  }
+
+  // Now we know we have valid transaction data
+  const { transactions, stats } = transactionAnalysis
+
+  // Agrupar transações por data
+  const grouped: Record<string, typeof transactions> = {}
+  for (const txData of transactions) {
+    const date = new Date(txData.tx.blocktime * 1000).toISOString().split('T')[0]
+    if (!grouped[date]) {
+      grouped[date] = []
+    }
+    grouped[date].push(txData)
+  }
+
+  // Ordenar transações dentro de cada data por blocktime (mais recente primeiro)
+  for (const date in grouped) {
+    grouped[date].sort((a, b) => b.tx.blocktime - a.tx.blocktime)
+  }
+
+  // Preparar dados para FlatList com cabeçalhos de data
+  const data: ListItem[] = []
+  const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a))
+
+  for (const date of sortedDates) {
+    // Formatar data para exibição
+    const displayDate = new Date(date).toLocaleDateString('pt-BR', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
     })
-    if (!grouped[date]) {
-      grouped[date] = []
-    }
-    grouped[date].push(tx)
-  }
+    data.push({ isDate: true, date: displayDate })
 
-  // Sort transactions within each date by blocktime (newest first)
-  for (const date in grouped) {
-    grouped[date].sort((a, b) => b.blocktime - a.blocktime)
-  }
+    for (const txData of grouped[date]) {
+      // Determinar endereço de exibição
+      let displayAddress = 'Unknown'
+      if (txData.type === 'received') {
+        displayAddress = txData.fromAddresses[0] || 'External'
+      } else if (txData.type === 'sent') {
+        displayAddress = txData.toAddresses[0] || 'External'
+      } else {
+        displayAddress = 'Self'
+      }
 
-  // Prepare data for FlatList with date headers
-  const data: ListItem[] = []
-  const sortedDates = Object.keys(grouped).sort(
-    (a, b) => new Date(b).getTime() - new Date(a).getTime(),
-  )
-  for (const date of sortedDates) {
-    data.push({ isDate: true, date })
-    for (const tx of grouped[date]) {
-      const details = getTxDetails(tx)
-      data.push({ isDate: false, tx, ...details })
+      data.push({
+        isDate: false,
+        tx: txData.tx,
+        type: txData.type,
+        amount: Math.abs(txData.netAmount),
+        address: displayAddress,
+      })
     }
   }
 
   const renderItem = ({ item, index }: { item: ListItem; index: number }) => {
     if (item.isDate) {
-      return <Text style={styles.date}>{item.date}</Text>
+      return <Text style={[styles.date, isDark && styles.dateDark]}>{item.date}</Text>
     } else {
-      // Check if previous item is a date header (making this the first in its group)
+      // Verificar se é o primeiro/último item do grupo
       const isFirstInGroup = index === 0 || data[index - 1].isDate
-
-      // Check if next item is a date header or doesn't exist (making this the last in its group)
       const isLastInGroup =
         index === data.length - 1 || (index + 1 < data.length && data[index + 1].isDate)
+
+      // Determinar estilo do tipo de transação
+      const typeLabel =
+        item.type === 'received' ? 'Received' : item.type === 'sent' ? 'Sent' : 'Self Transfer'
+
+      const isPositive = item.type === 'received'
+      const prefix = isPositive ? '+' : '-'
 
       return (
         <View>
@@ -263,20 +230,22 @@ export default function TransactionsScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <BitcoinLogo width={32} height={32} />
               <View>
-                <Text style={[styles.type, isDark && styles.typeDark]}>{item.type}</Text>
-
+                <Text style={[styles.type, isDark && styles.typeDark]}>{typeLabel}</Text>
                 <Text style={[styles.address, isDark && styles.addressDark]}>
-                  {item.type === 'Received' ? 'From' : 'To'} {truncateAddress(item.address, 6)}
+                  {item.type === 'received' ? 'From' : item.type === 'sent' ? 'To' : ''}{' '}
+                  {truncateAddress(item.address, 6)}
                 </Text>
               </View>
             </View>
             <Text
-              style={
-                (styles.balance,
+              style={[
+                styles.balance,
                 isDark && styles.balanceDark,
-                item.type === 'Received' ? styles.balancePositive : styles.balanceNegative)
-              }
-            >{`${item.type === 'Received' ? '+' : '-'}${formatBalance(item.amount, unit)} ${unit}`}</Text>
+                isPositive ? styles.balancePositive : styles.balanceNegative,
+              ]}
+            >
+              {`${prefix}${formatBalance(item.amount, unit)} ${unit}`}
+            </Text>
           </Pressable>
         </View>
       )
@@ -284,7 +253,7 @@ export default function TransactionsScreen() {
   }
 
   return (
-    <View style={{ paddingLeft: 16, paddingRight: 16 }}>
+    <View style={{ flex: 1, paddingLeft: 16, paddingRight: 16 }}>
       <FlatList
         contentContainerStyle={{
           paddingTop: headerHeight + 16,
@@ -295,49 +264,98 @@ export default function TransactionsScreen() {
         keyExtractor={item => (item.isDate ? item.date : item.tx.txid)}
         renderItem={renderItem}
         ListHeaderComponent={
-          <View
-            style={{
-              paddingBottom: 16,
-            }}
-          >
-            <Text style={{ color: isDark ? colors.text.dark : colors.text.light }}>
-              {`Received: ${data.reduce((acc, item) => {
-                if (item.isDate) return acc
-                return acc + (item.type === 'Received' ? 1 : 0)
-              }, 0)} | Sent: ${data.reduce((acc, item) => {
-                if (item.isDate) return acc
-                return acc + (item.type === 'Sent' ? 1 : 0)
-              }, 0)}`}
-            </Text>
-          </View>
-        }
-        ListEmptyComponent={
-          <View style={[styles.empty, isDark && styles.emptyDark]}>
-            <Text style={[styles.emptyText, isDark && styles.emptyTextDark]}>
-              {activeWalletId === undefined
-                ? 'Select a wallet to view transactions'
-                : 'No transactions found'}
+          <View style={{ paddingBottom: 16 }}>
+            <Text style={[styles.statsText, isDark && styles.statsTextDark]}>
+              {`Received: ${stats.receivedCount} | Sent: ${stats.sentCount} | Self: ${stats.selfCount}`}
             </Text>
           </View>
         }
         showsVerticalScrollIndicator={false}
-        // Adjust this value to match your tab bar height
       />
-      {/* tab bar height */}
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  // Define your styles here
-  container: {
-    padding: 16,
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  loadingBox: {
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    gap: 12,
+    minWidth: 200,
+  },
+  loadingBoxDark: {
+    backgroundColor: alpha(colors.background.light, 0.05),
+  },
+  loadingText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text.light,
+    textAlign: 'center',
+  },
+  loadingTextDark: {
+    color: colors.text.dark,
+  },
+  loadingSubText: {
+    fontSize: 14,
+    color: colors.textSecondary.light,
+    textAlign: 'center',
+  },
+  loadingSubTextDark: {
+    color: colors.textSecondary.dark,
+  },
+  emptyContainer: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  empty: {
+    flex: 1,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    padding: 24,
+    gap: 12,
+  },
+  emptyDark: {
+    backgroundColor: alpha(colors.background.light, 0.05),
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text.light,
+    textAlign: 'center',
+  },
+  emptyTextDark: {
+    color: colors.text.dark,
+  },
+  emptySubText: {
+    fontSize: 14,
+    color: colors.textSecondary.light,
+    textAlign: 'center',
+  },
+  emptySubTextDark: {
+    color: colors.textSecondary.dark,
+  },
+  statsText: {
+    fontSize: 14,
+    color: colors.text.light,
+  },
+  statsTextDark: {
+    color: colors.text.dark,
   },
   date: {
     paddingTop: 16,
     paddingBottom: 8,
     fontSize: 14,
-    fontWeight: 'semibold',
+    fontWeight: '600',
     color: colors.textSecondary.light,
   },
   dateDark: {
@@ -360,7 +378,6 @@ const styles = StyleSheet.create({
   },
   transactionPressable: {
     backgroundColor: colors.white,
-    // borderRadius: 16,
     padding: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -390,22 +407,5 @@ const styles = StyleSheet.create({
   },
   balanceNegative: {
     color: colors.error,
-  },
-  empty: {
-    height: 128,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.white,
-  },
-  emptyDark: {
-    backgroundColor: alpha(colors.background.light, 0.05),
-  },
-  emptyText: {
-    fontSize: 16,
-    color: colors.textSecondary.light,
-  },
-  emptyTextDark: {
-    color: colors.textSecondary.dark,
   },
 })

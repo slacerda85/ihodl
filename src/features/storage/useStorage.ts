@@ -17,6 +17,41 @@ const useStorage = create<StoreState>()(
     {
       name: 'app-storage',
       storage: createJSONStorage(() => storage),
+      // Versão para forçar recreação quando há mudanças estruturais
+      version: 2, // Incrementando versão para forçar recriação
+      migrate: (persistedState: any, version: number) => {
+        console.log('🔄 [Storage] Migrando storage da versão', version)
+        // Se for versão antiga, força recriação completa
+        if (version < 2) {
+          console.log('🗑️ [Storage] Versão antiga detectada, recriando storage...')
+          return {} // Estado vazio, será recriado
+        }
+        return persistedState
+      },
+      // Persistir apenas dados, não funções (o Zustand recria as funções automaticamente)
+      partialize: state => {
+        console.log('💾 [Storage] Salvando estado:', {
+          walletsCount: state.wallets?.length || 0,
+          activeWalletId: state.activeWalletId,
+          txCachesCount: state.tx?.walletCaches?.length || 0,
+        })
+
+        return {
+          // Estados das wallets
+          wallets: state.wallets,
+          activeWalletId: state.activeWalletId,
+          unit: state.unit,
+          loadingWalletState: false, // Sempre resetar loading states
+          // Estados das configurações
+          colorMode: state.colorMode,
+          userOverride: state.userOverride,
+          // Para TX, persistir apenas os dados, não os estados de loading
+          tx: {
+            walletCaches: state.tx?.walletCaches || [],
+            loadingTxState: false, // Sempre resetar loading state
+          },
+        }
+      },
     },
   ),
 )

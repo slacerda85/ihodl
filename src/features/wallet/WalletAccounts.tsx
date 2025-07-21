@@ -94,14 +94,23 @@ function AccountDetails({ account }: { account: Account }) {
   const router = useRouter()
 
   const loadingWallet = useStorage(state => state.loadingWalletState)
-  const loadingTransactions = useStorage(state => state.loadingTxState)
+  const loadingTransactions = useStorage(state => state.tx.loadingTxState)
   const loading = loadingWallet || loadingTransactions
   const unit = useStorage(state => state.unit)
   const activeWalletId = useStorage(state => state.activeWalletId)
+  const getBalance = useStorage(state => state.tx.getBalance)
+  const walletCaches = useStorage(state => state.tx.walletCaches)
 
-  const balance = useStorage(
-    state => state.transactions.find(tx => tx.walletId === activeWalletId)?.balance,
-  )
+  // Check if we have cached data for the active wallet
+  const hasTransactionData = activeWalletId
+    ? walletCaches.some(cache => cache.walletId === activeWalletId)
+    : false
+
+  // Usar o novo método para obter saldo com verificação de segurança
+  const balance =
+    activeWalletId && getBalance && typeof getBalance === 'function' && hasTransactionData
+      ? getBalance(activeWalletId)
+      : 0
 
   // Format account name using purpose and coin type labels
   const purposeLabel = purposeToLabel[account.purpose] || `Purpose ${account.purpose}`
@@ -133,7 +142,12 @@ function AccountDetails({ account }: { account: Account }) {
       <View style={styles.accountSection}>
         <View style={styles.accountDetails}>
           {loading ? (
-            <ActivityIndicator size="small" color={colors.primary} />
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={[styles.loadingText, isDark && styles.loadingTextDark]}>
+                {loadingWallet ? 'Loading...' : 'Syncing...'}
+              </Text>
+            </View>
           ) : (
             <Text style={[styles.accountBalance, isDark && styles.accountBalanceDark]}>
               {`${formatBalance(balance, unit)} ${unit}`}
@@ -157,9 +171,9 @@ const styles = StyleSheet.create({
     // padding: 16,
   },
   loadingContainer: {
-    // flex: 1,
-    justifyContent: 'center',
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
   loadingText: {
     marginTop: 12,

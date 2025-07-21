@@ -3,6 +3,7 @@ import { StoreState } from './useStorage'
 import { ColorMode } from '@/models/settings'
 type SettingsState = {
   colorMode: ColorMode
+  userOverride?: boolean
 }
 
 type SettingsActions = {

@@ -31,15 +31,16 @@ export default function ManageWallets() {
   function handleSelectWallet(walletId: string) {
     try {
       setLoadingWallets(true)
-      setActiveWalletId(walletId) // Assuming selectWalletId is a synchronous function
+      setActiveWalletId(walletId)
+      router.dismiss()
     } catch (error) {
       console.error('Error selecting wallet:', error)
       // Handle error if needed - you could add error state if required
     } finally {
-      router.dismiss()
+      // Keep loading state active briefly to allow the UI to update
       setTimeout(() => {
         setLoadingWallets(false)
-      }, 0)
+      }, 500)
     }
   }
 

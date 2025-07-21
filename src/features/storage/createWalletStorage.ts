@@ -43,9 +43,11 @@ const createWalletStorage: StateCreator<
     walletName = `Wallet ${get().wallets.length + 1}`,
     seedPhrase,
   }) => {
+    console.log('➕ [createWallet] Criando nova carteira:', walletName)
+
     // check if wallet has enough data
     if (!accounts || accounts.length === 0) {
-      console.error('Wallet accounts are required')
+      console.error('❌ [createWallet] Wallet accounts are required')
       return
     }
     const newWallet = createWallet({
@@ -54,10 +56,20 @@ const createWalletStorage: StateCreator<
       cold,
       accounts: accounts,
     })
+
+    console.log('✅ [createWallet] Carteira criada com ID:', newWallet.walletId)
+
     set(state => ({
       wallets: [...state.wallets, newWallet],
       activeWalletId: newWallet.walletId, // Set the selected wallet ID to the newly created wallet
     }))
+
+    // Automaticamente buscar transações da nova carteira
+    console.log('🔄 [createWallet] Acionando busca automática de transações para nova carteira...')
+    const { tx } = get()
+    tx.fetchTransactions(newWallet.walletId).catch(error => {
+      console.error('❌ [createWallet] Erro ao buscar transações da nova carteira:', error)
+    })
   },
   // actions
   editWallet: wallet => {
@@ -100,7 +112,18 @@ const createWalletStorage: StateCreator<
     set(() => ({ wallets: [] }))
   },
   setActiveWalletId: walletId => {
+    console.log('🎯 [setActiveWalletId] Definindo carteira ativa:', walletId)
+
     set(() => ({ activeWalletId: walletId }))
+
+    /* // Automaticamente buscar transações da carteira ativa
+    if (walletId) {
+      console.log('🔄 [setActiveWalletId] Acionando busca automática de transações...')
+      const { tx } = get()
+      tx.fetchTransactions(walletId).catch(error => {
+        console.error('❌ [setActiveWalletId] Erro ao buscar transações automaticamente:', error)
+      })
+    } */
   },
   setUnit: (unit: 'BTC' | 'Sats') => {
     set(() => ({ unit }))

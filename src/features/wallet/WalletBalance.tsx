@@ -8,19 +8,35 @@ export default function WalletBalance() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const loading = useStorage(state => state.loadingTxState)
+  const loadingWallet = useStorage(state => state.loadingWalletState)
+  const loadingTx = useStorage(state => state.tx.loadingTxState)
+  const loading = loadingWallet || loadingTx
   const unit = useStorage(state => state.unit)
   const setUnit = useStorage(state => state.setUnit)
   const activeWalletId = useStorage(state => state.activeWalletId)
+  const getBalance = useStorage(state => state.tx.getBalance)
+  const walletCaches = useStorage(state => state.tx.walletCaches)
 
-  const balance = useStorage(
-    state => state.transactions.find(tx => tx.walletId === activeWalletId)?.balance,
-  )
+  // Check if we have cached data for the active wallet
+  const hasTransactionData = activeWalletId
+    ? walletCaches.some(cache => cache.walletId === activeWalletId)
+    : false
+
+  // Usar o novo método para obter saldo com verificação de segurança
+  const balance =
+    activeWalletId && getBalance && typeof getBalance === 'function' && hasTransactionData
+      ? getBalance(activeWalletId)
+      : 0
 
   if (loading) {
     return (
       <View style={styles.balanceSection}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, isDark && styles.loadingTextDark]}>
+            {loadingWallet ? 'Loading wallet...' : 'Loading transactions...'}
+          </Text>
+        </View>
       </View>
     )
   }
@@ -38,7 +54,7 @@ export default function WalletBalance() {
         <View style={{ flex: 1 }}></View>
 
         <Text style={[styles.balanceAmount, isDark && styles.balanceAmountDark]}>
-          {formatBalance(balance || 0, unit)}
+          {formatBalance(balance, unit)}
         </Text>
         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
           <Pressable
@@ -60,6 +76,17 @@ export default function WalletBalance() {
 const styles = StyleSheet.create({
   balanceSection: {
     alignItems: 'center',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: colors.textSecondary.light,
+  },
+  loadingTextDark: {
+    color: colors.textSecondary.dark,
   },
   balanceLabel: {
     fontSize: 14,

@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "scripts": {
+    "test": "jest",
     "dev": "expo start",
     "start": "expo start",
     "prebuild:dev": "expo prebuild --platform android --profile development",
