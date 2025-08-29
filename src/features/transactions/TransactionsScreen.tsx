@@ -72,12 +72,6 @@ export default function TransactionsScreen() {
       <View style={[styles.loadingContainer, { paddingTop: headerHeight + 16 }]}>
         <View style={[styles.loadingBox, isDark && styles.loadingBoxDark]}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, isDark && styles.loadingTextDark]}>
-            {loadingWallet ? 'Loading wallet...' : 'Syncing transactions...'}
-          </Text>
-          <Text style={[styles.loadingSubText, isDark && styles.loadingSubTextDark]}>
-            This may take a few moments
-          </Text>
         </View>
       </View>
     )

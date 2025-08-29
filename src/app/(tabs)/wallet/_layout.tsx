@@ -184,6 +184,34 @@ export default function WalletLayout() {
           headerRight: Platform.OS === 'ios' ? () => <CloseModalButton /> : undefined,
         }}
       />
+      <Stack.Screen
+        name="send"
+        options={{
+          ...modalOptions,
+          presentation: Platform.select({
+            ios: 'modal',
+            default: 'transparentModal',
+          }),
+          animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
+          title: 'Send Bitcoin',
+          headerRight:
+            Platform.OS === 'ios' ? () => <CloseModalButton title="Cancel" /> : undefined,
+        }}
+      />
+      <Stack.Screen
+        name="receive"
+        options={{
+          ...modalOptions,
+          presentation: Platform.select({
+            ios: 'modal',
+            default: 'transparentModal',
+          }),
+          animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
+          title: 'Receive Bitcoin',
+          headerRight:
+            Platform.OS === 'ios' ? () => <CloseModalButton title="Cancel" /> : undefined,
+        }}
+      />
     </Stack>
   )
 }

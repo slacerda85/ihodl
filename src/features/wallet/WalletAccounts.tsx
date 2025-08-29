@@ -144,9 +144,6 @@ function AccountDetails({ account }: { account: Account }) {
           {loading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="small" color={colors.primary} />
-              <Text style={[styles.loadingText, isDark && styles.loadingTextDark]}>
-                {loadingWallet ? 'Loading...' : 'Syncing...'}
-              </Text>
             </View>
           ) : (
             <Text style={[styles.accountBalance, isDark && styles.accountBalanceDark]}>

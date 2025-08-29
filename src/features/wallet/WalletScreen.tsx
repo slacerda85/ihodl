@@ -26,12 +26,12 @@ export default function WalletScreen() {
 
   function handleSend() {
     // Navigate to send screen
-    // router.push('/transactions/send')
+    router.push('/wallet/send' as any)
   }
 
   function handleReceive() {
     // Navigate to receive screen
-    // router.push('/transactions/receive')
+    router.push('/wallet/receive' as any)
   }
 
   function handleCreateWallet() {
