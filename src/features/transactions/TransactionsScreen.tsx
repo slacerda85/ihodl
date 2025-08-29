@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
   },
   type: {
     fontSize: 16,
-    fontWeight: 'bold',
+    // fontWeight: 'semibold',
     color: colors.text.light,
   },
   typeDark: {
@@ -409,10 +409,13 @@ const styles = StyleSheet.create({
   },
   transactionPressable: {
     backgroundColor: colors.white,
-    padding: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
+    paddingLeft: 12,
+    paddingRight: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    // alignItems: 'center',
   },
   transactionsPressableDark: {
     backgroundColor: alpha(colors.white, 0.05),
@@ -427,7 +430,7 @@ const styles = StyleSheet.create({
   },
   balance: {
     fontSize: 16,
-    fontWeight: 'bold',
+    // fontWeight: 'bold',
     color: colors.text.light,
   },
   balanceDark: {
@@ -437,6 +440,6 @@ const styles = StyleSheet.create({
     color: colors.success,
   },
   balanceNegative: {
-    color: colors.error,
+    // color: colors.,
   },
 })
