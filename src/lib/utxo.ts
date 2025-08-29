@@ -96,6 +96,7 @@ export function analyzeTransaction(
   fee: number
   fromAddresses: string[]
   toAddresses: string[]
+  walletAddresses: string[]
 } {
   // Mapear transações por txid para lookup rápido
   const txMap = new Map<string, Tx>()
@@ -158,6 +159,18 @@ export function analyzeTransaction(
     netAmount = totalInputFromWallet - totalOutputToWallet // valor líquido enviado
   }
 
+  // Debug log para análise de transação
+  console.log(`🔍 [analyzeTransaction] ${tx.txid}:`, {
+    type,
+    totalInputFromWallet,
+    totalOutputToWallet,
+    totalOutputToExternal,
+    netAmount,
+    fromAddresses: fromAddresses.length,
+    toAddresses: toExternalAddresses.length,
+    walletAddresses: toWalletAddresses.length,
+  })
+
   // Calcular taxa aproximada (para transações enviadas)
   const totalInput = tx.vin.reduce((sum, vin) => {
     const prevTx = txMap.get(vin.txid)
@@ -178,7 +191,8 @@ export function analyzeTransaction(
     totalOutput: totalOutputToWallet,
     fee,
     fromAddresses,
-    toAddresses: type === 'received' ? toWalletAddresses : toExternalAddresses,
+    toAddresses: toExternalAddresses, // Sempre retorna endereços externos
+    walletAddresses: toWalletAddresses, // Endereços da própria carteira
   }
 }
 

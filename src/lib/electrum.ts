@@ -5,7 +5,7 @@ import { JsonRpcRequest } from '@/models/rpc'
 import { randomUUID } from 'expo-crypto'
 import { Tx } from '@/models/transaction'
 import { fromBech32, toScriptHash } from '@/lib/address'
-import { setItem, getItem } from '@/lib/storage'
+import zustandStorage from '@/lib/storage'
 import { ElectrumPeer } from '@/models/electrum'
 
 // Storage key for peers
@@ -140,7 +140,8 @@ async function getPeers(socket?: TLSSocket): Promise<ElectrumPeer[]> {
 async function savePeers(peers: ElectrumPeer[]): Promise<void> {
   try {
     console.log(`[electrum] Saving ${peers.length} peers to storage`)
-    await setItem(PEERS_STORAGE_KEY, peers)
+    const peersJson = JSON.stringify(peers)
+    await zustandStorage.setItem(PEERS_STORAGE_KEY, peersJson)
   } catch (error) {
     console.error('[electrum] Error saving peers to storage:', error)
     throw error
@@ -153,9 +154,15 @@ async function savePeers(peers: ElectrumPeer[]): Promise<void> {
  */
 async function readPeers(): Promise<ElectrumPeer[]> {
   try {
-    const peers = await getItem<ElectrumPeer[]>(PEERS_STORAGE_KEY)
-    console.log(`[electrum] Read ${peers?.length || 0} peers from storage`)
-    return peers || []
+    const peersJson = await zustandStorage.getItem(PEERS_STORAGE_KEY)
+    if (!peersJson) {
+      console.log('[electrum] No peers found in storage')
+      return []
+    }
+
+    const peers = JSON.parse(peersJson) as ElectrumPeer[]
+    console.log(`[electrum] Read ${peers.length} peers from storage`)
+    return peers
   } catch (error) {
     console.error('[electrum] Error reading peers from storage:', error)
     return []

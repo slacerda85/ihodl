@@ -43,7 +43,10 @@ export default function TransactionsScreen() {
   const activeWalletId = useStorage(state => state.activeWalletId)
   const getTransactionAnalysis = useStorage(state => state.tx.getTransactionAnalysis)
   const walletCaches = useStorage(state => state.tx.walletCaches)
-  const fetchTransactions = useStorage(state => state.tx.fetchTransactions)
+  const store = useStorage()
+
+  // Verificar se as funções existem no store
+  const hasFetchTransactions = store.tx && typeof store.tx.fetchTransactions === 'function'
 
   const loadingWallet = useStorage(state => state.loadingWalletState)
   const loadingTx = useStorage(state => state.tx.loadingTxState)
@@ -57,16 +60,11 @@ export default function TransactionsScreen() {
 
   // Trigger fetch transactions if we don't have data
   useEffect(() => {
-    if (
-      activeWalletId &&
-      !loading &&
-      !hasTransactionData &&
-      fetchTransactions &&
-      typeof fetchTransactions === 'function'
-    ) {
-      fetchTransactions(activeWalletId)
+    if (activeWalletId && !loading && !hasTransactionData && hasFetchTransactions) {
+      console.log('🚀 [TransactionsScreen] Executando fetchTransactions para:', activeWalletId)
+      store.tx.fetchTransactions(activeWalletId)
     }
-  }, [activeWalletId, loading, hasTransactionData, fetchTransactions])
+  }, [activeWalletId, loading, hasTransactionData, hasFetchTransactions, store.tx])
 
   // Loading state - show this prominently
   if (loading) {
@@ -122,6 +120,16 @@ export default function TransactionsScreen() {
       activeWalletId && getTransactionAnalysis && typeof getTransactionAnalysis === 'function'
         ? getTransactionAnalysis(activeWalletId)
         : null
+
+    // Debug: Log transaction analysis
+    if (transactionAnalysis) {
+      console.log('📊 Transaction Analysis:', {
+        balance: transactionAnalysis.balance,
+        totalTransactions: transactionAnalysis.transactions?.length || 0,
+        utxoCount: transactionAnalysis.utxos?.length || 0,
+        stats: transactionAnalysis.stats,
+      })
+    }
   } catch (error) {
     console.log('Error getting transaction analysis:', error)
   }
@@ -149,9 +157,20 @@ export default function TransactionsScreen() {
   // Now we know we have valid transaction data
   const { transactions, stats } = transactionAnalysis
 
+  console.log('📋 Processing transactions for display:', {
+    transactionCount: transactions.length,
+    stats,
+  })
+
   // Agrupar transações por data
   const grouped: Record<string, typeof transactions> = {}
   for (const txData of transactions) {
+    // Verificar se blocktime existe e é válido
+    if (!txData.tx.blocktime || txData.tx.blocktime <= 0) {
+      console.warn('Transação sem blocktime válido:', txData.tx.txid)
+      continue
+    }
+
     const date = new Date(txData.tx.blocktime * 1000).toISOString().split('T')[0]
     if (!grouped[date]) {
       grouped[date] = []
@@ -159,9 +178,18 @@ export default function TransactionsScreen() {
     grouped[date].push(txData)
   }
 
+  console.log('📅 Transactions grouped by date:', {
+    dateCount: Object.keys(grouped).length,
+    dates: Object.keys(grouped),
+  })
+
   // Ordenar transações dentro de cada data por blocktime (mais recente primeiro)
   for (const date in grouped) {
-    grouped[date].sort((a, b) => b.tx.blocktime - a.tx.blocktime)
+    grouped[date].sort((a, b) => {
+      // Verificar se blocktime existe
+      if (!a.tx.blocktime || !b.tx.blocktime) return 0
+      return b.tx.blocktime - a.tx.blocktime
+    })
   }
 
   // Preparar dados para FlatList com cabeçalhos de data
@@ -178,14 +206,17 @@ export default function TransactionsScreen() {
     data.push({ isDate: true, date: displayDate })
 
     for (const txData of grouped[date]) {
-      // Determinar endereço de exibição
+      // Determinar endereço de exibição baseado no tipo de transação
       let displayAddress = 'Unknown'
       if (txData.type === 'received') {
-        displayAddress = txData.fromAddresses[0] || 'External'
+        // Para transações recebidas, mostrar o primeiro endereço de origem (se disponível)
+        displayAddress = txData.fromAddresses.length > 0 ? txData.fromAddresses[0] : 'External'
       } else if (txData.type === 'sent') {
-        displayAddress = txData.toAddresses[0] || 'External'
+        // Para transações enviadas, mostrar o primeiro endereço de destino
+        displayAddress = txData.toAddresses.length > 0 ? txData.toAddresses[0] : 'External'
       } else {
-        displayAddress = 'Self'
+        // Para self-transfer, mostrar um dos endereços da carteira
+        displayAddress = txData.walletAddresses.length > 0 ? txData.walletAddresses[0] : 'Self'
       }
 
       data.push({

@@ -7,7 +7,16 @@ import {
 } from '@/lib/key'
 import { connect, getTransactions } from './electrum'
 import { createSegwitAddress } from './address'
-import { Tx, TxHistory, UTXO, WalletTransaction } from '@/models/transaction'
+
+import {
+  MINIMUN_CONFIRMATIONS,
+  TxHistory,
+  UTXO,
+  Tx,
+  WalletTransaction,
+  TransactionType,
+  TransactionStatus,
+} from '@/models/transaction'
 
 interface GetTxHistoryParams {
   extendedKey: Uint8Array
@@ -18,12 +27,20 @@ interface GetTxHistoryParams {
 }
 
 interface GetTxHistoryResponse {
-  balance: number
-  utxos: {
-    address: string
-    tx: Tx[]
-  }[]
   txHistory: TxHistory[]
+}
+
+interface Vout {
+  n: number
+  value: number
+  scriptPubKey: {
+    address?: string
+  }
+}
+
+interface Vin {
+  txid: string
+  vout: number
 }
 
 /**
@@ -41,7 +58,6 @@ async function getTxHistory({
   coinType = 0,
   accountStartIndex = 0,
   gapLimit = 20,
-  // multiAccount = false,
 }: GetTxHistoryParams): Promise<GetTxHistoryResponse> {
   try {
     const txHistory: TxHistory[] = []
@@ -62,52 +78,81 @@ async function getTxHistory({
     const receivingIndex = 0
     const receivingExtendedKey = deriveChildPrivateKey(accountExtendedKey, receivingIndex)
 
-    // receiving (change 1)
+    // change (change 1)
     const changeIndex = 1
     const changeExtendedKey = deriveChildPrivateKey(accountExtendedKey, changeIndex)
-
-    // const txHistory: TxHistory[] = []
-    let consecutiveUnused = 0
-    let index = 0
 
     // connect to electrum server
     const socket = await connect()
 
-    // Continue scanning until we find gapLimit consecutive unused addresses
-    while (consecutiveUnused < gapLimit) {
-      // derive address index
-      const addressIndexExtendedKey = deriveChildPrivateKey(receivingExtendedKey, index)
+    // Scan receiving addresses
+    const receivingTxHistory: TxHistory[] = []
+    let consecutiveUnusedReceiving = 0
+    let receivingIndexCount = 0
+    while (consecutiveUnusedReceiving < gapLimit) {
+      const addressIndexExtendedKey = deriveChildPrivateKey(
+        receivingExtendedKey,
+        receivingIndexCount,
+      )
       const { privateKey } = splitRootExtendedKey(addressIndexExtendedKey)
       const addressIndexPublicKey = createPublicKey(privateKey)
       const receivingAddress = createSegwitAddress(addressIndexPublicKey)
 
-      // change address
-      const changeAddressIndexExtendedKey = deriveChildPrivateKey(changeExtendedKey, index)
+      // Derive change address for the same index
+      const changeAddressIndexExtendedKey = deriveChildPrivateKey(
+        changeExtendedKey,
+        receivingIndexCount,
+      )
       const { privateKey: changePrivateKey } = splitRootExtendedKey(changeAddressIndexExtendedKey)
       const changeAddressIndexPublicKey = createPublicKey(changePrivateKey)
       const changeAddress = createSegwitAddress(changeAddressIndexPublicKey)
 
       const transactions = await getTransactions(receivingAddress, socket)
-      // const transactions = await api.transactions.getTransactions(address)
       if (transactions.length > 0) {
-        txHistory.push({
+        receivingTxHistory.push({
           receivingAddress,
           changeAddress,
-          index,
-          txs: transactions, // Store transactions associated with the address
+          index: receivingIndexCount,
+          txs: transactions,
         })
-        // Reset consecutive unused counter when we find a used address
-        consecutiveUnused = 0
+        consecutiveUnusedReceiving = 0
       } else {
-        consecutiveUnused++
+        consecutiveUnusedReceiving++
       }
-
-      index++
+      receivingIndexCount++
     }
 
-    const { balance, utxos } = calculateBalance(txHistory)
+    // Scan change addresses
+    const changeTxHistory: TxHistory[] = []
+    let consecutiveUnusedChange = 0
+    let changeIndexCount = 0
+    while (consecutiveUnusedChange < gapLimit) {
+      const changeAddressIndexExtendedKey = deriveChildPrivateKey(
+        changeExtendedKey,
+        changeIndexCount,
+      )
+      const { privateKey: changePrivateKey } = splitRootExtendedKey(changeAddressIndexExtendedKey)
+      const changeAddressIndexPublicKey = createPublicKey(changePrivateKey)
+      const changeAddress = createSegwitAddress(changeAddressIndexPublicKey)
 
-    return { balance, utxos, txHistory }
+      const transactions = await getTransactions(changeAddress, socket)
+      if (transactions.length > 0) {
+        changeTxHistory.push({
+          receivingAddress: '',
+          changeAddress,
+          index: changeIndexCount,
+          txs: transactions,
+        })
+        consecutiveUnusedChange = 0
+      } else {
+        consecutiveUnusedChange++
+      }
+      changeIndexCount++
+    }
+
+    txHistory.push(...receivingTxHistory, ...changeTxHistory)
+
+    return { txHistory }
   } catch (error) {
     throw new Error(`Failed to discover accounts: ${(error as Error).message}`)
   }
@@ -115,147 +160,198 @@ async function getTxHistory({
 
 function calculateBalance(txHistory: TxHistory[]): {
   balance: number
-  utxos: { address: string; tx: Tx[] }[]
+  utxos: { address: string; utxos: UTXO[] }[]
 } {
-  let balance = 0
-  const utxos: { address: string; tx: Tx[] }[] = []
+  const allTxs = new Map<string, Tx>()
+  const ourAddresses = new Set<string>()
+  const utxosByAddress = new Map<string, UTXO[]>()
 
-  txHistory.forEach(address => {
-    const { receivingAddress, txs } = address
-
-    const utxos = txs.filter(tx => {
-      // if the array of txs has any tx that has a vin that matches the txid of the current tx, its already spent
-      if (txs.some(t => t.vin.some(v => v.txid === tx.txid))) {
-        return false
-      }
-      // if the tx is not spent, add it to the utxos array
-      return true
+  // Collect all addresses and transactions
+  txHistory.forEach(history => {
+    if (history.receivingAddress) ourAddresses.add(history.receivingAddress)
+    if (history.changeAddress) ourAddresses.add(history.changeAddress)
+    history.txs.forEach(tx => {
+      allTxs.set(tx.txid, tx)
     })
-
-    // calculate balance for each address
-    const addressBalance = utxos.reduce((acc, tx) => {
-      const vout = tx.vout.find(v => v.scriptPubKey.address === receivingAddress)
-      if (vout) {
-        return acc + vout.value
-      }
-      return acc
-    }, 0)
-
-    balance += addressBalance
   })
 
-  return {
-    balance,
-    utxos,
-  }
-}
+  // Initialize UTXO arrays for each address
+  ourAddresses.forEach(addr => utxosByAddress.set(addr, []))
 
-type GetWalletAddressesRequest = {
-  extendedKey: Uint8Array
-  purpose: Purpose
-  coinType: CoinType
-  accountStartIndex?: number
-  gapLimit?: number
-}
+  let balance = 0
 
-/* async function getWalletAddresses({
-  extendedKey,
-  purpose = 84,
-  coinType = 0,
-  accountStartIndex = 0,
-  gapLimit = 20,
-  // multiAccount = false,
-}: GetWalletAddressesRequest): string[] {
-  try {
-  } catch (error) {}
-} */
-/* 
-async function processWalletTransactions(walletAddresses: Set<string>): Promise<{
-  balance: number
-  utxos: UTXO[]
-  walletTransactions: WalletTransaction[]
-}> {
-  // Assume existing code fetches allTxs and builds allTxsMap, calculates balance and utxos
-  // For example:
-  // const allTxs = await fetchTransactions(walletAddresses);
-  // const allTxsMap = new Map(allTxs.map(tx => [tx.txid, tx]));
-  // const { balance, utxos } = calculateBalanceAndUtxos(allTxs, walletAddresses);
-
-  const walletTransactions: WalletTransaction[] = allTxs.map(tx => {
-    // Determine if transaction spends wallet funds (i.e., 'sent')
-    const isSent = tx.vin.some(vin => {
-      const prevTx = allTxsMap.get(vin.txid)
-      return prevTx && walletAddresses.has(prevTx.vout[vin.vout].scriptPubKey.address)
-    })
-    const type: 'sent' | 'received' = isSent ? 'sent' : 'received'
-
-    // Calculate amount based on type
-    const amount = tx.vout.reduce((sum, vout) => {
-      const address = vout.scriptPubKey.address
-      if (
-        (type === 'received' && walletAddresses.has(address)) ||
-        (type === 'sent' && !walletAddresses.has(address))
-      ) {
-        return sum + vout.value
+  allTxs.forEach((tx, txid) => {
+    tx.vout.forEach(vout => {
+      const addr = vout.scriptPubKey.address
+      if (addr && ourAddresses.has(addr)) {
+        const isSpent = Array.from(allTxs.values()).some(t =>
+          t.vin.some(vin => vin.txid === txid && vin.vout === vout.n),
+        )
+        if (!isSpent) {
+          const utxo: UTXO = {
+            txid,
+            vout: vout.n,
+            address: addr,
+            amount: vout.value,
+            confirmations: tx.confirmations ?? 0,
+            scriptPubKey: vout.scriptPubKey,
+          }
+          utxosByAddress.get(addr)!.push(utxo)
+          balance += vout.value
+        }
       }
-      return sum
-    }, 0)
+    })
+  })
 
-    // Set fromAddress
-    let fromAddress = type === 'received' ? 'External' : ''
-    if (type === 'sent') {
-      for (const vin of tx.vin) {
-        const prevTx = allTxsMap.get(vin.txid)
-        if (prevTx) {
-          const address = prevTx.vout[vin.vout].scriptPubKey.address
-          if (walletAddresses.has(address)) {
-            fromAddress = address
-            break
+  const utxos = Array.from(utxosByAddress, ([address, utxos]) => ({ address, utxos }))
+
+  return { balance, utxos }
+}
+
+export type UIFriendlyTransaction = WalletTransaction & {
+  fee: number | null
+  confirmations: number | null
+}
+
+export async function getFriendlyTransactions(
+  txHistory: TxHistory[],
+  params: GetTxHistoryParams,
+): Promise<UIFriendlyTransaction[]> {
+  const allTxs = new Map<string, Tx>()
+  const ourAddresses = new Set<string>()
+
+  txHistory.forEach(history => {
+    if (history.receivingAddress) ourAddresses.add(history.receivingAddress)
+    if (history.changeAddress) ourAddresses.add(history.changeAddress)
+    history.txs.forEach(tx => {
+      allTxs.set(tx.txid, tx)
+    })
+  })
+
+  const friendlyTxs: UIFriendlyTransaction[] = []
+
+  allTxs.forEach((tx, txid) => {
+    let ourInputsValue = 0
+    let totalInputsValue = 0
+    const ourInputAddresses: string[] = []
+    const nonOurInputAddresses: string[] = []
+
+    tx.vin.forEach(vin => {
+      const prevTx = allTxs.get(vin.txid)
+      if (prevTx) {
+        const prevVout = prevTx.vout[vin.vout]
+        if (prevVout && prevVout.scriptPubKey.address) {
+          totalInputsValue += prevVout.value
+          const prevAddr = prevVout.scriptPubKey.address
+          if (ourAddresses.has(prevAddr)) {
+            ourInputsValue += prevVout.value
+            ourInputAddresses.push(prevAddr)
+          } else {
+            nonOurInputAddresses.push(prevAddr)
           }
         }
       }
-    }
+    })
 
-    // Set toAddress
-    let toAddress = ''
-    for (const vout of tx.vout) {
-      const address = vout.scriptPubKey.address
-      if (
-        (type === 'received' && walletAddresses.has(address)) ||
-        (type === 'sent' && !walletAddresses.has(address))
-      ) {
-        toAddress = address
-        break
+    let ourOutputsValue = 0
+    const ourOutputAddresses: string[] = []
+    const toAddresses: string[] = []
+    let nonOurOutputsValue = 0
+
+    tx.vout.forEach(vout => {
+      const addr = vout.scriptPubKey.address
+      if (addr) {
+        if (ourAddresses.has(addr)) {
+          ourOutputsValue += vout.value
+          ourOutputAddresses.push(addr)
+        } else {
+          nonOurOutputsValue += vout.value
+          toAddresses.push(addr)
+        }
       }
+    })
+
+    const net = ourOutputsValue - ourInputsValue
+    let type: TransactionType = net >= 0 ? 'received' : 'sent'
+    let amount = Math.abs(net)
+    if (ourInputsValue > 0 && ourOutputsValue > 0 && net === 0) {
+      type = 'sent' // Self-transfer, treat as sent.
     }
 
-    // Convert timestamp to date string
-    const timestamp = tx.time || tx.blocktime
-    const date = new Date(timestamp * 1000).toISOString()
+    const fromAddress =
+      ourInputsValue > 0 ? ourInputAddresses[0] || '' : nonOurInputAddresses[0] || 'Unknown'
 
-    // Determine status based on confirmations
-    const confirmations = tx.confirmations || 0
-    let status: 'pending' | 'processing' | 'confirmed'
-    if (confirmations === 0) {
-      status = 'pending'
-    } else if (confirmations < 6) {
-      status = 'processing'
-    } else {
-      status = 'confirmed'
+    const toAddress =
+      ourInputsValue > 0
+        ? toAddresses[0] || ourOutputAddresses[0] || ''
+        : ourOutputAddresses[0] || ''
+
+    let fee: number | null = null
+    if (ourInputsValue > 0) {
+      const totalOutputsValue = ourOutputsValue + nonOurOutputsValue
+      fee = totalInputsValue - totalOutputsValue
     }
 
-    return {
-      txid: tx.txid,
+    const confirmations = tx.confirmations ?? 0
+    const status = getTransactionStatus(tx, MINIMUN_CONFIRMATIONS)
+    const date = new Date(tx.time * 1000).toISOString()
+
+    friendlyTxs.push({
+      txid,
       date,
       type,
       fromAddress,
       toAddress,
       amount,
       status,
-    }
+      fee,
+      confirmations,
+    })
   })
 
-  return { balance, utxos, walletTransactions }
-} */
+  // Sort by date descending (most recent first).
+  friendlyTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+
+  return friendlyTxs
+}
+
+function isSpent(txHistory: Tx[], utxo: UTXO): boolean {
+  return txHistory.some(tx => tx.vin.some(vin => vin.txid === utxo.txid && vin.vout === utxo.vout))
+}
+
+function isReceived(txHistory: Tx[], utxo: UTXO): boolean {
+  return txHistory.some(tx =>
+    tx.vout.some(vout => vout.n === utxo.vout && vout.scriptPubKey.address === utxo.address),
+  )
+}
+
+function isChangeAddress(txHistory: Tx[], utxo: UTXO, changeAddress: string): boolean {
+  return txHistory.some(tx =>
+    tx.vout.some(vout => vout.scriptPubKey.address === changeAddress && vout.n === utxo.vout),
+  )
+}
+
+function isConfirmed(tx: Tx, minConfirmations: number): boolean {
+  return (tx.confirmations ?? 0) >= minConfirmations
+}
+
+function isPending(tx: Tx): boolean {
+  return (tx.confirmations ?? 0) < 1
+}
+
+function isProcessing(tx: Tx): boolean {
+  return (tx.confirmations ?? 0) > 0 && (tx.confirmations ?? 0) < 3
+}
+
+function getTransactionStatus(tx: Tx, minConfirmations: number): TransactionStatus {
+  if (isConfirmed(tx, minConfirmations)) {
+    return 'confirmed'
+  } else if (isPending(tx)) {
+    return 'pending'
+  } else if (isProcessing(tx)) {
+    return 'processing'
+  }
+  return 'unknown'
+}
 
 export { getTxHistory, calculateBalance }

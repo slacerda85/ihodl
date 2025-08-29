@@ -13,7 +13,7 @@ export type UTXO = {
   address: string
   amount: number
   confirmations: number
-  scriptPubKey: string
+  scriptPubKey: ScriptPubKey
   redeemScript?: string
 }
 
@@ -49,17 +49,19 @@ export type Vin = {
 export type Vout = {
   value: number
   n: number
-  scriptPubKey: {
-    asm: string
-    hex: string
-    reqSigs: number
-    type: string
-    address: string
-  }
+  scriptPubKey: ScriptPubKey
 }
 
-type TransactionType = 'received' | 'sent'
-type TransactionStatus = 'pending' | 'processing' | 'confirmed'
+type ScriptPubKey = {
+  asm: string
+  hex: string
+  reqSigs: number
+  type: string
+  address: string
+}
+
+export type TransactionType = 'received' | 'sent'
+export type TransactionStatus = 'pending' | 'processing' | 'confirmed' | 'unknown'
 
 export type WalletTransaction = {
   txid: string

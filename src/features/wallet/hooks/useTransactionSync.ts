@@ -17,6 +17,11 @@ export function useTransactionSync(activeWalletId?: string) {
   console.log('🔍 [useTransactionSync] fetchTransactions extraído:', fetchTransactions)
   console.log('🔍 [useTransactionSync] Tipo de fetchTransactions:', typeof fetchTransactions)
 
+  // Verificar se as funções existem no store
+  const hasFetchTransactions = store.tx && typeof store.tx.fetchTransactions === 'function'
+
+  console.log('🔍 [useTransactionSync] Função fetchTransactions existe?', hasFetchTransactions)
+
   // Check if we have cached data for the active wallet
   const hasTransactionData = activeWalletId
     ? walletCaches.some(cache => cache.walletId === activeWalletId)
@@ -37,7 +42,8 @@ export function useTransactionSync(activeWalletId?: string) {
       loadingWallet,
       loadingTx,
       hasTransactionData,
-      hasFetchFunction: !!fetchTransactions,
+      hasFetchFunction: hasFetchTransactions,
+      storeTxExists: !!store.tx,
     })
 
     if (
@@ -45,14 +51,14 @@ export function useTransactionSync(activeWalletId?: string) {
       !loadingWallet &&
       !loadingTx &&
       !hasTransactionData &&
-      fetchTransactions &&
-      typeof fetchTransactions === 'function'
+      hasFetchTransactions
     ) {
       console.log('✅ [useTransactionSync] Condições atendidas, iniciando fetch em 100ms...')
       // Small delay to allow UI to update first
       const timer = setTimeout(() => {
         console.log('🚀 [useTransactionSync] Executando fetchTransactions para:', activeWalletId)
-        fetchTransactions(activeWalletId)
+        // Usar a função diretamente do store para garantir que existe
+        store.tx.fetchTransactions(activeWalletId)
       }, 100)
 
       return () => {
@@ -65,10 +71,11 @@ export function useTransactionSync(activeWalletId?: string) {
         walletLoading: loadingWallet,
         txLoading: loadingTx,
         hasData: hasTransactionData,
-        noFetchFunction: !fetchTransactions,
+        noFetchFunction: !hasFetchTransactions,
+        storeTxMissing: !store.tx,
       })
     }
-  }, [activeWalletId, fetchTransactions, loadingWallet, loadingTx, hasTransactionData])
+  }, [activeWalletId, hasFetchTransactions, loadingWallet, loadingTx, hasTransactionData, store.tx])
 
   return {
     loading: loadingWallet || loadingTx,
