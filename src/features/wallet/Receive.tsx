@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import QRCode from 'react-native-qrcode-svg'
+import * as Clipboard from 'expo-clipboard'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/icon-symbol'
@@ -301,14 +302,19 @@ export default function Receive() {
   }
 
   // Handle copy address
-  const handleCopyAddress = () => {
+  const handleCopyAddress = async () => {
     if (!selectedAddress) {
       Alert.alert('Error', 'Please select an address first')
       return
     }
 
-    // In a real implementation, you would use Clipboard.setString()
-    Alert.alert('Copied!', 'Address copied to clipboard')
+    try {
+      await Clipboard.setStringAsync(selectedAddress)
+      Alert.alert('Copied!', 'Address copied to clipboard')
+    } catch (error) {
+      console.error('Error copying to clipboard:', error)
+      Alert.alert('Error', 'Failed to copy address to clipboard')
+    }
   }
 
   // Generate new address (placeholder)
