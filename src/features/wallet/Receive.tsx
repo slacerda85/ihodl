@@ -29,11 +29,11 @@ import {
 import { createSegwitAddress } from '@/lib/address'
 
 // Mock data for demonstration
-const mockAddresses = [
+/* const mockAddresses = [
   'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
   'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
   'bc1p5d7rjq7g6rdk2yhzks9smlaqtedr4dekq08ge8ztwac72sfr9rusxg3297',
-]
+] */
 
 // Types for address data
 interface UsedAddress {
@@ -97,10 +97,10 @@ const generateWalletAddressesAsync = async (
 }> => {
   if (!wallet) {
     return {
-      availableAddresses: mockAddresses,
+      availableAddresses: [],
       usedReceivingAddresses: [],
       usedChangeAddresses: [],
-      nextUnusedAddress: mockAddresses[0],
+      nextUnusedAddress: '',
     }
   }
 
@@ -185,15 +185,15 @@ const generateWalletAddressesAsync = async (
       availableAddresses: allAddresses,
       usedReceivingAddresses: usedReceiving,
       usedChangeAddresses: usedChange,
-      nextUnusedAddress: nextUnused || allAddresses[0] || mockAddresses[0],
+      nextUnusedAddress: nextUnused || allAddresses[0] || '',
     }
   } catch (error) {
     console.error('Error generating wallet addresses:', error)
     return {
-      availableAddresses: mockAddresses,
+      availableAddresses: [],
       usedReceivingAddresses: [],
       usedChangeAddresses: [],
-      nextUnusedAddress: mockAddresses[0],
+      nextUnusedAddress: '',
     }
   }
 }
@@ -212,7 +212,7 @@ export default function Receive() {
   // const [_availableAddresses, setAvailableAddresses] = useState<string[]>(mockAddresses)
   const [usedReceivingAddresses, setUsedReceivingAddresses] = useState<UsedAddress[]>([])
   const [usedChangeAddresses, setUsedChangeAddresses] = useState<UsedAddress[]>([])
-  const [nextUnusedAddress, setNextUnusedAddress] = useState<string>(mockAddresses[0])
+  const [nextUnusedAddress, setNextUnusedAddress] = useState<string>('')
 
   // Get active wallet
   const activeWallet = wallets.find(w => w.walletId === activeWalletId)
@@ -227,7 +227,7 @@ export default function Receive() {
       // setAvailableAddresses(mockAddresses)
       setUsedReceivingAddresses([])
       setUsedChangeAddresses([])
-      setNextUnusedAddress(mockAddresses[0])
+      setNextUnusedAddress('')
       setIsLoadingAddresses(false)
       return
     }
