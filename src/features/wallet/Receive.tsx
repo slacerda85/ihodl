@@ -209,7 +209,7 @@ export default function Receive() {
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(false)
 
   // Address data state - separate from useMemo for better performance
-  const [availableAddresses, setAvailableAddresses] = useState<string[]>(mockAddresses)
+  // const [_availableAddresses, setAvailableAddresses] = useState<string[]>(mockAddresses)
   const [usedReceivingAddresses, setUsedReceivingAddresses] = useState<UsedAddress[]>([])
   const [usedChangeAddresses, setUsedChangeAddresses] = useState<UsedAddress[]>([])
   const [nextUnusedAddress, setNextUnusedAddress] = useState<string>(mockAddresses[0])
@@ -224,7 +224,7 @@ export default function Receive() {
   // Generate addresses asynchronously when wallet changes
   useEffect(() => {
     if (!activeWallet) {
-      setAvailableAddresses(mockAddresses)
+      // setAvailableAddresses(mockAddresses)
       setUsedReceivingAddresses([])
       setUsedChangeAddresses([])
       setNextUnusedAddress(mockAddresses[0])
@@ -248,7 +248,7 @@ export default function Receive() {
 
         if (!isMountedRef.current) return
 
-        setAvailableAddresses(result.availableAddresses)
+        // setAvailableAddresses(result.availableAddresses)
         setUsedReceivingAddresses(result.usedReceivingAddresses)
         setUsedChangeAddresses(result.usedChangeAddresses)
         setNextUnusedAddress(result.nextUnusedAddress)
@@ -606,8 +606,8 @@ const styles = StyleSheet.create({
   qrContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 8,
-    borderRadius: 12,
+    // padding: 8,
+    // borderRadius: 12,
     // backgroundColor: alpha(colors.black, 0.03),
   },
   qrContainerDark: {

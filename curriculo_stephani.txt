@@ -1,0 +1,89 @@
+Stephani de Souza Lacerda
+
+[+55 21 99501 0519]
+[s.lacerda@outlook.com]
+[github.com/slacerda85]
+
+RESUMO PROFISSIONAL
+Desenvolvedor de software especializado em aplicações móveis e blockchain, com experiência em desenvolvimento de carteiras de criptomoedas. Proficiente em tecnologias modernas como React Native, TypeScript e integração com protocolos Bitcoin. Apaixonado por soluções seguras e eficientes para transações digitais.
+
+EXPERIÊNCIA PROFISSIONAL
+Desenvolvedor Full-Stack - Projeto de Carteira Bitcoin (ihodl)
+[Data de Início] - [Data de Fim]
+- Desenvolvimento de aplicação móvel para gerenciamento de carteiras Bitcoin usando React Native e Expo.
+- Implementação de funcionalidades de envio e recebimento de Bitcoin, incluindo validação de endereços, cálculo de taxas e integração com Electrum.
+- Criação de componentes UI responsivos e acessíveis, com suporte a temas claro/escuro.
+- Integração de bibliotecas de criptografia para geração de chaves, assinatura de transações e gerenciamento de UTXOs.
+- Desenvolvimento de testes unitários com Jest para garantir a robustez do código.
+- Uso de TypeScript para tipagem estática e melhoria da manutenibilidade.
+- Gerenciamento de estado com Zustand para armazenamento local e sincronização de dados.
+- Colaboração em equipe usando Git e VS Code para desenvolvimento colaborativo.
+
+[Experiência Anterior]
+[Desenvolvedor] - [Sumaq]
+[Data de Início] - [Data de Fim]
+- [Desenvolvedor frontend typescript]
+
+EDUCAÇÃO
+[Bacharelado em Ciência da Computação] - [Universidade Estácio]
+[Em curso]
+- Foco em algoritmos, estruturas de dados e desenvolvimento de software.
+
+[Conhecimentos]
+- [Desenvolvimento Mobile]
+- [Blockchain/Bitcoin]
+
+HABILIDADES TÉCNICAS
+Linguagens de Programação:
+- TypeScript
+- JavaScript (ES6+)
+- Python (básico, para testes e scripts)
+
+Frameworks e Bibliotecas:
+- React Native
+- Expo
+- React (Hooks, Context API)
+- Zustand (gerenciamento de estado)
+- Jest (testes unitários)
+
+Tecnologias Blockchain/Cripto:
+- Bitcoin Protocol (UTXO, transações, endereços SegWit)
+- BIP39 (mnemônicos)
+- BIP32/BIP49/BIP84 (derivação de chaves)
+- Electrum (integração com servidores)
+- Criptografia (ECDSA, SHA-256, etc.)
+
+Ferramentas e Plataformas:
+- VS Code
+- Git/GitHub
+- Expo CLI
+- Node.js/npm
+- Android Studio (para builds)
+- Xcode (para iOS, simulação)
+
+Outras Habilidades:
+- Desenvolvimento de UI/UX para mobile
+- Integração de APIs
+- Debugging e otimização de performance
+- Segurança em aplicações cripto
+- Versionamento de código
+
+PROJETOS NOTÁVEIS
+Carteira Bitcoin (ihodl)
+- Aplicação completa para criação, importação e gerenciamento de carteiras Bitcoin.
+- Funcionalidades: Envio/recebimento de BTC, sincronização de transações, validação de endereços.
+- Tecnologias: React Native, TypeScript, bibliotecas de cripto personalizadas.
+- Repositório: [github.com/slacerda85/ihodl]
+
+[Testes de Vetores BIP]
+- Implementação de testes para vetores de teste BIP32, BIP49, BIP84.
+- Garantia de conformidade com padrões Bitcoin.
+
+IDIOMAS
+- Português: Nativo
+- Inglês: [Nível avançado]
+
+OUTRAS INFORMAÇÕES
+- Participação em comunidades de desenvolvimento open-source relacionadas a blockchain.
+- Interesse em aprendizado contínuo em tecnologias emergentes como Lightning Network e DeFi.
+

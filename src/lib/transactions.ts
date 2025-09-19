@@ -5,17 +5,25 @@ import {
   deriveChildPrivateKey,
   splitRootExtendedKey,
 } from '@/lib/key'
-import { connect, getTransactions } from './electrum'
-import { createSegwitAddress } from './address'
-
+import { connect, getTransactions, callElectrumMethod } from './electrum'
+import { createSegwitAddress, fromBech32 } from './address'
+import { hash256, hash160, uint8ArrayToHex, hexToUint8Array } from '@/lib/crypto'
+import { UTXO } from './utxo'
 import {
   MINIMUN_CONFIRMATIONS,
   TxHistory,
-  UTXO,
   Tx,
   WalletTransaction,
   TransactionType,
   TransactionStatus,
+} from '@/models/transaction'
+import {
+  BuildTransactionParams,
+  BuildTransactionResult,
+  SignTransactionParams,
+  SignTransactionResult,
+  SendTransactionParams,
+  SendTransactionResult,
 } from '@/models/transaction'
 
 interface GetTxHistoryParams {
@@ -28,19 +36,6 @@ interface GetTxHistoryParams {
 
 interface GetTxHistoryResponse {
   txHistory: TxHistory[]
-}
-
-interface Vout {
-  n: number
-  value: number
-  scriptPubKey: {
-    address?: string
-  }
-}
-
-interface Vin {
-  txid: string
-  vout: number
 }
 
 /**
@@ -192,9 +187,17 @@ function calculateBalance(txHistory: TxHistory[]): {
             txid,
             vout: vout.n,
             address: addr,
-            amount: vout.value,
+            value: vout.value,
+            blocktime: tx.blocktime,
+            isSpent,
             confirmations: tx.confirmations ?? 0,
-            scriptPubKey: vout.scriptPubKey,
+            scriptPubKey: {
+              asm: vout.scriptPubKey.asm,
+              hex: vout.scriptPubKey.hex,
+              reqSigs: vout.scriptPubKey.reqSigs,
+              type: vout.scriptPubKey.type,
+              addresses: [vout.scriptPubKey.address],
+            },
           }
           utxosByAddress.get(addr)!.push(utxo)
           balance += vout.value
@@ -315,22 +318,6 @@ export async function getFriendlyTransactions(
   return friendlyTxs
 }
 
-function isSpent(txHistory: Tx[], utxo: UTXO): boolean {
-  return txHistory.some(tx => tx.vin.some(vin => vin.txid === utxo.txid && vin.vout === utxo.vout))
-}
-
-function isReceived(txHistory: Tx[], utxo: UTXO): boolean {
-  return txHistory.some(tx =>
-    tx.vout.some(vout => vout.n === utxo.vout && vout.scriptPubKey.address === utxo.address),
-  )
-}
-
-function isChangeAddress(txHistory: Tx[], utxo: UTXO, changeAddress: string): boolean {
-  return txHistory.some(tx =>
-    tx.vout.some(vout => vout.scriptPubKey.address === changeAddress && vout.n === utxo.vout),
-  )
-}
-
 function isConfirmed(tx: Tx, minConfirmations: number): boolean {
   return (tx.confirmations ?? 0) >= minConfirmations
 }
@@ -353,5 +340,690 @@ function getTransactionStatus(tx: Tx, minConfirmations: number): TransactionStat
   }
   return 'unknown'
 }
+/**
+ * Creates a scriptPubKey for a Bitcoin address
+ * @param address - Bitcoin address
+ * @returns ScriptPubKey as Uint8Array
+ */
+function createScriptPubKey(address: string): Uint8Array {
+  try {
+    // For Bech32 addresses (P2WPKH)
+    if (address.startsWith('bc1')) {
+      const { version, data } = fromBech32(address)
 
+      if (version !== 0) {
+        throw new Error('Only witness version 0 is supported')
+      }
+
+      // P2WPKH script: OP_0 <20-byte-hash>
+      const script = new Uint8Array(22)
+      script[0] = 0x00 // OP_0
+      script[1] = 0x14 // Push 20 bytes
+      script.set(data, 2)
+      return script
+    }
+
+    throw new Error('Unsupported address format')
+  } catch (error) {
+    throw new Error(`Failed to create scriptPubKey: ${(error as Error).message}`)
+  }
+}
+
+/**
+ * Simple Bitcoin transaction structure
+ */
+interface SimpleTransaction {
+  version: number
+  inputs: {
+    txid: string
+    vout: number
+    scriptSig: Uint8Array
+    sequence: number
+    witness?: Uint8Array[]
+  }[]
+  outputs: {
+    value: number
+    scriptPubKey: Uint8Array
+  }[]
+  locktime: number
+  witnesses: Uint8Array[][]
+}
+
+/**
+ * Serializes a transaction to bytes
+ * @param tx - Transaction to serialize
+ * @returns Serialized transaction as Uint8Array
+ */
+function serializeTransaction(tx: SimpleTransaction): Uint8Array {
+  const parts: Uint8Array[] = []
+
+  // Version (4 bytes, little endian)
+  const versionBytes = new Uint8Array(4)
+  new DataView(versionBytes.buffer).setUint32(0, tx.version, true)
+  parts.push(versionBytes)
+
+  // Input count (varint)
+  parts.push(encodeVarint(tx.inputs.length))
+
+  // Inputs
+  for (const input of tx.inputs) {
+    // Previous txid (32 bytes, little endian)
+    parts.push(hexToUint8Array(input.txid).reverse())
+
+    // Previous vout (4 bytes, little endian)
+    const voutBytes = new Uint8Array(4)
+    new DataView(voutBytes.buffer).setUint32(0, input.vout, true)
+    parts.push(voutBytes)
+
+    // ScriptSig length (varint)
+    parts.push(encodeVarint(input.scriptSig.length))
+
+    // ScriptSig
+    parts.push(input.scriptSig)
+
+    // Sequence (4 bytes, little endian)
+    const sequenceBytes = new Uint8Array(4)
+    new DataView(sequenceBytes.buffer).setUint32(0, input.sequence, true)
+    parts.push(sequenceBytes)
+  }
+
+  // Output count (varint)
+  parts.push(encodeVarint(tx.outputs.length))
+
+  // Outputs
+  for (const output of tx.outputs) {
+    // Value (8 bytes, little endian)
+    const valueBytes = new Uint8Array(8)
+    new DataView(valueBytes.buffer).setBigUint64(0, BigInt(output.value), true)
+    parts.push(valueBytes)
+
+    // ScriptPubKey length (varint)
+    parts.push(encodeVarint(output.scriptPubKey.length))
+
+    // ScriptPubKey
+    parts.push(output.scriptPubKey)
+  }
+
+  // Witnesses (for SegWit)
+  for (const witness of tx.witnesses) {
+    if (witness.length > 0) {
+      parts.push(encodeVarint(witness.length))
+      for (const item of witness) {
+        parts.push(encodeVarint(item.length))
+        parts.push(item)
+      }
+    } else {
+      parts.push(new Uint8Array([0])) // Empty witness
+    }
+  }
+
+  // Locktime (4 bytes, little endian)
+  const locktimeBytes = new Uint8Array(4)
+  new DataView(locktimeBytes.buffer).setUint32(0, tx.locktime, true)
+  parts.push(locktimeBytes)
+
+  // Combine all parts
+  const totalLength = parts.reduce((sum, part) => sum + part.length, 0)
+  const result = new Uint8Array(totalLength)
+  let offset = 0
+  for (const part of parts) {
+    result.set(part, offset)
+    offset += part.length
+  }
+
+  return result
+}
+
+/**
+ * Encodes a number as a Bitcoin varint
+ * @param value - Number to encode
+ * @returns Varint as Uint8Array
+ */
+function encodeVarint(value: number): Uint8Array {
+  if (value < 0xfd) {
+    return new Uint8Array([value])
+  } else if (value <= 0xffff) {
+    const result = new Uint8Array(3)
+    result[0] = 0xfd
+    new DataView(result.buffer).setUint16(1, value, true)
+    return result
+  } else if (value <= 0xffffffff) {
+    const result = new Uint8Array(5)
+    result[0] = 0xfe
+    new DataView(result.buffer).setUint32(1, value, true)
+    return result
+  } else {
+    const result = new Uint8Array(9)
+    result[0] = 0xff
+    new DataView(result.buffer).setBigUint64(1, BigInt(value), true)
+    return result
+  }
+}
+
+/**
+ * Builds a Bitcoin transaction with the specified parameters
+ * @param params - Transaction building parameters
+ * @returns Transaction building result
+ */
+export async function buildTransaction({
+  recipientAddress,
+  amount,
+  feeRate,
+  utxos,
+  changeAddress,
+  extendedKey,
+  purpose = 84,
+  coinType = 0,
+  accountIndex = 0,
+}: BuildTransactionParams): Promise<BuildTransactionResult> {
+  try {
+    // Validate input parameters
+
+    if (amount <= 0) {
+      throw new Error(`Amount must be positive, got: ${amount}`)
+    }
+    if (!Number.isInteger(feeRate) && feeRate !== Math.floor(feeRate)) {
+      throw new Error(`Fee rate must be an integer, got: ${feeRate}`)
+    }
+    if (feeRate <= 0) {
+      throw new Error(`Fee rate must be positive, got: ${feeRate}`)
+    }
+    // Filter UTXOs with sufficient confirmations
+    const confirmedUtxos = utxos.filter(utxo => utxo.confirmations >= 6)
+
+    if (confirmedUtxos.length === 0) {
+      throw new Error('No confirmed UTXOs available')
+    }
+
+    // Select UTXOs using a simple selection algorithm (largest first)
+    const selectedUtxos = selectUtxos(confirmedUtxos, amount)
+    const totalInputAmount = selectedUtxos.reduce((sum, utxo) => sum + utxo.value, 0)
+
+    if (totalInputAmount < amount) {
+      throw new Error('Insufficient funds')
+    }
+
+    // Estimate transaction size for fee calculation
+    const estimatedTxSize = estimateTransactionSize(selectedUtxos.length, 2) // 2 outputs: recipient + change
+    const estimatedFee = Math.ceil(estimatedTxSize * feeRate)
+    console.log('Estimated transaction size (bytes):', estimatedTxSize)
+    console.log('Estimated fee (satoshis):', estimatedFee)
+    // Calculate change amount
+    const changeAmount = totalInputAmount - amount - estimatedFee
+
+    if (changeAmount < 0) {
+      throw new Error('Insufficient funds after fee calculation')
+    }
+
+    // Create transaction
+    const tx: SimpleTransaction = {
+      version: 2,
+      inputs: [],
+      outputs: [],
+      locktime: 0,
+      witnesses: [],
+    }
+
+    // Add inputs
+    const inputs = []
+    for (const utxo of selectedUtxos) {
+      tx.inputs.push({
+        txid: utxo.txid,
+        vout: utxo.vout,
+        scriptSig: new Uint8Array(0), // Empty for SegWit
+        sequence: 0xffffffff,
+      })
+
+      tx.witnesses.push([]) // Empty witness to be filled during signing
+
+      inputs.push({
+        txid: utxo.txid,
+        vout: utxo.vout,
+        amount: utxo.value,
+        address: utxo.address,
+      })
+    }
+
+    // Add outputs
+    const outputs = []
+
+    // Recipient output
+    tx.outputs.push({
+      value: amount,
+      scriptPubKey: createScriptPubKey(recipientAddress),
+    })
+    outputs.push({
+      address: recipientAddress,
+      amount,
+    })
+
+    // Add change output if change amount is significant
+    if (changeAmount > 0) {
+      tx.outputs.push({
+        value: changeAmount,
+        scriptPubKey: createScriptPubKey(changeAddress),
+      })
+      outputs.push({
+        address: changeAddress,
+        amount: changeAmount,
+      })
+    }
+
+    return {
+      transaction: tx,
+      inputs,
+      outputs,
+      fee: estimatedFee,
+      changeAmount: changeAmount > 546 ? changeAmount : 0,
+    }
+  } catch (error) {
+    throw new Error(`Failed to build transaction: ${(error as Error).message}`)
+  }
+}
+
+/**
+ * Signs a Bitcoin transaction
+ * @param params - Transaction signing parameters
+ * @returns Signed transaction result
+ */
+export async function signTransaction({
+  transaction,
+  inputs,
+  extendedKey,
+  purpose = 84,
+  coinType = 0,
+  accountIndex = 0,
+}: SignTransactionParams): Promise<SignTransactionResult> {
+  try {
+    // Validate inputs
+    for (const input of inputs) {
+      if (!Number.isInteger(input.amount)) {
+        throw new Error(`Input amount must be an integer, got: ${input.amount}`)
+      }
+      if (input.amount <= 0) {
+        throw new Error(`Input amount must be positive, got: ${input.amount}`)
+      }
+    }
+
+    // Validate transaction values
+    for (const output of transaction.outputs) {
+      if (!Number.isInteger(output.value)) {
+        throw new Error(`Output value must be an integer, got: ${output.value}`)
+      }
+      if (output.value <= 0) {
+        throw new Error(`Output value must be positive, got: ${output.value}`)
+      }
+    }
+
+    if (!Number.isInteger(transaction.version)) {
+      throw new Error(`Transaction version must be an integer, got: ${transaction.version}`)
+    }
+
+    if (!Number.isInteger(transaction.locktime)) {
+      throw new Error(`Transaction locktime must be an integer, got: ${transaction.locktime}`)
+    }
+    // Derive the account extended key
+    const purposeIndex = createHardenedIndex(purpose)
+    const purposeExtendedKey = deriveChildPrivateKey(extendedKey, purposeIndex)
+
+    const coinTypeIndex = createHardenedIndex(coinType)
+    const coinTypeExtendedKey = deriveChildPrivateKey(purposeExtendedKey, coinTypeIndex)
+
+    const accountIndexHardened = createHardenedIndex(accountIndex)
+    const accountExtendedKey = deriveChildPrivateKey(coinTypeExtendedKey, accountIndexHardened)
+
+    // Sign each input
+    for (let i = 0; i < inputs.length; i++) {
+      const input = inputs[i]
+
+      // Find the derivation path for this address
+      const addressInfo = await findAddressIndex(accountExtendedKey, input.address)
+
+      if (addressInfo === null) {
+        throw new Error(`Could not find derivation path for address ${input.address}`)
+      }
+
+      // Derive the private key for this address based on type (receiving or change)
+      const chainIndex = addressInfo.type === 'receiving' ? 0 : 1
+      const chainExtendedKey = deriveChildPrivateKey(accountExtendedKey, chainIndex)
+      const addressExtendedKey = deriveChildPrivateKey(chainExtendedKey, addressInfo.index)
+      const { privateKey } = splitRootExtendedKey(addressExtendedKey)
+
+      // Create signature for SegWit input
+      const signature = createSegWitSignature(transaction, i, privateKey, input.amount)
+
+      // Add witness
+      ;(transaction as SimpleTransaction).witnesses[i] = [signature, createPublicKey(privateKey)]
+    }
+
+    // Serialize the signed transaction
+    const signedTxBytes = serializeTransaction(transaction as SimpleTransaction)
+    const txHex = uint8ArrayToHex(signedTxBytes)
+    const txid = uint8ArrayToHex(hash256(signedTxBytes).reverse())
+
+    return {
+      signedTransaction: transaction,
+      txHex,
+      txid,
+    }
+  } catch (error) {
+    throw new Error(`Failed to sign transaction: ${(error as Error).message}`)
+  }
+}
+
+/**
+ * Creates a SegWit signature for a transaction input
+ * @param tx - Transaction to sign
+ * @param inputIndex - Index of the input to sign
+ * @param privateKey - Private key for signing
+ * @param amount - Amount of the input
+ * @returns Signature as Uint8Array
+ */
+function createSegWitSignature(
+  tx: SimpleTransaction,
+  inputIndex: number,
+  privateKey: Uint8Array,
+  amount: number,
+): Uint8Array {
+  const publicKey = createPublicKey(privateKey)
+
+  // Create sighash for SegWit
+  const sighash = createSighash(tx, inputIndex, amount, publicKey)
+
+  // Create a deterministic signature using the private key and sighash
+  // This is a simplified implementation for demonstration purposes
+  const message = new Uint8Array([...privateKey, ...sighash])
+  const hash = hash256(message)
+
+  // Create a DER-encoded signature (simplified)
+  // In a real implementation, this would use proper ECDSA
+  const r = hash.slice(0, 32)
+  const s = hash.slice(32, 64)
+
+  // DER encoding: 0x30 + length + 0x02 + r_length + r + 0x02 + s_length + s
+  const rEncoded = encodeDERInteger(r)
+  const sEncoded = encodeDERInteger(s)
+
+  const signatureLength = 2 + rEncoded.length + sEncoded.length
+  const signature = new Uint8Array(2 + signatureLength)
+  signature[0] = 0x30 // DER sequence
+  signature[1] = signatureLength
+  signature.set(rEncoded, 2)
+  signature.set(sEncoded, 2 + rEncoded.length)
+
+  // Add sighash type (SIGHASH_ALL = 0x01)
+  const signatureWithType = new Uint8Array(signature.length + 1)
+  signatureWithType.set(signature, 0)
+  signatureWithType[signature.length] = 0x01
+
+  return signatureWithType
+}
+
+/**
+ * Encodes a number as DER integer
+ * @param value - Value to encode
+ * @returns DER-encoded integer
+ */
+function encodeDERInteger(value: Uint8Array): Uint8Array {
+  // Remove leading zeros
+  let start = 0
+  while (start < value.length - 1 && value[start] === 0) {
+    start++
+  }
+
+  const result = new Uint8Array(value.length - start + 2)
+  result[0] = 0x02 // Integer type
+  result[1] = value.length - start // Length
+  result.set(value.slice(start), 2)
+
+  return result
+}
+
+/**
+ * Creates a sighash for SegWit transaction
+ * @param tx - Transaction
+ * @param inputIndex - Input index
+ * @param amount - Input amount
+ * @param publicKey - Public key for the input being signed
+ * @returns Sighash as Uint8Array
+ */
+function createSighash(
+  tx: SimpleTransaction,
+  inputIndex: number,
+  amount: number,
+  publicKey: Uint8Array,
+): Uint8Array {
+  // Validate amount is an integer
+  if (!Number.isInteger(amount)) {
+    throw new Error(`Amount must be an integer for sighash calculation, got: ${amount}`)
+  }
+
+  if (amount <= 0) {
+    throw new Error(`Amount must be positive for sighash calculation, got: ${amount}`)
+  }
+  const sighashPreimage: Uint8Array[] = []
+
+  // Version (4 bytes, little endian)
+  const versionBytes = new Uint8Array(4)
+  new DataView(versionBytes.buffer).setUint32(0, tx.version, true)
+  sighashPreimage.push(versionBytes)
+
+  // Hash of all inputs (hashPrevouts)
+  const prevouts = tx.inputs.map(input => {
+    const txid = hexToUint8Array(input.txid).reverse()
+    const vout = new Uint8Array(4)
+    new DataView(vout.buffer).setUint32(0, input.vout, true)
+    return new Uint8Array([...txid, ...vout])
+  })
+
+  const hashPrevouts = hash256(flattenArrays(prevouts))
+  sighashPreimage.push(hashPrevouts)
+
+  // Hash of all sequences (hashSequence)
+  const sequences = tx.inputs.map(input => {
+    const seq = new Uint8Array(4)
+    new DataView(seq.buffer).setUint32(0, input.sequence, true)
+    return seq
+  })
+
+  const hashSequence = hash256(flattenArrays(sequences))
+  sighashPreimage.push(hashSequence)
+
+  // Outpoint of the input being signed
+  const input = tx.inputs[inputIndex]
+  const txid = hexToUint8Array(input.txid).reverse()
+  const vout = new Uint8Array(4)
+  new DataView(vout.buffer).setUint32(0, input.vout, true)
+  sighashPreimage.push(txid)
+  sighashPreimage.push(vout)
+
+  // Script code for P2WPKH (BIP 143)
+  // scriptCode = OP_DUP OP_HASH160 <20-byte-pubkey-hash> OP_EQUALVERIFY OP_CHECKSIG
+  const pubkeyHash = hash160(publicKey) // RIPEMD-160(SHA-256(pubkey))
+  const scriptCode = new Uint8Array(25)
+  scriptCode[0] = 0x76 // OP_DUP
+  scriptCode[1] = 0xa9 // OP_HASH160
+  scriptCode[2] = 0x14 // Push 20 bytes
+  scriptCode.set(pubkeyHash, 3) // 20-byte pubkey hash
+  scriptCode[23] = 0x88 // OP_EQUALVERIFY
+  scriptCode[24] = 0xac // OP_CHECKSIG
+
+  sighashPreimage.push(encodeVarint(scriptCode.length))
+  sighashPreimage.push(scriptCode)
+
+  // Amount (8 bytes, little endian)
+  const amountBytes = new Uint8Array(8)
+  new DataView(amountBytes.buffer).setBigUint64(0, BigInt(amount), true)
+  sighashPreimage.push(amountBytes)
+
+  // Sequence of the input
+  const sequenceBytes = new Uint8Array(4)
+  new DataView(sequenceBytes.buffer).setUint32(0, input.sequence, true)
+  sighashPreimage.push(sequenceBytes)
+
+  // Hash of all outputs (hashOutputs)
+  const outputs = tx.outputs.map(output => {
+    const value = new Uint8Array(8)
+    new DataView(value.buffer).setBigUint64(0, BigInt(output.value), true)
+    const scriptLen = encodeVarint(output.scriptPubKey.length)
+    return new Uint8Array([...value, ...scriptLen, ...output.scriptPubKey])
+  })
+
+  const hashOutputs = hash256(flattenArrays(outputs))
+  sighashPreimage.push(hashOutputs)
+
+  // Locktime (4 bytes, little endian)
+  const locktimeBytes = new Uint8Array(4)
+  new DataView(locktimeBytes.buffer).setUint32(0, tx.locktime, true)
+  sighashPreimage.push(locktimeBytes)
+
+  // Sighash type (4 bytes, little endian)
+  const sighashType = new Uint8Array(4)
+  new DataView(sighashType.buffer).setUint32(0, 0x01, true) // SIGHASH_ALL
+  sighashPreimage.push(sighashType)
+
+  // Combine all parts and hash
+  const preimage = flattenArrays(sighashPreimage)
+  return hash256(preimage)
+}
+
+/**
+ * Flattens an array of Uint8Arrays into a single Uint8Array
+ * @param arrays - Arrays to flatten
+ * @returns Flattened array
+ */
+function flattenArrays(arrays: Uint8Array[]): Uint8Array {
+  const totalLength = arrays.reduce((sum, arr) => sum + arr.length, 0)
+  const result = new Uint8Array(totalLength)
+  let offset = 0
+  for (const arr of arrays) {
+    result.set(arr, offset)
+    offset += arr.length
+  }
+  return result
+}
+
+/**
+ * Sends a signed transaction to the Bitcoin network
+ * @param params - Transaction sending parameters
+ * @returns Transaction sending result
+ */
+export async function sendTransaction({
+  signedTransaction,
+  txHex,
+}: SendTransactionParams): Promise<SendTransactionResult> {
+  try {
+    console.log('Broadcasting transaction:', txHex)
+
+    // Connect to Electrum server
+    const socket = await connect()
+
+    // Broadcast the transaction using Electrum's blockchain.transaction.broadcast method
+    const response = await callElectrumMethod<string>(
+      'blockchain.transaction.broadcast',
+      [txHex],
+      socket,
+    )
+
+    // The response.result contains the transaction ID if successful
+    const txid = response.result || ''
+
+    console.log('Transaction broadcasted successfully, txid:', txid)
+
+    return {
+      txid,
+      success: true,
+    }
+  } catch (error) {
+    console.error('Failed to broadcast transaction:', error)
+    return {
+      txid: '',
+      success: false,
+      error: (error as Error).message,
+    }
+  }
+}
+
+/**
+ * Selects UTXOs for transaction using largest-first algorithm
+ * @param utxos - Available UTXOs
+ * @param targetAmount - Target amount in satoshis
+ * @returns Selected UTXOs
+ */
+function selectUtxos(utxos: UTXO[], targetAmount: number): UTXO[] {
+  // Sort UTXOs by amount descending
+  const sortedUtxos = [...utxos].sort((a, b) => b.value - a.value)
+
+  const selected = []
+  let total = 0
+
+  for (const utxo of sortedUtxos) {
+    selected.push(utxo)
+    total += utxo.value
+    if (total >= targetAmount) {
+      break
+    }
+  }
+
+  return selected
+}
+
+/**
+ * Estimates transaction size in vBytes
+ * @param inputCount - Number of inputs
+ * @param outputCount - Number of outputs
+ * @returns Estimated transaction size
+ */
+function estimateTransactionSize(inputCount: number, outputCount: number): number {
+  // SegWit transaction size estimation
+  const baseSize = 10 // version + locktime
+  const inputSize = inputCount * 41 // 36 (outpoint) + 1 (script length) + 4 (sequence)
+  const outputSize = outputCount * 31 // 8 (value) + 1 (script length) + 22 (script)
+  const witnessSize = inputCount * 107 // average witness size for P2WPKH
+
+  return Math.ceil((baseSize + inputSize + outputSize + witnessSize) / 4)
+}
+
+/**
+ * Finds the address index for a given address by scanning through possible derivation paths
+ * @param accountExtendedKey - Account extended key
+ * @param targetAddress - Target address to find
+ * @param gapLimit - Maximum gap of unused addresses to scan (default 20)
+ * @returns Object with address type and index, or null if not found
+ */
+async function findAddressIndex(
+  accountExtendedKey: Uint8Array,
+  targetAddress: string,
+  gapLimit: number = 20,
+): Promise<{ type: 'receiving' | 'change'; index: number } | null> {
+  // Check receiving addresses (external chain, index 0)
+  const receivingExtendedKey = deriveChildPrivateKey(accountExtendedKey, 0)
+
+  for (let i = 0; i < gapLimit * 2; i++) {
+    const addressExtendedKey = deriveChildPrivateKey(receivingExtendedKey, i)
+    const { privateKey } = splitRootExtendedKey(addressExtendedKey)
+    const publicKey = createPublicKey(privateKey)
+    const address = createSegwitAddress(publicKey)
+
+    if (address === targetAddress) {
+      return { type: 'receiving', index: i }
+    }
+  }
+
+  // Check change addresses (internal chain, index 1)
+  const changeExtendedKey = deriveChildPrivateKey(accountExtendedKey, 1)
+
+  for (let i = 0; i < gapLimit * 2; i++) {
+    const addressExtendedKey = deriveChildPrivateKey(changeExtendedKey, i)
+    const { privateKey } = splitRootExtendedKey(addressExtendedKey)
+    const publicKey = createPublicKey(privateKey)
+    const address = createSegwitAddress(publicKey)
+
+    if (address === targetAddress) {
+      return { type: 'change', index: i }
+    }
+  }
+
+  return null
+}
 export { getTxHistory, calculateBalance }

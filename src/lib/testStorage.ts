@@ -39,7 +39,8 @@ export function testStorageFunctions() {
             const balance = state.tx.getBalance(state.activeWalletId)
             console.log('   - Balance for active wallet:', balance)
           } catch (error) {
-            console.log('   - Error calling getBalance:', error.message)
+            const errorMessage = error instanceof Error ? error.message : String(error)
+            console.log('   - Error calling getBalance:', errorMessage)
           }
         } else {
           console.log('   - No active wallet to test')

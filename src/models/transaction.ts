@@ -1,3 +1,5 @@
+import { UTXO } from '@/lib/utxo'
+
 export const MINIMUN_CONFIRMATIONS = 6
 
 export type TxHistory = {
@@ -5,16 +7,6 @@ export type TxHistory = {
   changeAddress: string
   index: number
   txs: Tx[] // Transactions associated with the address
-}
-
-export type UTXO = {
-  txid: string
-  vout: number
-  address: string
-  amount: number
-  confirmations: number
-  scriptPubKey: ScriptPubKey
-  redeemScript?: string
 }
 
 export type Tx = {
@@ -52,7 +44,7 @@ export type Vout = {
   scriptPubKey: ScriptPubKey
 }
 
-type ScriptPubKey = {
+export type ScriptPubKey = {
   asm: string
   hex: string
   reqSigs: number
@@ -71,4 +63,64 @@ export type WalletTransaction = {
   toAddress: string
   amount: number
   status: TransactionStatus
+}
+
+// Types for transaction building and signing
+export interface BuildTransactionParams {
+  recipientAddress: string
+  amount: number // in satoshis
+  feeRate: number // sat/vB
+  utxos: UTXO[]
+  changeAddress: string
+  extendedKey: Uint8Array
+  purpose?: number
+  coinType?: number
+  accountIndex?: number
+}
+
+export interface BuildTransactionResult {
+  transaction: any // bitcoinjs-lib Transaction
+  inputs: {
+    txid: string
+    vout: number
+    amount: number
+    address: string
+  }[]
+  outputs: {
+    address: string
+    amount: number
+  }[]
+  fee: number
+  changeAmount: number
+}
+
+export interface SignTransactionParams {
+  transaction: any // bitcoinjs-lib Transaction
+  inputs: {
+    txid: string
+    vout: number
+    amount: number
+    address: string
+  }[]
+  extendedKey: Uint8Array
+  purpose?: number
+  coinType?: number
+  accountIndex?: number
+}
+
+export interface SignTransactionResult {
+  signedTransaction: any // bitcoinjs-lib Transaction
+  txHex: string
+  txid: string
+}
+
+export interface SendTransactionParams {
+  signedTransaction: any // bitcoinjs-lib Transaction
+  txHex: string
+}
+
+export interface SendTransactionResult {
+  txid: string
+  success: boolean
+  error?: string
 }

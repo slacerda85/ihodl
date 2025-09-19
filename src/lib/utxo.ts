@@ -1,9 +1,10 @@
+import { ScriptPubKey } from '@/models/electrum'
 import { Tx } from '@/models/transaction'
 
 /**
  * Representa um UTXO (Unspent Transaction Output) corretamente
  */
-export interface ProcessedUTXO {
+export interface UTXO {
   txid: string
   vout: number
   address: string
@@ -11,6 +12,8 @@ export interface ProcessedUTXO {
   blocktime: number
   confirmations: number
   isSpent: boolean
+  scriptPubKey: ScriptPubKey
+  // redeemScript: string
 }
 
 /**
@@ -22,10 +25,10 @@ export function calculateWalletBalance(
   walletAddresses: Set<string>,
 ): {
   balance: number
-  utxos: ProcessedUTXO[]
-  spentUtxos: ProcessedUTXO[]
+  utxos: UTXO[]
+  spentUtxos: UTXO[]
 } {
-  const utxoMap = new Map<string, ProcessedUTXO>()
+  const utxoMap = new Map<string, UTXO>()
   const spentUtxoKeys = new Set<string>()
 
   // Primeiro, identificar todos os UTXOs criados para endereços da carteira
@@ -41,6 +44,14 @@ export function calculateWalletBalance(
           blocktime: tx.blocktime,
           confirmations: tx.confirmations || 0,
           isSpent: false,
+          scriptPubKey: {
+            asm: vout.scriptPubKey.asm,
+            hex: vout.scriptPubKey.hex,
+            reqSigs: vout.scriptPubKey.reqSigs,
+            type: vout.scriptPubKey.type,
+            addresses: [vout.scriptPubKey.address],
+          },
+          // redeemScript: vout.redeemScript,
         })
       }
     }
@@ -59,8 +70,8 @@ export function calculateWalletBalance(
   }
 
   // Separar UTXOs gastos e não gastos
-  const unspentUtxos: ProcessedUTXO[] = []
-  const spentUtxos: ProcessedUTXO[] = []
+  const unspentUtxos: UTXO[] = []
+  const spentUtxos: UTXO[] = []
 
   for (const utxo of utxoMap.values()) {
     if (utxo.isSpent) {
@@ -158,18 +169,6 @@ export function analyzeTransaction(
     type = 'sent'
     netAmount = totalInputFromWallet - totalOutputToWallet // valor líquido enviado
   }
-
-  // Debug log para análise de transação
-  console.log(`🔍 [analyzeTransaction] ${tx.txid}:`, {
-    type,
-    totalInputFromWallet,
-    totalOutputToWallet,
-    totalOutputToExternal,
-    netAmount,
-    fromAddresses: fromAddresses.length,
-    toAddresses: toExternalAddresses.length,
-    walletAddresses: toWalletAddresses.length,
-  })
 
   // Calcular taxa aproximada (para transações enviadas)
   const totalInput = tx.vin.reduce((sum, vin) => {

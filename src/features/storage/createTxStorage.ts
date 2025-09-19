@@ -1,7 +1,7 @@
 import { createRootExtendedKey, fromMnemonic } from '@/lib/key'
 import { getTxHistory } from '@/lib/transactions'
 import { Tx } from '@/models/transaction'
-import { processWalletTransactions, ProcessedUTXO } from '@/lib/utxo'
+import { processWalletTransactions, UTXO } from '@/lib/utxo'
 import { StateCreator } from 'zustand'
 import { StoreState } from './useStorage'
 
@@ -25,7 +25,7 @@ type TransactionsActions = {
   setLoadingTransactions: (loading: boolean) => void
   fetchTransactions: (walletId: string) => Promise<void>
   getBalance: (walletId: string) => number
-  getUtxos: (walletId: string) => ProcessedUTXO[]
+  getUtxos: (walletId: string) => UTXO[]
   getTransactionAnalysis: (walletId: string) => ReturnType<typeof processWalletTransactions> | null
   clearWalletCache: (walletId: string) => void
   initializeActiveWalletTransactions: () => Promise<void>

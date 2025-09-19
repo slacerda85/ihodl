@@ -158,7 +158,6 @@ async function discoverAccounts(
       purpose,
       coinType,
       accountIndex: accountStartIndex,
-      addressInfo,
     }
     discoveredAccounts.push(discoveredAccount)
 

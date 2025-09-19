@@ -16,20 +16,94 @@ import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/icon-symbol'
 import { useRouter } from 'expo-router'
 import { fromBech32, fromBase58check } from '@/lib/address'
+import useStorage from '@/features/storage/useStorage'
+import {
+  fromMnemonic,
+  createRootExtendedKey,
+  deriveChildPrivateKey,
+  createPublicKey,
+  createHardenedIndex,
+  splitRootExtendedKey,
+} from '@/lib/key'
+import { buildTransaction, signTransaction, sendTransaction } from '@/lib/transactions'
+import { formatBalance } from './utils'
+import { UTXO } from '@/lib/utxo'
+import { createSegwitAddress } from '@/lib/address'
 
 export default function Send() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
   const router = useRouter()
+
+  const activeWalletId = useStorage(state => state.activeWalletId)
+  const wallets = useStorage(state => state.wallets)
+  const walletCaches = useStorage(state => state.tx.walletCaches)
+  const getBalance = useStorage(state => state.tx.getBalance)
+  const getUtxos = useStorage(state => state.tx.getUtxos)
+  const unit = useStorage(state => state.unit)
+
   const [submitting, setSubmitting] = useState<boolean>(false)
 
   const [recipientAddress, setRecipientAddress] = useState<string>('')
-  const [amount, setAmount] = useState<string>('')
-  const [feeRate, setFeeRate] = useState<string>('1') // Default fee rate in sat/vB
+  const [amountInput, setAmountInput] = useState<string>('')
+  const [amount, setAmount] = useState<number>(0)
+  const [feeRateInput, setFeeRateInput] = useState<string>('1')
+  const [feeRate, setFeeRate] = useState<number>(1) // Default fee rate in sat/vB
   const [memo, setMemo] = useState<string>('')
   const [autoFeeAdjustment, setAutoFeeAdjustment] = useState<boolean>(true)
   const [addressValid, setAddressValid] = useState<boolean | null>(null)
+  const [amountValid, setAmountValid] = useState<boolean | null>(null)
+
+  // Check if we have cached data for the active wallet
+  const hasTransactionData = activeWalletId
+    ? walletCaches.some(cache => cache.walletId === activeWalletId)
+    : false
+
+  // Usar o novo método para obter saldo com verificação de segurança
+  const availableBalance =
+    activeWalletId && getBalance && typeof getBalance === 'function' && hasTransactionData
+      ? getBalance(activeWalletId)
+      : 0
+
+  // Function to derive change address
+  const deriveChangeAddress = (
+    extendedKey: Uint8Array,
+    purpose: number,
+    coinType: number,
+    accountIndex: number,
+    addressIndex: number = 0,
+  ): string => {
+    try {
+      // Derive purpose (hardened)
+      const purposeIndex = createHardenedIndex(purpose)
+      const purposeExtendedKey = deriveChildPrivateKey(extendedKey, purposeIndex)
+
+      // Derive coin type (hardened)
+      const coinTypeIndex = createHardenedIndex(coinType)
+      const coinTypeExtendedKey = deriveChildPrivateKey(purposeExtendedKey, coinTypeIndex)
+
+      // Derive account (hardened)
+      const accountIndexHardened = createHardenedIndex(accountIndex)
+      const accountExtendedKey = deriveChildPrivateKey(coinTypeExtendedKey, accountIndexHardened)
+
+      // Derive change (non-hardened, change = 1)
+      const changeExtendedKey = deriveChildPrivateKey(accountExtendedKey, 1)
+
+      // Derive address index (non-hardened)
+      const addressIndexExtendedKey = deriveChildPrivateKey(changeExtendedKey, addressIndex)
+
+      // Get private key and create public key
+      const { privateKey } = splitRootExtendedKey(addressIndexExtendedKey)
+      const publicKey = createPublicKey(privateKey)
+
+      // Create SegWit address
+      return createSegwitAddress(publicKey)
+    } catch (error) {
+      console.error('Error deriving change address:', error)
+      throw new Error('Failed to derive change address')
+    }
+  }
 
   // Bitcoin address validation function
   const validateBitcoinAddress = (address: string): boolean => {
@@ -62,21 +136,6 @@ export default function Send() {
     return false
   }
 
-  // Auto-adjust fee rate function
-  const getRecommendedFeeRate = async (): Promise<number> => {
-    // This is a placeholder - in a real implementation, you would:
-    // 1. Connect to Electrum server
-    // 2. Get fee estimates using blockchain.estimatefee
-    // 3. Return appropriate fee rate based on urgency
-
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 500))
-
-    // Return a mock recommended fee rate (in sat/vB)
-    // In reality, this would be based on network conditions
-    return Math.floor(Math.random() * 20) + 5 // Random between 5-25 sat/vB
-  }
-
   // Effect to validate address when it changes
   useEffect(() => {
     if (recipientAddress.trim()) {
@@ -86,6 +145,30 @@ export default function Send() {
       setAddressValid(null)
     }
   }, [recipientAddress])
+
+  // Effect to validate amount when feeRate, availableBalance, or amount changes
+  useEffect(() => {
+    if (amount > 0) {
+      if (amount + (feeRate * 250) / 100000000 > availableBalance) {
+        setAmountValid(false)
+      } else {
+        setAmountValid(true)
+      }
+    } else {
+      setAmountValid(null)
+    }
+  }, [feeRate, availableBalance, amount])
+
+  useEffect(() => {
+    const normalized = normalizeAmount(amountInput)
+    const num = parseFloat(normalized)
+    setAmount(isNaN(num) ? 0 : num)
+  }, [amountInput])
+
+  useEffect(() => {
+    const num = parseFloat(feeRateInput)
+    setFeeRate(isNaN(num) ? 1 : num)
+  }, [feeRateInput])
 
   // Function to normalize amount input (convert commas to dots)
   const normalizeAmount = (text: string): string => {
@@ -97,10 +180,10 @@ export default function Send() {
   const handleAmountChange = (text: string) => {
     // Normalize the input and update state
     const normalizedText = normalizeAmount(text)
-    setAmount(normalizedText)
+    setAmountInput(normalizedText)
   }
 
-  function handleSend() {
+  async function handleSend() {
     if (!recipientAddress.trim()) {
       Alert.alert('Error', 'Please enter a recipient address')
       return
@@ -111,35 +194,110 @@ export default function Send() {
       return
     }
 
-    if (!amount.trim() || parseFloat(amount) <= 0) {
+    if (amount <= 0) {
       Alert.alert('Error', 'Please enter a valid amount')
       return
     }
 
-    if (!feeRate.trim() || parseFloat(feeRate) <= 0) {
+    if (feeRate <= 0) {
       Alert.alert('Error', 'Please enter a valid fee rate')
       return
     }
 
+    if (!activeWalletId) {
+      Alert.alert('Error', 'No active wallet found')
+      return
+    }
+
+    const activeWallet = wallets.find(wallet => wallet.walletId === activeWalletId)
+    if (!activeWallet) {
+      Alert.alert('Error', 'Active wallet not found')
+      return
+    }
+
+    console.log('Starting transaction assembly...')
     setSubmitting(true)
 
-    // TODO: Implement actual transaction creation and broadcasting
-    // This is a placeholder for the send functionality
-    setTimeout(() => {
-      Alert.alert(
-        'Transaction Sent',
-        `Sending ${amount} BTC to ${recipientAddress}\nFee Rate: ${feeRate} sat/vB\n\nThis is a placeholder. Transaction broadcasting will be implemented.`,
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              setSubmitting(false)
-              router.back()
-            },
-          },
-        ],
+    try {
+      console.log('Retrieving wallet data...')
+      // Get wallet data
+      const entropy = fromMnemonic(activeWallet.seedPhrase)
+      const extendedKey = createRootExtendedKey(entropy)
+
+      console.log('Retrieving UTXOs...')
+      // Get UTXOs and convert to UTXO format
+      const allUtxos = getUtxos ? getUtxos(activeWalletId) : []
+      const utxos = allUtxos.filter((utxo: UTXO) => !utxo.isSpent)
+
+      console.log('Deriving change address...')
+      // Get change address using proper derivation
+      const account = activeWallet.accounts[0]
+      const changeAddress = deriveChangeAddress(
+        extendedKey,
+        account.purpose,
+        account.coinType,
+        account.accountIndex,
+        0, // Use address index 0 for change
       )
-    }, 2000)
+
+      console.log('Building transaction...')
+      console.log('amount', amount)
+      // Build transaction
+      const buildResult = await buildTransaction({
+        recipientAddress,
+        amount,
+        feeRate,
+        utxos,
+        changeAddress,
+        extendedKey,
+        purpose: account.purpose,
+        coinType: account.coinType,
+        accountIndex: account.accountIndex,
+      })
+
+      console.log('Signing transaction...')
+      // Sign transaction
+      const signResult = await signTransaction({
+        transaction: buildResult.transaction,
+        inputs: buildResult.inputs,
+        extendedKey,
+        purpose: account.purpose,
+        coinType: account.coinType,
+        accountIndex: account.accountIndex,
+      })
+
+      console.log('Sending transaction...')
+      // Send transaction
+      const sendResult = await sendTransaction({
+        signedTransaction: signResult.signedTransaction,
+        txHex: signResult.txHex,
+      })
+
+      if (sendResult.success) {
+        console.log('Transaction sent successfully...')
+        setSubmitting(false)
+        Alert.alert(
+          'Transaction Sent',
+          `Transaction successfully sent!\n\nTXID: ${sendResult.txid}\nAmount: ${amount.toFixed(8)} BTC\nFee: ${(buildResult.fee / 100000000).toFixed(8)} BTC`,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                router.back()
+              },
+            },
+          ],
+        )
+      } else {
+        console.log('Failed to send transaction:', sendResult.error)
+        Alert.alert('Error', `Failed to send transaction: ${sendResult.error}`)
+        setSubmitting(false)
+      }
+    } catch (error) {
+      console.log('Transaction failed:', error)
+      Alert.alert('Error', `Transaction failed: ${(error as Error).message}`)
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -168,15 +326,36 @@ export default function Send() {
         <View style={styles.section}>
           <Text style={[styles.label, isDark && styles.labelDark]}>Amount (BTC)</Text>
           <TextInput
-            style={[styles.input, isDark && styles.inputDark]}
+            style={[
+              styles.input,
+              isDark && styles.inputDark,
+              amountValid === false && styles.inputError,
+              amountValid === true && styles.inputValid,
+            ]}
             placeholder="0.00000000"
             placeholderTextColor={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
-            value={amount}
+            value={amountInput}
             onChangeText={handleAmountChange}
             keyboardType="decimal-pad"
             autoCapitalize="none"
             autoCorrect={false}
           />
+          {amountValid === false && amount <= 0 && (
+            <Text style={styles.errorText}>Amount must be greater than 0</Text>
+          )}
+          {amountValid === false && amount > 0 && (
+            <Text style={styles.errorText}>
+              Insufficient balance including estimated fees. Remaining:{' '}
+              {formatBalance(availableBalance - (amount + (feeRate * 250) / 100000000), unit)}{' '}
+              {unit}
+            </Text>
+          )}
+          {amountValid === true && <Text style={styles.validText}>✓ Sufficient balance</Text>}
+          <View style={styles.balanceContainer}>
+            <Text style={[styles.balanceText, isDark && styles.balanceTextDark]}>
+              Available: {formatBalance(availableBalance, unit)} {unit}
+            </Text>
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -198,8 +377,8 @@ export default function Send() {
             style={[styles.input, isDark && styles.inputDark]}
             placeholder="1"
             placeholderTextColor={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
-            value={feeRate}
-            onChangeText={setFeeRate}
+            value={feeRateInput}
+            onChangeText={setFeeRateInput}
             keyboardType="decimal-pad"
             autoCapitalize="none"
             autoCorrect={false}
@@ -235,7 +414,7 @@ export default function Send() {
 
         <Pressable
           onPress={handleSend}
-          disabled={submitting}
+          disabled={submitting || amountValid === false}
           style={[styles.button, styles.primaryButton, submitting && styles.disabledButton]}
         >
           {submitting ? <ActivityIndicator color={colors.white} /> : null}
@@ -358,5 +537,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '500',
     fontSize: 16,
+  },
+  balanceContainer: {
+    marginTop: 8,
+    alignItems: 'flex-end',
+  },
+  balanceText: {
+    fontSize: 14,
+    color: colors.textSecondary.light,
+    fontWeight: '500',
+  },
+  balanceTextDark: {
+    color: colors.textSecondary.dark,
   },
 })
