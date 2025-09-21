@@ -4,9 +4,9 @@ import WalletTabIcon from '@/features/wallet/WalletTabIcon'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { HapticTab } from '@/ui/haptic-tab'
-import { BlurView } from 'expo-blur'
+// import { BlurView } from 'expo-blur'
 import { Tabs } from 'expo-router'
-import { Platform, StyleSheet, useColorScheme } from 'react-native'
+import { Platform, StyleSheet, useColorScheme, View } from 'react-native'
 
 export default function TabsLayout() {
   const colorScheme = useColorScheme()
@@ -20,18 +20,28 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarBackground: () => (
-          <BlurView
-            experimentalBlurMethod="dimezisBlurView"
-            intensity={100}
+          // <BlurView
+          //   experimentalBlurMethod="dimezisBlurView"
+          //   intensity={100}
+          //   style={{
+          //     ...StyleSheet.absoluteFillObject,
+          //     backgroundColor: 'transparent',
+          //     borderTopWidth: 1,
+          //     borderTopColor: isDark
+          //       ? alpha(colors.background.light, 0.1)
+          //       : alpha(colors.background.dark, 0.1),
+          //   }}
+          //   tint={isDark ? 'dark' : 'light'}
+          // />
+          <View
             style={{
               ...StyleSheet.absoluteFillObject,
-              backgroundColor: 'transparent',
+              backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)',
               borderTopWidth: 1,
               borderTopColor: isDark
                 ? alpha(colors.background.light, 0.1)
                 : alpha(colors.background.dark, 0.1),
             }}
-            tint={isDark ? 'dark' : 'light'}
           />
         ),
         tabBarStyle: Platform.select({
