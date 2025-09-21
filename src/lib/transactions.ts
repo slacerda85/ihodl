@@ -530,29 +530,37 @@ export async function buildTransaction({
     }
     // Filter UTXOs with sufficient confirmations
     const confirmedUtxos = utxos.filter(utxo => utxo.confirmations >= 6)
+    console.log(`Filtered to ${confirmedUtxos.length} confirmed UTXOs`)
 
     if (confirmedUtxos.length === 0) {
       throw new Error('No confirmed UTXOs available')
     }
 
     // Select UTXOs using a simple selection algorithm (largest first)
-    const selectedUtxos = selectUtxos(confirmedUtxos, amount)
-    const totalInputAmount = selectedUtxos.reduce((sum, utxo) => sum + utxo.value, 0)
+    const targetAmountBtc = amount / 1e8
+    console.log(`Selecting UTXOs for target amount: ${targetAmountBtc} BTC`)
+    const selectedUtxos = selectUtxos(confirmedUtxos, targetAmountBtc) // Convert amount to BTC for UTXO selection
+    console.log(`Selected ${selectedUtxos.length} UTXOs`)
+    const totalInputAmountBtc = selectedUtxos.reduce((sum, utxo) => sum + utxo.value, 0)
+    const totalInputAmountSat = Math.round(totalInputAmountBtc * 1e8)
 
-    if (totalInputAmount < amount) {
+    if (totalInputAmountSat < amount) {
       throw new Error('Insufficient funds')
     }
 
     // Estimate transaction size for fee calculation
     const estimatedTxSize = estimateTransactionSize(selectedUtxos.length, 2) // 2 outputs: recipient + change
-    const estimatedFee = Math.ceil(estimatedTxSize * feeRate)
+    const estimatedFeeSat = Math.ceil(estimatedTxSize * feeRate)
     console.log('Estimated transaction size (bytes):', estimatedTxSize)
-    console.log('Estimated fee (satoshis):', estimatedFee)
-    // Calculate change amount
-    const changeAmount = totalInputAmount - amount - estimatedFee
+    console.log('Estimated fee (satoshis):', estimatedFeeSat)
 
-    if (changeAmount < 0) {
-      throw new Error('Insufficient funds after fee calculation')
+    // Calculate change amount in satoshis
+    const changeAmountSat = totalInputAmountSat - amount - estimatedFeeSat
+
+    if (changeAmountSat < 0) {
+      throw new Error(
+        `Insufficient funds after fee calculation. Needed: ${amount + estimatedFeeSat} sat, Available: ${totalInputAmountSat} sat`,
+      )
     }
 
     // Create transaction
@@ -566,7 +574,9 @@ export async function buildTransaction({
 
     // Add inputs
     const inputs = []
+    console.log(`Building transaction with ${selectedUtxos.length} selected UTXOs`)
     for (const utxo of selectedUtxos) {
+      console.log(`Adding input: ${utxo.txid}:${utxo.vout} with amount ${utxo.value} BTC`)
       tx.inputs.push({
         txid: utxo.txid,
         vout: utxo.vout,
@@ -579,10 +589,11 @@ export async function buildTransaction({
       inputs.push({
         txid: utxo.txid,
         vout: utxo.vout,
-        amount: utxo.value,
+        amount: Math.round(utxo.value * 100000000), // Convert BTC to satoshis
         address: utxo.address,
       })
     }
+    console.log(`Transaction now has ${tx.inputs.length} inputs`)
 
     // Add outputs
     const outputs = []
@@ -594,18 +605,19 @@ export async function buildTransaction({
     })
     outputs.push({
       address: recipientAddress,
-      amount,
+      amount: amount / 1e8, // Convert back to BTC for display
     })
 
     // Add change output if change amount is significant
-    if (changeAmount > 0) {
+    if (changeAmountSat > 546) {
+      // 546 sat = dust threshold
       tx.outputs.push({
-        value: changeAmount,
+        value: changeAmountSat,
         scriptPubKey: createScriptPubKey(changeAddress),
       })
       outputs.push({
         address: changeAddress,
-        amount: changeAmount,
+        amount: changeAmountSat / 1e8, // Convert back to BTC for display
       })
     }
 
@@ -613,8 +625,8 @@ export async function buildTransaction({
       transaction: tx,
       inputs,
       outputs,
-      fee: estimatedFee,
-      changeAmount: changeAmount > 546 ? changeAmount : 0,
+      fee: estimatedFeeSat,
+      changeAmount: changeAmountSat > 546 ? changeAmountSat / 1e8 : 0,
     }
   } catch (error) {
     throw new Error(`Failed to build transaction: ${(error as Error).message}`)
@@ -635,20 +647,39 @@ export async function signTransaction({
   accountIndex = 0,
 }: SignTransactionParams): Promise<SignTransactionResult> {
   try {
-    // Validate inputs
+    console.log(`Signing transaction with ${inputs.length} inputs`)
+    console.log(`Transaction has ${transaction.inputs.length} inputs before signing`)
+
+    if (inputs.length === 0) {
+      throw new Error('No inputs provided for signing')
+    }
+
+    if (transaction.inputs.length === 0) {
+      throw new Error('Transaction has no inputs to sign')
+    }
+
+    // Validate inputs - ensure amounts are in satoshis and integers
     for (const input of inputs) {
       if (!Number.isInteger(input.amount)) {
-        throw new Error(`Input amount must be an integer, got: ${input.amount}`)
+        throw new Error(
+          `Input amount must be an integer (satoshis), got: ${input.amount} (type: ${typeof input.amount})`,
+        )
       }
       if (input.amount <= 0) {
         throw new Error(`Input amount must be positive, got: ${input.amount}`)
       }
+      // Additional validation for reasonable Bitcoin amounts
+      if (input.amount > 21000000 * 100000000) {
+        throw new Error(
+          `Input amount exceeds maximum possible Bitcoin amount, got: ${input.amount}`,
+        )
+      }
     }
 
-    // Validate transaction values
+    // Validate transaction values - ensure values are in satoshis and integers
     for (const output of transaction.outputs) {
       if (!Number.isInteger(output.value)) {
-        throw new Error(`Output value must be an integer, got: ${output.value}`)
+        throw new Error(`Output value must be an integer (satoshis), got: ${output.value}`)
       }
       if (output.value <= 0) {
         throw new Error(`Output value must be positive, got: ${output.value}`)
@@ -701,6 +732,10 @@ export async function signTransaction({
     const txHex = uint8ArrayToHex(signedTxBytes)
     const txid = uint8ArrayToHex(hash256(signedTxBytes).reverse())
 
+    console.log(`Signed transaction hex length: ${txHex.length}`)
+    console.log(`Signed transaction has ${transaction.inputs.length} inputs`)
+    console.log(`Signed transaction has ${transaction.outputs.length} outputs`)
+
     return {
       signedTransaction: transaction,
       txHex,
@@ -725,6 +760,35 @@ function createSegWitSignature(
   privateKey: Uint8Array,
   amount: number,
 ): Uint8Array {
+  console.log(`createSegWitSignature called with amount: ${amount} (type: ${typeof amount})`)
+
+  // Additional validation before calling createSighash
+  if (typeof amount !== 'number' || isNaN(amount)) {
+    throw new Error(`Amount must be a valid number, got: ${amount} (type: ${typeof amount})`)
+  }
+
+  if (!Number.isInteger(amount)) {
+    // Check if it's a very small decimal that should be zero
+    if (Math.abs(amount) < 1e-8) {
+      throw new Error(`Amount is too small (close to zero), got: ${amount}`)
+    }
+    // Check if it's a decimal that should be an integer
+    if (amount % 1 !== 0) {
+      throw new Error(
+        `Amount must be an integer for signature creation, got: ${amount} (decimal part: ${amount % 1})`,
+      )
+    }
+  }
+
+  if (amount <= 0) {
+    throw new Error(`Amount must be positive for signature creation, got: ${amount}`)
+  }
+
+  // Check for unreasonably large amounts
+  if (amount > 21000000 * 100000000) {
+    throw new Error(`Amount exceeds maximum possible Bitcoin amount, got: ${amount}`)
+  }
+
   const publicKey = createPublicKey(privateKey)
 
   // Create sighash for SegWit
@@ -793,13 +857,25 @@ function createSighash(
   amount: number,
   publicKey: Uint8Array,
 ): Uint8Array {
-  // Validate amount is an integer
+  // Validate amount is an integer and within valid range
+  if (typeof amount !== 'number' || isNaN(amount)) {
+    throw new Error(
+      `Amount must be a valid number for sighash calculation, got: ${amount} (type: ${typeof amount})`,
+    )
+  }
+
   if (!Number.isInteger(amount)) {
-    throw new Error(`Amount must be an integer for sighash calculation, got: ${amount}`)
+    throw new Error(`Amount must be an integer (satoshis) for sighash calculation, got: ${amount}`)
   }
 
   if (amount <= 0) {
     throw new Error(`Amount must be positive for sighash calculation, got: ${amount}`)
+  }
+
+  // Additional validation: amount should be within reasonable Bitcoin limits
+  if (amount > 21000000 * 100000000) {
+    // More than total Bitcoin supply in satoshis
+    throw new Error(`Amount exceeds maximum possible Bitcoin amount, got: ${amount}`)
   }
   const sighashPreimage: Uint8Array[] = []
 
@@ -904,6 +980,308 @@ function flattenArrays(arrays: Uint8Array[]): Uint8Array {
 }
 
 /**
+ * Decodes a Bitcoin transaction from hex and validates its structure
+ * @param txHex - Transaction hex string
+ * @returns Decoded transaction information
+ */
+function decodeTransaction(txHex: string): {
+  version: number
+  inputs: {
+    txid: string
+    vout: number
+    scriptSig: string
+    sequence: number
+  }[]
+  outputs: {
+    value: number
+    scriptPubKey: string
+  }[]
+  locktime: number
+  witnesses: Uint8Array[][]
+  txid: string
+  weight: number
+  vsize: number
+} {
+  try {
+    console.log('Decoding transaction for validation...')
+    console.log('Transaction hex length:', txHex.length)
+
+    if (!txHex || txHex.length === 0) {
+      throw new Error('Transaction hex is empty')
+    }
+
+    // Convert hex to bytes
+    const txBytes = hexToUint8Array(txHex)
+    console.log('Transaction bytes length:', txBytes.length)
+
+    let offset = 0
+
+    // Version (4 bytes, little endian)
+    if (offset + 4 > txBytes.length) {
+      throw new Error('Transaction too short for version')
+    }
+    const version = new DataView(txBytes.buffer, offset, 4).getUint32(0, true)
+    offset += 4
+    console.log('Version:', version)
+
+    // Input count (varint)
+    const inputCountResult = decodeVarint(txBytes, offset)
+    const inputCount = inputCountResult.value
+    offset = inputCountResult.newOffset
+    console.log('Input count:', inputCount)
+
+    if (inputCount === 0) {
+      throw new Error('Transaction has no inputs')
+    }
+
+    // Parse inputs
+    const inputs = []
+    for (let i = 0; i < inputCount; i++) {
+      if (offset + 32 > txBytes.length) {
+        throw new Error(`Input ${i}: Transaction too short for txid`)
+      }
+      const txid = uint8ArrayToHex(txBytes.slice(offset, offset + 32).reverse())
+      offset += 32
+
+      if (offset + 4 > txBytes.length) {
+        throw new Error(`Input ${i}: Transaction too short for vout`)
+      }
+      const vout = new DataView(txBytes.buffer, offset, 4).getUint32(0, true)
+      offset += 4
+
+      // ScriptSig length (varint)
+      const scriptSigLenResult = decodeVarint(txBytes, offset)
+      const scriptSigLen = scriptSigLenResult.value
+      offset = scriptSigLenResult.newOffset
+
+      if (offset + scriptSigLen > txBytes.length) {
+        throw new Error(`Input ${i}: Transaction too short for scriptSig`)
+      }
+      const scriptSig = uint8ArrayToHex(txBytes.slice(offset, offset + scriptSigLen))
+      offset += scriptSigLen
+
+      if (offset + 4 > txBytes.length) {
+        throw new Error(`Input ${i}: Transaction too short for sequence`)
+      }
+      const sequence = new DataView(txBytes.buffer, offset, 4).getUint32(0, true)
+      offset += 4
+
+      inputs.push({ txid, vout, scriptSig, sequence })
+      console.log(`Input ${i}: ${txid}:${vout}, scriptSig: ${scriptSig.length} bytes`)
+    }
+
+    // Output count (varint)
+    const outputCountResult = decodeVarint(txBytes, offset)
+    const outputCount = outputCountResult.value
+    offset = outputCountResult.newOffset
+    console.log('Output count:', outputCount)
+
+    if (outputCount === 0) {
+      throw new Error('Transaction has no outputs')
+    }
+
+    // Parse outputs
+    const outputs = []
+    for (let i = 0; i < outputCount; i++) {
+      if (offset + 8 > txBytes.length) {
+        throw new Error(`Output ${i}: Transaction too short for value`)
+      }
+      const value = Number(new DataView(txBytes.buffer, offset, 8).getBigUint64(0, true))
+      offset += 8
+
+      // ScriptPubKey length (varint)
+      const scriptPubKeyLenResult = decodeVarint(txBytes, offset)
+      const scriptPubKeyLen = scriptPubKeyLenResult.value
+      offset = scriptPubKeyLenResult.newOffset
+
+      if (offset + scriptPubKeyLen > txBytes.length) {
+        throw new Error(`Output ${i}: Transaction too short for scriptPubKey`)
+      }
+      const scriptPubKey = uint8ArrayToHex(txBytes.slice(offset, offset + scriptPubKeyLen))
+      offset += scriptPubKeyLen
+
+      outputs.push({ value, scriptPubKey })
+      console.log(`Output ${i}: ${value} satoshis, scriptPubKey: ${scriptPubKey.length} bytes`)
+    }
+
+    // Witnesses (for SegWit) - simplified parsing
+    const witnesses = []
+    for (let i = 0; i < inputCount; i++) {
+      // For SegWit, we expect witness data after outputs
+      // This is a simplified implementation
+      witnesses.push([])
+    }
+
+    // Locktime (4 bytes, little endian)
+    if (offset + 4 > txBytes.length) {
+      throw new Error('Transaction too short for locktime')
+    }
+    const locktime = new DataView(txBytes.buffer, offset, 4).getUint32(0, true)
+    offset += 4
+    console.log('Locktime:', locktime)
+
+    // Calculate txid
+    const txid = uint8ArrayToHex(hash256(txBytes).reverse())
+
+    // Calculate weight and vsize (simplified)
+    const weight = txBytes.length * 4 // Simplified weight calculation
+    const vsize = Math.ceil(weight / 4)
+
+    console.log('Decoded transaction successfully')
+    console.log(`TXID: ${txid}`)
+    console.log(`Weight: ${weight}, vSize: ${vsize}`)
+
+    return {
+      version,
+      inputs,
+      outputs,
+      locktime,
+      witnesses,
+      txid,
+      weight,
+      vsize,
+    }
+  } catch (error) {
+    console.error('Failed to decode transaction:', error)
+    throw new Error(`Transaction decode failed: ${(error as Error).message}`)
+  }
+}
+
+/**
+ * Decodes a Bitcoin varint from bytes
+ * @param bytes - Byte array
+ * @param offset - Current offset
+ * @returns Decoded value and new offset
+ */
+function decodeVarint(bytes: Uint8Array, offset: number): { value: number; newOffset: number } {
+  if (offset >= bytes.length) {
+    throw new Error('Unexpected end of data')
+  }
+
+  const firstByte = bytes[offset]
+  offset++
+
+  if (firstByte < 0xfd) {
+    return { value: firstByte, newOffset: offset }
+  } else if (firstByte === 0xfd) {
+    if (offset + 2 > bytes.length) {
+      throw new Error('Unexpected end of data for 2-byte varint')
+    }
+    const value = new DataView(bytes.buffer, offset, 2).getUint16(0, true)
+    return { value, newOffset: offset + 2 }
+  } else if (firstByte === 0xfe) {
+    if (offset + 4 > bytes.length) {
+      throw new Error('Unexpected end of data for 4-byte varint')
+    }
+    const value = new DataView(bytes.buffer, offset, 4).getUint32(0, true)
+    return { value, newOffset: offset + 4 }
+  } else if (firstByte === 0xff) {
+    if (offset + 8 > bytes.length) {
+      throw new Error('Unexpected end of data for 8-byte varint')
+    }
+    const value = Number(new DataView(bytes.buffer, offset, 8).getBigUint64(0, true))
+    return { value, newOffset: offset + 8 }
+  }
+
+  throw new Error('Invalid varint')
+}
+
+/**
+ * Test function to decode and validate a transaction before broadcasting
+ * @param txHex - Transaction hex string to test
+ * @returns Validation result with decoded information
+ */
+export function testTransactionDecode(txHex: string): {
+  success: boolean
+  decodedTx?: any
+  error?: string
+  warnings?: string[]
+} {
+  try {
+    console.log('Testing transaction decode...')
+    console.log('Transaction hex length:', txHex.length)
+
+    const decodedTx = decodeTransaction(txHex)
+
+    const warnings: string[] = []
+
+    // Validate basic structure
+    if (decodedTx.inputs.length === 0) {
+      return {
+        success: false,
+        error: 'Transaction has no inputs',
+      }
+    }
+
+    if (decodedTx.outputs.length === 0) {
+      return {
+        success: false,
+        error: 'Transaction has no outputs',
+      }
+    }
+
+    // Check for potential issues
+    if (decodedTx.inputs.length > 100) {
+      warnings.push('High number of inputs may cause issues')
+    }
+
+    if (decodedTx.outputs.length > 100) {
+      warnings.push('High number of outputs may cause issues')
+    }
+
+    // Check input values
+    for (let i = 0; i < decodedTx.inputs.length; i++) {
+      const input = decodedTx.inputs[i]
+      if (!input.txid || input.txid.length !== 64) {
+        return {
+          success: false,
+          error: `Input ${i} has invalid txid: ${input.txid}`,
+        }
+      }
+      if (input.vout < 0 || input.vout > 0xffffffff) {
+        return {
+          success: false,
+          error: `Input ${i} has invalid vout: ${input.vout}`,
+        }
+      }
+    }
+
+    // Check output values
+    for (let i = 0; i < decodedTx.outputs.length; i++) {
+      const output = decodedTx.outputs[i]
+      if (output.value <= 0) {
+        return {
+          success: false,
+          error: `Output ${i} has invalid amount: ${output.value}`,
+        }
+      }
+      if (output.value > 21000000 * 100000000) {
+        return {
+          success: false,
+          error: `Output ${i} amount exceeds maximum Bitcoin supply: ${output.value}`,
+        }
+      }
+    }
+
+    console.log('✅ Transaction decode test passed')
+    console.log(`Summary: ${decodedTx.inputs.length} inputs, ${decodedTx.outputs.length} outputs`)
+    console.log(`TXID: ${decodedTx.txid}`)
+
+    return {
+      success: true,
+      decodedTx,
+      warnings: warnings.length > 0 ? warnings : undefined,
+    }
+  } catch (error) {
+    console.error('❌ Transaction decode test failed:', error)
+    return {
+      success: false,
+      error: (error as Error).message,
+    }
+  }
+}
+
+/**
  * Sends a signed transaction to the Bitcoin network
  * @param params - Transaction sending parameters
  * @returns Transaction sending result
@@ -913,7 +1291,36 @@ export async function sendTransaction({
   txHex,
 }: SendTransactionParams): Promise<SendTransactionResult> {
   try {
-    console.log('Broadcasting transaction:', txHex)
+    console.log('Broadcasting transaction:', txHex.substring(0, 100) + '...')
+    console.log('Transaction hex length:', txHex.length)
+    console.log('Signed transaction inputs:', (signedTransaction as any).inputs?.length || 0)
+    console.log('Signed transaction outputs:', (signedTransaction as any).outputs?.length || 0)
+
+    if (!txHex || txHex.length === 0) {
+      throw new Error('Transaction hex is empty')
+    }
+
+    if ((signedTransaction as any).inputs?.length === 0) {
+      throw new Error('Transaction has no inputs')
+    }
+
+    console.log('Testing transaction decode before broadcast...')
+    const testResult = testTransactionDecode(txHex)
+
+    if (!testResult.success) {
+      console.error('Transaction decode test failed:', testResult.error)
+      return {
+        txid: '',
+        success: false,
+        error: `Transaction validation failed: ${testResult.error}`,
+      }
+    }
+
+    if (testResult.warnings && testResult.warnings.length > 0) {
+      console.warn('Transaction warnings:', testResult.warnings)
+    }
+
+    console.log('Transaction validation passed, proceeding with broadcast...')
 
     // Connect to Electrum server
     const socket = await connect()
@@ -951,6 +1358,9 @@ export async function sendTransaction({
  * @returns Selected UTXOs
  */
 function selectUtxos(utxos: UTXO[], targetAmount: number): UTXO[] {
+  console.log(`Selecting UTXOs for target amount: ${targetAmount} BTC`)
+  console.log(`Available UTXOs: ${utxos.length}`)
+
   // Sort UTXOs by amount descending
   const sortedUtxos = [...utxos].sort((a, b) => b.value - a.value)
 
@@ -958,13 +1368,17 @@ function selectUtxos(utxos: UTXO[], targetAmount: number): UTXO[] {
   let total = 0
 
   for (const utxo of sortedUtxos) {
+    console.log(`Considering UTXO: ${utxo.txid}:${utxo.vout} with ${utxo.value} BTC`)
     selected.push(utxo)
     total += utxo.value
+    console.log(`Total so far: ${total} BTC, target: ${targetAmount} BTC`)
     if (total >= targetAmount) {
+      console.log(`Target reached with ${selected.length} UTXOs`)
       break
     }
   }
 
+  console.log(`Selected ${selected.length} UTXOs with total ${total} BTC`)
   return selected
 }
 

@@ -244,6 +244,7 @@ export default function Receive() {
       if (!isMountedRef.current) return
 
       try {
+        console.log('Generating addresses for wallet:', activeWallet.walletName)
         const result = await generateWalletAddressesAsync(activeWallet, tx)
 
         if (!isMountedRef.current) return

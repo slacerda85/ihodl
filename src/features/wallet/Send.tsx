@@ -149,7 +149,13 @@ export default function Send() {
   // Effect to validate amount when feeRate, availableBalance, or amount changes
   useEffect(() => {
     if (amount > 0) {
-      if (amount + (feeRate * 250) / 100000000 > availableBalance) {
+      // Convert all values to satoshis for accurate comparison
+      const amountInSatoshis = Math.round(amount * 100000000)
+      const feeRateInteger = Math.round(feeRate)
+      const estimatedFeeInSatoshis = Math.round(feeRateInteger * 250) // 250 bytes estimated tx size
+      const availableBalanceInSatoshis = Math.round(availableBalance * 100000000)
+
+      if (amountInSatoshis + estimatedFeeInSatoshis > availableBalanceInSatoshis) {
         setAmountValid(false)
       } else {
         setAmountValid(true)
@@ -158,12 +164,6 @@ export default function Send() {
       setAmountValid(null)
     }
   }, [feeRate, availableBalance, amount])
-
-  useEffect(() => {
-    const normalized = normalizeAmount(amountInput)
-    const num = parseFloat(normalized)
-    setAmount(isNaN(num) ? 0 : num)
-  }, [amountInput])
 
   useEffect(() => {
     const num = parseFloat(feeRateInput)
@@ -181,6 +181,16 @@ export default function Send() {
     // Normalize the input and update state
     const normalizedText = normalizeAmount(text)
     setAmountInput(normalizedText)
+    const num = parseFloat(normalizedText)
+    setAmount(isNaN(num) ? 0 : num)
+  }
+
+  const handleChangeFeeRate = (text: string) => {
+    // Normalize the input and update state
+    const normalizedText = normalizeAmount(text)
+    setFeeRateInput(normalizedText)
+    const num = parseFloat(normalizedText)
+    setFeeRate(isNaN(num) ? 1 : num)
   }
 
   async function handleSend() {
@@ -227,7 +237,46 @@ export default function Send() {
       console.log('Retrieving UTXOs...')
       // Get UTXOs and convert to UTXO format
       const allUtxos = getUtxos ? getUtxos(activeWalletId) : []
+      console.log(`Total UTXOs from storage: ${allUtxos.length}`)
+      console.log(
+        'UTXO details:',
+        allUtxos.map(utxo => ({
+          txid: utxo.txid,
+          vout: utxo.vout,
+          value: utxo.value,
+          isSpent: utxo.isSpent,
+          confirmations: utxo.confirmations,
+        })),
+      )
+
       const utxos = allUtxos.filter((utxo: UTXO) => !utxo.isSpent)
+      console.log(`UTXOs after filtering spent: ${utxos.length}`)
+      console.log(
+        'Filtered UTXO details:',
+        utxos.map(utxo => ({
+          txid: utxo.txid,
+          vout: utxo.vout,
+          value: utxo.value,
+          confirmations: utxo.confirmations,
+        })),
+      )
+
+      // Filter for confirmed UTXOs (6+ confirmations)
+      const confirmedUtxos = utxos.filter((utxo: UTXO) => utxo.confirmations >= 6)
+      console.log(`Confirmed UTXOs (6+ confirmations): ${confirmedUtxos.length}`)
+      console.log(
+        'Confirmed UTXO details:',
+        confirmedUtxos.map(utxo => ({
+          txid: utxo.txid,
+          vout: utxo.vout,
+          value: utxo.value,
+          confirmations: utxo.confirmations,
+        })),
+      )
+
+      if (confirmedUtxos.length === 0) {
+        throw new Error('No confirmed UTXOs available for transaction')
+      }
 
       console.log('Deriving change address...')
       // Get change address using proper derivation
@@ -241,13 +290,19 @@ export default function Send() {
       )
 
       console.log('Building transaction...')
-      console.log('amount', amount)
+      console.log('amount (BTC)', amount)
+      // Convert amount from BTC to satoshis and ensure feeRate is integer
+      const amountInSatoshis = Math.round(amount * 100000000)
+      const feeRateInteger = Math.round(feeRate)
+      console.log('amount (satoshis)', amountInSatoshis)
+      console.log('feeRate (sat/vB)', feeRateInteger)
+
       // Build transaction
       const buildResult = await buildTransaction({
         recipientAddress,
-        amount,
-        feeRate,
-        utxos,
+        amount: amountInSatoshis,
+        feeRate: feeRateInteger,
+        utxos: confirmedUtxos,
         changeAddress,
         extendedKey,
         purpose: account.purpose,
@@ -346,7 +401,10 @@ export default function Send() {
           {amountValid === false && amount > 0 && (
             <Text style={styles.errorText}>
               Insufficient balance including estimated fees. Remaining:{' '}
-              {formatBalance(availableBalance - (amount + (feeRate * 250) / 100000000), unit)}{' '}
+              {formatBalance(
+                Math.max(0, availableBalance - amount - (Math.round(feeRate) * 250) / 100000000),
+                unit,
+              )}{' '}
               {unit}
             </Text>
           )}
@@ -378,7 +436,7 @@ export default function Send() {
             placeholder="1"
             placeholderTextColor={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
             value={feeRateInput}
-            onChangeText={setFeeRateInput}
+            onChangeText={handleChangeFeeRate}
             keyboardType="decimal-pad"
             autoCapitalize="none"
             autoCorrect={false}
@@ -470,16 +528,16 @@ const styles = StyleSheet.create({
   },
   inputValid: {
     borderWidth: 1,
-    borderColor: '#44ff44',
+    borderColor: colors.success,
   },
   errorText: {
     fontSize: 14,
-    color: '#ff4444',
+    color: colors.error,
     marginTop: 4,
   },
   validText: {
     fontSize: 14,
-    color: '#44ff44',
+    color: colors.success,
     marginTop: 4,
   },
   feeHeader: {
