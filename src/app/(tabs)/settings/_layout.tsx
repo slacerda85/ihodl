@@ -24,16 +24,18 @@ function SettingsScreens() {
     >
       <Stack.Screen
         name="index"
-        options={{
-          headerShown: true,
-          title: 'Settings',
-          /* headerStyle: {
+        options={
+          {
+            // headerShown: true,
+            // title: 'Settings',
+            /* headerStyle: {
             backgroundColor: isDark ? colors.background.dark : colors.background.light,
           },
           contentStyle: {
             backgroundColor: isDark ? colors.background.dark : colors.background.light,
           }, */
-        }}
+          }
+        }
       />
     </Stack>
   )

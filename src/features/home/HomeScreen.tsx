@@ -14,7 +14,7 @@ export default function HomeScreen() {
 
   useEffect(() => {
     if (currentRoute === '/' && authenticated) {
-      router.push('/(tabs)/wallet')
+      router.push('/(tabs)/test')
     }
   }, [authenticated, currentRoute])
 
