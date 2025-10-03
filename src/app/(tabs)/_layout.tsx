@@ -5,7 +5,8 @@ import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { HapticTab } from '@/ui/haptic-tab'
 // import { BlurView } from 'expo-blur'
-import { Tabs } from 'expo-router'
+// import { Tabs } from 'expo-router'
+import { NativeTabs, Icon, Label } from 'expo-router/unstable-native-tabs'
 import { Platform, StyleSheet, useColorScheme, View } from 'react-native'
 
 export default function TabsLayout() {
@@ -13,26 +14,31 @@ export default function TabsLayout() {
   const isDark = colorScheme === 'dark'
 
   return (
-    <Tabs
+    <NativeTabs>
+      <NativeTabs.Trigger name="wallet">
+        <Icon sf="wallet.bifold" />
+        <Label>Wallet</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="transactions">
+        <Icon sf="arrow.left.arrow.right" />
+        <Label>Transactions</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="settings">
+        <Icon sf="gearshape" />
+        <Label>Settings</Label>
+      </NativeTabs.Trigger>
+    </NativeTabs>
+  )
+}
+
+/* <Tabs
       screenOptions={{
         animation: 'shift',
         tabBarActiveTintColor: colors.primary,
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarBackground: () => (
-          // <BlurView
-          //   experimentalBlurMethod="dimezisBlurView"
-          //   intensity={100}
-          //   style={{
-          //     ...StyleSheet.absoluteFillObject,
-          //     backgroundColor: 'transparent',
-          //     borderTopWidth: 1,
-          //     borderTopColor: isDark
-          //       ? alpha(colors.background.light, 0.1)
-          //       : alpha(colors.background.dark, 0.1),
-          //   }}
-          //   tint={isDark ? 'dark' : 'light'}
-          // />
+          
           <View
             style={{
               ...StyleSheet.absoluteFillObject,
@@ -77,6 +83,4 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, focused }) => <SettingsTabIcon color={color} filled={focused} />,
         }}
       />
-    </Tabs>
-  )
-}
+    </Tabs> */

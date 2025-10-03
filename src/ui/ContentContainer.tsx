@@ -1,10 +1,10 @@
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
+// import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
 import { useHeaderHeight } from '@react-navigation/elements'
 import { View, StyleSheet } from 'react-native'
 
 export default function ScreenContainer({ children }: { children: React.ReactNode }) {
   const headerHeight = useHeaderHeight()
-  const tabBarHeight = useBottomTabBarHeight()
+  const tabBarHeight = 0 // useBottomTabBarHeight()
 
   return (
     <View

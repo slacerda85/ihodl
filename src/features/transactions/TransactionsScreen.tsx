@@ -16,7 +16,7 @@ import BitcoinLogo from '@/assets/bitcoin-logo'
 import { formatBalance } from '../wallet/utils'
 import { alpha } from '@/ui/utils'
 import { useHeaderHeight } from '@react-navigation/elements'
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
+// import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
 
 // Define types for our transaction list items
 type DateHeader = {
@@ -36,7 +36,7 @@ type ListItem = DateHeader | TransactionItem
 
 export default function TransactionsScreen() {
   const headerHeight = useHeaderHeight()
-  const tabBarHeight = useBottomTabBarHeight()
+  const tabBarHeight = 0 // useBottomTabBarHeight()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
