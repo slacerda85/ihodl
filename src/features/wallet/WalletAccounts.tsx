@@ -198,7 +198,10 @@ const styles = StyleSheet.create({
   },
   accountContainer: {
     backgroundColor: colors.white,
-    borderRadius: 16,
+    borderTopLeftRadius: 36,
+    borderTopRightRadius: 36,
+    borderBottomLeftRadius: 36,
+    borderBottomRightRadius: 36,
     padding: 16,
     flexDirection: 'row',
     gap: 24,

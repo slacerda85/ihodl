@@ -15,11 +15,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     runtimeVersion: {
       policy: 'appVersion',
     },
-    icon: {
-      dark: './assets/images/icon.png',
-      light: './assets/images/icon.png',
-      tinted: './assets/images/icon-tinted.png',
-    },
+    icon: './assets/images/icon.png',
     supportsTablet: true,
     infoPlist: {
       NSFaceIDUsageDescription: 'This app uses Face ID to secure your data',
@@ -53,6 +49,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   plugins: [
     'expo-router',
+    'expo-font',
     [
       'expo-local-authentication',
       {

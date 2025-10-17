@@ -8,5 +8,5 @@ export default function SwapIcon({
   color: string
   size: number
 }) {
-  return <AntDesign name="caretdown" size={size} color={color} />
+  return <AntDesign name="caret-down" size={size} color={color} />
 }

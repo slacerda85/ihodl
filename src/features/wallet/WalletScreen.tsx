@@ -3,7 +3,7 @@ import { Link, useRouter } from 'expo-router'
 import { StyleSheet, Text, Pressable, useColorScheme, View } from 'react-native'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
-import useStorage, { useInitialize } from '../storage'
+import useStorage from '../storage'
 
 // Components
 import WalletBalance from './WalletBalance'
@@ -11,7 +11,7 @@ import WalletAccounts from './WalletAccounts'
 import Divider from '@/ui/Divider'
 import CreateWalletIcon from './CreateWalletIcon'
 import ImportWalletIcon from './ImportWalletIcon'
-import ScreenContainer from '@/ui/ContentContainer'
+import ContentContainer from '@/ui/ContentContainer'
 import { useTransactionSync } from './hooks/useTransactionSync'
 // import useStorage from '../store'
 
@@ -22,7 +22,7 @@ export default function WalletScreen() {
   const isDark = colorScheme === 'dark'
 
   // Hook de inicialização para carregar transações automaticamente
-  useInitialize()
+  // useInitialize() // Removido para evitar inicialização duplicada
 
   function handleSend() {
     // Navigate to send screen
@@ -51,7 +51,7 @@ export default function WalletScreen() {
   if (wallets === undefined || wallets?.length === 0) {
     // create link to wallet/manage
     return (
-      <ScreenContainer>
+      <ContentContainer>
         <View style={styles.emptyState}>
           <Text style={[styles.walletName, isDark && styles.walletNameDark]}>No wallets found</Text>
           <Divider
@@ -96,12 +96,12 @@ export default function WalletScreen() {
             </Pressable>
           </View>
         </View>
-      </ScreenContainer>
+      </ContentContainer>
     )
   } else if (activeWalletId === undefined) {
     // create link to wallet/manage
     return (
-      <ScreenContainer>
+      <ContentContainer>
         <View style={styles.emptyState}>
           <Text style={[styles.walletName, isDark && styles.walletNameDark]}>
             No wallet selected
@@ -114,12 +114,12 @@ export default function WalletScreen() {
             </Link>
           </View>
         </View>
-      </ScreenContainer>
+      </ContentContainer>
     )
   }
 
   return (
-    <ScreenContainer>
+    <ContentContainer>
       <View style={{ gap: 32 }}>
         <WalletBalance />
         <View style={styles.actionsSection}>
@@ -142,7 +142,7 @@ export default function WalletScreen() {
           <WalletAccounts />
         </View>
       </View>
-    </ScreenContainer>
+    </ContentContainer>
   )
 }
 

@@ -8,6 +8,15 @@ export type WalletState = {
   activeWalletId: string | undefined
   unit: 'BTC' | 'Sats'
   loadingWalletState: boolean
+  // Cache for addresses to avoid regeneration
+  addressCache: {
+    [walletId: string]: {
+      nextUnusedAddress: string
+      usedReceivingAddresses: any[]
+      usedChangeAddresses: any[]
+      lastUpdated: number
+    }
+  }
 }
 
 type WalletActions = {
@@ -18,6 +27,18 @@ type WalletActions = {
   setActiveWalletId: (walletId: string) => void
   setUnit: (unit: 'BTC' | 'Sats') => void
   setLoadingWalletState: (loading: boolean) => void
+  // Address cache actions
+  setAddressCache: (
+    walletId: string,
+    cache: { nextUnusedAddress: string; usedReceivingAddresses: any[]; usedChangeAddresses: any[] },
+  ) => void
+  getAddressCache: (walletId: string) => {
+    nextUnusedAddress: string
+    usedReceivingAddresses: any[]
+    usedChangeAddresses: any[]
+    lastUpdated: number
+  } | null
+  clearAddressCache: (walletId?: string) => void
 }
 
 export type WalletStorage = WalletState & WalletActions
@@ -33,6 +54,7 @@ const createWalletStorage: StateCreator<
   activeWalletId: undefined,
   unit: 'BTC',
   loadingWalletState: false,
+  addressCache: {},
   setLoadingWalletState: loading => {
     set(() => ({ loadingWalletState: loading }))
   },
@@ -127,6 +149,35 @@ const createWalletStorage: StateCreator<
   },
   setUnit: (unit: 'BTC' | 'Sats') => {
     set(() => ({ unit }))
+  },
+  // Address cache actions
+  setAddressCache: (
+    walletId: string,
+    cache: { nextUnusedAddress: string; usedReceivingAddresses: any[]; usedChangeAddresses: any[] },
+  ) => {
+    set(state => ({
+      addressCache: {
+        ...state.addressCache,
+        [walletId]: {
+          ...cache,
+          lastUpdated: Date.now(),
+        },
+      },
+    }))
+  },
+  getAddressCache: (walletId: string) => {
+    return get().addressCache[walletId] || null
+  },
+  clearAddressCache: (walletId?: string) => {
+    if (walletId) {
+      set(state => {
+        const newCache = { ...state.addressCache }
+        delete newCache[walletId]
+        return { addressCache: newCache }
+      })
+    } else {
+      set(() => ({ addressCache: {} }))
+    }
   },
 })
 

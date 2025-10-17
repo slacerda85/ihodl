@@ -114,18 +114,8 @@ export default function TransactionsScreen() {
       activeWalletId && getTransactionAnalysis && typeof getTransactionAnalysis === 'function'
         ? getTransactionAnalysis(activeWalletId)
         : null
-
-    // Debug: Log transaction analysis
-    if (transactionAnalysis) {
-      console.log('📊 Transaction Analysis:', {
-        balance: transactionAnalysis.balance,
-        totalTransactions: transactionAnalysis.transactions?.length || 0,
-        utxoCount: transactionAnalysis.utxos?.length || 0,
-        stats: transactionAnalysis.stats,
-      })
-    }
   } catch (error) {
-    console.log('Error getting transaction analysis:', error)
+    console.error('Error getting transaction analysis:', error)
   }
 
   // No transaction analysis or no transactions
@@ -151,11 +141,6 @@ export default function TransactionsScreen() {
   // Now we know we have valid transaction data
   const { transactions, stats } = transactionAnalysis
 
-  console.log('📋 Processing transactions for display:', {
-    transactionCount: transactions.length,
-    stats,
-  })
-
   // Agrupar transações por data
   const grouped: Record<string, typeof transactions> = {}
   for (const txData of transactions) {
@@ -171,11 +156,6 @@ export default function TransactionsScreen() {
     }
     grouped[date].push(txData)
   }
-
-  console.log('📅 Transactions grouped by date:', {
-    dateCount: Object.keys(grouped).length,
-    dates: Object.keys(grouped),
-  })
 
   // Ordenar transações dentro de cada data por blocktime (mais recente primeiro)
   for (const date in grouped) {

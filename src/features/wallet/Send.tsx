@@ -13,7 +13,7 @@ import {
 } from 'react-native'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
-import { IconSymbol } from '@/ui/icon-symbol'
+import IconSymbol from '@/ui/IconSymbol'
 import { useRouter } from 'expo-router'
 import { fromBech32, fromBase58check } from '@/lib/address'
 import useStorage from '@/features/storage/useStorage'

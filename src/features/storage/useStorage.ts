@@ -42,6 +42,7 @@ const useStorage = create<StoreState>()(
           activeWalletId: state.activeWalletId,
           unit: state.unit,
           loadingWalletState: false, // Sempre resetar loading states
+          addressCache: state.addressCache,
           // Estados das configurações
           colorMode: state.colorMode,
           userOverride: state.userOverride,

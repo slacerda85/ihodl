@@ -1,16 +1,11 @@
-// react native divider component
 import { View } from 'react-native'
-import colors from '@/ui/colors'
 
 interface DividerProps {
   orientation?: 'horizontal' | 'vertical'
   color?: string
 }
 
-export default function Divider({
-  orientation = 'horizontal',
-  color = colors.border.light,
-}: DividerProps) {
+export default function Divider({ orientation = 'horizontal', color = '#cccccc' }: DividerProps) {
   return (
     <View
       style={{

@@ -1,4 +1,4 @@
-// import { IconSymbol } from '@/ui/icon-symbol'
+// import IconSymbol from '@/ui/IconSymbol'
 import Ionicons from '@expo/vector-icons/Ionicons'
 import Entypo from '@expo/vector-icons/Entypo'
 import { useColorScheme, View } from 'react-native'

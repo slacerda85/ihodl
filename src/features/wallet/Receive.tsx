@@ -16,7 +16,7 @@ import QRCode from 'react-native-qrcode-svg'
 import * as Clipboard from 'expo-clipboard'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
-import { IconSymbol } from '@/ui/icon-symbol'
+import IconSymbol from '@/ui/IconSymbol'
 import useStorage from '../storage'
 import {
   createRootExtendedKey,
@@ -41,6 +41,56 @@ interface UsedAddress {
   index: number
   type: 'receiving' | 'change'
   transactions: any[]
+}
+
+const generateNextUnusedAddressAsync = async (wallet: any, tx: any): Promise<string> => {
+  if (!wallet) return ''
+
+  try {
+    const rootExtendedKey = createRootExtendedKey(fromMnemonic(wallet.seedPhrase))
+    const walletCache = tx.walletCaches.find((cache: any) => cache.walletId === wallet.walletId)
+    const usedAddressSet = new Set<string>(walletCache?.addresses || [])
+
+    // Generate derivation path components
+    const purposeIndex = createHardenedIndex(84) // Native SegWit
+    const purposeExtendedKey = deriveChildPrivateKey(rootExtendedKey, purposeIndex)
+
+    const coinTypeIndex = createHardenedIndex(0) // Bitcoin
+    const coinTypeExtendedKey = deriveChildPrivateKey(purposeExtendedKey, coinTypeIndex)
+
+    const accountIndex = createHardenedIndex(0) // Default account
+    const accountExtendedKey = deriveChildPrivateKey(coinTypeExtendedKey, accountIndex)
+
+    // Receiving addresses (change 0)
+    const receivingExtendedKey = deriveChildPrivateKey(accountExtendedKey, 0)
+
+    // Find next unused address by checking sequentially
+    let nextUnused: string | null = null
+    let index = 0
+    const maxCheck = 100 // Safety limit
+
+    while (!nextUnused && index < maxCheck) {
+      try {
+        const addressIndexExtendedKey = deriveChildPrivateKey(receivingExtendedKey, index)
+        const { privateKey } = splitRootExtendedKey(addressIndexExtendedKey)
+        const publicKey = createPublicKey(privateKey)
+        const address = createSegwitAddress(publicKey)
+
+        if (!usedAddressSet.has(address)) {
+          nextUnused = address
+        }
+        index++
+      } catch (error) {
+        console.warn(`Error generating address at index ${index}:`, error)
+        index++
+      }
+    }
+
+    return nextUnused || ''
+  } catch (error) {
+    console.error('Error generating next unused address:', error)
+    return ''
+  }
 }
 
 // Address generation utilities - separated for better organization
@@ -202,7 +252,7 @@ export default function Receive() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const { wallets, activeWalletId, tx } = useStorage()
+  const { wallets, activeWalletId, tx, getAddressCache, setAddressCache } = useStorage()
   const [selectedAddress, setSelectedAddress] = useState<string>('')
   const [showUsedAddresses, setShowUsedAddresses] = useState(false)
   const [activeTab, setActiveTab] = useState<'receiving' | 'change'>('receiving')
@@ -219,15 +269,15 @@ export default function Receive() {
 
   // Refs for managing async operations
   const isMountedRef = useRef(true)
-  const generationTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const generationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Generate addresses asynchronously when wallet changes
   useEffect(() => {
     if (!activeWallet) {
-      // setAvailableAddresses(mockAddresses)
       setUsedReceivingAddresses([])
       setUsedChangeAddresses([])
       setNextUnusedAddress('')
+      setSelectedAddress('')
       setIsLoadingAddresses(false)
       return
     }
@@ -238,35 +288,75 @@ export default function Receive() {
     }
 
     setIsLoadingAddresses(true)
+    setSelectedAddress('') // Reset to show loading
 
-    // Use setTimeout with low priority to move heavy computation off main thread
+    // Check cache first
+    const cached = getAddressCache(activeWallet.walletId)
+    if (cached && Date.now() - cached.lastUpdated < 5 * 60 * 1000) {
+      // 5 minutes
+      console.log('Using cached addresses for wallet:', activeWallet.walletName)
+      setUsedReceivingAddresses(cached.usedReceivingAddresses)
+      setUsedChangeAddresses(cached.usedChangeAddresses)
+      setNextUnusedAddress(cached.nextUnusedAddress)
+      setSelectedAddress(cached.nextUnusedAddress)
+      setIsLoadingAddresses(false)
+      return
+    }
+
+    // First, generate only the next unused address quickly for QR code
+    const quickGeneration = async () => {
+      try {
+        const nextAddress = await generateNextUnusedAddressAsync(activeWallet, tx)
+        if (isMountedRef.current) {
+          setNextUnusedAddress(nextAddress)
+          setSelectedAddress(nextAddress)
+        }
+      } catch (error) {
+        console.error('Failed to generate next address:', error)
+      }
+    }
+
+    // Start quick generation immediately
+    quickGeneration()
+
+    // Then, generate full address list in background
     generationTimeoutRef.current = setTimeout(async () => {
       if (!isMountedRef.current) return
 
       try {
-        console.log('Generating addresses for wallet:', activeWallet.walletName)
+        console.log('Generating full address list for wallet:', activeWallet.walletName)
         const result = await generateWalletAddressesAsync(activeWallet, tx)
 
         if (!isMountedRef.current) return
 
-        // setAvailableAddresses(result.availableAddresses)
         setUsedReceivingAddresses(result.usedReceivingAddresses)
         setUsedChangeAddresses(result.usedChangeAddresses)
-        setNextUnusedAddress(result.nextUnusedAddress)
+        // Update nextUnusedAddress if it changed (though unlikely)
+        if (result.nextUnusedAddress && result.nextUnusedAddress !== nextUnusedAddress) {
+          setNextUnusedAddress(result.nextUnusedAddress)
+          if (!selectedAddress) setSelectedAddress(result.nextUnusedAddress)
+        }
         setIsLoadingAddresses(false)
+
+        // Cache the results
+        setAddressCache(activeWallet.walletId, {
+          nextUnusedAddress: result.nextUnusedAddress,
+          usedReceivingAddresses: result.usedReceivingAddresses,
+          usedChangeAddresses: result.usedChangeAddresses,
+        })
       } catch (error) {
         if (!isMountedRef.current) return
-        console.error('Failed to generate addresses:', error)
+        console.error('Failed to generate full address list:', error)
         setIsLoadingAddresses(false)
       }
-    }, 100) // Small delay to ensure UI renders first
+    }, 500) // Delay to allow quick generation to complete first
 
     return () => {
       if (generationTimeoutRef.current) {
         clearTimeout(generationTimeoutRef.current)
       }
     }
-  }, [activeWallet, tx, activeWalletId])
+  }, [activeWallet, tx, activeWalletId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cleanup on unmount
   useEffect(() => {

@@ -6,23 +6,46 @@ import { useAuth } from '@/features/auth/AuthProvider'
 import { useCallback, useEffect } from 'react'
 import ManageWalletsIcon from '@/features/wallet/ManageWalletsIcon'
 import useStorage from '@/features/storage'
+import Button from '@/ui/Button/Button'
 // import useStorage from '@/features/store'
 
 function headerRight() {
   return (
-    <Link style={{ padding: 8, borderRadius: 24 }} href="/wallet/actions">
-      <Ionicons name="ellipsis-vertical" size={24} color={colors.primary} />
+    <Link href="/wallet/actions" asChild>
+      <Pressable
+        style={{
+          width: 36,
+          height: 36,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Ionicons name="ellipsis-vertical" size={24} color={colors.primary} />
+      </Pressable>
     </Link>
   )
 }
 
-// link to [id]/manage
-function manageWallets() {
+// link to wallet/manage
+function ManageWallets() {
+  const router = useRouter()
+
+  function handleManageWallets() {
+    router.push('/wallet/manage' as any)
+  }
+
   return (
-    <Link style={{ padding: 8, borderRadius: 24 }} href="/wallet/manage">
-      <ManageWalletsIcon color={colors.primary} />
-      {/* <Ionicons name="wallet-outline" size={24} color={colors.primary} /> */}
-    </Link>
+    <Pressable
+      onPress={handleManageWallets}
+      style={{
+        width: 36,
+        height: 36,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <ManageWalletsIcon color={colors.primary} size={24} />
+    </Pressable>
   )
 }
 
@@ -89,20 +112,13 @@ export default function WalletLayout() {
         contentStyle: {
           backgroundColor: colors.background[isDark ? 'dark' : 'light'],
         },
-        // headerTransparent: true,
-        /* headerStyle: {
-          backgroundColor: colors.background[isDark ? 'dark' : 'light'],
-        },
-        contentStyle: {
-          backgroundColor: colors.background[isDark ? 'dark' : 'light'],
-        }, */
       }}
     >
       <Stack.Screen
         name="index"
         options={{
           headerBlurEffect: 'none',
-          headerLeft: empty ? undefined : () => manageWallets(),
+          headerLeft: empty ? undefined : () => ManageWallets(),
           headerRight: activeWalletId ? () => headerRight() : undefined,
           headerTitleAlign: 'center',
           title: selectedWallet?.walletName || '',

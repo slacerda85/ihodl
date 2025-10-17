@@ -9,6 +9,7 @@ import * as SplashScreen from 'expo-splash-screen'
 import { useEffect, useState } from 'react'
 import AuthScreen from '@/features/auth/AuthScreen'
 import useStorage from '@/features/storage'
+import { useInitialize } from '@/features/storage'
 
 SplashScreen.preventAutoHideAsync()
 
@@ -23,13 +24,14 @@ export default function RootLayout() {
   const setColorMode = useStorage(state => state.setColorMode)
   const colorMode = useStorage(state => state.colorMode)
 
-  // Set the color mode based on the system preference
-  useEffect(() => {
-    setColorMode(colorScheme ?? 'light')
-  }, [colorScheme, setColorMode])
+  // Initialize app data
+  useInitialize()
+
+  // Determine the effective color mode
+  const effectiveColorMode = colorMode === 'auto' ? (colorScheme ?? 'light') : colorMode
 
   const defaultStyle = {
-    backgroundColor: colors.background[colorMode],
+    backgroundColor: colors.background[effectiveColorMode],
   }
 
   const defaultScreenOptions = {

@@ -10,6 +10,7 @@ import { ElectrumPeer } from '@/models/electrum'
 
 // Storage key for peers
 const PEERS_STORAGE_KEY = 'electrum_peers'
+const TRUSTED_PEERS_STORAGE_KEY = 'trusted_electrum_peers'
 
 export const initialPeers /*  */ = [
   { host: 'electrum1.bluewallet.io', port: 443, rejectUnauthorized: false },
@@ -34,8 +35,16 @@ async function init() {
 async function connect(): Promise<TLSSocket> {
   console.log('[electrum] connecting Electrum peers...')
   const peers: ConnectionOptions[] = []
-  peers.push(...initialPeers)
-  // check saved peers
+  // First try trusted peers
+  const trustedPeers = await readTrustedPeers()
+  if (trustedPeers.length > 0) {
+    console.log(`[electrum] Found ${trustedPeers.length} trusted peers`)
+    peers.push(...trustedPeers)
+  } else {
+    // Fallback to initial peers
+    peers.push(...initialPeers)
+  }
+  // Also add any stored peers for discovery
   const storedPeers = await readPeers()
   if (storedPeers.length > 0) {
     console.log(`[electrum] Found ${storedPeers.length} stored peers`)
@@ -134,17 +143,136 @@ async function getPeers(socket?: TLSSocket): Promise<ElectrumPeer[]> {
 }
 
 /**
- * Save Electrum peers to secure storage
- * @param peers Array of Electrum peers to save
+ * Save trusted Electrum peers to secure storage
+ * @param peers Array of trusted peers to save
  */
-async function savePeers(peers: ElectrumPeer[]): Promise<void> {
+async function saveTrustedPeers(peers: ConnectionOptions[]): Promise<void> {
   try {
-    console.log(`[electrum] Saving ${peers.length} peers to storage`)
+    console.log(`[electrum] Saving ${peers.length} trusted peers to storage`)
     const peersJson = JSON.stringify(peers)
-    await zustandStorage.setItem(PEERS_STORAGE_KEY, peersJson)
+    await zustandStorage.setItem(TRUSTED_PEERS_STORAGE_KEY, peersJson)
   } catch (error) {
-    console.error('[electrum] Error saving peers to storage:', error)
+    console.error('[electrum] Error saving trusted peers to storage:', error)
     throw error
+  }
+}
+
+/**
+ * Test peers for consistency by checking blockchain height
+ * @param peers Array of peers to test
+ * @returns Array of trusted peers that gave consistent responses
+ */
+async function testPeers(peers: ConnectionOptions[]): Promise<ConnectionOptions[]> {
+  console.log(`[electrum] Testing ${peers.length} peers for consistency...`)
+
+  const results: { peer: ConnectionOptions; height: number; error?: Error }[] = []
+
+  // Test each peer concurrently
+  const promises = peers.map(async peer => {
+    try {
+      const socket = await init()
+      await new Promise<void>((resolve, reject) => {
+        socket.connect({ host: peer.host!, port: peer.port! }, () => resolve())
+        socket.on('error', reject)
+        setTimeout(() => reject(new Error('Connection timeout')), 5000)
+      })
+
+      const response = await callElectrumMethod<{ height: number }>(
+        'blockchain.headers.subscribe',
+        [],
+        socket,
+      )
+      const height = response.result?.height || 0
+
+      close(socket)
+      return { peer, height }
+    } catch (error) {
+      console.warn(`[electrum] Peer ${peer.host}:${peer.port} failed:`, error)
+      return { peer, height: -1, error: error as Error }
+    }
+  })
+
+  const testResults = await Promise.allSettled(promises)
+
+  testResults.forEach(result => {
+    if (result.status === 'fulfilled') {
+      results.push(result.value)
+    } else {
+      console.error('[electrum] Test failed:', result.reason)
+    }
+  })
+
+  // Group by height
+  const heightGroups: { [height: number]: ConnectionOptions[] } = {}
+  results.forEach(({ peer, height, error }) => {
+    if (!error && height > 0) {
+      if (!heightGroups[height]) heightGroups[height] = []
+      heightGroups[height].push(peer)
+    }
+  })
+
+  // Find the most common height
+  let maxCount = 0
+  let trustedPeers: ConnectionOptions[] = []
+  for (const height in heightGroups) {
+    const count = heightGroups[height].length
+    if (count > maxCount && count >= 2) {
+      // At least 2 peers agree
+      maxCount = count
+      trustedPeers = heightGroups[height]
+    }
+  }
+
+  console.log(`[electrum] Found ${trustedPeers.length} trusted peers with consistent height`)
+  return trustedPeers
+}
+
+/**
+ * Update the list of trusted peers by testing available peers
+ */
+async function updateTrustedPeers(): Promise<void> {
+  try {
+    console.log('[electrum] Updating trusted peers...')
+
+    // Get all available peers
+    const allPeers: ConnectionOptions[] = [...initialPeers]
+    const storedPeers = await readPeers()
+    if (storedPeers.length > 0) {
+      allPeers.push(...peersToConnectionOptions(storedPeers))
+    }
+
+    // Test peers for consistency
+    const trustedPeers = await testPeers(allPeers)
+
+    if (trustedPeers.length > 0) {
+      await saveTrustedPeers(trustedPeers)
+      console.log(`[electrum] Updated trusted peers: ${trustedPeers.length} peers`)
+    } else {
+      console.warn('[electrum] No trusted peers found, keeping existing')
+    }
+  } catch (error) {
+    console.error('[electrum] Error updating trusted peers:', error)
+  }
+}
+
+/**
+ * Read saved trusted Electrum peers from secure storage
+ * @returns Array of trusted peers or empty array if none found
+ */
+async function readTrustedPeers(): Promise<ConnectionOptions[]> {
+  try {
+    const peersJson = await zustandStorage.getItem(TRUSTED_PEERS_STORAGE_KEY)
+    if (!peersJson) {
+      console.log('[electrum] No trusted peers found in storage')
+      return []
+    }
+
+    const peers = JSON.parse(peersJson) as ConnectionOptions[]
+    console.log(`[electrum] Read ${peers.length} trusted peers from storage`)
+    return peers
+  } catch (error) {
+    console.error('[electrum] Error reading trusted peers from storage:', error)
+    return []
   }
 }
 
@@ -609,7 +737,6 @@ async function getBalance(address: string, socket?: TLSSocket): Promise<number> 
 export {
   connect,
   getPeers,
-  savePeers,
   readPeers,
   close,
   callElectrumMethod,
@@ -619,4 +746,5 @@ export {
   getTransactions,
   getTransactionsMultipleAddresses,
   getBalance,
+  updateTrustedPeers,
 }
