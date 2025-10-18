@@ -16,6 +16,7 @@ import BitcoinLogo from '@/assets/bitcoin-logo'
 import { formatBalance } from '../wallet/utils'
 import { alpha } from '@/ui/utils'
 import { useHeaderHeight } from '@react-navigation/elements'
+import ContentContainer from '@/ui/ContentContainer'
 // import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
 
 // Define types for our transaction list items
@@ -258,11 +259,11 @@ export default function TransactionsScreen() {
   }
 
   return (
-    <View style={{ flex: 1, paddingLeft: 16, paddingRight: 16 }}>
+    <ContentContainer>
       <FlatList
         contentContainerStyle={{
-          paddingTop: headerHeight + 16,
-          paddingBottom: tabBarHeight + 16,
+          paddingTop: 32,
+          paddingBottom: 16,
           gap: 1,
         }}
         data={data}
@@ -277,7 +278,7 @@ export default function TransactionsScreen() {
         }
         showsVerticalScrollIndicator={false}
       />
-    </View>
+    </ContentContainer>
   )
 }
 

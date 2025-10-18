@@ -2,6 +2,9 @@
 
 # prebuid
 
+#bitcoin
+bitcoin/
+
 
 # dependencies
 node_modules/

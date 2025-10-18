@@ -1,7 +1,37 @@
 import { sha256 } from '@noble/hashes/sha2'
 import { MMKV } from 'react-native-mmkv'
 import { uint8ArrayToHex, hexToUint8Array } from '@/lib/crypto'
-import { callElectrumMethod } from '@/lib/electrum'
+import { callElectrumMethod, connect, close } from '@/lib/electrum'
+
+// Consensus parameters (mainnet)
+const CONSENSUS_PARAMS = {
+  powLimit: '00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff', // Mainnet powLimit
+  difficultyAdjustmentInterval: 2016,
+  powTargetTimespan: 14 * 24 * 60 * 60, // 2 weeks
+  powTargetSpacing: 10 * 60, // 10 minutes
+  nMedianTimeSpan: 11,
+}
+
+// Helper function to convert hex to Uint8Array (big-endian)
+function hexToUint8ArrayBE(hex: string): Uint8Array {
+  const bytes = hexToUint8Array(hex)
+  // Reverse for big-endian
+  return bytes.reverse()
+}
+
+// Function to get compact representation of target
+function targetToCompact(target: Uint8Array): number {
+  let exponent = target.length
+  while (exponent > 0 && target[exponent - 1] === 0) {
+    exponent--
+  }
+  if (exponent === 0) return 0
+  let mantissa = 0
+  for (let i = 0; i < 3; i++) {
+    mantissa |= (target[exponent - 1 - i] || 0) << (8 * i)
+  }
+  return (exponent << 24) | (mantissa >>> (8 * (3 - Math.min(3, exponent))))
+}
 
 // Define interfaces
 export interface BlockHeader {
@@ -109,11 +139,12 @@ export function getBlockHeaderByHeight(height: number): BlockHeader | null {
 }
 
 // Function to get current block height
-export async function getCurrentBlockHeight(): Promise<number> {
+export async function getCurrentBlockHeight(socket?: any): Promise<number> {
   try {
     const response = await callElectrumMethod<{ height: number }>(
       'blockchain.headers.subscribe',
       [],
+      socket,
     )
     return response.result?.height || 0
   } catch (error) {
@@ -123,9 +154,12 @@ export async function getCurrentBlockHeight(): Promise<number> {
 }
 
 // Function to get block header from Electrum by height
-export async function getBlockHeaderFromElectrum(height: number): Promise<BlockHeader> {
+export async function getBlockHeaderFromElectrum(
+  height: number,
+  socket?: any,
+): Promise<BlockHeader> {
   try {
-    const response = await callElectrumMethod<string>('blockchain.block.header', [height])
+    const response = await callElectrumMethod<string>('blockchain.block.header', [height], socket)
     const headerHex = response.result
     if (!headerHex) throw new Error('No header received')
     const headerBytes = hexToUint8Array(headerHex)
@@ -190,9 +224,14 @@ export function validateBlockHeader(header: BlockHeader, previousHeader?: BlockH
   if (previousHeader && !uint8ArraysEqual(header.previousBlockHash, previousHeader.hash!))
     return false
 
-  // Check timestamp (not before previous, not too far in future)
+  // Check timestamp against median time past
+  if (previousHeader) {
+    const medianTimePast = getMedianTimePast(previousHeader)
+    if (header.timestamp <= medianTimePast) return false
+  }
+
+  // Check timestamp not too far in future
   const now = Math.floor(Date.now() / 1000)
-  if (previousHeader && header.timestamp <= previousHeader.timestamp) return false
   if (header.timestamp > now + 7200) return false // 2 hours in future
 
   // Check version (basic)
@@ -244,9 +283,17 @@ export function verifyMerkleProof(proof: MerkleProof, merkleRoot: Uint8Array): b
 }
 
 // Placeholder for sync logic
-export async function syncHeaders(maxSizeGB: number = 1): Promise<void> {
+export async function syncHeaders(
+  maxSizeGB: number = 1,
+  onProgress?: (height: number, currentHeight?: number) => void,
+): Promise<void> {
+  let socket: any = null
   try {
-    const currentHeight = await getCurrentBlockHeight()
+    // Establish persistent connection for the entire sync
+    socket = await connect()
+    console.log('[blockchain] Established persistent Electrum connection for header sync')
+
+    const currentHeight = await getCurrentBlockHeight(socket)
     const lastHeader = getLastSyncedHeader()
     const maxHeaders = Math.floor((maxSizeGB * 1e9) / 80) // Approximate: 80 bytes per header
     const startHeight = Math.max(0, currentHeight - maxHeaders + 1)
@@ -259,11 +306,11 @@ export async function syncHeaders(maxSizeGB: number = 1): Promise<void> {
     )
 
     for (let height = effectiveStartHeight; height <= currentHeight; height++) {
-      const header = await getBlockHeaderFromElectrum(height)
+      const header = await getBlockHeaderFromElectrum(height, socket)
       const previousHeader =
         height > 0 ? getBlockHeaderByHeight(height - 1) || undefined : undefined
 
-      console.log(`Fetched header for height ${height}, hash: ${uint8ArrayToHex(header.hash!)}`)
+      // console.log(`Fetched header for height ${height}, hash: ${uint8ArrayToHex(header.hash!)}`)
 
       if (!validateBlockHeader(header, previousHeader)) {
         console.error(`Invalid header at height ${height}`)
@@ -272,12 +319,30 @@ export async function syncHeaders(maxSizeGB: number = 1): Promise<void> {
 
       storeBlockHeader(header)
       storage.set('last_synced_height', height.toString())
-      console.log(`Synced header ${height}`)
+      // console.log(`Synced header ${height}`)
+
+      // Call progress callback if provided
+      if (onProgress) {
+        onProgress(height, currentHeight)
+      }
+
+      // Yield control to allow UI updates (small delay)
+      await new Promise(resolve => setTimeout(resolve, 1))
     }
 
     console.log('Headers synced')
   } catch (error) {
     console.error('Error syncing headers:', error)
+  } finally {
+    // Close the persistent connection
+    if (socket) {
+      try {
+        console.log('[blockchain] Closing persistent Electrum connection')
+        close(socket)
+      } catch (closeError) {
+        console.error('[blockchain] Error closing persistent socket:', closeError)
+      }
+    }
   }
 }
 
@@ -290,4 +355,57 @@ export function verifyTransaction(
   const header = getBlockHeader(blockHash)
   if (!header) return false
   return verifyMerkleProof(proof, header.merkleRoot)
+}
+
+// Function to get median time past for a header
+export function getMedianTimePast(header: BlockHeader): number {
+  const timestamps: number[] = []
+  let currentHeight = header.height!
+  for (let i = 0; i < CONSENSUS_PARAMS.nMedianTimeSpan && currentHeight >= 0; i++) {
+    const currentHeader = getBlockHeaderByHeight(currentHeight)
+    if (currentHeader) {
+      timestamps.push(currentHeader.timestamp)
+    }
+    currentHeight--
+  }
+  timestamps.sort((a, b) => a - b)
+  return timestamps[Math.floor(timestamps.length / 2)] || 0
+}
+
+// Function to get next work required
+export function getNextWorkRequired(previousHeader: BlockHeader): number {
+  const powLimitCompact = targetToCompact(hexToUint8ArrayBE(CONSENSUS_PARAMS.powLimit))
+
+  // Only change once per difficulty adjustment interval
+  if ((previousHeader.height! + 1) % CONSENSUS_PARAMS.difficultyAdjustmentInterval !== 0) {
+    return previousHeader.bits
+  }
+
+  // Go back by what we want to be 14 days worth of blocks
+  const heightFirst = previousHeader.height! - (CONSENSUS_PARAMS.difficultyAdjustmentInterval - 1)
+  const firstHeader = getBlockHeaderByHeight(heightFirst)
+  if (!firstHeader) return powLimitCompact
+
+  return calculateNextWorkRequired(previousHeader, firstHeader.timestamp)
+}
+
+// Function to calculate next work required
+function calculateNextWorkRequired(lastHeader: BlockHeader, firstBlockTime: number): number {
+  let actualTimespan = lastHeader.timestamp - firstBlockTime
+
+  // Limit adjustment step
+  const minTimespan = CONSENSUS_PARAMS.powTargetTimespan / 4
+  const maxTimespan = CONSENSUS_PARAMS.powTargetTimespan * 4
+  actualTimespan = Math.max(minTimespan, Math.min(maxTimespan, actualTimespan))
+
+  // Retarget - simplified
+  const ratio = actualTimespan / CONSENSUS_PARAMS.powTargetTimespan
+  let newBits = lastHeader.bits
+  if (ratio < 1) {
+    newBits += Math.floor((1 - ratio) * 0x100000)
+  } else {
+    newBits -= Math.floor((ratio - 1) * 0x100000)
+  }
+  const powLimitCompact = targetToCompact(hexToUint8ArrayBE(CONSENSUS_PARAMS.powLimit))
+  return Math.min(newBits, powLimitCompact)
 }

@@ -80,22 +80,6 @@ async function connect(): Promise<TLSSocket> {
         socket.on('error', errorHandler)
       })
 
-      // rawait savePeers([])
-      /* if (storedPeers.length === 0) {
-        // refresh peers
-        const peers = await getPeers(socket)
-
-        if (peers.length > 0) {
-          // save 10 random peers to storage
-          const randomPeers = peers.sort(() => Math.random() - 0.5).slice(0, 10)
-
-          await savePeers(randomPeers)
-          // await refreshPeersList() // Update active peers list
-          console.log(`[electrum] Successfully updated ${peers.length} peers`)
-        } else {
-          console.warn('[electrum] Received empty peer list, not updating storage')
-        }
-      } */
       // If we reach here, connection was successful
       return socket
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -231,15 +215,36 @@ async function testPeers(peers: ConnectionOptions[]): Promise<ConnectionOptions[
  * Update the list of trusted peers by testing available peers
  */
 async function updateTrustedPeers(): Promise<void> {
+  let socket: TLSSocket | null = null
   try {
     console.log('[electrum] Updating trusted peers...')
 
-    // Get all available peers
-    const allPeers: ConnectionOptions[] = [...initialPeers]
+    // Connect to get a socket for fetching peers
+    socket = await connect()
+    console.log('[electrum] Connected to Electrum server for peer discovery')
+
+    // Fetch fresh peers from the network
+    const networkPeers = await getPeers(socket)
+    console.log(`[electrum] Fetched ${networkPeers.length} peers from network`)
+
+    // Convert network peers to connection options
+    const networkConnectionOptions = peersToConnectionOptions(networkPeers)
+    console.log(
+      `[electrum] Converted ${networkConnectionOptions.length} network peers to connection options`,
+    )
+
+    // Get all available peers (initial + stored + network)
+    const allPeers: ConnectionOptions[] = [...initialPeers, ...networkConnectionOptions]
+
+    // Add stored peers if any
     const storedPeers = await readPeers()
     if (storedPeers.length > 0) {
-      allPeers.push(...peersToConnectionOptions(storedPeers))
+      const storedConnectionOptions = peersToConnectionOptions(storedPeers)
+      allPeers.push(...storedConnectionOptions)
+      console.log(`[electrum] Added ${storedConnectionOptions.length} stored peers`)
     }
+
+    console.log(`[electrum] Total peers to test: ${allPeers.length}`)
 
     // Test peers for consistency
     const trustedPeers = await testPeers(allPeers)
@@ -252,6 +257,15 @@ async function updateTrustedPeers(): Promise<void> {
     }
   } catch (error) {
     console.error('[electrum] Error updating trusted peers:', error)
+  } finally {
+    // Close the socket
+    if (socket) {
+      try {
+        close(socket)
+      } catch (closeError) {
+        console.error('[electrum] Error closing socket:', closeError)
+      }
+    }
   }
 }
 

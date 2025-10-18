@@ -1,6 +1,5 @@
 import { useEffect } from 'react'
 import useStorage from './useStorage'
-import { syncHeaders, getLastSyncedHeader } from '@/lib/blockchain'
 import { updateTrustedPeers } from '@/lib/electrum'
 
 /**
@@ -11,31 +10,12 @@ export function useInitialize() {
   const initializeActiveWalletTransactions = useStorage(
     state => state.tx.initializeActiveWalletTransactions,
   )
-  const maxBlockchainSizeGB = useStorage(state => state.maxBlockchainSizeGB)
 
   useEffect(() => {
     console.log('🚀 [useInitialize] Executando inicialização do app...')
 
     // Pequeno delay para garantir que o store esteja totalmente carregado
     const timer = setTimeout(async () => {
-      // Verificar se há cópia da blockchain em memória
-      const lastSyncedHeader = getLastSyncedHeader()
-      if (!lastSyncedHeader) {
-        console.log(
-          '📥 [useInitialize] Nenhuma cópia da blockchain encontrada, iniciando sincronização...',
-        )
-        try {
-          await syncHeaders(maxBlockchainSizeGB)
-          console.log('✅ [useInitialize] Sincronização de headers concluída')
-        } catch (error) {
-          console.error('❌ [useInitialize] Erro na sincronização de headers:', error)
-        }
-      } else {
-        console.log(
-          '📋 [useInitialize] Cópia da blockchain encontrada, pulando sincronização inicial',
-        )
-      }
-
       // Atualizar lista de peers confiáveis
       try {
         await updateTrustedPeers()
@@ -58,7 +38,7 @@ export function useInitialize() {
     }, 500)
 
     return () => clearTimeout(timer)
-  }, [initializeActiveWalletTransactions, maxBlockchainSizeGB])
+  }, [initializeActiveWalletTransactions])
 }
 
 /**

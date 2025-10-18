@@ -5,7 +5,7 @@ import {
   deriveChildPrivateKey,
   splitRootExtendedKey,
 } from '@/lib/key'
-import { connect, getTransactions, callElectrumMethod } from './electrum'
+import { connect, getTransactions, callElectrumMethod, close } from './electrum'
 import { createSegwitAddress, fromBech32 } from './address'
 import { hash256, hash160, uint8ArrayToHex, hexToUint8Array } from '@/lib/crypto'
 import { UTXO } from './utxo'
@@ -54,6 +54,7 @@ async function getTxHistory({
   accountStartIndex = 0,
   gapLimit = 20,
 }: GetTxHistoryParams): Promise<GetTxHistoryResponse> {
+  let socket: any = null
   try {
     const txHistory: TxHistory[] = []
 
@@ -78,7 +79,8 @@ async function getTxHistory({
     const changeExtendedKey = deriveChildPrivateKey(accountExtendedKey, changeIndex)
 
     // connect to electrum server
-    const socket = await connect()
+    socket = await connect()
+    console.log('[transactions] Established persistent Electrum connection for transaction history')
 
     // Scan receiving addresses
     const receivingTxHistory: TxHistory[] = []
@@ -150,6 +152,16 @@ async function getTxHistory({
     return { txHistory }
   } catch (error) {
     throw new Error(`Failed to discover accounts: ${(error as Error).message}`)
+  } finally {
+    // Close the persistent connection
+    if (socket) {
+      try {
+        console.log('[transactions] Closing persistent Electrum connection')
+        close(socket)
+      } catch (closeError) {
+        console.error('[transactions] Error closing persistent socket:', closeError)
+      }
+    }
   }
 }
 

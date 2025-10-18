@@ -70,6 +70,9 @@ const generateNextUnusedAddressAsync = async (wallet: any, tx: any): Promise<str
     const maxCheck = 100 // Safety limit
 
     while (!nextUnused && index < maxCheck) {
+      // Yield control to prevent blocking UI
+      await new Promise(resolve => setTimeout(resolve, 0))
+
       try {
         const addressIndexExtendedKey = deriveChildPrivateKey(receivingExtendedKey, index)
         const { privateKey } = splitRootExtendedKey(addressIndexExtendedKey)
@@ -94,19 +97,22 @@ const generateNextUnusedAddressAsync = async (wallet: any, tx: any): Promise<str
 }
 
 // Address generation utilities - separated for better organization
-const generateAddressBatch = (
+const generateAddressBatch = async (
   extendedKey: any,
   startIndex: number,
   count: number,
   usedAddressSet: Set<string>,
   walletCache: any,
   type: 'receiving' | 'change',
-): { addresses: string[]; usedAddresses: UsedAddress[]; nextUnused: string | null } => {
+): Promise<{ addresses: string[]; usedAddresses: UsedAddress[]; nextUnused: string | null }> => {
   const addresses: string[] = []
   const usedAddresses: UsedAddress[] = []
   let nextUnused: string | null = null
 
   for (let i = startIndex; i < startIndex + count; i++) {
+    // Yield control to prevent blocking UI
+    await new Promise(resolve => setTimeout(resolve, 0))
+
     try {
       const addressIndexExtendedKey = deriveChildPrivateKey(extendedKey, i)
       const { privateKey } = splitRootExtendedKey(addressIndexExtendedKey)
@@ -193,7 +199,7 @@ const generateWalletAddressesAsync = async (
         addresses,
         usedAddresses,
         nextUnused: batchNextUnused,
-      } = generateAddressBatch(
+      } = await generateAddressBatch(
         receivingExtendedKey,
         startIndex,
         batchSize,
@@ -216,7 +222,7 @@ const generateWalletAddressesAsync = async (
     // Process change addresses in batches
     for (let batch = 0; batch < totalAddresses / batchSize; batch++) {
       const startIndex = batch * batchSize
-      const { usedAddresses } = generateAddressBatch(
+      const { usedAddresses } = await generateAddressBatch(
         changeExtendedKey,
         startIndex,
         batchSize,
@@ -257,6 +263,7 @@ export default function Receive() {
   const [showUsedAddresses, setShowUsedAddresses] = useState(false)
   const [activeTab, setActiveTab] = useState<'receiving' | 'change'>('receiving')
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState<string>('')
 
   // Address data state - separate from useMemo for better performance
   // const [_availableAddresses, setAvailableAddresses] = useState<string[]>(mockAddresses)
@@ -288,6 +295,7 @@ export default function Receive() {
     }
 
     setIsLoadingAddresses(true)
+    setLoadingMessage('Generating addresses...')
     setSelectedAddress('') // Reset to show loading
 
     // Check cache first
@@ -300,6 +308,7 @@ export default function Receive() {
       setNextUnusedAddress(cached.nextUnusedAddress)
       setSelectedAddress(cached.nextUnusedAddress)
       setIsLoadingAddresses(false)
+      setLoadingMessage('')
       return
     }
 
@@ -337,6 +346,7 @@ export default function Receive() {
           if (!selectedAddress) setSelectedAddress(result.nextUnusedAddress)
         }
         setIsLoadingAddresses(false)
+        setLoadingMessage('')
 
         // Cache the results
         setAddressCache(activeWallet.walletId, {
@@ -348,6 +358,7 @@ export default function Receive() {
         if (!isMountedRef.current) return
         console.error('Failed to generate full address list:', error)
         setIsLoadingAddresses(false)
+        setLoadingMessage('')
       }
     }, 500) // Delay to allow quick generation to complete first
 
@@ -430,49 +441,66 @@ export default function Receive() {
     <>
       <ScrollView style={[styles.scrollView, isDark && styles.scrollViewDark]}>
         <View style={[styles.contentWrapper, isDark && styles.contentWrapperDark]}>
-          {/* Header Section */}
-          <View
-            style={[styles.sectionBox, styles.sectionBoxFirst, isDark && styles.sectionBoxDark]}
-          >
-            <Text style={[styles.subtitle, isDark && styles.subtitleDark]}>
-              {activeWallet ? `Wallet: ${activeWallet.walletName}` : 'No wallet selected'}
-            </Text>
-          </View>
-
-          {/* QR Code Section */}
-          {selectedAddress && activeWallet && (
+          {/* Loading State */}
+          {isLoadingAddresses && (
             <View style={[styles.sectionBox, isDark && styles.sectionBoxDark]}>
-              <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>QR Code</Text>
-              <View style={[styles.qrContainer, isDark && styles.qrContainerDark]}>
-                <View style={styles.qrPlaceholder}>
-                  {isLoadingAddresses ? (
-                    <ActivityIndicator size="large" color={colors.primary} />
-                  ) : (
-                    <QRCode
-                      value={`${selectedAddress}`}
-                      size={180}
-                      color={isDark ? colors.text.dark : colors.text.light}
-                      backgroundColor="transparent"
-                    />
-                  )}
-                </View>
+              <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
+                Loading Addresses
+              </Text>
+              <View style={styles.qrContainer}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                {loadingMessage && (
+                  <Text style={[styles.subtitle, isDark && styles.subtitleDark, { marginTop: 16 }]}>
+                    {loadingMessage}
+                  </Text>
+                )}
               </View>
             </View>
           )}
 
-          {/* Address Display Section */}
-          {selectedAddress && activeWallet && (
+          {/* Address Display with QR Code Section */}
+          {selectedAddress && activeWallet && !isLoadingAddresses && (
             <View style={[styles.sectionBox, isDark && styles.sectionBoxDark]}>
+              <Text style={[styles.subtitle, isDark && styles.subtitleDark]}>
+                {activeWallet ? `Wallet: ${activeWallet.walletName}` : 'No wallet selected'}
+              </Text>
               <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>Address</Text>
               <Text style={[styles.addressText, isDark && styles.addressTextDark]}>
                 {selectedAddress}
               </Text>
-            </View>
-          )}
+              <View style={styles.qrContainer}>
+                <QRCode
+                  value={`${selectedAddress}`}
+                  size={180}
+                  color={isDark ? colors.text.dark : colors.text.light}
+                  backgroundColor="transparent"
+                />
+              </View>
+              <View style={styles.buttonRow}>
+                <Pressable
+                  style={[
+                    styles.button,
+                    styles.secondaryButton,
+                    isDark && styles.secondaryButtonDark,
+                  ]}
+                  onPress={handleCopyAddress}
+                >
+                  <IconSymbol name="doc.on.doc" size={20} color={colors.primary} />
+                  <Text style={styles.secondaryButtonText}>Copy</Text>
+                </Pressable>
 
-          {/* Used Addresses Section */}
-          {(usedReceivingAddresses.length > 0 || usedChangeAddresses.length > 0) && (
-            <View style={[styles.sectionBox, isDark && styles.sectionBoxDark]}>
+                <Pressable
+                  style={[
+                    styles.button,
+                    styles.secondaryButton,
+                    isDark && styles.secondaryButtonDark,
+                  ]}
+                  onPress={handleShareAddress}
+                >
+                  <IconSymbol name="square.and.arrow.up" size={20} color={colors.primary} />
+                  <Text style={styles.secondaryButtonText}>Share</Text>
+                </Pressable>
+              </View>
               <Pressable
                 style={[
                   styles.button,
@@ -486,46 +514,15 @@ export default function Receive() {
                   View Used Addresses ({usedReceivingAddresses.length + usedChangeAddresses.length})
                 </Text>
               </Pressable>
+              <Pressable
+                style={[styles.button, styles.primaryButton]}
+                onPress={handleGenerateNewAddress}
+              >
+                <IconSymbol name="plus" size={20} color={colors.primary} />
+                <Text style={styles.primaryButtonText}>Generate New Address</Text>
+              </Pressable>
             </View>
           )}
-
-          {/* Action Buttons Section */}
-          <View style={[styles.sectionBox, styles.sectionBoxLast, isDark && styles.sectionBoxDark]}>
-            <View style={styles.buttonRow}>
-              <Pressable
-                style={[
-                  styles.button,
-                  styles.secondaryButton,
-                  isDark && styles.secondaryButtonDark,
-                ]}
-                onPress={handleCopyAddress}
-              >
-                <IconSymbol name="doc.on.doc" size={20} color={colors.primary} />
-                <Text style={styles.secondaryButtonText}>Copy</Text>
-              </Pressable>
-
-              <Pressable
-                style={[
-                  styles.button,
-                  styles.secondaryButton,
-                  isDark && styles.secondaryButtonDark,
-                ]}
-                onPress={handleShareAddress}
-              >
-                <IconSymbol name="square.and.arrow.up" size={20} color={colors.primary} />
-                <Text style={styles.secondaryButtonText}>Share</Text>
-              </Pressable>
-            </View>
-
-            <Pressable
-              style={[styles.button, styles.primaryButton]}
-              onPress={handleGenerateNewAddress}
-            >
-              <IconSymbol name="plus" size={20} color={colors.primary} />
-              <Text style={styles.primaryButtonText}>Generate New Address</Text>
-            </Pressable>
-          </View>
-
           {/* Info Section */}
           <View style={[styles.infoBox, isDark && styles.infoBoxDark]}>
             <IconSymbol
@@ -695,6 +692,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary.dark,
   },
   qrContainer: {
+    padding: 8,
     alignItems: 'center',
     justifyContent: 'center',
     // padding: 8,

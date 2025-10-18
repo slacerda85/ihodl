@@ -1,5 +1,6 @@
 // import { StrictMode } from 'react'
 import AuthProvider from '@/features/auth/AuthProvider'
+import BlockchainProvider from '@/features/blockchain/BlockchainProvider'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import InactivityOverlay from '@/features/auth/InactivityOverlay'
@@ -53,24 +54,26 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      <Stack
-        screenOptions={{
-          // ...defaultScreenOptions,
-          animation: 'fade',
-          // headerTransparent: true,
-        }}
-      >
-        <Stack.Screen
-          name="index"
-          options={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}
-        />
+    <BlockchainProvider>
+      <AuthProvider>
+        <Stack
+          screenOptions={{
+            // ...defaultScreenOptions,
+            animation: 'fade',
+            // headerTransparent: true,
+          }}
+        >
+          <Stack.Screen
+            name="index"
+            options={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}
+          />
 
-        <Stack.Screen name="(tabs)" options={defaultScreenOptions} />
-      </Stack>
-      <InactivityOverlay />
-      <AuthScreen />
-      <StatusBar style="auto" />
-    </AuthProvider>
+          <Stack.Screen name="(tabs)" options={defaultScreenOptions} />
+        </Stack>
+        <InactivityOverlay />
+        <AuthScreen />
+        <StatusBar style="auto" />
+      </AuthProvider>
+    </BlockchainProvider>
   )
 }
