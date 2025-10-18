@@ -4,7 +4,7 @@ import { ElectrumMethod, ElectrumResponse, GetHistoryResult } from '@/models/ele
 import { JsonRpcRequest } from '@/models/rpc'
 import { randomUUID } from 'expo-crypto'
 import { Tx } from '@/models/transaction'
-import { fromBech32, toScriptHash } from '@/lib/address'
+import { fromBech32, toScriptHash, legacyToScriptHash } from '@/lib/address'
 import zustandStorage from '@/lib/storage'
 import { ElectrumPeer } from '@/models/electrum'
 
@@ -244,10 +244,16 @@ async function updateTrustedPeers(): Promise<void> {
       console.log(`[electrum] Added ${storedConnectionOptions.length} stored peers`)
     }
 
-    console.log(`[electrum] Total peers to test: ${allPeers.length}`)
+    console.log(`[electrum] Total peers available: ${allPeers.length}`)
 
-    // Test peers for consistency
-    const trustedPeers = await testPeers(allPeers)
+    // Randomly select up to 10 peers to test (or all if less than 10)
+    const peersToTest =
+      allPeers.length <= 10 ? allPeers : allPeers.sort(() => Math.random() - 0.5).slice(0, 10)
+
+    console.log(`[electrum] Selected ${peersToTest.length} peers to test for consistency`)
+
+    // Test selected peers for consistency
+    const trustedPeers = await testPeers(peersToTest)
 
     if (trustedPeers.length > 0) {
       await saveTrustedPeers(trustedPeers)
@@ -344,72 +350,6 @@ function peersToConnectionOptions(peers: ElectrumPeer[]): {
       return { host, port, rejectUnauthorized: false }
     })
 }
-
-/**
- * Update the active peers list with peers from storage
- */
-/* async function refreshPeersList(): Promise<void> {
-  try {
-    const storedPeers = await readPeers()
-
-    if (storedPeers?.length > 0) {
-      const connectionOptions = peersToConnectionOptions(storedPeers)
-
-      if (connectionOptions.length > 0) {
-        // Update the module's peers array
-        initialPeers.length = 0 // Clear existing peers
-        connectionOptions.forEach(option => initialPeers.push(option))
-        console.log(`[electrum] Refreshed active peers list with ${initialPeers.length} peers`)
-      } else {
-        console.warn('[electrum] No valid connection options found in stored peers')
-      }
-    } else {
-      console.log('[electrum] No peers in storage to refresh from')
-    }
-  } catch (error) {
-    console.error('[electrum] Error refreshing peers list:', error)
-  }
-} */
-
-/**
- * Update peers list - fetches new peers and updates storage
- * @param socket Optional TLSSocket to reuse
- * @returns Array of updated peers
- */
-/* async function updatePeers(socket?: TLSSocket): Promise<{ success: boolean }> {
-  console.log('[electrum] Updating peer list')
-
-  // Create a socket if not provided
-  const managedSocket = !socket
-  let usedSocket: TLSSocket | null = null
-
-  try {
-    usedSocket = socket || (await connect())
-    const peers = await getPeers(usedSocket)
-
-    if (peers.length > 0) {
-      await savePeers(peers)
-      // await refreshPeersList() // Update active peers list
-      console.log(`[electrum] Successfully updated ${peers.length} peers`)
-    } else {
-      console.warn('[electrum] Received empty peer list, not updating storage')
-    }
-
-    return { success: true }
-  } catch (error) {
-    console.error('[electrum] Error updating peers:', error)
-    throw error
-  } finally {
-    // Close socket if we created it
-    if (managedSocket && usedSocket) {
-      try {
-        close(usedSocket)
-      } catch (closeError) {
-        console.error('[electrum] Error closing socket:', closeError)
-      }
-    }
-  }
-} */
 
 // Generic function to make Electrum calls
 async function callElectrumMethod<T>(
@@ -555,7 +495,7 @@ async function getBlockHash(height: number, socket?: TLSSocket): Promise<Electru
 async function getTransactions(
   address: string,
   socket?: TLSSocket,
-  minConfirmations = 3,
+  minConfirmations = 1,
   batchSize = 10,
 ): Promise<Tx[]> {
   // const startTime = Date.now()
@@ -667,7 +607,7 @@ async function getTransactions(
 async function getTransactionsMultipleAddresses(
   addresses: string[],
   socket?: TLSSocket,
-  minConfirmations = 3,
+  minConfirmations = 1,
 ): Promise<Tx[]> {
   const allTransactions: Tx[] = []
 
@@ -748,6 +688,181 @@ async function getBalance(address: string, socket?: TLSSocket): Promise<number> 
   }
 }
 
+// Estimate fee rate for different confirmation targets
+// Returns fee rate in sat/vB for the given number of blocks
+async function estimateFeeRate(targetBlocks: number = 6, socket?: TLSSocket): Promise<number> {
+  const startTime = Date.now()
+  let usedSocket = socket
+  const managedSocket = !socket
+
+  try {
+    usedSocket = socket || (await connect())
+    console.log(
+      `[electrum] Connected to Electrum server${managedSocket ? ' (new connection)' : ' (reusing connection)'}`,
+    )
+
+    console.log(`[electrum] Estimating fee rate for ${targetBlocks} block confirmation target`)
+
+    // Use blockchain.estimatefee to get fee rate in BTC/kB
+    const feeData = await callElectrumMethod<number>(
+      'blockchain.estimatefee',
+      [targetBlocks],
+      usedSocket,
+    )
+
+    // Convert from BTC/kB to sat/vB
+    // Electrum returns fee in BTC per kilobyte, we need satoshis per vbyte
+    const feeBtcPerKb = feeData.result || 0.00001 // fallback to 1 sat/vB if no data
+    const feeSatPerVb = Math.ceil((feeBtcPerKb * 100000000) / 1000) // BTC to sats, then /1000 for per vbyte
+
+    // Ensure minimum fee rate of 1 sat/vB
+    const finalFeeRate = Math.max(1, feeSatPerVb)
+
+    console.log(`[electrum] Estimated fee rate: ${finalFeeRate} sat/vB for ${targetBlocks} blocks`)
+
+    const totalTime = Date.now() - startTime
+    console.log(`[electrum] estimateFeeRate completed in ${totalTime}ms`)
+
+    return finalFeeRate
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error)
+    console.error(`[electrum] Error estimating fee rate: ${errorMsg}`, error)
+
+    // Return a reasonable fallback fee rate
+    const fallbackFeeRate = targetBlocks <= 1 ? 10 : targetBlocks <= 3 ? 5 : 2
+    console.log(`[electrum] Using fallback fee rate: ${fallbackFeeRate} sat/vB`)
+    return fallbackFeeRate
+  } finally {
+    // Close socket if we created it
+    if (managedSocket && usedSocket) {
+      try {
+        console.log('[electrum] Closing managed socket connection')
+        close(usedSocket)
+      } catch (closeError) {
+        console.error('[electrum] Error closing socket:', closeError)
+      }
+    }
+  }
+}
+
+// Get recommended fee rates for different priority levels
+async function getRecommendedFeeRates(socket?: TLSSocket): Promise<{
+  slow: number
+  normal: number
+  fast: number
+  urgent: number
+}> {
+  try {
+    console.log('[electrum] Fetching recommended fee rates for all priorities')
+
+    // Estimate fees for different confirmation targets
+    const [slow, normal, fast, urgent] = await Promise.all([
+      estimateFeeRate(144, socket), // ~24 hours (slow)
+      estimateFeeRate(6, socket), // ~1 hour (normal)
+      estimateFeeRate(2, socket), // ~20 minutes (fast)
+      estimateFeeRate(1, socket), // ~10 minutes (urgent)
+    ])
+
+    const rates = { slow, normal, fast, urgent }
+    console.log('[electrum] Recommended fee rates:', rates)
+
+    return rates
+  } catch (error) {
+    console.error('[electrum] Error fetching recommended fee rates:', error)
+
+    // Return conservative fallback rates
+    return {
+      slow: 1,
+      normal: 2,
+      fast: 5,
+      urgent: 10,
+    }
+  }
+}
+
+async function getMempoolTransactions(addresses: string[]): Promise<Tx[]> {
+  const socket = await connect()
+
+  try {
+    const mempoolTxs: Tx[] = []
+
+    // Filter and validate addresses
+    const validAddresses = addresses.filter(addr => {
+      if (typeof addr !== 'string' || !addr.trim()) {
+        console.warn('[electrum] Skipping invalid address:', addr)
+        return false
+      }
+      return true
+    })
+
+    console.log(
+      `[electrum] Processing ${validAddresses.length} valid addresses out of ${addresses.length} total`,
+    )
+
+    // Check each valid address for mempool transactions
+    for (const address of validAddresses) {
+      try {
+        console.log(`[electrum] Checking mempool for address: ${address}`)
+
+        let scripthash: string
+
+        try {
+          // Try toScriptHash first (works with Bech32 addresses)
+          scripthash = toScriptHash(address)
+        } catch (bech32Error) {
+          try {
+            // Fallback to legacyToScriptHash (for legacy P2PKH addresses)
+            scripthash = legacyToScriptHash(address)
+          } catch (legacyError) {
+            console.warn(
+              `[electrum] Failed to convert address ${address} to scripthash:`,
+              bech32Error,
+              legacyError,
+            )
+            continue
+          }
+        }
+
+        console.log(`[electrum] Using scripthash: ${scripthash}`)
+
+        // Get mempool transactions for this scripthash
+        const mempoolData = await callElectrumMethod<
+          { tx_hash: string; height: number; fee?: number }[]
+        >('blockchain.scripthash.get_mempool', [scripthash], socket)
+
+        if (mempoolData.result && mempoolData.result.length > 0) {
+          console.log(`[electrum] Found ${mempoolData.result.length} mempool txs for ${address}`)
+          // Get full transaction data for each mempool tx
+          for (const mempoolTx of mempoolData.result) {
+            try {
+              const txData = await getTransaction(mempoolTx.tx_hash, true, socket)
+
+              if (txData.result) {
+                const tx = txData.result
+                // Mark as unconfirmed (height = 0 for mempool)
+                tx.confirmations = 0
+                tx.blocktime = Math.floor(Date.now() / 1000) // Current time as blocktime
+                mempoolTxs.push(tx)
+              }
+            } catch (error) {
+              console.warn(`[electrum] Failed to get mempool tx ${mempoolTx.tx_hash}:`, error)
+            }
+          }
+        } else {
+          console.log(`[electrum] No mempool txs found for ${address}`)
+        }
+      } catch (error) {
+        console.warn(`[electrum] Failed to get mempool for address ${address}:`, error)
+      }
+    }
+
+    console.log(`[electrum] Total mempool transactions found: ${mempoolTxs.length}`)
+    return mempoolTxs
+  } finally {
+    close(socket)
+  }
+}
+
 export {
   connect,
   getPeers,
@@ -761,4 +876,7 @@ export {
   getTransactionsMultipleAddresses,
   getBalance,
   updateTrustedPeers,
+  estimateFeeRate,
+  getRecommendedFeeRates,
+  getMempoolTransactions,
 }

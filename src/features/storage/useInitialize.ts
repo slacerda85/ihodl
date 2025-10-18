@@ -7,12 +7,44 @@ import { updateTrustedPeers } from '@/lib/electrum'
  * quando o app carrega. Deve ser usado em componentes de nível superior.
  */
 export function useInitialize() {
-  const initializeActiveWalletTransactions = useStorage(
-    state => state.tx.initializeActiveWalletTransactions,
-  )
+  const activeWalletId = useStorage(state => state.activeWalletId)
+  const fetchTransactions = useStorage(state => state.tx.fetchTransactions)
+  const fetchMempoolTransactions = useStorage(state => state.tx.fetchMempoolTransactions)
 
   useEffect(() => {
     console.log('🚀 [useInitialize] Executando inicialização do app...')
+
+    const tryInitialize = async () => {
+      if (!activeWalletId) {
+        console.log('⚠️ [useInitialize] Nenhuma carteira ativa, pulando busca de transações')
+        return
+      }
+
+      try {
+        console.log('✅ [useInitialize] Carteira ativa encontrada, buscando transações...')
+        await fetchTransactions(activeWalletId)
+        console.log('✅ [useInitialize] Busca de transações concluída')
+      } catch (error) {
+        console.error('❌ [useInitialize] Erro na busca de transações:', error)
+      }
+
+      // Verificar transações pendentes na mempool
+      if (
+        activeWalletId &&
+        fetchMempoolTransactions &&
+        typeof fetchMempoolTransactions === 'function'
+      ) {
+        try {
+          console.log('🔍 [useInitialize] Verificando transações na mempool...')
+          await fetchMempoolTransactions(activeWalletId)
+          console.log('✅ [useInitialize] Verificação de mempool concluída')
+        } catch (error) {
+          console.error('❌ [useInitialize] Erro na verificação de mempool:', error)
+        }
+      } else {
+        console.warn('⚠️ [useInitialize] Função de fetch de mempool não disponível')
+      }
+    }
 
     // Pequeno delay para garantir que o store esteja totalmente carregado
     const timer = setTimeout(async () => {
@@ -25,20 +57,11 @@ export function useInitialize() {
       }
 
       // Inicializar transações da carteira ativa
-      if (initializeActiveWalletTransactions) {
-        try {
-          await initializeActiveWalletTransactions()
-          console.log('✅ [useInitialize] Inicialização de transações concluída')
-        } catch (error) {
-          console.error('❌ [useInitialize] Erro na inicialização:', error)
-        }
-      } else {
-        console.warn('⚠️ [useInitialize] Função de inicialização não disponível')
-      }
-    }, 500)
+      await tryInitialize()
+    }, 2000) // Aumentei para 2 segundos
 
     return () => clearTimeout(timer)
-  }, [initializeActiveWalletTransactions])
+  }, [activeWalletId, fetchTransactions, fetchMempoolTransactions])
 }
 
 /**

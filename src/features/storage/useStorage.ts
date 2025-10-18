@@ -47,7 +47,11 @@ const useStorage = create<StoreState>()(
           colorMode: state.colorMode,
           userOverride: state.userOverride,
           // Para TX, persistir apenas os dados, não os estados de loading
-          // REMOVER: tx: { walletCaches: state.tx?.walletCaches || [], loadingTxState: false }
+          tx: {
+            walletCaches: state.tx?.walletCaches || [],
+            pendingTransactions: state.tx?.pendingTransactions || [],
+            loadingTxState: false,
+          },
           // As funções serão recriadas automaticamente pelo Zustand
         }
       },

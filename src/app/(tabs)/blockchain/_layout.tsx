@@ -1,11 +1,12 @@
 import { Stack } from 'expo-router'
 // import { useColorScheme } from 'react-native'
 import colors from '@/ui/colors'
-import useStorage from '@/features/storage'
+import { useSettings } from '@/features/store'
+// import useStorage from '@/features/storage'
 
 export default function BlockchainLayout() {
-  const colorScheme = useStorage(storage => storage.colorMode)
-  const isDark = colorScheme === 'dark'
+  const { colorMode } = useSettings()
+  const isDark = colorMode === 'dark'
 
   return (
     <Stack

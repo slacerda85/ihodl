@@ -1,9 +1,10 @@
 // React and React Native
 import { Link, useRouter } from 'expo-router'
 import { StyleSheet, Text, Pressable, useColorScheme, View } from 'react-native'
+import { useEffect } from 'react'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
-import useStorage from '../storage'
+import { useWallet, useTransactions } from '../store'
 
 // Components
 import WalletBalance from './WalletBalance'
@@ -12,8 +13,6 @@ import Divider from '@/ui/Divider'
 import CreateWalletIcon from './CreateWalletIcon'
 import ImportWalletIcon from './ImportWalletIcon'
 import ContentContainer from '@/ui/ContentContainer'
-import { useTransactionSync } from './hooks/useTransactionSync'
-// import useStorage from '../store'
 
 export default function WalletScreen() {
   const router = useRouter()
@@ -42,11 +41,21 @@ export default function WalletScreen() {
     router.push('/wallet/import')
   }
 
-  const activeWalletId = useStorage(state => state.activeWalletId)
-  const wallets = useStorage(state => state.wallets)
+  const { activeWalletId, wallets } = useWallet()
+  const { fetchTransactions } = useTransactions()
 
-  // Use custom hook to manage transaction syncing - this handles the fetchTransactions logic
-  useTransactionSync(activeWalletId)
+  // Auto-fetch transactions when wallet becomes active
+  useEffect(() => {
+    if (activeWalletId && wallets) {
+      const activeWallet = wallets.find(wallet => wallet.walletId === activeWalletId)
+      if (activeWallet?.seedPhrase) {
+        console.log('[WalletScreen] Wallet active, fetching transactions...')
+        fetchTransactions(activeWalletId, activeWallet.seedPhrase)
+      }
+    }
+  }, [activeWalletId, wallets, fetchTransactions])
+
+  // Transaction sync logic can be handled by individual components that need it
 
   if (wallets === undefined || wallets?.length === 0) {
     // create link to wallet/manage

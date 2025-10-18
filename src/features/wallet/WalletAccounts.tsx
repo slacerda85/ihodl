@@ -13,7 +13,7 @@ import BitcoinLogo from '@/assets/bitcoin-logo'
 import { ReactNode } from 'react'
 import { alpha } from '@/ui/utils'
 import colors from '@/ui/colors'
-import useStorage from '../storage'
+import { useWallet, useTransactions } from '../store'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { formatBalance } from './utils'
@@ -45,8 +45,7 @@ export default function WalletAccounts() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const wallets = useStorage(state => state.wallets)
-  const activeWalletId = useStorage(state => state.activeWalletId)
+  const { wallets, activeWalletId } = useWallet()
 
   if (!activeWalletId) {
     return (
@@ -93,24 +92,17 @@ function AccountDetails({ account }: { account: Account }) {
   const isDark = colorScheme === 'dark'
   const router = useRouter()
 
-  const loadingWallet = useStorage(state => state.loadingWalletState)
-  const loadingTransactions = useStorage(state => state.tx.loadingTxState)
+  const { loadingWalletState: loadingWallet } = useWallet()
+  const { loadingTxState: loadingTransactions, walletCaches, getWalletCache } = useTransactions()
   const loading = loadingWallet || loadingTransactions
-  const unit = useStorage(state => state.unit)
-  const activeWalletId = useStorage(state => state.activeWalletId)
-  const getBalance = useStorage(state => state.tx.getBalance)
-  const walletCaches = useStorage(state => state.tx.walletCaches)
+  const { unit, activeWalletId } = useWallet()
 
   // Check if we have cached data for the active wallet
-  const hasTransactionData = activeWalletId
-    ? walletCaches.some(cache => cache.walletId === activeWalletId)
-    : false
+  const walletCache = activeWalletId ? getWalletCache(activeWalletId) : null
+  const hasTransactionData = !!walletCache
 
-  // Usar o novo método para obter saldo com verificação de segurança
-  const balance =
-    activeWalletId && getBalance && typeof getBalance === 'function' && hasTransactionData
-      ? getBalance(activeWalletId)
-      : 0
+  // TODO: Implement balance calculation from transactions
+  const balance = 0
 
   // Format account name using purpose and coin type labels
   const purposeLabel = purposeToLabel[account.purpose] || `Purpose ${account.purpose}`

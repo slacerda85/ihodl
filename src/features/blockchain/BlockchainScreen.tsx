@@ -1,7 +1,7 @@
 import { Text, View, StyleSheet, useColorScheme, ActivityIndicator, Pressable } from 'react-native'
 import { useHeaderHeight } from '@react-navigation/elements'
 import colors from '@/ui/colors'
-import { useBlockchain } from '@/features/blockchain'
+import { useBlockchain } from '@/features/store'
 
 // Helper function to format bytes
 function formatBytes(bytes: number): string {

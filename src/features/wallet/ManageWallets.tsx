@@ -7,18 +7,15 @@ import { alpha } from '@/ui/utils'
 import Divider from '@/ui/Divider'
 import CreateWalletIcon from './CreateWalletIcon'
 import ImportWalletIcon from './ImportWalletIcon'
-import useStorage from '../storage'
+import { useWallet } from '../store'
 // import { setActiveWalletId } from '@/lib/wallet'
 
 export default function ManageWallets() {
   const router = useRouter()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
-  const wallets = useStorage(state => state.wallets)
-  const activeWalletId = useStorage(state => state.activeWalletId)
-  const setActiveWalletId = useStorage(state => state.setActiveWalletId)
-  const loadingWallet = useStorage(state => state.loadingWalletState)
-  const setLoadingWallets = useStorage(state => state.setLoadingWalletState)
+  const { wallets, activeWalletId, setActiveWallet, loadingWalletState, setLoadingWallet } =
+    useWallet()
 
   function handleCreateWallet() {
     router.push('/wallet/create')
@@ -30,8 +27,8 @@ export default function ManageWallets() {
 
   function handleSelectWallet(walletId: string) {
     try {
-      setLoadingWallets(true)
-      setActiveWalletId(walletId)
+      setLoadingWallet(true)
+      setActiveWallet(walletId)
       router.dismiss()
     } catch (error) {
       console.error('Error selecting wallet:', error)
@@ -39,7 +36,7 @@ export default function ManageWallets() {
     } finally {
       // Keep loading state active briefly to allow the UI to update
       setTimeout(() => {
-        setLoadingWallets(false)
+        setLoadingWallet(false)
       }, 500)
     }
   }
@@ -76,7 +73,7 @@ export default function ManageWallets() {
                   >
                     <View style={{ flex: 1 }}>
                       <View style={styles.walletHeader}>
-                        {loadingWallet ? (
+                        {loadingWalletState ? (
                           <ActivityIndicator size={20} color={colors.primary} />
                         ) : (
                           <View style={styles.radioContainer}>

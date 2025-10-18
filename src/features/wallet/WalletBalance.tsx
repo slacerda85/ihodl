@@ -1,32 +1,36 @@
 import { View, Text, StyleSheet, useColorScheme, Pressable, ActivityIndicator } from 'react-native'
+import { useState, useEffect } from 'react'
 import colors from '@/ui/colors'
 import SwapIcon from './SwapIcon'
-import useStorage from '../storage'
+import { useWallet, useTransactions } from '../store'
 import { formatBalance } from './utils'
 
 export default function WalletBalance() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const loadingWallet = useStorage(state => state.loadingWalletState)
-  const loadingTx = useStorage(state => state.tx.loadingTxState)
-  const loading = loadingWallet || loadingTx
-  const unit = useStorage(state => state.unit)
-  const setUnit = useStorage(state => state.setUnit)
-  const activeWalletId = useStorage(state => state.activeWalletId)
-  const getBalance = useStorage(state => state.tx.getBalance)
-  const walletCaches = useStorage(state => state.tx.walletCaches)
+  const [balance, setBalance] = useState(0)
+  const { walletCaches, getBalance } = useTransactions()
+  const { loadingWalletState: loadingWallet, unit, setUnit, activeWalletId } = useWallet()
+  const { loadingTxState: loadingTx } = useTransactions()
+  const loading = loadingWallet || loadingTx || false
 
-  // Check if we have cached data for the active wallet
-  const hasTransactionData = activeWalletId
-    ? walletCaches.some(cache => cache.walletId === activeWalletId)
-    : false
-
-  // Usar o novo método para obter saldo com verificação de segurança
-  const balance =
-    activeWalletId && getBalance && typeof getBalance === 'function' && hasTransactionData
-      ? getBalance(activeWalletId)
-      : 0
+  // Update balance when dependencies change
+  useEffect(() => {
+    if (activeWalletId) {
+      try {
+        // Use the getBalance selector from useTransactions
+        const newBalance = getBalance(activeWalletId)
+        setBalance(newBalance)
+        console.log('[WalletBalance] Balance updated:', newBalance)
+      } catch (error) {
+        console.error('[WalletBalance] Error getting balance:', error)
+        setBalance(0)
+      }
+    } else {
+      setBalance(0)
+    }
+  }, [activeWalletId, walletCaches, getBalance])
 
   if (loading) {
     return (

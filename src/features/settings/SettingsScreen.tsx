@@ -1,6 +1,6 @@
 import colors from '@/ui/colors'
 import { StyleSheet, useColorScheme, ScrollView, Text, View } from 'react-native'
-import useStorage from '@/features/storage'
+import { useSettings } from '@/features/store'
 import Picker from '@/ui/Picker'
 import { ColorMode } from '@/models/settings'
 
@@ -9,10 +9,7 @@ import { Host, Button } from '@expo/ui/swift-ui'
 
 export default function SettingsScreen() {
   const colorScheme = useColorScheme()
-  const colorMode = useStorage(state => state.colorMode)
-  const setColorMode = useStorage(state => state.setColorMode)
-  const maxBlockchainSizeGB = useStorage(state => state.maxBlockchainSizeGB)
-  const setMaxBlockchainSizeGB = useStorage(state => state.setMaxBlockchainSizeGB)
+  const { colorMode, setColorMode, maxBlockchainSizeGB, setMaxBlockchainSize } = useSettings()
 
   const effectiveColorMode = colorMode === 'auto' ? (colorScheme ?? 'light') : colorMode
   const isDarkEffective = effectiveColorMode === 'dark'
@@ -60,7 +57,7 @@ export default function SettingsScreen() {
             options={['0.5 GB', '1 GB', '2 GB', '5 GB']}
             selectedIndex={selectedSizeIndex}
             onOptionSelected={({ nativeEvent: { index } }) => {
-              setMaxBlockchainSizeGB(blockchainSizeOptions[index].value)
+              setMaxBlockchainSize(blockchainSizeOptions[index].value)
             }}
             variant="segmented"
           />

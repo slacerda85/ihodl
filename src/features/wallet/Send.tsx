@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ import { alpha } from '@/ui/utils'
 import IconSymbol from '@/ui/IconSymbol'
 import { useRouter } from 'expo-router'
 import { fromBech32, fromBase58check } from '@/lib/address'
-import useStorage from '@/features/storage/useStorage'
+import { useWallet, useTransactions } from '../store'
 import {
   fromMnemonic,
   createRootExtendedKey,
@@ -29,6 +29,7 @@ import { buildTransaction, signTransaction, sendTransaction } from '@/lib/transa
 import { formatBalance } from './utils'
 import { UTXO } from '@/lib/utxo'
 import { createSegwitAddress } from '@/lib/address'
+import { getRecommendedFeeRates } from '@/lib/electrum'
 
 export default function Send() {
   const colorScheme = useColorScheme()
@@ -36,12 +37,8 @@ export default function Send() {
 
   const router = useRouter()
 
-  const activeWalletId = useStorage(state => state.activeWalletId)
-  const wallets = useStorage(state => state.wallets)
-  const walletCaches = useStorage(state => state.tx.walletCaches)
-  const getBalance = useStorage(state => state.tx.getBalance)
-  const getUtxos = useStorage(state => state.tx.getUtxos)
-  const unit = useStorage(state => state.unit)
+  const { activeWalletId, wallets, unit } = useWallet()
+  const { walletCaches, addPendingTransaction, getBalance, getUtxos } = useTransactions()
 
   const [submitting, setSubmitting] = useState<boolean>(false)
 
@@ -54,6 +51,13 @@ export default function Send() {
   const [autoFeeAdjustment, setAutoFeeAdjustment] = useState<boolean>(true)
   const [addressValid, setAddressValid] = useState<boolean | null>(null)
   const [amountValid, setAmountValid] = useState<boolean | null>(null)
+  const [feeRates, setFeeRates] = useState<{
+    slow: number
+    normal: number
+    fast: number
+    urgent: number
+  } | null>(null)
+  const [loadingFeeRates, setLoadingFeeRates] = useState<boolean>(false)
 
   // Check if we have cached data for the active wallet
   const hasTransactionData = activeWalletId
@@ -152,7 +156,14 @@ export default function Send() {
       // Convert all values to satoshis for accurate comparison
       const amountInSatoshis = Math.round(amount * 100000000)
       const feeRateInteger = Math.round(feeRate)
-      const estimatedFeeInSatoshis = Math.round(feeRateInteger * 250) // 250 bytes estimated tx size
+
+      // Estimate transaction size more accurately (assuming 1-2 inputs, 1-2 outputs)
+      const estimatedTxSize =
+        autoFeeAdjustment && feeRates
+          ? 200 + Math.random() * 100 // Variable estimate when auto-adjusting
+          : 250 // Fixed estimate for manual adjustment
+
+      const estimatedFeeInSatoshis = Math.round(feeRateInteger * estimatedTxSize)
       const availableBalanceInSatoshis = Math.round(availableBalance * 100000000)
 
       if (amountInSatoshis + estimatedFeeInSatoshis > availableBalanceInSatoshis) {
@@ -163,12 +174,63 @@ export default function Send() {
     } else {
       setAmountValid(null)
     }
-  }, [feeRate, availableBalance, amount])
+  }, [feeRate, availableBalance, amount, autoFeeAdjustment, feeRates])
 
   useEffect(() => {
     const num = parseFloat(feeRateInput)
     setFeeRate(isNaN(num) ? 1 : num)
   }, [feeRateInput])
+
+  // Function to fetch recommended fee rates from network
+  const fetchRecommendedFeeRates = useCallback(async () => {
+    if (!autoFeeAdjustment) return
+
+    setLoadingFeeRates(true)
+    try {
+      console.log('[Send] Fetching recommended fee rates from network...')
+      const rates = await getRecommendedFeeRates()
+      setFeeRates(rates)
+
+      // Auto-select "normal" fee rate for auto-adjustment
+      if (autoFeeAdjustment) {
+        setFeeRate(rates.normal)
+        setFeeRateInput(rates.normal.toString())
+      }
+
+      console.log('[Send] Fee rates updated:', rates)
+    } catch (error) {
+      console.error('[Send] Failed to fetch fee rates:', error)
+      // Keep existing rates or use fallback
+      if (!feeRates) {
+        const fallbackRates = { slow: 1, normal: 2, fast: 5, urgent: 10 }
+        setFeeRates(fallbackRates)
+        if (autoFeeAdjustment) {
+          setFeeRate(fallbackRates.normal)
+          setFeeRateInput(fallbackRates.normal.toString())
+        }
+      }
+    } finally {
+      setLoadingFeeRates(false)
+    }
+  }, [autoFeeAdjustment, feeRates])
+
+  // Effect to fetch fee rates when auto-adjustment is enabled
+  useEffect(() => {
+    if (autoFeeAdjustment && !feeRates) {
+      fetchRecommendedFeeRates()
+    }
+  }, [autoFeeAdjustment, feeRates, fetchRecommendedFeeRates])
+
+  // Effect to update fee rate when auto-adjustment is toggled
+  useEffect(() => {
+    if (autoFeeAdjustment && feeRates) {
+      setFeeRate(feeRates.normal)
+      setFeeRateInput(feeRates.normal.toString())
+    } else if (!autoFeeAdjustment && feeRates) {
+      // When disabling auto-adjustment, keep current rate
+      setFeeRateInput(feeRate.toString())
+    }
+  }, [autoFeeAdjustment, feeRates, feeRate])
 
   // Function to normalize amount input (convert commas to dots)
   const normalizeAmount = (text: string): string => {
@@ -194,39 +256,54 @@ export default function Send() {
   }
 
   async function handleSend() {
+    setSubmitting(true) // Show loading immediately on button press
+
     if (!recipientAddress.trim()) {
       Alert.alert('Error', 'Please enter a recipient address')
+      setSubmitting(false)
       return
     }
 
     if (addressValid === false) {
       Alert.alert('Error', 'Please enter a valid Bitcoin address')
+      setSubmitting(false)
       return
     }
 
     if (amount <= 0) {
       Alert.alert('Error', 'Please enter a valid amount')
+      setSubmitting(false)
+      return
+    }
+
+    // Check if amount is above dust threshold (546 satoshis)
+    const amountInSatoshis = Math.round(amount * 100000000)
+    if (amountInSatoshis < 546) {
+      Alert.alert('Error', `Amount must be at least 0.00000546 BTC (546 satoshis) to avoid dust`)
+      setSubmitting(false)
       return
     }
 
     if (feeRate <= 0) {
       Alert.alert('Error', 'Please enter a valid fee rate')
+      setSubmitting(false)
       return
     }
 
     if (!activeWalletId) {
       Alert.alert('Error', 'No active wallet found')
+      setSubmitting(false)
       return
     }
 
     const activeWallet = wallets.find(wallet => wallet.walletId === activeWalletId)
     if (!activeWallet) {
       Alert.alert('Error', 'Active wallet not found')
+      setSubmitting(false)
       return
     }
 
     console.log('Starting transaction assembly...')
-    setSubmitting(true)
 
     try {
       console.log('Retrieving wallet data...')
@@ -262,7 +339,7 @@ export default function Send() {
       )
 
       // Filter for confirmed UTXOs (6+ confirmations)
-      const confirmedUtxos = utxos.filter((utxo: UTXO) => utxo.confirmations >= 6)
+      const confirmedUtxos = utxos.filter((utxo: UTXO) => utxo.confirmations >= 2)
       console.log(`Confirmed UTXOs (6+ confirmations): ${confirmedUtxos.length}`)
       console.log(
         'Confirmed UTXO details:',
@@ -291,10 +368,9 @@ export default function Send() {
 
       console.log('Building transaction...')
       console.log('amount (BTC)', amount)
+      console.log('amountInSatoshis', amountInSatoshis)
       // Convert amount from BTC to satoshis and ensure feeRate is integer
-      const amountInSatoshis = Math.round(amount * 100000000)
       const feeRateInteger = Math.round(feeRate)
-      console.log('amount (satoshis)', amountInSatoshis)
       console.log('feeRate (sat/vB)', feeRateInteger)
 
       // Build transaction
@@ -330,6 +406,20 @@ export default function Send() {
 
       if (sendResult.success) {
         console.log('Transaction sent successfully...')
+
+        // Salvar transação pendente no storage
+        if (addPendingTransaction) {
+          addPendingTransaction({
+            txid: sendResult.txid,
+            walletId: activeWalletId,
+            recipientAddress,
+            amount: amountInSatoshis,
+            fee: buildResult.fee,
+            txHex: signResult.txHex,
+          })
+          console.log('Pending transaction saved to storage')
+        }
+
         setSubmitting(false)
         Alert.alert(
           'Transaction Sent',
@@ -442,6 +532,57 @@ export default function Send() {
             autoCorrect={false}
             editable={!autoFeeAdjustment}
           />
+          {loadingFeeRates && (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={[styles.loadingText, isDark && styles.loadingTextDark]}>
+                Fetching network fee rates...
+              </Text>
+            </View>
+          )}
+          {autoFeeAdjustment && feeRates && (
+            <View style={styles.feeRatesContainer}>
+              <Text style={[styles.feeRatesTitle, isDark && styles.feeRatesTitleDark]}>
+                Network Fee Rates:
+              </Text>
+              <View style={styles.feeRatesGrid}>
+                <View style={styles.feeRateOption}>
+                  <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>Slow</Text>
+                  <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
+                    {feeRates.slow} sat/vB
+                  </Text>
+                </View>
+                <View style={styles.feeRateOption}>
+                  <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
+                    Normal
+                  </Text>
+                  <Text
+                    style={[
+                      styles.feeRateValue,
+                      isDark && styles.feeRateValueDark,
+                      styles.feeRateSelected,
+                    ]}
+                  >
+                    {feeRates.normal} sat/vB
+                  </Text>
+                </View>
+                <View style={styles.feeRateOption}>
+                  <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>Fast</Text>
+                  <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
+                    {feeRates.fast} sat/vB
+                  </Text>
+                </View>
+                <View style={styles.feeRateOption}>
+                  <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
+                    Urgent
+                  </Text>
+                  <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
+                    {feeRates.urgent} sat/vB
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
           <View style={styles.infoBox}>
             <IconSymbol
               name="info.circle.fill"
@@ -451,7 +592,9 @@ export default function Send() {
             />
             <Text style={[styles.infoText, isDark && styles.infoTextDark]}>
               {autoFeeAdjustment
-                ? 'Fee rate is automatically adjusted based on network conditions.'
+                ? loadingFeeRates
+                  ? 'Loading current network conditions...'
+                  : 'Fee rate is automatically adjusted based on network conditions.'
                 : 'Higher fee rates result in faster confirmation times.'}
             </Text>
           </View>
@@ -607,5 +750,67 @@ const styles = StyleSheet.create({
   },
   balanceTextDark: {
     color: colors.textSecondary.dark,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 8,
+    gap: 8,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: colors.textSecondary.light,
+  },
+  loadingTextDark: {
+    color: colors.textSecondary.dark,
+  },
+  feeRatesContainer: {
+    marginTop: 8,
+    padding: 12,
+    backgroundColor: alpha(colors.black, 0.05),
+    borderRadius: 8,
+  },
+  feeRatesTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.text.light,
+    marginBottom: 8,
+  },
+  feeRatesTitleDark: {
+    color: colors.text.dark,
+  },
+  feeRatesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  feeRateOption: {
+    flex: 1,
+    minWidth: '45%',
+    alignItems: 'center',
+    padding: 8,
+    backgroundColor: alpha(colors.white, 0.1),
+    borderRadius: 6,
+  },
+  feeRateLabel: {
+    fontSize: 12,
+    color: colors.textSecondary.light,
+    marginBottom: 2,
+  },
+  feeRateLabelDark: {
+    color: colors.textSecondary.dark,
+  },
+  feeRateValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.text.light,
+  },
+  feeRateValueDark: {
+    color: colors.text.dark,
+  },
+  feeRateSelected: {
+    color: colors.primary,
+    fontWeight: '600',
   },
 })

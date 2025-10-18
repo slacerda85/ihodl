@@ -17,248 +17,23 @@ import * as Clipboard from 'expo-clipboard'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import IconSymbol from '@/ui/IconSymbol'
-import useStorage from '../storage'
-import {
-  createRootExtendedKey,
-  fromMnemonic,
-  createHardenedIndex,
-  deriveChildPrivateKey,
-  splitRootExtendedKey,
-  createPublicKey,
-} from '@/lib/key'
-import { createSegwitAddress } from '@/lib/address'
-
-// Mock data for demonstration
-/* const mockAddresses = [
-  'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
-  'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
-  'bc1p5d7rjq7g6rdk2yhzks9smlaqtedr4dekq08ge8ztwac72sfr9rusxg3297',
-] */
-
-// Types for address data
-interface UsedAddress {
-  address: string
-  index: number
-  type: 'receiving' | 'change'
-  transactions: any[]
-}
-
-const generateNextUnusedAddressAsync = async (wallet: any, tx: any): Promise<string> => {
-  if (!wallet) return ''
-
-  try {
-    const rootExtendedKey = createRootExtendedKey(fromMnemonic(wallet.seedPhrase))
-    const walletCache = tx.walletCaches.find((cache: any) => cache.walletId === wallet.walletId)
-    const usedAddressSet = new Set<string>(walletCache?.addresses || [])
-
-    // Generate derivation path components
-    const purposeIndex = createHardenedIndex(84) // Native SegWit
-    const purposeExtendedKey = deriveChildPrivateKey(rootExtendedKey, purposeIndex)
-
-    const coinTypeIndex = createHardenedIndex(0) // Bitcoin
-    const coinTypeExtendedKey = deriveChildPrivateKey(purposeExtendedKey, coinTypeIndex)
-
-    const accountIndex = createHardenedIndex(0) // Default account
-    const accountExtendedKey = deriveChildPrivateKey(coinTypeExtendedKey, accountIndex)
-
-    // Receiving addresses (change 0)
-    const receivingExtendedKey = deriveChildPrivateKey(accountExtendedKey, 0)
-
-    // Find next unused address by checking sequentially
-    let nextUnused: string | null = null
-    let index = 0
-    const maxCheck = 100 // Safety limit
-
-    while (!nextUnused && index < maxCheck) {
-      // Yield control to prevent blocking UI
-      await new Promise(resolve => setTimeout(resolve, 0))
-
-      try {
-        const addressIndexExtendedKey = deriveChildPrivateKey(receivingExtendedKey, index)
-        const { privateKey } = splitRootExtendedKey(addressIndexExtendedKey)
-        const publicKey = createPublicKey(privateKey)
-        const address = createSegwitAddress(publicKey)
-
-        if (!usedAddressSet.has(address)) {
-          nextUnused = address
-        }
-        index++
-      } catch (error) {
-        console.warn(`Error generating address at index ${index}:`, error)
-        index++
-      }
-    }
-
-    return nextUnused || ''
-  } catch (error) {
-    console.error('Error generating next unused address:', error)
-    return ''
-  }
-}
+import { useWallet } from '../store'
+import { UsedAddress } from '@/lib/address'
 
 // Address generation utilities - separated for better organization
-const generateAddressBatch = async (
-  extendedKey: any,
-  startIndex: number,
-  count: number,
-  usedAddressSet: Set<string>,
-  walletCache: any,
-  type: 'receiving' | 'change',
-): Promise<{ addresses: string[]; usedAddresses: UsedAddress[]; nextUnused: string | null }> => {
-  const addresses: string[] = []
-  const usedAddresses: UsedAddress[] = []
-  let nextUnused: string | null = null
-
-  for (let i = startIndex; i < startIndex + count; i++) {
-    // Yield control to prevent blocking UI
-    await new Promise(resolve => setTimeout(resolve, 0))
-
-    try {
-      const addressIndexExtendedKey = deriveChildPrivateKey(extendedKey, i)
-      const { privateKey } = splitRootExtendedKey(addressIndexExtendedKey)
-      const publicKey = createPublicKey(privateKey)
-      const address = createSegwitAddress(publicKey)
-
-      addresses.push(address)
-
-      if (usedAddressSet.has(address)) {
-        usedAddresses.push({
-          address,
-          index: i,
-          type,
-          transactions:
-            walletCache?.transactions.filter((tx: any) =>
-              tx.vout.some((vout: any) => vout.scriptPubKey.address === address),
-            ) || [],
-        })
-      } else if (!nextUnused) {
-        nextUnused = address
-      }
-    } catch (error) {
-      console.warn(`Error generating ${type} address at index ${i}:`, error)
-    }
-  }
-
-  return { addresses, usedAddresses, nextUnused }
-}
-
-const generateWalletAddressesAsync = async (
-  wallet: any,
-  tx: any,
-): Promise<{
-  availableAddresses: string[]
-  usedReceivingAddresses: UsedAddress[]
-  usedChangeAddresses: UsedAddress[]
-  nextUnusedAddress: string
-}> => {
-  if (!wallet) {
-    return {
-      availableAddresses: [],
-      usedReceivingAddresses: [],
-      usedChangeAddresses: [],
-      nextUnusedAddress: '',
-    }
-  }
-
-  try {
-    // Allow UI to render first by yielding control
-    await new Promise(resolve => setTimeout(resolve, 0))
-
-    const rootExtendedKey = createRootExtendedKey(fromMnemonic(wallet.seedPhrase))
-    const walletCache = tx.walletCaches.find((cache: any) => cache.walletId === wallet.walletId)
-    const usedAddressSet = new Set<string>(walletCache?.addresses || [])
-
-    // Generate derivation path components
-    const purposeIndex = createHardenedIndex(84) // Native SegWit
-    const purposeExtendedKey = deriveChildPrivateKey(rootExtendedKey, purposeIndex)
-
-    const coinTypeIndex = createHardenedIndex(0) // Bitcoin
-    const coinTypeExtendedKey = deriveChildPrivateKey(purposeExtendedKey, coinTypeIndex)
-
-    const accountIndex = createHardenedIndex(0) // Default account
-    const accountExtendedKey = deriveChildPrivateKey(coinTypeExtendedKey, accountIndex)
-
-    // Receiving addresses (change 0)
-    const receivingExtendedKey = deriveChildPrivateKey(accountExtendedKey, 0)
-    // Change addresses (change 1)
-    const changeExtendedKey = deriveChildPrivateKey(accountExtendedKey, 1)
-
-    // Generate addresses in smaller batches to prevent UI blocking
-    const batchSize = 5
-    const totalAddresses = 20
-
-    let allAddresses: string[] = []
-    let usedReceiving: UsedAddress[] = []
-    let usedChange: UsedAddress[] = []
-    let nextUnused: string | null = null
-
-    // Process receiving addresses in batches
-    for (let batch = 0; batch < totalAddresses / batchSize; batch++) {
-      const startIndex = batch * batchSize
-      const {
-        addresses,
-        usedAddresses,
-        nextUnused: batchNextUnused,
-      } = await generateAddressBatch(
-        receivingExtendedKey,
-        startIndex,
-        batchSize,
-        usedAddressSet,
-        walletCache,
-        'receiving',
-      )
-
-      allAddresses.push(...addresses)
-      usedReceiving.push(...usedAddresses)
-
-      if (!nextUnused && batchNextUnused) {
-        nextUnused = batchNextUnused
-      }
-
-      // Yield control back to the event loop between batches
-      await new Promise(resolve => setTimeout(resolve, 0))
-    }
-
-    // Process change addresses in batches
-    for (let batch = 0; batch < totalAddresses / batchSize; batch++) {
-      const startIndex = batch * batchSize
-      const { usedAddresses } = await generateAddressBatch(
-        changeExtendedKey,
-        startIndex,
-        batchSize,
-        usedAddressSet,
-        walletCache,
-        'change',
-      )
-
-      usedChange.push(...usedAddresses)
-
-      // Yield control back to the event loop between batches
-      await new Promise(resolve => setTimeout(resolve, 0))
-    }
-
-    return {
-      availableAddresses: allAddresses,
-      usedReceivingAddresses: usedReceiving,
-      usedChangeAddresses: usedChange,
-      nextUnusedAddress: nextUnused || allAddresses[0] || '',
-    }
-  } catch (error) {
-    console.error('Error generating wallet addresses:', error)
-    return {
-      availableAddresses: [],
-      usedReceivingAddresses: [],
-      usedChangeAddresses: [],
-      nextUnusedAddress: '',
-    }
-  }
-}
 
 export default function Receive() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const { wallets, activeWalletId, tx, getAddressCache, setAddressCache } = useStorage()
+  const {
+    wallets,
+    activeWalletId,
+    getAddressCache,
+    setAddressCache,
+    generateWalletAddresses,
+    generateNextUnusedAddress,
+  } = useWallet()
   const [selectedAddress, setSelectedAddress] = useState<string>('')
   const [showUsedAddresses, setShowUsedAddresses] = useState(false)
   const [activeTab, setActiveTab] = useState<'receiving' | 'change'>('receiving')
@@ -314,8 +89,9 @@ export default function Receive() {
 
     // First, generate only the next unused address quickly for QR code
     const quickGeneration = async () => {
+      if (!activeWalletId) return
       try {
-        const nextAddress = await generateNextUnusedAddressAsync(activeWallet, tx)
+        const nextAddress = await generateNextUnusedAddress(activeWalletId)
         if (isMountedRef.current) {
           setNextUnusedAddress(nextAddress)
           setSelectedAddress(nextAddress)
@@ -323,9 +99,7 @@ export default function Receive() {
       } catch (error) {
         console.error('Failed to generate next address:', error)
       }
-    }
-
-    // Start quick generation immediately
+    } // Start quick generation immediately
     quickGeneration()
 
     // Then, generate full address list in background
@@ -334,7 +108,8 @@ export default function Receive() {
 
       try {
         console.log('Generating full address list for wallet:', activeWallet.walletName)
-        const result = await generateWalletAddressesAsync(activeWallet, tx)
+        if (!activeWalletId) return
+        const result = await generateWalletAddresses(activeWalletId)
 
         if (!isMountedRef.current) return
 
@@ -367,7 +142,7 @@ export default function Receive() {
         clearTimeout(generationTimeoutRef.current)
       }
     }
-  }, [activeWallet, tx, activeWalletId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeWallet, activeWalletId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cleanup on unmount
   useEffect(() => {

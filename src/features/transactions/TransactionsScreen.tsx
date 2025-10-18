@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { useEffect } from 'react'
-import useStorage from '../storage'
 import colors from '@/ui/colors'
 import { truncateAddress } from './utils'
 import BitcoinLogo from '@/assets/bitcoin-logo'
@@ -17,6 +16,7 @@ import { formatBalance } from '../wallet/utils'
 import { alpha } from '@/ui/utils'
 import { useHeaderHeight } from '@react-navigation/elements'
 import ContentContainer from '@/ui/ContentContainer'
+import { useWallet, useTransactions } from '../store'
 // import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
 
 // Define types for our transaction list items
@@ -41,18 +41,15 @@ export default function TransactionsScreen() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const activeWalletId = useStorage(state => state.activeWalletId)
-  const getTransactionAnalysis = useStorage(state => state.tx.getTransactionAnalysis)
-  const walletCaches = useStorage(state => state.tx.walletCaches)
-  const store = useStorage()
+  const { activeWalletId, loadingWalletState: loadingWallet, unit, activeWallet } = useWallet()
+  const {
+    walletCaches,
+    getTransactionAnalysis,
+    loadingTxState: loadingTx,
+    fetchTransactions,
+  } = useTransactions()
 
-  // Verificar se as funções existem no store
-  const hasFetchTransactions = store.tx && typeof store.tx.fetchTransactions === 'function'
-
-  const loadingWallet = useStorage(state => state.loadingWalletState)
-  const loadingTx = useStorage(state => state.tx.loadingTxState)
   const loading = loadingWallet || loadingTx
-  const unit = useStorage(state => state.unit)
 
   // Check if we have cached data for the active wallet
   const hasTransactionData = activeWalletId
@@ -61,11 +58,11 @@ export default function TransactionsScreen() {
 
   // Trigger fetch transactions if we don't have data
   useEffect(() => {
-    if (activeWalletId && !loading && !hasTransactionData && hasFetchTransactions) {
+    if (activeWalletId && !loading && !hasTransactionData && fetchTransactions && activeWallet) {
       console.log('🚀 [TransactionsScreen] Executando fetchTransactions para:', activeWalletId)
-      store.tx.fetchTransactions(activeWalletId)
+      fetchTransactions(activeWalletId, activeWallet.seedPhrase)
     }
-  }, [activeWalletId, loading, hasTransactionData, hasFetchTransactions, store.tx])
+  }, [activeWalletId, loading, hasTransactionData, fetchTransactions, activeWallet])
 
   // Loading state - show this prominently
   if (loading) {
@@ -185,13 +182,26 @@ export default function TransactionsScreen() {
       let displayAddress = 'Unknown'
       if (txData.type === 'received') {
         // Para transações recebidas, mostrar o primeiro endereço de origem (se disponível)
-        displayAddress = txData.fromAddresses.length > 0 ? txData.fromAddresses[0] : 'External'
+        displayAddress =
+          txData.fromAddresses &&
+          Array.isArray(txData.fromAddresses) &&
+          txData.fromAddresses.length > 0
+            ? txData.fromAddresses[0]
+            : 'External'
       } else if (txData.type === 'sent') {
         // Para transações enviadas, mostrar o primeiro endereço de destino
-        displayAddress = txData.toAddresses.length > 0 ? txData.toAddresses[0] : 'External'
+        displayAddress =
+          txData.toAddresses && Array.isArray(txData.toAddresses) && txData.toAddresses.length > 0
+            ? txData.toAddresses[0]
+            : 'External'
       } else {
         // Para self-transfer, mostrar um dos endereços da carteira
-        displayAddress = txData.walletAddresses.length > 0 ? txData.walletAddresses[0] : 'Self'
+        displayAddress =
+          txData.walletAddresses &&
+          Array.isArray(txData.walletAddresses) &&
+          txData.walletAddresses.length > 0
+            ? txData.walletAddresses[0]
+            : 'Self'
       }
 
       data.push({

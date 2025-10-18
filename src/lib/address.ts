@@ -2,6 +2,15 @@ import { bech32, bech32m } from 'bech32'
 import bs58check from 'bs58check'
 import { publicKeyVerify } from 'secp256k1'
 import { hash160, sha256 } from '@/lib/crypto'
+import {
+  createRootExtendedKey,
+  fromMnemonic,
+  createHardenedIndex,
+  deriveChildPrivateKey,
+  splitRootExtendedKey,
+  createPublicKey,
+} from '@/lib/key'
+import { Tx } from '@/models/transaction'
 
 /** bech32 decode result */
 export interface Bech32Result {
@@ -11,6 +20,39 @@ export interface Bech32Result {
   prefix: string
   /** address data：20 bytes for P2WPKH, 32 bytes for P2WSH、P2TR */
   data: Uint8Array
+}
+
+/** Wallet data structure */
+export interface Wallet {
+  walletId: string
+  walletName: string
+  cold: boolean
+  seedPhrase: string
+  accounts: any[] // Account[]
+}
+
+/** Transaction cache for a wallet */
+export interface WalletTransactionCache {
+  walletId: string
+  transactions: Tx[]
+  addresses: string[]
+  lastUpdated: number
+}
+
+/** Transaction storage state */
+export interface TxStorage {
+  walletCaches: WalletTransactionCache[]
+  pendingTransactions: any[]
+  loadingTxState: boolean
+  loadingMempoolState: boolean
+}
+
+/** Used address information */
+export interface UsedAddress {
+  address: string
+  index: number
+  type: 'receiving' | 'change'
+  transactions: Tx[]
 }
 
 /**
@@ -124,4 +166,317 @@ function toScriptHash(address: string): string {
     .join('')
 }
 
-export { createSegwitAddress, fromBech32, toScriptHash, toBech32, toBase58check, fromBase58check }
+/**
+ * Converts a legacy (P2PKH) address to a scripthash for Electrum queries.
+ * @param {string} address - The legacy Bitcoin address (starting with '1').
+ * @returns {string} - The scripthash as a hex string.
+ */
+function legacyToScriptHash(address: string): string {
+  // Decode Base58Check address to get the public key hash (hash160)
+  const hash160 = fromBase58check(address)
+
+  // Validate hash160 length (should be 20 bytes for P2PKH)
+  if (hash160.length !== 20) {
+    throw new Error('Invalid P2PKH address: hash160 must be 20 bytes')
+  }
+
+  // Construct scriptPubKey for P2PKH: OP_DUP OP_HASH160 PUSH20 <hash160> OP_EQUALVERIFY OP_CHECKSIG
+  const scriptPubKey = new Uint8Array(25)
+  scriptPubKey[0] = 0x76 // OP_DUP
+  scriptPubKey[1] = 0xa9 // OP_HASH160
+  scriptPubKey[2] = 0x14 // PUSH20
+  scriptPubKey.set(hash160, 3) // hash160
+  scriptPubKey[23] = 0x88 // OP_EQUALVERIFY
+  scriptPubKey[24] = 0xac // OP_CHECKSIG
+
+  // Hash the scriptPubKey with SHA256
+  const hash = sha256(scriptPubKey)
+
+  // Reverse the hash (little-endian)
+  const reversedHash = new Uint8Array([...hash].reverse())
+
+  // Convert to hex
+  return Array.from(reversedHash)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+/**
+ * Generates the next unused receiving address for a wallet
+ * @param wallet - The wallet object containing seed phrase and ID
+ * @param tx - The transaction storage state
+ * @returns Promise<string> - The next unused address or empty string if none found
+ */
+export const generateNextUnusedAddressAsync = async (
+  wallet: Wallet,
+  tx: TxStorage,
+): Promise<string> => {
+  if (!wallet) return ''
+
+  try {
+    const rootExtendedKey = createRootExtendedKey(fromMnemonic(wallet.seedPhrase))
+    const walletCache = tx.walletCaches.find(cache => cache.walletId === wallet.walletId)
+    const usedAddressSet = new Set<string>(walletCache?.addresses || [])
+
+    // Generate derivation path components
+    const purposeIndex = createHardenedIndex(84) // Native SegWit
+    const purposeExtendedKey = deriveChildPrivateKey(rootExtendedKey, purposeIndex)
+
+    const coinTypeIndex = createHardenedIndex(0) // Bitcoin
+    const coinTypeExtendedKey = deriveChildPrivateKey(purposeExtendedKey, coinTypeIndex)
+
+    const accountIndex = createHardenedIndex(0) // Default account
+    const accountExtendedKey = deriveChildPrivateKey(coinTypeExtendedKey, accountIndex)
+
+    // Receiving addresses (change 0)
+    const receivingExtendedKey = deriveChildPrivateKey(accountExtendedKey, 0)
+
+    // Find next unused address by checking sequentially
+    let nextUnused: string | null = null
+    let index = 0
+    const maxCheck = 100 // Safety limit
+
+    while (!nextUnused && index < maxCheck) {
+      // Yield control to prevent blocking UI
+      await new Promise(resolve => setTimeout(resolve, 0))
+
+      try {
+        const addressIndexExtendedKey = deriveChildPrivateKey(receivingExtendedKey, index)
+        const { privateKey } = splitRootExtendedKey(addressIndexExtendedKey)
+        const publicKey = createPublicKey(privateKey)
+        const address = createSegwitAddress(publicKey)
+
+        if (!usedAddressSet.has(address)) {
+          nextUnused = address
+        }
+        index++
+      } catch (error) {
+        console.warn(`Error generating address at index ${index}:`, error)
+        index++
+      }
+    }
+
+    return nextUnused || ''
+  } catch (error) {
+    console.error('Error generating next unused address:', error)
+    return ''
+  }
+}
+
+/**
+ * Generates a batch of addresses for a wallet
+ * @param extendedKey - The extended key to derive addresses from
+ * @param startIndex - The starting index for address generation
+ * @param count - Number of addresses to generate
+ * @param usedAddressSet - Set of already used addresses
+ * @param walletCache - The wallet's transaction cache
+ * @param type - Type of addresses ('receiving' or 'change')
+ * @returns Promise with generated addresses, used addresses, and next unused address
+ */
+export const generateAddressBatch = async (
+  extendedKey: any,
+  startIndex: number,
+  count: number,
+  usedAddressSet: Set<string>,
+  walletCache: WalletTransactionCache | undefined,
+  type: 'receiving' | 'change',
+): Promise<{ addresses: string[]; usedAddresses: UsedAddress[]; nextUnused: string | null }> => {
+  const addresses: string[] = []
+  const usedAddresses: UsedAddress[] = []
+  let nextUnused: string | null = null
+
+  for (let i = startIndex; i < startIndex + count; i++) {
+    // Yield control to prevent blocking UI
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    try {
+      const addressIndexExtendedKey = deriveChildPrivateKey(extendedKey, i)
+      const { privateKey } = splitRootExtendedKey(addressIndexExtendedKey)
+      const publicKey = createPublicKey(privateKey)
+      const address = createSegwitAddress(publicKey)
+
+      addresses.push(address)
+
+      if (usedAddressSet.has(address)) {
+        usedAddresses.push({
+          address,
+          index: i,
+          type,
+          transactions:
+            walletCache?.transactions.filter(tx =>
+              tx.vout.some(vout => vout.scriptPubKey.address === address),
+            ) || [],
+        })
+      } else if (!nextUnused) {
+        nextUnused = address
+      }
+    } catch (error) {
+      console.warn(`Error generating ${type} address at index ${i}:`, error)
+    }
+  }
+
+  return { addresses, usedAddresses, nextUnused }
+}
+
+/**
+ * Generates all addresses for a wallet including used and unused ones
+ * @param wallet - The wallet object
+ * @param tx - The transaction storage state
+ * @returns Promise with all address information
+ */
+export const generateWalletAddressesAsync = async (
+  wallet: Wallet,
+  tx: TxStorage,
+): Promise<{
+  availableAddresses: string[]
+  usedReceivingAddresses: UsedAddress[]
+  usedChangeAddresses: UsedAddress[]
+  nextUnusedAddress: string
+}> => {
+  if (!wallet) {
+    return {
+      availableAddresses: [],
+      usedReceivingAddresses: [],
+      usedChangeAddresses: [],
+      nextUnusedAddress: '',
+    }
+  }
+
+  try {
+    // Allow UI to render first by yielding control
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    const rootExtendedKey = createRootExtendedKey(fromMnemonic(wallet.seedPhrase))
+    const walletCache = tx.walletCaches.find(cache => cache.walletId === wallet.walletId)
+    const usedAddressSet = new Set<string>(walletCache?.addresses || [])
+
+    // Generate derivation path components
+    const purposeIndex = createHardenedIndex(84) // Native SegWit
+    const purposeExtendedKey = deriveChildPrivateKey(rootExtendedKey, purposeIndex)
+
+    const coinTypeIndex = createHardenedIndex(0) // Bitcoin
+    const coinTypeExtendedKey = deriveChildPrivateKey(purposeExtendedKey, coinTypeIndex)
+
+    const accountIndex = createHardenedIndex(0) // Default account
+    const accountExtendedKey = deriveChildPrivateKey(coinTypeExtendedKey, accountIndex)
+
+    // Receiving addresses (change 0)
+    const receivingExtendedKey = deriveChildPrivateKey(accountExtendedKey, 0)
+    // Change addresses (change 1)
+    const changeExtendedKey = deriveChildPrivateKey(accountExtendedKey, 1)
+
+    // Generate addresses in smaller batches to prevent UI blocking
+    const batchSize = 5
+    const totalAddresses = 20
+
+    let allAddresses: string[] = []
+    let usedReceiving: UsedAddress[] = []
+    let usedChange: UsedAddress[] = []
+    let nextUnused: string | null = null
+
+    // Process receiving addresses in batches
+    for (let batch = 0; batch < totalAddresses / batchSize; batch++) {
+      const startIndex = batch * batchSize
+      const {
+        addresses,
+        usedAddresses,
+        nextUnused: batchNextUnused,
+      } = await generateAddressBatch(
+        receivingExtendedKey,
+        startIndex,
+        batchSize,
+        usedAddressSet,
+        walletCache,
+        'receiving',
+      )
+
+      allAddresses.push(...addresses)
+      usedReceiving.push(...usedAddresses)
+
+      if (!nextUnused && batchNextUnused) {
+        nextUnused = batchNextUnused
+      }
+
+      // Yield control back to the event loop between batches
+      await new Promise(resolve => setTimeout(resolve, 0))
+    }
+
+    // Process change addresses in batches
+    for (let batch = 0; batch < totalAddresses / batchSize; batch++) {
+      const startIndex = batch * batchSize
+      const { usedAddresses } = await generateAddressBatch(
+        changeExtendedKey,
+        startIndex,
+        batchSize,
+        usedAddressSet,
+        walletCache,
+        'change',
+      )
+
+      usedChange.push(...usedAddresses)
+
+      // Yield control back to the event loop between batches
+      await new Promise(resolve => setTimeout(resolve, 0))
+    }
+
+    return {
+      availableAddresses: allAddresses,
+      usedReceivingAddresses: usedReceiving,
+      usedChangeAddresses: usedChange,
+      nextUnusedAddress: nextUnused || allAddresses[0] || '',
+    }
+  } catch (error) {
+    console.error('Error generating wallet addresses:', error)
+    return {
+      availableAddresses: [],
+      usedReceivingAddresses: [],
+      usedChangeAddresses: [],
+      nextUnusedAddress: '',
+    }
+  }
+}
+
+/**
+ * Generates addresses for a wallet with optional change addresses
+ * @param extendedKey - The extended key to derive addresses from
+ * @param changeExtendedKey - The extended key to derive change addresses from (optional)
+ * @param startIndex - The starting index for address generation
+ * @param count - Number of addresses to generate
+ * @returns Array of generated addresses with optional change addresses
+ */
+function generateAddresses(
+  extendedKey: Uint8Array,
+  changeExtendedKey?: Uint8Array,
+  startIndex: number = 0,
+  count: number = 20,
+): { address: string; changeAddress?: string; index: number }[] {
+  const addresses: { address: string; changeAddress?: string; index: number }[] = []
+  for (let i = startIndex; i < startIndex + count; i++) {
+    const addressIndexExtendedKey = deriveChildPrivateKey(extendedKey, i)
+    const { privateKey } = splitRootExtendedKey(addressIndexExtendedKey)
+    const addressIndexPublicKey = createPublicKey(privateKey)
+    const address = createSegwitAddress(addressIndexPublicKey)
+
+    let changeAddress: string | undefined
+    if (changeExtendedKey) {
+      const changeAddressIndexExtendedKey = deriveChildPrivateKey(changeExtendedKey, i)
+      const { privateKey: changePrivateKey } = splitRootExtendedKey(changeAddressIndexExtendedKey)
+      const changeAddressIndexPublicKey = createPublicKey(changePrivateKey)
+      changeAddress = createSegwitAddress(changeAddressIndexPublicKey)
+    }
+
+    addresses.push({ address, changeAddress, index: i })
+  }
+  return addresses
+}
+
+export {
+  createSegwitAddress,
+  fromBech32,
+  toScriptHash,
+  legacyToScriptHash,
+  toBech32,
+  toBase58check,
+  fromBase58check,
+  generateAddresses,
+}

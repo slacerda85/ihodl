@@ -6,7 +6,8 @@ import {
   splitRootExtendedKey,
 } from '@/lib/key'
 import { connect, getTransactions, callElectrumMethod, close } from './electrum'
-import { createSegwitAddress, fromBech32 } from './address'
+import { createSegwitAddress, fromBech32, generateAddresses } from './address'
+import secp256k1 from 'secp256k1'
 import { hash256, hash160, uint8ArrayToHex, hexToUint8Array } from '@/lib/crypto'
 import { UTXO } from './utxo'
 import {
@@ -82,69 +83,91 @@ async function getTxHistory({
     socket = await connect()
     console.log('[transactions] Established persistent Electrum connection for transaction history')
 
-    // Scan receiving addresses
+    // Generate all receiving addresses first
+    console.log('[transactions] Generating receiving addresses...')
+    const receivingAddresses = generateAddresses(
+      receivingExtendedKey,
+      changeExtendedKey,
+      0,
+      gapLimit * 2,
+    )
+
+    // Check all receiving addresses in parallel
+    console.log(
+      `[transactions] Checking ${receivingAddresses.length} receiving addresses in parallel...`,
+    )
+    const receivingResults = await Promise.allSettled(
+      receivingAddresses.map(({ address }) => getTransactions(address, socket)),
+    )
+
+    // Process receiving results
     const receivingTxHistory: TxHistory[] = []
     let consecutiveUnusedReceiving = 0
-    let receivingIndexCount = 0
-    while (consecutiveUnusedReceiving < gapLimit) {
-      const addressIndexExtendedKey = deriveChildPrivateKey(
-        receivingExtendedKey,
-        receivingIndexCount,
-      )
-      const { privateKey } = splitRootExtendedKey(addressIndexExtendedKey)
-      const addressIndexPublicKey = createPublicKey(privateKey)
-      const receivingAddress = createSegwitAddress(addressIndexPublicKey)
+    for (let i = 0; i < receivingResults.length && consecutiveUnusedReceiving < gapLimit; i++) {
+      const result = receivingResults[i]
+      const addressData = receivingAddresses[i]
 
-      // Derive change address for the same index
-      const changeAddressIndexExtendedKey = deriveChildPrivateKey(
-        changeExtendedKey,
-        receivingIndexCount,
-      )
-      const { privateKey: changePrivateKey } = splitRootExtendedKey(changeAddressIndexExtendedKey)
-      const changeAddressIndexPublicKey = createPublicKey(changePrivateKey)
-      const changeAddress = createSegwitAddress(changeAddressIndexPublicKey)
-
-      const transactions = await getTransactions(receivingAddress, socket)
-      if (transactions.length > 0) {
-        receivingTxHistory.push({
-          receivingAddress,
-          changeAddress,
-          index: receivingIndexCount,
-          txs: transactions,
-        })
-        consecutiveUnusedReceiving = 0
+      if (result.status === 'fulfilled') {
+        const transactions = result.value
+        if (transactions.length > 0) {
+          receivingTxHistory.push({
+            receivingAddress: addressData.address,
+            changeAddress: addressData.changeAddress!,
+            index: addressData.index,
+            txs: transactions,
+          })
+          consecutiveUnusedReceiving = 0
+        } else {
+          consecutiveUnusedReceiving++
+        }
       } else {
+        console.warn(
+          `[transactions] Failed to check receiving address ${addressData.address}:`,
+          result.reason,
+        )
         consecutiveUnusedReceiving++
       }
-      receivingIndexCount++
     }
 
-    // Scan change addresses
+    // Generate change addresses
+    console.log('[transactions] Generating change addresses...')
+    const changeAddresses = generateAddresses(changeExtendedKey, undefined, 0, gapLimit * 2).map(
+      ({ address, index }) => ({ address, index }),
+    )
+
+    // Check all change addresses in parallel
+    console.log(`[transactions] Checking ${changeAddresses.length} change addresses in parallel...`)
+    const changeResults = await Promise.allSettled(
+      changeAddresses.map(({ address }) => getTransactions(address, socket)),
+    )
+
+    // Process change results
     const changeTxHistory: TxHistory[] = []
     let consecutiveUnusedChange = 0
-    let changeIndexCount = 0
-    while (consecutiveUnusedChange < gapLimit) {
-      const changeAddressIndexExtendedKey = deriveChildPrivateKey(
-        changeExtendedKey,
-        changeIndexCount,
-      )
-      const { privateKey: changePrivateKey } = splitRootExtendedKey(changeAddressIndexExtendedKey)
-      const changeAddressIndexPublicKey = createPublicKey(changePrivateKey)
-      const changeAddress = createSegwitAddress(changeAddressIndexPublicKey)
+    for (let i = 0; i < changeResults.length && consecutiveUnusedChange < gapLimit; i++) {
+      const result = changeResults[i]
+      const addressData = changeAddresses[i]
 
-      const transactions = await getTransactions(changeAddress, socket)
-      if (transactions.length > 0) {
-        changeTxHistory.push({
-          receivingAddress: '',
-          changeAddress,
-          index: changeIndexCount,
-          txs: transactions,
-        })
-        consecutiveUnusedChange = 0
+      if (result.status === 'fulfilled') {
+        const transactions = result.value
+        if (transactions.length > 0) {
+          changeTxHistory.push({
+            receivingAddress: '',
+            changeAddress: addressData.address,
+            index: addressData.index,
+            txs: transactions,
+          })
+          consecutiveUnusedChange = 0
+        } else {
+          consecutiveUnusedChange++
+        }
       } else {
+        console.warn(
+          `[transactions] Failed to check change address ${addressData.address}:`,
+          result.reason,
+        )
         consecutiveUnusedChange++
       }
-      changeIndexCount++
     }
 
     txHistory.push(...receivingTxHistory, ...changeTxHistory)
@@ -414,6 +437,9 @@ function serializeTransaction(tx: SimpleTransaction): Uint8Array {
   new DataView(versionBytes.buffer).setUint32(0, tx.version, true)
   parts.push(versionBytes)
 
+  // SegWit marker (0x00) and flag (0x01)
+  parts.push(new Uint8Array([0x00, 0x01]))
+
   // Input count (varint)
   parts.push(encodeVarint(tx.inputs.length))
 
@@ -541,7 +567,7 @@ export async function buildTransaction({
       throw new Error(`Fee rate must be positive, got: ${feeRate}`)
     }
     // Filter UTXOs with sufficient confirmations
-    const confirmedUtxos = utxos.filter(utxo => utxo.confirmations >= 6)
+    const confirmedUtxos = utxos.filter(utxo => utxo.confirmations >= 2)
     console.log(`Filtered to ${confirmedUtxos.length} confirmed UTXOs`)
 
     if (confirmedUtxos.length === 0) {
@@ -567,7 +593,7 @@ export async function buildTransaction({
     console.log('Estimated fee (satoshis):', estimatedFeeSat)
 
     // Calculate change amount in satoshis
-    const changeAmountSat = totalInputAmountSat - amount - estimatedFeeSat
+    let changeAmountSat = totalInputAmountSat - amount - estimatedFeeSat
 
     if (changeAmountSat < 0) {
       throw new Error(
@@ -610,14 +636,32 @@ export async function buildTransaction({
     // Add outputs
     const outputs = []
 
-    // Recipient output
+    // Recipient output - include dust change if any
+    let recipientAmount = amount
+    if (changeAmountSat > 0 && changeAmountSat <= 546) {
+      console.log(`Adding dust change ${changeAmountSat} sat to recipient`)
+      recipientAmount += changeAmountSat
+      changeAmountSat = 0
+    }
+
+    console.log(`Final recipient amount: ${recipientAmount} sat (${recipientAmount / 1e8} BTC)`)
+    console.log(`Final change amount: ${changeAmountSat} sat (${changeAmountSat / 1e8} BTC)`)
+
     tx.outputs.push({
-      value: amount,
+      value: recipientAmount,
       scriptPubKey: createScriptPubKey(recipientAddress),
     })
+
+    // Validate that recipient amount is not dust
+    if (recipientAmount <= 546) {
+      throw new Error(
+        `Recipient amount ${recipientAmount} satoshis is below dust threshold (546 satoshis)`,
+      )
+    }
+
     outputs.push({
       address: recipientAddress,
-      amount: amount / 1e8, // Convert back to BTC for display
+      amount: recipientAmount / 1e8, // Convert back to BTC for display
     })
 
     // Add change output if change amount is significant
@@ -806,33 +850,50 @@ function createSegWitSignature(
   // Create sighash for SegWit
   const sighash = createSighash(tx, inputIndex, amount, publicKey)
 
-  // Create a deterministic signature using the private key and sighash
-  // This is a simplified implementation for demonstration purposes
-  const message = new Uint8Array([...privateKey, ...sighash])
-  const hash = hash256(message)
+  // Sign the sighash using ECDSA
+  const { signature } = secp256k1.ecdsaSign(sighash, privateKey)
 
-  // Create a DER-encoded signature (simplified)
-  // In a real implementation, this would use proper ECDSA
-  const r = hash.slice(0, 32)
-  const s = hash.slice(32, 64)
+  // Convert signature to DER format
+  const derSignature = compactSignatureToDER(signature)
 
-  // DER encoding: 0x30 + length + 0x02 + r_length + r + 0x02 + s_length + s
+  // Add sighash type (SIGHASH_ALL = 0x01)
+  const signatureWithType = new Uint8Array(derSignature.length + 1)
+  signatureWithType.set(derSignature, 0)
+  signatureWithType[derSignature.length] = 0x01
+
+  return signatureWithType
+}
+
+/**
+ * Converts secp256k1 compact signature to DER format
+ * @param compactSignature - 64-byte compact signature (r + s)
+ * @returns DER-encoded signature
+ */
+function compactSignatureToDER(compactSignature: Uint8Array): Uint8Array {
+  if (compactSignature.length !== 64) {
+    throw new Error('Compact signature must be 64 bytes')
+  }
+
+  const r = compactSignature.slice(0, 32)
+  const s = compactSignature.slice(32, 64)
+
+  // Encode r and s as DER integers
   const rEncoded = encodeDERInteger(r)
   const sEncoded = encodeDERInteger(s)
 
-  const signatureLength = 2 + rEncoded.length + sEncoded.length
-  const signature = new Uint8Array(2 + signatureLength)
-  signature[0] = 0x30 // DER sequence
-  signature[1] = signatureLength
-  signature.set(rEncoded, 2)
-  signature.set(sEncoded, 2 + rEncoded.length)
+  // Calculate total length
+  const totalLength = rEncoded.length + sEncoded.length
+  const derSignature = new Uint8Array(2 + totalLength)
 
-  // Add sighash type (SIGHASH_ALL = 0x01)
-  const signatureWithType = new Uint8Array(signature.length + 1)
-  signatureWithType.set(signature, 0)
-  signatureWithType[signature.length] = 0x01
+  // DER sequence header
+  derSignature[0] = 0x30 // DER sequence
+  derSignature[1] = totalLength
 
-  return signatureWithType
+  // Add encoded r and s
+  derSignature.set(rEncoded, 2)
+  derSignature.set(sEncoded, 2 + rEncoded.length)
+
+  return derSignature
 }
 
 /**
@@ -847,10 +908,24 @@ function encodeDERInteger(value: Uint8Array): Uint8Array {
     start++
   }
 
-  const result = new Uint8Array(value.length - start + 2)
+  const trimmedValue = value.slice(start)
+
+  // Check if the first byte has the high bit set (negative in two's complement)
+  // If so, we need to add a leading 0x00 byte to make it positive
+  const needsPadding = trimmedValue.length > 0 && (trimmedValue[0] & 0x80) !== 0
+
+  const resultLength = trimmedValue.length + (needsPadding ? 1 : 0) + 2
+  const result = new Uint8Array(resultLength)
+
   result[0] = 0x02 // Integer type
-  result[1] = value.length - start // Length
-  result.set(value.slice(start), 2)
+  result[1] = trimmedValue.length + (needsPadding ? 1 : 0) // Length
+
+  if (needsPadding) {
+    result[2] = 0x00 // Padding byte for positive numbers
+    result.set(trimmedValue, 3)
+  } else {
+    result.set(trimmedValue, 2)
+  }
 
   return result
 }
@@ -1035,6 +1110,12 @@ function decodeTransaction(txHex: string): {
     const version = new DataView(txBytes.buffer, offset, 4).getUint32(0, true)
     offset += 4
     console.log('Version:', version)
+
+    // Check for SegWit marker and flag (0x00 0x01)
+    if (offset + 2 <= txBytes.length && txBytes[offset] === 0x00 && txBytes[offset + 1] === 0x01) {
+      offset += 2 // Skip marker and flag
+      console.log('Detected SegWit transaction')
+    }
 
     // Input count (varint)
     const inputCountResult = decodeVarint(txBytes, offset)
@@ -1395,19 +1476,46 @@ function selectUtxos(utxos: UTXO[], targetAmount: number): UTXO[] {
 }
 
 /**
- * Estimates transaction size in vBytes
+ * Estimates transaction size in vBytes (virtual bytes)
  * @param inputCount - Number of inputs
  * @param outputCount - Number of outputs
- * @returns Estimated transaction size
+ * @returns Estimated transaction size in vBytes
  */
 function estimateTransactionSize(inputCount: number, outputCount: number): number {
-  // SegWit transaction size estimation
-  const baseSize = 10 // version + locktime
-  const inputSize = inputCount * 41 // 36 (outpoint) + 1 (script length) + 4 (sequence)
-  const outputSize = outputCount * 31 // 8 (value) + 1 (script length) + 22 (script)
-  const witnessSize = inputCount * 107 // average witness size for P2WPKH
+  // SegWit transaction size calculation
+  // Non-witness data
+  let nonWitnessSize = 0
 
-  return Math.ceil((baseSize + inputSize + outputSize + witnessSize) / 4)
+  // Version (4) + locktime (4)
+  nonWitnessSize += 8
+
+  // Input count varint
+  nonWitnessSize += encodeVarint(inputCount).length
+
+  // Inputs: each input is ~41 bytes (36 outpoint + 1 script len + 4 sequence)
+  nonWitnessSize += inputCount * 41
+
+  // Output count varint
+  nonWitnessSize += encodeVarint(outputCount).length
+
+  // Outputs: each output is ~31 bytes (8 value + 1 script len + ~22 script)
+  nonWitnessSize += outputCount * 31
+
+  // Witness data (SegWit)
+  let witnessSize = 0
+
+  // For each input: witness stack items (1) + sig (73) + pubkey (33) + lengths (2)
+  witnessSize += inputCount * (1 + 1 + 73 + 1 + 33)
+
+  // Total weight = nonWitnessSize * 4 + witnessSize
+  // vBytes = weight / 4
+  const totalWeight = nonWitnessSize * 4 + witnessSize
+  const vBytes = Math.ceil(totalWeight / 4)
+
+  console.log(
+    `Estimated tx size: ${vBytes} vBytes (${nonWitnessSize} non-witness + ${witnessSize} witness bytes)`,
+  )
+  return vBytes
 }
 
 /**
@@ -1452,4 +1560,5 @@ async function findAddressIndex(
 
   return null
 }
-export { getTxHistory, calculateBalance }
+
+export { getTxHistory, calculateBalance, findAddressIndex, selectUtxos, estimateTransactionSize }

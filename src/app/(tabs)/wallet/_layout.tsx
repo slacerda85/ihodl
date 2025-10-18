@@ -5,11 +5,9 @@ import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { useCallback, useEffect } from 'react'
 import ManageWalletsIcon from '@/features/wallet/ManageWalletsIcon'
-import useStorage from '@/features/storage'
-import Button from '@/ui/Button/Button'
-// import useStorage from '@/features/store'
+import { useWallet } from '@/features/store'
 
-function headerRight() {
+function HeaderRight() {
   return (
     <Link href="/wallet/actions" asChild>
       <Pressable
@@ -82,8 +80,7 @@ const CloseModalButton = ({ title }: { title?: string }) => {
 }
 
 export default function WalletLayout() {
-  const activeWalletId = useStorage(state => state.activeWalletId)
-  const wallets = useStorage(state => state.wallets)
+  const { activeWalletId, wallets } = useWallet()
   const selectedWallet = wallets?.find(wallet => wallet.walletId === activeWalletId)
   const empty = wallets === undefined || wallets?.length === 0
 
@@ -108,7 +105,10 @@ export default function WalletLayout() {
         headerBackButtonDisplayMode: 'minimal',
         headerTintColor: colors.primary,
         headerBlurEffect: isDark ? 'dark' : 'light',
-        headerTransparent: true,
+        headerTransparent: false,
+        headerStyle: {
+          backgroundColor: colors.background[isDark ? 'dark' : 'light'],
+        },
         contentStyle: {
           backgroundColor: colors.background[isDark ? 'dark' : 'light'],
         },
@@ -118,10 +118,14 @@ export default function WalletLayout() {
         name="index"
         options={{
           headerBlurEffect: 'none',
+          headerTransparent: true,
+          headerStyle: {
+            backgroundColor: colors.background[isDark ? 'dark' : 'light'],
+          },
           headerLeft: empty ? undefined : () => ManageWallets(),
-          headerRight: activeWalletId ? () => headerRight() : undefined,
+          headerRight: activeWalletId && !empty ? () => HeaderRight() : undefined,
           headerTitleAlign: 'center',
-          title: selectedWallet?.walletName || '',
+          title: selectedWallet?.walletName || (empty ? 'No wallets' : 'Select wallet'),
         }}
       />
       <Stack.Screen

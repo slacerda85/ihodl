@@ -1,6 +1,6 @@
 import React from 'react'
 import { useColorScheme, View, Text, StyleSheet, ScrollView } from 'react-native'
-import useStorage from '@/features/storage'
+import { useWallet } from '../store'
 import { alpha } from '@/ui/utils'
 import colors from '@/ui/colors'
 import Divider from '@/ui/Divider'
@@ -9,8 +9,7 @@ export default function GetSeedPhraseScreen() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
 
-  const wallets = useStorage(state => state.wallets)
-  const activeWalletId = useStorage(state => state.activeWalletId)
+  const { wallets, activeWalletId } = useWallet()
 
   if (!activeWalletId) {
     return (
