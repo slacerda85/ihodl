@@ -41,7 +41,7 @@ export interface WalletTransactionCache {
 
 /** Transaction storage state */
 export interface TxStorage {
-  walletCaches: WalletTransactionCache[]
+  cachedTransactions: WalletTransactionCache[]
   pendingTransactions: any[]
   loadingTxState: boolean
   loadingMempoolState: boolean
@@ -215,7 +215,7 @@ export const generateNextUnusedAddressAsync = async (
 
   try {
     const rootExtendedKey = createRootExtendedKey(fromMnemonic(wallet.seedPhrase))
-    const walletCache = tx.walletCaches.find(cache => cache.walletId === wallet.walletId)
+    const walletCache = tx.cachedTransactions.find(cache => cache.walletId === wallet.walletId)
     const usedAddressSet = new Set<string>(walletCache?.addresses || [])
 
     // Generate derivation path components
@@ -347,7 +347,7 @@ export const generateWalletAddressesAsync = async (
     await new Promise(resolve => setTimeout(resolve, 0))
 
     const rootExtendedKey = createRootExtendedKey(fromMnemonic(wallet.seedPhrase))
-    const walletCache = tx.walletCaches.find(cache => cache.walletId === wallet.walletId)
+    const walletCache = tx.cachedTransactions.find(cache => cache.walletId === wallet.walletId)
     const usedAddressSet = new Set<string>(walletCache?.addresses || [])
 
     // Generate derivation path components

@@ -50,20 +50,20 @@ const colors: Colors = {
   primary: '#F7931A',
   secondary: '#142850',
   background: {
-    light: '#F2F2F7', // iOS standard background color for light mode
-    dark: '#111113', // iOS standard background color for dark mode
+    light: '#F2F2F7', // iOS 26 secondarySystemBackground
+    dark: '#000000', // iOS 26 systemGroupedBackground dark
   },
   text: {
-    light: '#000000', // iOS standard text color for light mode
-    dark: '#FFFFFF', // iOS standard text color for dark mode
+    light: '#000000', // iOS 26 label
+    dark: '#FFFFFF', // iOS 26 label
   },
   textSecondary: {
-    light: '#6C6C70', // iOS standard secondary text color for light mode
-    dark: '#8E8E93', // iOS standard secondary text color for dark mode
+    light: '#3C3C43', // iOS 26 secondaryLabel
+    dark: '#EBEBF5', // iOS 26 secondaryLabel
   },
   border: {
-    light: '#E5E5EA', // iOS standard separator color for light mode
-    dark: '#38383A', // iOS standard separator color for dark mode
+    light: '#C6C6C8', // iOS 26 separator
+    dark: '#38383A', // iOS 26 separator
   },
   success: '#34C759', // iOS system green
   error: '#FF3B30', // iOS system red

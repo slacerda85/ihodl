@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { useEffect } from 'react'
+import { useRouter } from 'expo-router'
 import colors from '@/ui/colors'
 import { truncateAddress } from './utils'
 import BitcoinLogo from '@/assets/bitcoin-logo'
@@ -37,13 +38,13 @@ type ListItem = DateHeader | TransactionItem
 
 export default function TransactionsScreen() {
   const headerHeight = useHeaderHeight()
-  const tabBarHeight = 0 // useBottomTabBarHeight()
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
+  const router = useRouter()
 
   const { activeWalletId, loadingWalletState: loadingWallet, unit, activeWallet } = useWallet()
   const {
-    walletCaches,
+    cachedTransactions,
     getTransactionAnalysis,
     loadingTxState: loadingTx,
     fetchTransactions,
@@ -53,7 +54,7 @@ export default function TransactionsScreen() {
 
   // Check if we have cached data for the active wallet
   const hasTransactionData = activeWalletId
-    ? walletCaches.some(cache => cache.walletId === activeWalletId)
+    ? cachedTransactions.some(cache => cache.walletId === activeWalletId)
     : false
 
   // Trigger fetch transactions if we don't have data
@@ -240,7 +241,8 @@ export default function TransactionsScreen() {
               isLastInGroup && styles.last,
             ]}
             onPress={() => {
-              // Handle transaction press (e.g., navigate to details)
+              // Navigate to transaction details
+              router.push(`/transactions/${item.tx.txid}` as any)
             }}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>

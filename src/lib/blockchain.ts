@@ -286,11 +286,12 @@ export function verifyMerkleProof(proof: MerkleProof, merkleRoot: Uint8Array): b
 export async function syncHeaders(
   maxSizeGB: number = 1,
   onProgress?: (height: number, currentHeight?: number) => void,
+  state?: any,
 ): Promise<void> {
   let socket: any = null
   try {
     // Establish persistent connection for the entire sync
-    socket = await connect()
+    socket = await connect(state)
     console.log('[blockchain] Established persistent Electrum connection for header sync')
 
     const currentHeight = await getCurrentBlockHeight(socket)

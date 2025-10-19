@@ -5,6 +5,7 @@ export * as crypto from './crypto'
 export * as electrum from './electrum'
 export * as key from './key'
 export * as payment from './payment'
-export * as storage from './storage'
 export * as wallet from './wallet'
 export * as transactions from './transactions'
+export * as lightning from './lightning'
+// Removed storage export as storage module was deleted

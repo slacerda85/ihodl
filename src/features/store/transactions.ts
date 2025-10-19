@@ -1,10 +1,10 @@
 import { Tx } from '@/models/transaction'
-import { UTXO } from '@/lib/utxo'
+import { UsedAddress } from '@/lib/address'
 import { Reducer } from './types'
 
 // Transactions State
 export type TransactionsState = {
-  walletCaches: {
+  cachedTransactions: {
     walletId: string
     transactions: Tx[]
     addresses: string[]
@@ -22,6 +22,14 @@ export type TransactionsState = {
   loadingTxState: boolean
   loadingMempoolState: boolean
   mempoolTransactions: Tx[]
+  addressCaches: {
+    [walletId: string]: {
+      nextUnusedAddress: string
+      usedReceivingAddresses: UsedAddress[]
+      usedChangeAddresses: UsedAddress[]
+      lastUpdated: number
+    }
+  }
 }
 
 // Transactions Actions
@@ -33,14 +41,17 @@ export type TransactionsAction =
   | { type: 'ADD_PENDING_TX'; payload: any }
   | { type: 'REMOVE_PENDING_TX'; payload: string }
   | { type: 'SET_MEMPOOL_TRANSACTIONS'; payload: Tx[] }
+  | { type: 'SET_ADDRESS_CACHE'; payload: { walletId: string; cache: any } }
+  | { type: 'CLEAR_ADDRESS_CACHE'; payload?: string }
 
 // Initial state
 export const initialTransactionsState: TransactionsState = {
-  walletCaches: [],
+  cachedTransactions: [],
   pendingTransactions: [],
   loadingTxState: false,
   loadingMempoolState: false,
   mempoolTransactions: [],
+  addressCaches: {},
 }
 
 // Reducer
@@ -62,10 +73,10 @@ export const transactionsReducer: Reducer<TransactionsState, TransactionsAction>
       }
 
     case 'SET_WALLET_CACHE':
-      const existingIndex = state.walletCaches.findIndex(
+      const existingIndex = state.cachedTransactions.findIndex(
         cache => cache.walletId === action.payload.walletId,
       )
-      const newCaches = [...state.walletCaches]
+      const newCaches = [...state.cachedTransactions]
 
       if (existingIndex >= 0) {
         newCaches[existingIndex] = action.payload.cache
@@ -75,13 +86,15 @@ export const transactionsReducer: Reducer<TransactionsState, TransactionsAction>
 
       return {
         ...state,
-        walletCaches: newCaches,
+        cachedTransactions: newCaches,
       }
 
     case 'CLEAR_WALLET_CACHE':
       return {
         ...state,
-        walletCaches: state.walletCaches.filter(cache => cache.walletId !== action.payload),
+        cachedTransactions: state.cachedTransactions.filter(
+          cache => cache.walletId !== action.payload,
+        ),
       }
 
     case 'ADD_PENDING_TX':
@@ -100,6 +113,31 @@ export const transactionsReducer: Reducer<TransactionsState, TransactionsAction>
       return {
         ...state,
         mempoolTransactions: action.payload,
+      }
+
+    case 'SET_ADDRESS_CACHE':
+      return {
+        ...state,
+        addressCaches: {
+          ...state.addressCaches,
+          [action.payload.walletId]: {
+            ...action.payload.cache,
+            lastUpdated: Date.now(),
+          },
+        },
+      }
+
+    case 'CLEAR_ADDRESS_CACHE':
+      if (action.payload) {
+        const { [action.payload]: _, ...rest } = state.addressCaches
+        return {
+          ...state,
+          addressCaches: rest,
+        }
+      }
+      return {
+        ...state,
+        addressCaches: {},
       }
 
     default:
@@ -143,21 +181,34 @@ export const transactionsActions = {
     type: 'SET_MEMPOOL_TRANSACTIONS',
     payload: transactions,
   }),
+
+  setAddressCache: (walletId: string, cache: any): TransactionsAction => ({
+    type: 'SET_ADDRESS_CACHE',
+    payload: { walletId, cache },
+  }),
+
+  clearAddressCache: (walletId?: string): TransactionsAction => ({
+    type: 'CLEAR_ADDRESS_CACHE',
+    payload: walletId,
+  }),
 }
 
 // Selectors
 export const transactionsSelectors = {
   getWalletCache: (state: TransactionsState, walletId: string) =>
-    state.walletCaches.find(cache => cache.walletId === walletId) || null,
+    state.cachedTransactions.find(cache => cache.walletId === walletId) || null,
 
   getPendingTransactions: (state: TransactionsState, walletId: string) =>
     state.pendingTransactions.filter(tx => tx.walletId === walletId),
 
   getBalance: (state: TransactionsState, walletId: string) => {
     // Simplified balance calculation
-    const cache = state.walletCaches.find(c => c.walletId === walletId)
+    const cache = state.cachedTransactions.find(c => c.walletId === walletId)
     if (!cache) return 0
     // This would need the processWalletTransactions logic
     return 0
   },
+
+  getAddressCache: (state: TransactionsState, walletId: string) =>
+    state.addressCaches[walletId] || null,
 }

@@ -23,24 +23,28 @@ export const useBlockchain = () => {
 
       console.log('🔄 [useBlockchain] Starting sync, last synced:', lastHeader?.height)
 
-      await syncHeaders(maxBlockchainSizeGB, (height, currentHeight) => {
-        // Update progress during sync
-        dispatch({
-          type: 'BLOCKCHAIN',
-          action: { type: 'SET_LAST_SYNCED_HEIGHT', payload: height },
-        })
-        if (currentHeight) {
+      await syncHeaders(
+        maxBlockchainSizeGB,
+        (height, currentHeight) => {
+          // Update progress during sync
           dispatch({
             type: 'BLOCKCHAIN',
-            action: { type: 'SET_CURRENT_HEIGHT', payload: currentHeight },
+            action: { type: 'SET_LAST_SYNCED_HEIGHT', payload: height },
           })
-          const progress = height / currentHeight
-          dispatch({
-            type: 'BLOCKCHAIN',
-            action: { type: 'SET_SYNC_PROGRESS', payload: progress },
-          })
-        }
-      })
+          if (currentHeight) {
+            dispatch({
+              type: 'BLOCKCHAIN',
+              action: { type: 'SET_CURRENT_HEIGHT', payload: currentHeight },
+            })
+            const progress = height / currentHeight
+            dispatch({
+              type: 'BLOCKCHAIN',
+              action: { type: 'SET_SYNC_PROGRESS', payload: progress },
+            })
+          }
+        },
+        state,
+      )
 
       const updatedLast = getLastSyncedHeader()
       console.log('✅ [useBlockchain] Sync completed, updated last height:', updatedLast?.height)
@@ -53,7 +57,7 @@ export const useBlockchain = () => {
     } finally {
       dispatch({ type: 'BLOCKCHAIN', action: { type: 'SET_SYNCING', payload: false } })
     }
-  }, [state.blockchain.isSyncing, maxBlockchainSizeGB, dispatch])
+  }, [maxBlockchainSizeGB, dispatch, state])
 
   // Auto-sync on mount and periodically
   useEffect(() => {
@@ -71,23 +75,27 @@ export const useBlockchain = () => {
 
         console.log('🔄 [useBlockchain] Starting sync, last synced:', lastHeader?.height)
 
-        await syncHeaders(maxBlockchainSizeGB, (height, currentHeight) => {
-          dispatch({
-            type: 'BLOCKCHAIN',
-            action: { type: 'SET_LAST_SYNCED_HEIGHT', payload: height },
-          })
-          if (currentHeight) {
+        await syncHeaders(
+          maxBlockchainSizeGB,
+          (height, currentHeight) => {
             dispatch({
               type: 'BLOCKCHAIN',
-              action: { type: 'SET_CURRENT_HEIGHT', payload: currentHeight },
+              action: { type: 'SET_LAST_SYNCED_HEIGHT', payload: height },
             })
-            const progress = height / currentHeight
-            dispatch({
-              type: 'BLOCKCHAIN',
-              action: { type: 'SET_SYNC_PROGRESS', payload: progress },
-            })
-          }
-        })
+            if (currentHeight) {
+              dispatch({
+                type: 'BLOCKCHAIN',
+                action: { type: 'SET_CURRENT_HEIGHT', payload: currentHeight },
+              })
+              const progress = height / currentHeight
+              dispatch({
+                type: 'BLOCKCHAIN',
+                action: { type: 'SET_SYNC_PROGRESS', payload: progress },
+              })
+            }
+          },
+          state,
+        )
 
         const updatedLast = getLastSyncedHeader()
         console.log('✅ [useBlockchain] Sync completed, updated last height:', updatedLast?.height)
@@ -120,7 +128,13 @@ export const useBlockchain = () => {
     ) // 10 minutes
 
     return () => clearInterval(interval)
-  }, [maxBlockchainSizeGB, state.blockchain.currentHeight, state.blockchain.isSyncing, dispatch])
+  }, [
+    maxBlockchainSizeGB,
+    state.blockchain.currentHeight,
+    state.blockchain.isSyncing,
+    dispatch,
+    state,
+  ])
 
   return {
     // State

@@ -26,6 +26,7 @@ import {
   SendTransactionParams,
   SendTransactionResult,
 } from '@/models/transaction'
+import { ElectrumPeer } from '@/models/electrum'
 
 interface GetTxHistoryParams {
   extendedKey: Uint8Array
@@ -54,7 +55,10 @@ async function getTxHistory({
   coinType = 0,
   accountStartIndex = 0,
   gapLimit = 20,
-}: GetTxHistoryParams): Promise<GetTxHistoryResponse> {
+  state,
+}: GetTxHistoryParams & {
+  state?: { electrum: { trustedPeers: ElectrumPeer[] } }
+}): Promise<GetTxHistoryResponse> {
   let socket: any = null
   try {
     const txHistory: TxHistory[] = []
@@ -80,7 +84,7 @@ async function getTxHistory({
     const changeExtendedKey = deriveChildPrivateKey(accountExtendedKey, changeIndex)
 
     // connect to electrum server
-    socket = await connect()
+    socket = await connect(state)
     console.log('[transactions] Established persistent Electrum connection for transaction history')
 
     // Generate all receiving addresses first

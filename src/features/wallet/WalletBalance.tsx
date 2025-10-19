@@ -10,7 +10,7 @@ export default function WalletBalance() {
   const isDark = colorScheme === 'dark'
 
   const [balance, setBalance] = useState(0)
-  const { walletCaches, getBalance } = useTransactions()
+  const { cachedTransactions, getBalance } = useTransactions()
   const { loadingWalletState: loadingWallet, unit, setUnit, activeWalletId } = useWallet()
   const { loadingTxState: loadingTx } = useTransactions()
   const loading = loadingWallet || loadingTx || false
@@ -30,7 +30,7 @@ export default function WalletBalance() {
     } else {
       setBalance(0)
     }
-  }, [activeWalletId, walletCaches, getBalance])
+  }, [activeWalletId, cachedTransactions, getBalance])
 
   if (loading) {
     return (

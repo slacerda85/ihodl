@@ -38,7 +38,7 @@ export default function Send() {
   const router = useRouter()
 
   const { activeWalletId, wallets, unit } = useWallet()
-  const { walletCaches, addPendingTransaction, getBalance, getUtxos } = useTransactions()
+  const { cachedTransactions, addPendingTransaction, getBalance, getUtxos } = useTransactions()
 
   const [submitting, setSubmitting] = useState<boolean>(false)
 
@@ -61,7 +61,7 @@ export default function Send() {
 
   // Check if we have cached data for the active wallet
   const hasTransactionData = activeWalletId
-    ? walletCaches.some(cache => cache.walletId === activeWalletId)
+    ? cachedTransactions.some(cache => cache.walletId === activeWalletId)
     : false
 
   // Usar o novo método para obter saldo com verificação de segurança

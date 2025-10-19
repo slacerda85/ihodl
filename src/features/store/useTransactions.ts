@@ -1,8 +1,17 @@
 import { useStore } from './StoreProvider'
 import { processWalletTransactions } from '@/lib/utxo'
 import { getTxHistory } from '@/lib/transactions'
-import { createRootExtendedKey, fromMnemonic } from '@/lib/key'
+import {
+  createRootExtendedKey,
+  fromMnemonic,
+  createHardenedIndex,
+  deriveChildPrivateKey,
+  splitRootExtendedKey,
+  createPublicKey,
+} from '@/lib/key'
+import { createSegwitAddress } from '@/lib/address'
 import { getMempoolTransactions as getMempoolTransactionsLib } from '@/lib/electrum'
+import { UsedAddress } from '@/lib/address'
 import { useCallback } from 'react'
 
 // Transactions hook
@@ -10,13 +19,22 @@ export const useTransactions = () => {
   const { state, dispatch } = useStore()
 
   // Helper function to fetch transactions
-  const fetchTransactionsHelper = async (
-    walletId: string,
-    walletSeedPhrase: string,
-    addressCache?: any,
-  ) => {
+  const fetchTransactionsHelper = async (walletId: string, walletSeedPhrase: string) => {
     console.log(`🔄 [fetchTransactions] Iniciando busca de transações para wallet: ${walletId}`)
     dispatch({ type: 'TRANSACTIONS', action: { type: 'SET_LOADING_TX', payload: true } })
+
+    // Check if we have a valid cache for this wallet
+    const existingCache = state.transactions.cachedTransactions.find(
+      cache => cache.walletId === walletId,
+    )
+    const CACHE_VALIDITY_MS = 5 * 60 * 1000 // 5 minutes
+    if (existingCache && Date.now() - existingCache.lastUpdated < CACHE_VALIDITY_MS) {
+      console.log(
+        `✅ [fetchTransactions] Usando cache existente para wallet ${walletId} (atualizado há ${(Date.now() - existingCache.lastUpdated) / 1000}s atrás)`,
+      )
+      dispatch({ type: 'TRANSACTIONS', action: { type: 'SET_LOADING_TX', payload: false } })
+      return
+    }
 
     try {
       // Fetch transactions using the existing method
@@ -25,6 +43,7 @@ export const useTransactions = () => {
       console.log(`📡 [fetchTransactions] Chamando getTxHistory...`)
       const { txHistory } = await getTxHistory({
         extendedKey: rootExtendedKey,
+        state,
       })
       console.log(`📡 [fetchTransactions] getTxHistory retornou ${txHistory.length} endereços`)
 
@@ -42,22 +61,6 @@ export const useTransactions = () => {
       console.log(
         `🔧 [fetchTransactions] Extraído ${allTransactions.length} transações brutas e ${allAddresses.length} endereços do txHistory`,
       )
-
-      // Add addresses from addressCache to ensure addresses is not empty
-      if (addressCache) {
-        const cacheAddressesCount =
-          1 + addressCache.usedReceivingAddresses.length + addressCache.usedChangeAddresses.length
-        allAddresses.push(
-          addressCache.nextUnusedAddress,
-          ...addressCache.usedReceivingAddresses,
-          ...addressCache.usedChangeAddresses,
-        )
-        console.log(
-          `✅ [fetchTransactions] Adicionados ${cacheAddressesCount} endereços do addressCache`,
-        )
-      } else {
-        console.log(`⚠️ [fetchTransactions] AddressCache não encontrado para wallet ${walletId}`)
-      }
 
       // Remove duplicate transactions
       console.log(`🔧 [fetchTransactions] Removendo transações duplicadas...`)
@@ -85,6 +88,60 @@ export const useTransactions = () => {
         action: { type: 'SET_WALLET_CACHE', payload: { walletId, cache: newCache } },
       })
       console.log(`✅ [fetchTransactions] Cache atualizado com sucesso para wallet ${walletId}`)
+
+      // Calculate address cache
+      const usedReceivingAddresses: UsedAddress[] = txHistory
+        .filter(h => h.receivingAddress && h.txs.length > 0)
+        .map(h => ({
+          address: h.receivingAddress,
+          index: h.index,
+          type: 'receiving' as const,
+          transactions: h.txs,
+        }))
+      const usedChangeAddresses: UsedAddress[] = txHistory
+        .filter(h => h.changeAddress && h.txs.length > 0)
+        .map(h => ({
+          address: h.changeAddress,
+          index: h.index,
+          type: 'change' as const,
+          transactions: h.txs,
+        }))
+
+      // Find next unused receiving address
+      let nextUnusedAddress = ''
+      const usedAddressSet = new Set(uniqueAddresses)
+      const purposeIndex = createHardenedIndex(84)
+      const purposeExtendedKey = deriveChildPrivateKey(rootExtendedKey, purposeIndex)
+      const coinTypeIndex = createHardenedIndex(0)
+      const coinTypeExtendedKey = deriveChildPrivateKey(purposeExtendedKey, coinTypeIndex)
+      const accountIndex = createHardenedIndex(0)
+      const accountExtendedKey = deriveChildPrivateKey(coinTypeExtendedKey, accountIndex)
+      const receivingExtendedKey = deriveChildPrivateKey(accountExtendedKey, 0)
+
+      let index = 0
+      const maxCheck = 100
+      while (!nextUnusedAddress && index < maxCheck) {
+        const addressIndexExtendedKey = deriveChildPrivateKey(receivingExtendedKey, index)
+        const { privateKey } = splitRootExtendedKey(addressIndexExtendedKey)
+        const publicKey = createPublicKey(privateKey)
+        const address = createSegwitAddress(publicKey)
+        if (!usedAddressSet.has(address)) {
+          nextUnusedAddress = address
+        }
+        index++
+      }
+
+      const addressCache = {
+        nextUnusedAddress,
+        usedReceivingAddresses,
+        usedChangeAddresses,
+      }
+
+      dispatch({
+        type: 'TRANSACTIONS',
+        action: { type: 'SET_ADDRESS_CACHE', payload: { walletId, cache: addressCache } },
+      })
+      console.log(`✅ [fetchTransactions] Address cache atualizado para wallet ${walletId}`)
     } catch (error) {
       console.error(`❌ [fetchTransactions] Erro durante o fetch para wallet ${walletId}:`, error)
       if (error instanceof Error) {
@@ -101,7 +158,7 @@ export const useTransactions = () => {
 
   return {
     // State
-    walletCaches: state.transactions.walletCaches,
+    cachedTransactions: state.transactions.cachedTransactions,
     pendingTransactions: state.transactions.pendingTransactions,
     loadingTxState: state.transactions.loadingTxState,
     loadingMempoolState: state.transactions.loadingMempoolState,
@@ -130,15 +187,16 @@ export const useTransactions = () => {
       }),
 
     // Async Actions
-    fetchTransactions: useCallback(fetchTransactionsHelper, [dispatch]),
+    fetchTransactions: useCallback(fetchTransactionsHelper, [dispatch, state]),
 
-    fetchMempoolTransactions: async (walletId: string, addressCache?: any) => {
+    fetchMempoolTransactions: async (walletId: string) => {
       console.log(
         `🔄 [fetchMempoolTransactions] Iniciando busca de transações na mempool para wallet: ${walletId}`,
       )
       dispatch({ type: 'TRANSACTIONS', action: { type: 'SET_LOADING_MEMPOOL', payload: true } })
 
       try {
+        const addressCache = state.transactions.addressCaches[walletId]
         if (!addressCache) {
           console.log('[fetchMempoolTransactions] No address cache found for wallet:', walletId)
           return
@@ -146,8 +204,8 @@ export const useTransactions = () => {
 
         const addresses = [
           addressCache.nextUnusedAddress,
-          ...addressCache.usedReceivingAddresses,
-          ...addressCache.usedChangeAddresses,
+          ...addressCache.usedReceivingAddresses.map(addr => addr.address),
+          ...addressCache.usedChangeAddresses.map(addr => addr.address),
         ].filter(addr => typeof addr === 'string' && addr.trim()) // Filter out any non-string or empty addresses
 
         if (addresses.length === 0) {
@@ -185,42 +243,46 @@ export const useTransactions = () => {
     // Selectors
     getWalletCache: useCallback(
       (walletId: string) =>
-        state.transactions.walletCaches.find(cache => cache.walletId === walletId) || null,
-      [state.transactions.walletCaches],
+        state.transactions.cachedTransactions.find(cache => cache.walletId === walletId) || null,
+      [state.transactions.cachedTransactions],
     ),
     getPendingTransactions: useCallback(
       (walletId: string) =>
         state.transactions.pendingTransactions.filter(tx => tx.walletId === walletId),
       [state.transactions.pendingTransactions],
     ),
+    getAddressCache: useCallback(
+      (walletId: string) => state.transactions.addressCaches[walletId] || null,
+      [state.transactions.addressCaches],
+    ),
     getBalance: useCallback(
       (walletId: string) => {
-        const cache = state.transactions.walletCaches.find(c => c.walletId === walletId)
+        const cache = state.transactions.cachedTransactions.find(c => c.walletId === walletId)
         if (!cache) return 0
         const walletAddresses = new Set(cache.addresses)
         const { balance } = processWalletTransactions(cache.transactions, walletAddresses)
         return balance
       },
-      [state.transactions.walletCaches],
+      [state.transactions.cachedTransactions],
     ),
     getUtxos: useCallback(
       (walletId: string) => {
-        const cache = state.transactions.walletCaches.find(c => c.walletId === walletId)
+        const cache = state.transactions.cachedTransactions.find(c => c.walletId === walletId)
         if (!cache) return []
         const walletAddresses = new Set(cache.addresses)
         const { utxos } = processWalletTransactions(cache.transactions, walletAddresses)
         return utxos
       },
-      [state.transactions.walletCaches],
+      [state.transactions.cachedTransactions],
     ),
     getTransactionAnalysis: useCallback(
       (walletId: string) => {
-        const cache = state.transactions.walletCaches.find(c => c.walletId === walletId)
+        const cache = state.transactions.cachedTransactions.find(c => c.walletId === walletId)
         if (!cache) return null
         const walletAddresses = new Set(cache.addresses)
         return processWalletTransactions(cache.transactions, walletAddresses)
       },
-      [state.transactions.walletCaches],
+      [state.transactions.cachedTransactions],
     ),
   }
 }

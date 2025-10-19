@@ -38,7 +38,7 @@ Configurado para persistir apenas o estado, não as funções:
 partialize: state => ({
   // ... outros estados
   tx: {
-    walletCaches: state.tx?.walletCaches || [],
+    cachedTransactions: state.tx?.cachedTransactions || [],
     loadingTxState: state.tx?.loadingTxState || false,
   },
 })

@@ -1,9 +1,40 @@
-import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react'
+import React, { createContext, useContext, useReducer, ReactNode, useEffect, useRef } from 'react'
 import { appReducer, initialAppState, AppState, AppAction } from './store'
 import { MMKV } from 'react-native-mmkv'
+import { electrumActions } from './electrum'
 
 const storage = new MMKV()
 const STORAGE_KEY = 'app-state'
+
+// Initialize Electrum peers on app startup
+const initializeElectrumPeers = async (dispatch: React.Dispatch<AppAction>, state: AppState) => {
+  try {
+    console.log('[StoreProvider] Initializing Electrum peers...')
+
+    // Check if we have any saved trusted peers
+    const hasTrustedPeers = state.electrum.trustedPeers.length > 0
+
+    if (!hasTrustedPeers) {
+      console.log(
+        '[StoreProvider] No saved trusted peers found, this appears to be first app launch',
+      )
+      console.log('[StoreProvider] Performing initial peer discovery and testing...')
+    } else {
+      console.log(
+        `[StoreProvider] Found ${state.electrum.trustedPeers.length} saved trusted peers, updating if needed...`,
+      )
+    }
+
+    // Always update trusted peers (this will fetch new peers if needed and test them)
+    const actions = await electrumActions.updateTrustedPeers(() => ({ electrum: state.electrum }))
+    actions.forEach(action => dispatch({ type: 'ELECTRUM', action }))
+
+    console.log('[StoreProvider] Electrum peers initialization completed')
+  } catch (error) {
+    console.error('[StoreProvider] Error initializing Electrum peers:', error)
+    // Don't throw - we don't want to break app startup
+  }
+}
 
 // Load initial state from storage
 const loadPersistedState = (): AppState => {
@@ -26,6 +57,7 @@ const loadPersistedState = (): AppState => {
           ...parsed.transactions,
           loadingTxState: false,
           loadingMempoolState: false,
+          addressCaches: parsed.transactions?.addressCaches || {},
         },
         blockchain: initialAppState.blockchain, // Always reset blockchain state on app start
       }
@@ -47,6 +79,15 @@ const StoreContext = createContext<StoreContextType | undefined>(undefined)
 // Provider
 export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(appReducer, loadPersistedState())
+  const hasInitializedPeers = useRef(false)
+
+  // Initialize Electrum peers on app startup
+  useEffect(() => {
+    if (!hasInitializedPeers.current) {
+      hasInitializedPeers.current = true
+      initializeElectrumPeers(dispatch, state)
+    }
+  }, [dispatch, state])
 
   // Persist state changes
   useEffect(() => {
@@ -57,13 +98,21 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           wallets: state.wallet.wallets,
           activeWalletId: state.wallet.activeWalletId,
           unit: state.wallet.unit,
-          addressCache: state.wallet.addressCache,
         },
         settings: state.settings,
         transactions: {
-          walletCaches: state.transactions.walletCaches,
+          cachedTransactions: state.transactions.cachedTransactions,
           pendingTransactions: state.transactions.pendingTransactions,
           mempoolTransactions: state.transactions.mempoolTransactions,
+          addressCaches: state.transactions.addressCaches,
+        },
+        lightning: {
+          lightningWallets: state.lightning.lightningWallets,
+          lightningConfigs: state.lightning.lightningConfigs,
+        },
+        electrum: {
+          trustedPeers: state.electrum.trustedPeers,
+          lastPeerUpdate: state.electrum.lastPeerUpdate,
         },
       }
 

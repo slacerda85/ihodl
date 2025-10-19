@@ -93,13 +93,9 @@ function AccountDetails({ account }: { account: Account }) {
   const router = useRouter()
 
   const { loadingWalletState: loadingWallet } = useWallet()
-  const { loadingTxState: loadingTransactions, walletCaches, getWalletCache } = useTransactions()
+  const { loadingTxState: loadingTransactions } = useTransactions()
   const loading = loadingWallet || loadingTransactions
-  const { unit, activeWalletId } = useWallet()
-
-  // Check if we have cached data for the active wallet
-  const walletCache = activeWalletId ? getWalletCache(activeWalletId) : null
-  const hasTransactionData = !!walletCache
+  const { unit } = useWallet()
 
   // TODO: Implement balance calculation from transactions
   const balance = 0

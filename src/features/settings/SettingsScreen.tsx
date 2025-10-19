@@ -5,7 +5,7 @@ import Picker from '@/ui/Picker'
 import { ColorMode } from '@/models/settings'
 
 // Import all iOS UI components
-import { Host, Button } from '@expo/ui/swift-ui'
+// import { Host, Button } from '@expo/ui/swift-ui'
 
 export default function SettingsScreen() {
   const colorScheme = useColorScheme()

@@ -6,11 +6,11 @@ import { useWallet, useTransactions } from '../../store'
  */
 export function useTransactionSync(activeWalletId?: string) {
   const { loadingWalletState: loadingWallet } = useWallet()
-  const { loadingTxState: loadingTx, walletCaches } = useTransactions()
+  const { loadingTxState: loadingTx, cachedTransactions } = useTransactions()
 
   // Check if we have cached data for the active wallet
   const hasTransactionData = activeWalletId
-    ? walletCaches.some(cache => cache.walletId === activeWalletId)
+    ? cachedTransactions.some(cache => cache.walletId === activeWalletId)
     : false
 
   useEffect(() => {

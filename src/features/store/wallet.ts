@@ -1,5 +1,5 @@
 import { WalletData } from '@/models/wallet'
-import { Action, Reducer } from './types'
+import { Reducer } from './types'
 
 // Wallet State
 export type WalletState = {
@@ -7,14 +7,6 @@ export type WalletState = {
   activeWalletId: string | undefined
   unit: 'BTC' | 'Sats'
   loadingWalletState: boolean
-  addressCache: {
-    [walletId: string]: {
-      nextUnusedAddress: string
-      usedReceivingAddresses: any[]
-      usedChangeAddresses: any[]
-      lastUpdated: number
-    }
-  }
 }
 
 // Wallet Actions
@@ -26,8 +18,6 @@ export type WalletAction =
   | { type: 'SET_ACTIVE_WALLET'; payload: string }
   | { type: 'SET_UNIT'; payload: 'BTC' | 'Sats' }
   | { type: 'SET_LOADING_WALLET'; payload: boolean }
-  | { type: 'SET_ADDRESS_CACHE'; payload: { walletId: string; cache: any } }
-  | { type: 'CLEAR_ADDRESS_CACHE'; payload?: string }
 
 // Initial state
 export const initialWalletState: WalletState = {
@@ -35,7 +25,6 @@ export const initialWalletState: WalletState = {
   activeWalletId: undefined,
   unit: 'BTC',
   loadingWalletState: false,
-  addressCache: {},
 }
 
 // Reducer
@@ -69,7 +58,6 @@ export const walletReducer: Reducer<WalletState, WalletAction> = (state, action)
         ...state,
         wallets: [],
         activeWalletId: undefined,
-        addressCache: {},
       }
 
     case 'SET_ACTIVE_WALLET':
@@ -88,31 +76,6 @@ export const walletReducer: Reducer<WalletState, WalletAction> = (state, action)
       return {
         ...state,
         loadingWalletState: action.payload,
-      }
-
-    case 'SET_ADDRESS_CACHE':
-      return {
-        ...state,
-        addressCache: {
-          ...state.addressCache,
-          [action.payload.walletId]: {
-            ...action.payload.cache,
-            lastUpdated: Date.now(),
-          },
-        },
-      }
-
-    case 'CLEAR_ADDRESS_CACHE':
-      if (action.payload) {
-        const { [action.payload]: _, ...rest } = state.addressCache
-        return {
-          ...state,
-          addressCache: rest,
-        }
-      }
-      return {
-        ...state,
-        addressCache: {},
       }
 
     default:
@@ -155,22 +118,10 @@ export const walletActions = {
     type: 'SET_LOADING_WALLET',
     payload: loading,
   }),
-
-  setAddressCache: (walletId: string, cache: any): WalletAction => ({
-    type: 'SET_ADDRESS_CACHE',
-    payload: { walletId, cache },
-  }),
-
-  clearAddressCache: (walletId?: string): WalletAction => ({
-    type: 'CLEAR_ADDRESS_CACHE',
-    payload: walletId,
-  }),
 }
 
 // Selectors
 export const walletSelectors = {
   getActiveWallet: (state: WalletState) =>
     state.wallets.find(wallet => wallet.walletId === state.activeWalletId),
-
-  getAddressCache: (state: WalletState, walletId: string) => state.addressCache[walletId] || null,
 }
