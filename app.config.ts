@@ -1,8 +1,24 @@
 import { ExpoConfig, ConfigContext } from 'expo/config'
 
+const IS_DEV = process.env.APP_VARIANT === 'development'
+
+const getAppName = () => {
+  if (IS_DEV) {
+    return 'iHodl Dev'
+  }
+  return 'iHodl'
+}
+
+const getUniqueIdentifier = () => {
+  if (IS_DEV) {
+    return 'app.ihodl.wallet.dev'
+  }
+  return 'app.ihodl.wallet'
+}
+
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
-  name: 'ihodl',
+  name: getAppName(),
   slug: 'ihodl',
   scheme: 'ihodl',
   version: '1.0.0',
@@ -15,13 +31,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     runtimeVersion: {
       policy: 'appVersion',
     },
-    icon: './assets/images/icon.png',
+    icon: './assets/images/icon-multi.png',
     supportsTablet: true,
     infoPlist: {
       NSFaceIDUsageDescription: 'This app uses Face ID to secure your data',
       ITSAppUsesNonExemptEncryption: false,
     },
-    bundleIdentifier: 'app.ihodl.wallet',
+    bundleIdentifier: getUniqueIdentifier(),
     config: {
       usesNonExemptEncryption: false,
     },

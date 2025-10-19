@@ -4,7 +4,7 @@
   "main": "expo-router/entry",
   "scripts": {
     "test": "jest",
-    "dev": "expo start",
+    "dev": "APP_VARIANT=development npx expo start",
     "start": "expo start",
     "prebuild:dev": "expo prebuild --platform android",
     "prebuild:prev": "expo prebuild --platform android --profile preview",

@@ -8,10 +8,18 @@
       "environment": "development",
       "distribution": "internal",
       "credentialsSource": "local",
-      "developmentClient": true
+      "developmentClient": true,
+      "env": {
+        "APP_VARIANT": "development"
+      }
     },
-    "preview": {      
-      "distribution": "internal"        
+    "preview": {
+      "environment": "development",
+      "distribution": "internal",
+      "credentialsSource": "local",
+      "env": {
+        "APP_VARIANT": "preview"
+      }
     },
     "production": {
       "autoIncrement": true
