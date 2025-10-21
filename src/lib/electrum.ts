@@ -27,7 +27,7 @@ async function init() {
   }
 }
 
-async function connect(state?: { electrum: { trustedPeers: ElectrumPeer[] } }): Promise<TLSSocket> {
+async function connect(state?: { electrum?: { trustedPeers?: any[] } }): Promise<TLSSocket> {
   console.log('[electrum] connecting Electrum peers...')
   const peers: ConnectionOptions[] = []
   // First try trusted peers
@@ -209,7 +209,7 @@ async function testPeers(peers: ConnectionOptions[]): Promise<ConnectionOptions[
  * @returns Object with trustedPeers and lastPeerUpdate data, or null if no update needed
  */
 async function updateTrustedPeers(state?: {
-  electrum: { trustedPeers: ElectrumPeer[]; lastPeerUpdate: number | null }
+  electrum?: { trustedPeers?: ElectrumPeer[]; lastPeerUpdate?: number | null }
 }): Promise<{ trustedPeers: ElectrumPeer[]; lastPeerUpdate: number } | null> {
   let socket: TLSSocket | null = null
   try {
@@ -338,13 +338,13 @@ async function updateTrustedPeers(state?: {
  * @returns The timestamp or null if not found
  */
 async function getLastPeerUpdateTime(state?: {
-  electrum: { lastPeerUpdate: number | null }
+  electrum?: { lastPeerUpdate?: number | null }
 }): Promise<number | null> {
   try {
-    if (state) {
+    if (state?.electrum?.lastPeerUpdate !== undefined) {
       return state.electrum.lastPeerUpdate
     } else {
-      console.warn('[electrum] No state provided, cannot read last peer update time from store')
+      console.log('[electrum] No last peer update time in state')
       return null
     }
   } catch (error) {
@@ -359,10 +359,10 @@ async function getLastPeerUpdateTime(state?: {
  * @returns Array of trusted peers or empty array if none found
  */
 async function readTrustedPeers(state?: {
-  electrum: { trustedPeers: ElectrumPeer[] }
+  electrum?: { trustedPeers?: ElectrumPeer[] }
 }): Promise<ConnectionOptions[]> {
   try {
-    if (state) {
+    if (state?.electrum?.trustedPeers) {
       // Convert ElectrumPeer format back to ConnectionOptions
       return state.electrum.trustedPeers.map(peer => ({
         host: peer[1], // hostname
@@ -372,7 +372,7 @@ async function readTrustedPeers(state?: {
         rejectUnauthorized: false,
       }))
     } else {
-      console.warn('[electrum] No state provided, cannot read trusted peers from store')
+      console.log('[electrum] No trusted peers in state, using initial peers')
       return []
     }
   } catch (error) {

@@ -1,15 +1,38 @@
-import React from 'react'
-import { useColorScheme, View, Text, StyleSheet, ScrollView } from 'react-native'
-import { useWallet } from '../store'
+import React, { useState, useEffect } from 'react'
+import { View, Text, StyleSheet, ScrollView } from 'react-native'
+import { useWallet, useSettings } from '../store'
 import { alpha } from '@/ui/utils'
 import colors from '@/ui/colors'
 import Divider from '@/ui/Divider'
+import { getWalletSeedPhrase } from '@/lib/secureStorage'
 
 export default function GetSeedPhraseScreen() {
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === 'dark'
+  const { isDark } = useSettings()
+  const { activeWalletId } = useWallet()
+  const [seedPhrase, setSeedPhrase] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
 
-  const { wallets, activeWalletId } = useWallet()
+  useEffect(() => {
+    const loadSeedPhrase = async () => {
+      if (!activeWalletId) {
+        setLoading(false)
+        return
+      }
+
+      try {
+        // TODO: Get password from user or state
+        const password = '' // Temporary: assume no password for now
+        const phrase = await getWalletSeedPhrase(activeWalletId, password)
+        setSeedPhrase(phrase)
+      } catch (error) {
+        console.error('Error loading seed phrase:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadSeedPhrase()
+  }, [activeWalletId])
 
   if (!activeWalletId) {
     return (
@@ -19,17 +42,25 @@ export default function GetSeedPhraseScreen() {
     )
   }
 
-  const wallet = wallets.find(wallet => wallet.walletId === activeWalletId)
-
-  if (!wallet) {
+  if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={[styles.subText, isDark && styles.subTextDark]}>Wallet not found</Text>
+        <Text style={[styles.subText, isDark && styles.subTextDark]}>Loading seed phrase...</Text>
       </View>
     )
   }
 
-  const words = wallet.seedPhrase.split(' ')
+  if (!seedPhrase) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={[styles.subText, isDark && styles.subTextDark]}>
+          Seed phrase not available
+        </Text>
+      </View>
+    )
+  }
+
+  const words = seedPhrase.split(' ')
 
   return (
     <ScrollView style={styles.scrollView}>

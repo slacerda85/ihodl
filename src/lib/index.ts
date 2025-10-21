@@ -7,5 +7,6 @@ export * as key from './key'
 export * as payment from './payment'
 export * as wallet from './wallet'
 export * as transactions from './transactions'
-export * as lightning from './lightning'
+export * as lightning from './lightning/index'
+export * as p2p from './p2p/index'
 // Removed storage export as storage module was deleted

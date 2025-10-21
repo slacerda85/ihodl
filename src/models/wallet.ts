@@ -4,6 +4,6 @@ export type WalletData = {
   walletId: string
   walletName: string
   cold: boolean
-  seedPhrase: string
+  // seedPhrase removed - now stored encrypted in secureStorage
   accounts: Account[]
 }

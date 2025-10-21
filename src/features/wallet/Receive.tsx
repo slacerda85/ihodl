@@ -5,7 +5,6 @@ import {
   ScrollView,
   Pressable,
   StyleSheet,
-  useColorScheme,
   Alert,
   Share,
   Modal,
@@ -15,16 +14,15 @@ import {
 import * as Clipboard from 'expo-clipboard'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
-import IconSymbol from '@/ui/IconSymbol'
-import { useWallet } from '../store'
+import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
+import { useWallet, useSettings } from '../store'
 import { UsedAddress } from '@/lib/address'
 import QRCode from '@/ui/QRCode'
 
 // Address generation utilities - separated for better organization
 
 export default function Receive() {
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === 'dark'
+  const { isDark } = useSettings()
 
   const { wallets, activeWalletId, getAddressCache } = useWallet()
   const [selectedAddress, setSelectedAddress] = useState<string>('')

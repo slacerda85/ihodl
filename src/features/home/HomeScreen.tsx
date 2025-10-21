@@ -1,16 +1,16 @@
 import BitcoinLogo from '@/assets/bitcoin-logo'
 import { useEffect } from 'react'
-import { StyleSheet, Text, View, useColorScheme } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import colors from '@/ui/colors'
 import { router, useSegments } from 'expo-router'
 import { useAuth } from '../auth/AuthProvider'
+import { useSettings } from '../store'
 
 export default function HomeScreen() {
   const { authenticated } = useAuth()
   const segments = useSegments()
   const currentRoute = '/' + segments.join('/')
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === 'dark'
+  const { isDark } = useSettings()
 
   useEffect(() => {
     if (currentRoute === '/' && authenticated) {

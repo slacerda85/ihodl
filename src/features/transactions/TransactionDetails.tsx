@@ -1,27 +1,17 @@
 import React from 'react'
-import {
-  View,
-  Text,
-  ScrollView,
-  Pressable,
-  StyleSheet,
-  useColorScheme,
-  Alert,
-  Share,
-} from 'react-native'
+import { View, Text, ScrollView, Pressable, StyleSheet, Alert, Share } from 'react-native'
 import { useLocalSearchParams } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
-import IconSymbol from '@/ui/IconSymbol'
-import { useTransactions } from '../store'
+import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
+import { useTransactions, useSettings } from '../store'
 import QRCode from '@/ui/QRCode'
 import ContentContainer from '@/ui/ContentContainer'
 
 export default function TransactionDetails() {
   const { txid } = useLocalSearchParams<{ txid: string }>()
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === 'dark'
+  const { isDark } = useSettings()
 
   const { cachedTransactions } = useTransactions()
 
@@ -84,10 +74,20 @@ export default function TransactionDetails() {
         <View style={[styles.container, isDark && styles.containerDark]}>
           {/* Main Section */}
           <View style={[styles.section, isDark && styles.sectionDark]}>
-            {/* Header */}
             <View style={styles.item}>
               <Text style={[styles.title, isDark && styles.titleDark]}>Transaction Details</Text>
-              <Text style={[styles.status, confirmations > 0 ? styles.confirmed : styles.pending]}>
+              <Text
+                style={[
+                  styles.status,
+                  confirmations > 0
+                    ? isDark
+                      ? styles.confirmedDark
+                      : styles.confirmed
+                    : isDark
+                      ? styles.pendingDark
+                      : styles.pending,
+                ]}
+              >
                 {status}
               </Text>
             </View>
@@ -137,7 +137,9 @@ export default function TransactionDetails() {
             {/* Amount */}
             <View style={styles.item}>
               <Text style={[styles.label, isDark && styles.labelDark]}>Amount</Text>
-              <Text style={[styles.amount]}>{totalOutput.toFixed(8)} BTC</Text>
+              <Text style={[styles.amount, isDark && styles.amountDark]}>
+                {totalOutput.toFixed(8)} BTC
+              </Text>
             </View>
 
             {/* Date */}
@@ -182,7 +184,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   container: {
-    padding: 16,
+    // padding: 16,
     gap: 16,
   },
   containerDark: {
@@ -195,7 +197,7 @@ const styles = StyleSheet.create({
     gap: 24,
   },
   sectionDark: {
-    backgroundColor: alpha(colors.background.light, 0.05),
+    backgroundColor: alpha(colors.background.light, 0.1),
   },
   item: {
     // No specific styles, just a container
@@ -220,7 +222,15 @@ const styles = StyleSheet.create({
     backgroundColor: alpha(colors.success, 0.1),
     color: colors.success,
   },
+  confirmedDark: {
+    backgroundColor: alpha(colors.success, 0.1),
+    color: colors.success,
+  },
   pending: {
+    backgroundColor: alpha(colors.warning, 0.1),
+    color: colors.warning,
+  },
+  pendingDark: {
     backgroundColor: alpha(colors.warning, 0.1),
     color: colors.warning,
   },
@@ -249,6 +259,9 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: colors.text.light,
+  },
+  amountDark: {
+    color: colors.text.dark,
   },
   amountPositive: {
     color: colors.success,

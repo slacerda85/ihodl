@@ -1,13 +1,17 @@
 import { Link, Stack, useRouter } from 'expo-router'
-import { useColorScheme, Text, Pressable, Platform } from 'react-native'
+import { Text, Pressable, Platform } from 'react-native'
 import colors from '@/ui/colors'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { useCallback, useEffect } from 'react'
-import ManageWalletsIcon from '@/features/wallet/ManageWalletsIcon'
-import { useWallet } from '@/features/store'
+import { useWallet, useSettings } from '@/features/store'
+import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
+import { ExtendedStackNavigationOptions } from 'expo-router/build/layouts/StackClient'
+import { alpha } from '@/ui/utils'
 
 function HeaderRight() {
+  const { isDark } = useSettings()
+
   return (
     <Link href="/wallet/actions" asChild>
       <Pressable
@@ -18,7 +22,11 @@ function HeaderRight() {
           justifyContent: 'center',
         }}
       >
-        <Ionicons name="ellipsis-vertical" size={24} color={colors.primary} />
+        <Ionicons
+          name="ellipsis-vertical"
+          size={24}
+          color={isDark ? colors.text.dark : colors.text.light}
+        />
       </Pressable>
     </Link>
   )
@@ -27,6 +35,7 @@ function HeaderRight() {
 // link to wallet/manage
 function ManageWallets() {
   const router = useRouter()
+  const { isDark } = useSettings()
 
   function handleManageWallets() {
     router.push('/wallet/manage' as any)
@@ -42,7 +51,11 @@ function ManageWallets() {
         justifyContent: 'center',
       }}
     >
-      <ManageWalletsIcon color={colors.primary} size={24} />
+      <IconSymbol
+        name="wallet.bifold"
+        size={24}
+        color={isDark ? colors.text.dark : colors.text.light}
+      />
     </Pressable>
   )
 }
@@ -50,6 +63,7 @@ function ManageWallets() {
 const CloseModalButton = ({ title }: { title?: string }) => {
   const router = useRouter()
   const { inactive } = useAuth()
+  const { isDark } = useSettings()
 
   const handleClose = useCallback(() => {
     router.back()
@@ -69,7 +83,7 @@ const CloseModalButton = ({ title }: { title?: string }) => {
         style={{
           fontSize: 16,
           // fontWeight: 'bold',
-          color: colors.primary,
+          color: isDark ? colors.text.dark : colors.text.light,
           // padding: 8,
         }}
       >
@@ -84,31 +98,21 @@ export default function WalletLayout() {
   const selectedWallet = wallets?.find(wallet => wallet.walletId === activeWalletId)
   const empty = wallets === undefined || wallets?.length === 0
 
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === 'dark'
+  const { isDark } = useSettings()
 
-  const modalOptions = {
-    headerBlurEffect: undefined,
-    headerTransparent: false,
-    headerStyle: {
-      backgroundColor: colors.background[isDark ? 'dark' : 'light'],
-    },
-    contentStyle: {
-      backgroundColor: colors.background[isDark ? 'dark' : 'light'],
-    },
+  const modalOptions: ExtendedStackNavigationOptions = {
+    presentation: Platform.select({
+      ios: 'modal',
+      default: 'transparentModal',
+    }),
   }
 
   return (
     <Stack
       screenOptions={{
         headerShadowVisible: false,
-        headerBackButtonDisplayMode: 'minimal',
-        headerTintColor: colors.primary,
-        headerBlurEffect: isDark ? 'dark' : 'light',
-        headerTransparent: false,
-        headerStyle: {
-          backgroundColor: colors.background[isDark ? 'dark' : 'light'],
-        },
+        headerTransparent: true,
+        headerTintColor: isDark ? colors.text.dark : colors.text.light,
         contentStyle: {
           backgroundColor: colors.background[isDark ? 'dark' : 'light'],
         },
@@ -117,11 +121,6 @@ export default function WalletLayout() {
       <Stack.Screen
         name="index"
         options={{
-          headerBlurEffect: 'none',
-          headerTransparent: true,
-          headerStyle: {
-            backgroundColor: colors.background[isDark ? 'dark' : 'light'],
-          },
           headerLeft: empty ? undefined : () => ManageWallets(),
           headerRight: activeWalletId && !empty ? () => HeaderRight() : undefined,
           headerTitleAlign: 'center',
@@ -132,10 +131,6 @@ export default function WalletLayout() {
         name="actions"
         options={{
           ...modalOptions,
-          presentation: Platform.select({
-            ios: 'modal',
-            default: 'transparentModal',
-          }),
           animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
           title: 'Wallet actions',
           headerRight: Platform.OS === 'ios' ? () => <CloseModalButton title="Done" /> : undefined,
@@ -145,10 +140,7 @@ export default function WalletLayout() {
         name="create"
         options={{
           ...modalOptions,
-          presentation: Platform.select({
-            ios: 'modal',
-            default: 'modal',
-          }),
+
           animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
           title: 'Create wallet',
           headerRight:
@@ -159,7 +151,6 @@ export default function WalletLayout() {
         name="import"
         options={{
           ...modalOptions,
-          presentation: 'modal',
           title: 'Import wallet',
           headerRight: () => <CloseModalButton title="Cancel" />,
         }}
@@ -168,10 +159,7 @@ export default function WalletLayout() {
         name="manage"
         options={{
           ...modalOptions,
-          presentation: Platform.select({
-            ios: 'modal',
-            default: 'transparentModal',
-          }),
+
           animation: Platform.OS === 'android' ? 'slide_from_left' : undefined,
           title: 'Manage wallets',
           headerRight: Platform.OS === 'ios' ? () => <CloseModalButton title="Done" /> : undefined,
@@ -181,11 +169,6 @@ export default function WalletLayout() {
         name="seed"
         options={{
           ...modalOptions,
-
-          presentation: Platform.select({
-            ios: 'modal',
-            default: 'transparentModal',
-          }),
           animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
           title: 'Wallet seed',
           headerRight: Platform.OS === 'ios' ? () => <CloseModalButton title="Done" /> : undefined,
@@ -195,10 +178,6 @@ export default function WalletLayout() {
         name="delete"
         options={{
           ...modalOptions,
-          presentation: Platform.select({
-            ios: 'modal',
-            default: 'transparentModal',
-          }),
           animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
           title: 'Delete wallet',
           headerRight: Platform.OS === 'ios' ? () => <CloseModalButton /> : undefined,
@@ -208,10 +187,6 @@ export default function WalletLayout() {
         name="send"
         options={{
           ...modalOptions,
-          presentation: Platform.select({
-            ios: 'modal',
-            default: 'transparentModal',
-          }),
           animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
           title: 'Send Bitcoin',
           headerRight:
@@ -222,12 +197,36 @@ export default function WalletLayout() {
         name="receive"
         options={{
           ...modalOptions,
-          presentation: Platform.select({
-            ios: 'modal',
-            default: 'transparentModal',
-          }),
           animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
           title: 'Receive Bitcoin',
+          headerRight:
+            Platform.OS === 'ios' ? () => <CloseModalButton title="Cancel" /> : undefined,
+        }}
+      />
+      <Stack.Screen
+        name="lightning-channels"
+        options={{
+          ...modalOptions,
+          animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
+          title: 'Lightning Channels',
+          headerRight: Platform.OS === 'ios' ? () => <CloseModalButton title="Close" /> : undefined,
+        }}
+      />
+      <Stack.Screen
+        name="channel-actions"
+        options={{
+          ...modalOptions,
+          animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
+          title: 'Channel Actions',
+          headerRight: Platform.OS === 'ios' ? () => <CloseModalButton title="Close" /> : undefined,
+        }}
+      />
+      <Stack.Screen
+        name="open-channel"
+        options={{
+          ...modalOptions,
+          animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
+          title: 'Open Channel',
           headerRight:
             Platform.OS === 'ios' ? () => <CloseModalButton title="Cancel" /> : undefined,
         }}

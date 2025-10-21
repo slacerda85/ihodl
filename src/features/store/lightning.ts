@@ -19,6 +19,12 @@ export type LightningState = {
   connectedNodes: {
     [walletId: string]: boolean
   }
+  // Global connection state (not wallet-specific)
+  lightningConnection: {
+    config: LightningConfig | null
+    connected: boolean
+    nodeInfo: import('@/lib/lightning').LightningNode | null
+  }
 }
 
 // Lightning Actions
@@ -52,6 +58,24 @@ export type LightningAction =
       type: 'UPDATE_LIGHTNING_INVOICE'
       payload: { walletId: string; paymentHash: string; updates: Partial<LightningInvoice> }
     }
+  | {
+      type: 'SET_LIGHTNING_CONNECTION'
+      payload: {
+        config: LightningConfig | null
+        connected: boolean
+        nodeInfo: import('@/lib/lightning').LightningNode | null
+      }
+    }
+  | {
+      type: 'UPDATE_LIGHTNING_CONNECTION'
+      payload: {
+        updates: Partial<{
+          config: LightningConfig | null
+          connected: boolean
+          nodeInfo: import('@/lib/lightning').LightningNode | null
+        }>
+      }
+    }
 
 // Initial state
 export const initialLightningState: LightningState = {
@@ -59,6 +83,11 @@ export const initialLightningState: LightningState = {
   lightningConfigs: {},
   loadingLightningState: false,
   connectedNodes: {},
+  lightningConnection: {
+    config: null,
+    connected: false,
+    nodeInfo: null,
+  },
 }
 
 // Reducer
@@ -258,6 +287,25 @@ export const lightningReducer: Reducer<LightningState, LightningAction> = (state
         },
       }
 
+    case 'SET_LIGHTNING_CONNECTION':
+      return {
+        ...state,
+        lightningConnection: {
+          config: action.payload.config,
+          connected: action.payload.connected,
+          nodeInfo: action.payload.nodeInfo,
+        },
+      }
+
+    case 'UPDATE_LIGHTNING_CONNECTION':
+      return {
+        ...state,
+        lightningConnection: {
+          ...state.lightningConnection,
+          ...action.payload.updates,
+        },
+      }
+
     default:
       return state
   }
@@ -352,6 +400,26 @@ export const lightningActions = {
     type: 'UPDATE_LIGHTNING_INVOICE',
     payload: { walletId, paymentHash, updates },
   }),
+
+  setLightningConnection: (
+    config: LightningConfig | null,
+    connected: boolean,
+    nodeInfo: import('@/lib/lightning').LightningNode | null,
+  ): LightningAction => ({
+    type: 'SET_LIGHTNING_CONNECTION',
+    payload: { config, connected, nodeInfo },
+  }),
+
+  updateLightningConnection: (
+    updates: Partial<{
+      config: LightningConfig | null
+      connected: boolean
+      nodeInfo: import('@/lib/lightning').LightningNode | null
+    }>,
+  ): LightningAction => ({
+    type: 'UPDATE_LIGHTNING_CONNECTION',
+    payload: { updates },
+  }),
 }
 
 // Selectors
@@ -382,4 +450,10 @@ export const lightningSelectors = {
 
   isNodeConnected: (state: LightningState, walletId: string) =>
     state.connectedNodes[walletId] || false,
+
+  getLightningConnection: (state: LightningState) => state.lightningConnection,
+
+  isLightningConnected: (state: LightningState) => state.lightningConnection.connected,
+
+  getLightningNodeInfo: (state: LightningState) => state.lightningConnection.nodeInfo,
 }

@@ -4,21 +4,19 @@ import {
   Text,
   TextInput,
   ScrollView,
-  Pressable,
   StyleSheet,
   Switch,
-  useColorScheme,
   ActivityIndicator,
 } from 'react-native'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
-import IconSymbol from '@/ui/IconSymbol'
+import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
 import { useRouter } from 'expo-router'
-import { useWallet } from '../store'
+import { useWallet, useSettings } from '../store'
+import Button from '@/ui/Button'
 
 export default function CreateWallet() {
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === 'dark'
+  const { isDark } = useSettings()
 
   const router = useRouter()
   const { createWallet } = useWallet()
@@ -26,6 +24,8 @@ export default function CreateWallet() {
 
   const [offline, setOffline] = useState<boolean>(false)
   const [walletName, setWalletName] = useState<string>('')
+  const [password, setPassword] = useState<string>('')
+  const [usePassword, setUsePassword] = useState<boolean>(false)
 
   function handleCreateWallet() {
     setSubmitting(true)
@@ -33,17 +33,13 @@ export default function CreateWallet() {
       return
     }
     try {
-      createWallet({
-        walletName,
-        accounts: [
-          {
-            purpose: 84,
-            coinType: 0,
-            accountIndex: 0,
-          },
-        ],
-        cold: offline,
-      })
+      createWallet(
+        {
+          walletName,
+          cold: offline,
+        },
+        usePassword && password ? password : undefined,
+      )
     } catch (error) {
       console.error('Error creating wallet:', error)
     } finally {
@@ -69,6 +65,24 @@ export default function CreateWallet() {
             onChangeText={setWalletName}
           />
         </View>
+        <View style={styles.section}>
+          <View style={styles.checkboxContainer}>
+            <Switch onValueChange={setUsePassword} value={usePassword} />
+            <Text style={[styles.checkboxText, isDark && styles.checkboxTextDark]}>
+              Encrypt wallet seed with password
+            </Text>
+          </View>
+          {usePassword && (
+            <TextInput
+              style={[styles.input, isDark && styles.inputDark]}
+              placeholder="Enter password for encryption"
+              placeholderTextColor={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+          )}
+        </View>
         <View
           style={[
             styles.toggleSection,
@@ -77,10 +91,10 @@ export default function CreateWallet() {
           ]}
         >
           <View style={styles.toggleContainer}>
+            <Switch onValueChange={handleToggleOffline} value={offline} />
             <Text style={[styles.toggleText, isDark && styles.toggleTextDark]}>
               Offline mode (cold wallet)
             </Text>
-            <Switch onValueChange={handleToggleOffline} value={offline} />
           </View>
           <View style={styles.infoBox}>
             <IconSymbol
@@ -95,24 +109,17 @@ export default function CreateWallet() {
             </Text>
           </View>
         </View>
-        <Pressable
+        <Button
           onPress={handleCreateWallet}
-          style={[
-            styles.button,
-            offline
-              ? isDark
-                ? styles.secondaryButtonDark
-                : styles.secondaryButton
-              : styles.primaryButton,
-          ]}
+          style={[styles.button, offline ? styles.outlinedButton : styles.primaryButton]}
         >
-          {submitting ? <ActivityIndicator color={colors.white} /> : null}
-          <Text
-            style={[styles.buttonText, offline ? (isDark ? styles.buttonTextDark : null) : null]}
-          >
+          {submitting ? (
+            <ActivityIndicator color={offline ? colors.primary : colors.white} />
+          ) : null}
+          <Text style={[styles.buttonText, offline ? styles.buttonTextOutlined : null]}>
             {submitting ? 'Creating...' : offline ? 'Create cold wallet' : 'Create wallet'}
           </Text>
-        </Pressable>
+        </Button>
       </View>
     </ScrollView>
   )
@@ -178,8 +185,9 @@ const styles = StyleSheet.create({
   },
   toggleContainer: {
     flexDirection: 'row',
+    gap: 12,
     alignItems: 'center',
-    justifyContent: 'space-between',
+    // justifyContent: 'space-between',
   },
   toggleText: {
     fontSize: 18,
@@ -240,6 +248,11 @@ const styles = StyleSheet.create({
   primaryButton: {
     backgroundColor: colors.primary,
   },
+  outlinedButton: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: 'transparent',
+  },
   secondaryButton: {
     backgroundColor: colors.black,
   },
@@ -254,7 +267,23 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '500',
   },
+  buttonTextOutlined: {
+    color: colors.primary,
+  },
   buttonTextDark: {
     color: colors.black,
+  },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  checkboxText: {
+    fontSize: 16,
+    color: colors.text.light,
+    marginLeft: 8,
+  },
+  checkboxTextDark: {
+    color: colors.text.dark,
   },
 })

@@ -1,29 +1,19 @@
-import { Link, Stack } from 'expo-router'
-import MaterialIcons from '@expo/vector-icons/MaterialIcons'
-import { useColorScheme } from 'react-native'
+import { Stack, useRouter } from 'expo-router'
+import Button from '@/ui/Button'
 import colors from '@/ui/colors'
+import { useSettings } from '@/features/store/useSettings'
+import { MaterialIcons } from '@expo/vector-icons'
 
 export default function TransactionsLayout() {
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === 'dark'
-
-  // link to [id]/manage
-  function headerLeft() {
-    return (
-      <Link style={{ padding: 8, borderRadius: 24 }} href="/wallet">
-        <MaterialIcons name="arrow-back-ios" size={24} color={colors.primary} />
-      </Link>
-    )
-  }
+  const { isDark } = useSettings()
 
   return (
     <Stack
       screenOptions={{
-        headerShadowVisible: true,
         headerBackButtonDisplayMode: 'minimal',
-        headerTintColor: colors.primary,
-        headerBlurEffect: isDark ? 'dark' : 'light',
+        headerShadowVisible: false,
         headerTransparent: true,
+        headerTintColor: isDark ? colors.text.dark : colors.text.light,
         contentStyle: {
           backgroundColor: colors.background[isDark ? 'dark' : 'light'],
         },
@@ -34,7 +24,16 @@ export default function TransactionsLayout() {
         options={{
           headerTitleAlign: 'center',
           title: `Transactions`,
-          headerLeft: () => headerLeft(),
+          //  headerLeft: HeaderLeft,
+        }}
+      />
+      <Stack.Screen
+        name="[txid]"
+        options={{
+          headerTitleAlign: 'center',
+          title: `Transaction Details`,
+
+          // headerLeft: HeaderLeft,
         }}
       />
     </Stack>

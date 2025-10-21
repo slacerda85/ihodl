@@ -1,13 +1,5 @@
 import { Tx } from '@/models/transaction'
-import {
-  Text,
-  View,
-  Pressable,
-  FlatList,
-  StyleSheet,
-  useColorScheme,
-  ActivityIndicator,
-} from 'react-native'
+import { Text, View, Pressable, FlatList, StyleSheet, ActivityIndicator } from 'react-native'
 import { useEffect } from 'react'
 import { useRouter } from 'expo-router'
 import colors from '@/ui/colors'
@@ -17,7 +9,9 @@ import { formatBalance } from '../wallet/utils'
 import { alpha } from '@/ui/utils'
 import { useHeaderHeight } from '@react-navigation/elements'
 import ContentContainer from '@/ui/ContentContainer'
-import { useWallet, useTransactions } from '../store'
+import { useWallet, useTransactions, useSettings } from '../store'
+import Divider from '@/ui/Divider'
+import { getWalletSeedPhrase } from '@/lib/secureStorage'
 // import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
 
 // Define types for our transaction list items
@@ -38,8 +32,7 @@ type ListItem = DateHeader | TransactionItem
 
 export default function TransactionsScreen() {
   const headerHeight = useHeaderHeight()
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === 'dark'
+  const { isDark } = useSettings()
   const router = useRouter()
 
   const { activeWalletId, loadingWalletState: loadingWallet, unit, activeWallet } = useWallet()
@@ -59,10 +52,28 @@ export default function TransactionsScreen() {
 
   // Trigger fetch transactions if we don't have data
   useEffect(() => {
-    if (activeWalletId && !loading && !hasTransactionData && fetchTransactions && activeWallet) {
-      console.log('🚀 [TransactionsScreen] Executando fetchTransactions para:', activeWalletId)
-      fetchTransactions(activeWalletId, activeWallet.seedPhrase)
+    const fetchTxData = async () => {
+      if (activeWalletId && !loading && !hasTransactionData && fetchTransactions && activeWallet) {
+        try {
+          // TODO: Get password from user or state
+          const password = '' // Temporary: assume no password for now
+          const seedPhrase = await getWalletSeedPhrase(activeWalletId, password)
+          if (seedPhrase) {
+            console.log(
+              '🚀 [TransactionsScreen] Executando fetchTransactions para:',
+              activeWalletId,
+            )
+            fetchTransactions(activeWalletId, seedPhrase)
+          } else {
+            console.error('No seed phrase found for wallet:', activeWalletId)
+          }
+        } catch (error) {
+          console.error('Error getting wallet seed phrase:', error)
+        }
+      }
     }
+
+    fetchTxData()
   }, [activeWalletId, loading, hasTransactionData, fetchTransactions, activeWallet])
 
   // Loading state - show this prominently
@@ -276,7 +287,7 @@ export default function TransactionsScreen() {
         contentContainerStyle={{
           paddingTop: 32,
           paddingBottom: 16,
-          gap: 1,
+          gap: 2,
         }}
         data={data}
         keyExtractor={item => (item.isDate ? item.date : item.tx.txid)}
@@ -402,18 +413,34 @@ const styles = StyleSheet.create({
     paddingRight: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    // alignItems: 'center',
+    borderWidth: 1,
+    borderTopColor: alpha(colors.white, 0.1),
+    borderLeftColor: alpha(colors.white, 0.075),
+    borderRightColor: alpha(colors.white, 0.05),
+    borderBottomColor: alpha(colors.white, 0.05),
   },
   transactionsPressableDark: {
-    backgroundColor: alpha(colors.white, 0.05),
+    backgroundColor: alpha(colors.white, 0.1),
   },
   first: {
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    /* borderTopWidth: 1,
+    borderTopColor: alpha(colors.white, 0.1),
+    borderLeftWidth: 1,
+    borderLeftColor: alpha(colors.white, 0.075),
+    borderRightWidth: 1,
+    borderRightColor: alpha(colors.white, 0.05), */
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
   },
   last: {
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
+    /* borderLeftWidth: 1,
+    borderLeftColor: alpha(colors.white, 0.075),
+    borderRightWidth: 1,
+    borderRightColor: alpha(colors.white, 0.05),
+    borderBottomWidth: 1,
+    borderBottomColor: alpha(colors.white, 0.05), */
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
   },
   balance: {
     fontSize: 16,
@@ -427,6 +454,6 @@ const styles = StyleSheet.create({
     color: colors.success,
   },
   balanceNegative: {
-    // color: colors.,
+    color: colors.error,
   },
 })

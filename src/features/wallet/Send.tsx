@@ -6,17 +6,16 @@ import {
   ScrollView,
   Pressable,
   StyleSheet,
-  useColorScheme,
   ActivityIndicator,
   Alert,
   Switch,
 } from 'react-native'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
-import IconSymbol from '@/ui/IconSymbol'
+import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
 import { useRouter } from 'expo-router'
 import { fromBech32, fromBase58check } from '@/lib/address'
-import { useWallet, useTransactions } from '../store'
+import { useWallet, useTransactions, useSettings } from '../store'
 import {
   fromMnemonic,
   createRootExtendedKey,
@@ -30,10 +29,10 @@ import { formatBalance } from './utils'
 import { UTXO } from '@/lib/utxo'
 import { createSegwitAddress } from '@/lib/address'
 import { getRecommendedFeeRates } from '@/lib/electrum'
+import { getWalletSeedPhrase } from '@/lib/secureStorage'
 
 export default function Send() {
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === 'dark'
+  const { isDark } = useSettings()
 
   const router = useRouter()
 
@@ -307,8 +306,15 @@ export default function Send() {
 
     try {
       console.log('Retrieving wallet data...')
-      // Get wallet data
-      const entropy = fromMnemonic(activeWallet.seedPhrase)
+      // Get wallet seed phrase
+      // TODO: Get password from user or state
+      const password = '' // Temporary: assume no password for now
+      const seedPhrase = await getWalletSeedPhrase(activeWalletId!, password)
+      if (!seedPhrase) {
+        throw new Error('Unable to retrieve wallet seed phrase')
+      }
+
+      const entropy = fromMnemonic(seedPhrase)
       const extendedKey = createRootExtendedKey(entropy)
 
       console.log('Retrieving UTXOs...')

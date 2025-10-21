@@ -1,13 +1,12 @@
-import { View, Text, StyleSheet, useColorScheme, Pressable, ActivityIndicator } from 'react-native'
+import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native'
 import { useState, useEffect } from 'react'
 import colors from '@/ui/colors'
 import SwapIcon from './SwapIcon'
-import { useWallet, useTransactions } from '../store'
+import { useWallet, useTransactions, useSettings } from '../store'
 import { formatBalance } from './utils'
 
 export default function WalletBalance() {
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === 'dark'
+  const { isDark } = useSettings()
 
   const [balance, setBalance] = useState(0)
   const { cachedTransactions, getBalance } = useTransactions()

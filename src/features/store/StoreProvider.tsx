@@ -59,7 +59,16 @@ const loadPersistedState = (): AppState => {
           loadingMempoolState: false,
           addressCaches: parsed.transactions?.addressCaches || {},
         },
-        blockchain: initialAppState.blockchain, // Always reset blockchain state on app start
+        blockchain: {
+          ...initialAppState.blockchain,
+          ...parsed.blockchain,
+        }, // Persist blockchain sync state
+        lightning: {
+          ...initialAppState.lightning,
+          ...parsed.lightning,
+          // Reset connection state on app start (don't persist connection)
+          lightningConnection: initialAppState.lightning.lightningConnection,
+        },
       }
     }
   } catch (error) {
@@ -106,13 +115,11 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           mempoolTransactions: state.transactions.mempoolTransactions,
           addressCaches: state.transactions.addressCaches,
         },
-        lightning: {
-          lightningWallets: state.lightning.lightningWallets,
-          lightningConfigs: state.lightning.lightningConfigs,
-        },
-        electrum: {
-          trustedPeers: state.electrum.trustedPeers,
-          lastPeerUpdate: state.electrum.lastPeerUpdate,
+        blockchain: {
+          lastSyncedHeight: state.blockchain.lastSyncedHeight,
+          currentHeight: state.blockchain.currentHeight,
+          syncProgress: state.blockchain.syncProgress,
+          // Don't persist isSyncing as it should reset to false on app start
         },
       }
 

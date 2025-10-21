@@ -1,15 +1,15 @@
 import { useAuth } from '@/features/auth/AuthProvider'
 import { Modal } from 'react-native'
 import React, { useState, useRef } from 'react'
-import { Text, View, StyleSheet, useColorScheme, Pressable, Animated } from 'react-native'
+import { Text, View, StyleSheet, Pressable, Animated } from 'react-native'
 import { Ionicons } from '@expo/vector-icons' // Assuming you have react-native-vector-icons installed
 import BitcoinLogo from '@/assets/bitcoin-logo'
 import colors from '@/ui/colors'
+import { useSettings } from '../store'
 
 export default function AuthScreen() {
   const { auth, authenticated } = useAuth()
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === 'dark'
+  const { isDark } = useSettings()
   const [isUnlocked, setIsUnlocked] = useState(false)
   const rotateAnim = useRef(new Animated.Value(0)).current
 

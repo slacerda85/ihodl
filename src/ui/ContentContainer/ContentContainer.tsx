@@ -1,14 +1,17 @@
-import { StyleSheet } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { useHeaderHeight } from '@react-navigation/elements'
+import { View, StyleSheet } from 'react-native'
+// import { SafeAreaView } from 'react-native-safe-area-context'
 
 export default function ContentContainer({ children }: { children: React.ReactNode }) {
-  return <SafeAreaView style={styles.container}>{children}</SafeAreaView>
+  const headerHeight = useHeaderHeight()
+
+  return <View style={[styles.container, { paddingTop: headerHeight }]}>{children}</View>
 }
 
 const styles = StyleSheet.create({
   container: {
-    paddingTop: 48,
-    flex: 1,
+    // paddingTop: 16,
     paddingHorizontal: 16,
+    flex: 1,
   },
 })

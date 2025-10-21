@@ -1,7 +1,7 @@
 import colors from '@/ui/colors'
 import { StyleSheet, useColorScheme, ScrollView, Text, View } from 'react-native'
 import { useSettings } from '@/features/store'
-import Picker from '@/ui/Picker'
+import Picker from '@/ui/Picker/Picker'
 import { ColorMode } from '@/models/settings'
 
 // Import all iOS UI components
@@ -33,7 +33,7 @@ export default function SettingsScreen() {
   )
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={[styles.container, isDarkEffective && styles.containerDark]}>
       <View style={styles.section}>
         <Text style={[styles.subtitle, isDarkEffective && styles.subtitleDark]}>Tema</Text>
         <View style={styles.settingRow}>
@@ -71,6 +71,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background.light,
+  },
+  containerDark: {
+    backgroundColor: colors.background.dark,
   },
   section: {
     padding: 20,

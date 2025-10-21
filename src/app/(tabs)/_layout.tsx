@@ -1,15 +1,9 @@
 import colors from '@/ui/colors'
-import { DynamicColorIOS } from 'react-native'
 import { NativeTabs, Icon, Label } from 'expo-router/unstable-native-tabs'
 
 export default function TabsLayout() {
   return (
-    <NativeTabs
-      iconColor={DynamicColorIOS({
-        light: colors.primary,
-        dark: colors.primary,
-      })}
-    >
+    <NativeTabs iconColor={colors.primary} tintColor={colors.primary}>
       <NativeTabs.Trigger name="wallet">
         <Icon sf="wallet.bifold.fill" />
         <Label>Wallet</Label>

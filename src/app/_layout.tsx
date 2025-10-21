@@ -1,10 +1,7 @@
-// import { StrictMode } from 'react'
 import AuthProvider from '@/features/auth/AuthProvider'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import InactivityOverlay from '@/features/auth/InactivityOverlay'
-import { useColorScheme } from 'react-native'
-import colors from '@/ui/colors'
 import * as SplashScreen from 'expo-splash-screen'
 import { useEffect, useState } from 'react'
 import AuthScreen from '@/features/auth/AuthScreen'
@@ -19,33 +16,20 @@ SplashScreen.setOptions({
 })
 
 function AppContent() {
-  const { colorMode } = useSettings()
-  const colorScheme = useColorScheme()
-  const effectiveColorMode = colorMode === 'auto' ? (colorScheme ?? 'light') : colorMode
-
-  const defaultStyle = {
-    backgroundColor: colors.background[effectiveColorMode],
-  }
-
-  const defaultScreenOptions = {
-    headerShown: false,
-    headerStyle: defaultStyle,
-    contentStyle: defaultStyle,
-  }
+  const { isDark } = useSettings()
 
   return (
-    <Stack
-      screenOptions={{
-        animation: 'fade',
-      }}
-    >
-      <Stack.Screen
-        name="index"
-        options={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}
-      />
+    <>
+      <Stack>
+        <Stack.Screen
+          name="index"
+          options={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}
+        />
 
-      <Stack.Screen name="(tabs)" options={defaultScreenOptions} />
-    </Stack>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      </Stack>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+    </>
   )
 }
 
@@ -68,7 +52,6 @@ export default function RootLayout() {
         <AppContent />
         <InactivityOverlay />
         <AuthScreen />
-        <StatusBar style="auto" />
       </AuthProvider>
     </StoreProvider>
   )

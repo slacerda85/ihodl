@@ -1,9 +1,9 @@
 // React and React Native
 import { Link, useRouter } from 'expo-router'
-import { StyleSheet, Text, Pressable, useColorScheme, View } from 'react-native'
+import { StyleSheet, Text, Pressable, View } from 'react-native'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
-import { useWallet } from '../store'
+import { useWallet, useSettings } from '../store'
 
 // Components
 import WalletBalance from './WalletBalance'
@@ -12,12 +12,14 @@ import Divider from '@/ui/Divider'
 import CreateWalletIcon from './CreateWalletIcon'
 import ImportWalletIcon from './ImportWalletIcon'
 import ContentContainer from '@/ui/ContentContainer'
+import Button from '@/ui/Button'
+import { useHeaderHeight } from '@react-navigation/elements'
 
 export default function WalletScreen() {
   const router = useRouter()
+  const headerHeight = useHeaderHeight()
   // theme
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === 'dark'
+  const { isDark } = useSettings()
 
   // Hook de inicialização para carregar transações automaticamente
   // useInitialize() // Removido para evitar inicialização duplicada
@@ -120,18 +122,15 @@ export default function WalletScreen() {
       <View style={{ gap: 32 }}>
         <WalletBalance />
         <View style={styles.actionsSection}>
-          <Pressable onPress={handleSend} style={[styles.button, styles.primaryButton]}>
+          <Button onPress={handleSend} style={[styles.button, styles.primaryButton]}>
             <Text style={styles.buttonText}>Send</Text>
-          </Pressable>
+          </Button>
 
-          <Pressable
-            onPress={handleReceive}
-            style={[styles.button, isDark ? styles.secondaryButtonDark : styles.secondaryButton]}
-          >
+          <Button onPress={handleReceive} style={[styles.button, styles.outlinedButton]}>
             <Text style={[styles.buttonTextSecondary, isDark && styles.buttonTextSecondaryDark]}>
               Receive
             </Text>
-          </Pressable>
+          </Button>
         </View>
         <View style={styles.accountsSection}>
           <Text style={[styles.accountsHeader, isDark && styles.accountsHeaderDark]}>Accounts</Text>
@@ -207,12 +206,17 @@ const styles = StyleSheet.create({
   button: {
     flex: 1,
     padding: 16,
-    borderRadius: 16,
+    borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
   primaryButton: {
     backgroundColor: colors.primary,
+  },
+  outlinedButton: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: 'transparent',
   },
   secondaryButton: {
     backgroundColor: colors.background.dark,
@@ -230,10 +234,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '500',
     fontSize: 16,
-    color: colors.text.dark,
+    color: colors.primary,
   },
   buttonTextSecondaryDark: {
-    color: colors.text.light,
+    color: colors.primary,
   },
   accountsSection: {
     // backgroundColor: 'red',

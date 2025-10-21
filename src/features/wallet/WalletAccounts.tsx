@@ -1,19 +1,11 @@
-import {
-  View,
-  Text,
-  Image,
-  useColorScheme,
-  StyleSheet,
-  FlatList,
-  ActivityIndicator,
-  Pressable,
-} from 'react-native'
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native'
 import { Account } from '@/models/account'
 import BitcoinLogo from '@/assets/bitcoin-logo'
+import LightningLogo from '@/assets/lightning-logo'
 import { ReactNode } from 'react'
 import { alpha } from '@/ui/utils'
 import colors from '@/ui/colors'
-import { useWallet, useTransactions } from '../store'
+import { useWallet, useTransactions, useSettings, useLightning } from '../store'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { formatBalance } from './utils'
@@ -22,6 +14,8 @@ const purposeToLabel: Record<number, string> = {
   44: 'Legacy',
   49: 'SegWit',
   84: 'Native SegWit',
+  86: 'Taproot',
+  9735: 'Lightning',
   // Add more purposes as needed
 }
 
@@ -29,7 +23,8 @@ const purposeToIcon: Record<number, ReactNode> = {
   44: <BitcoinLogo width={32} height={32} />,
   49: <BitcoinLogo width={32} height={32} />,
   84: <BitcoinLogo width={32} height={32} />,
-  86: <Image source={require('@/assets/lightning-logo.png')} style={{ width: 32, height: 32 }} />,
+  // 86: <Image source={require('@/assets/lightning-logo.png')} style={{ width: 32, height: 32 }} />,
+  9735: <LightningLogo width={32} height={32} />,
   // Add more purposes as needed
 }
 /* 
@@ -42,8 +37,7 @@ function getPurposeIcon(purpose: number) {
 }
 
 export default function WalletAccounts() {
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === 'dark'
+  const { isDark } = useSettings()
 
   const { wallets, activeWalletId } = useWallet()
 
@@ -88,17 +82,26 @@ export default function WalletAccounts() {
 }
 
 function AccountDetails({ account }: { account: Account }) {
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === 'dark'
+  const { isDark } = useSettings()
   const router = useRouter()
 
   const { loadingWalletState: loadingWallet } = useWallet()
-  const { loadingTxState: loadingTransactions } = useTransactions()
+  const { loadingTxState: loadingTransactions, getBalance } = useTransactions()
+  const { getLightningBalance, getLightningChannels, isNodeConnected } = useLightning()
   const loading = loadingWallet || loadingTransactions
-  const { unit } = useWallet()
+  const { unit, activeWalletId } = useWallet()
 
-  // TODO: Implement balance calculation from transactions
-  const balance = 0
+  // Calculate balance using the transactions hook
+  const balance = activeWalletId ? getBalance(activeWalletId) : 0
+
+  // Get Lightning data if this is a Lightning account
+  const isLightningAccount = account.purpose === 9735
+  const lightningBalance =
+    isLightningAccount && activeWalletId ? getLightningBalance(activeWalletId) : 0
+  const lightningChannels =
+    isLightningAccount && activeWalletId ? getLightningChannels(activeWalletId) : []
+  const nodeConnected =
+    isLightningAccount && activeWalletId ? isNodeConnected(activeWalletId) : false
 
   // Format account name using purpose and coin type labels
   const purposeLabel = purposeToLabel[account.purpose] || `Purpose ${account.purpose}`
@@ -113,39 +116,88 @@ function AccountDetails({ account }: { account: Account }) {
     router.push('/transactions')
   }
 
+  const handleOpenLightningChannels = () => {
+    // Navigate to lightning channels modal
+    router.push('/wallet/lightning-channels' as any)
+  }
+
   return (
-    <Pressable
-      style={[styles.accountContainer, isDark && styles.accountContainerDark]}
-      onPress={handleNavigate}
-    >
-      <View style={styles.accountSection}>
-        <View style={styles.accountIcon}>{accountIcon}</View>
-        <View style={styles.accountDetails}>
-          <Text style={styles.accountUnit}>{'BTC'}</Text>
-          <Text style={[styles.accountTitle, isDark && styles.accountTitleDark]}>
-            {accountName}
-          </Text>
-        </View>
-      </View>
-      <View style={styles.accountSection}>
-        <View style={styles.accountDetails}>
-          {loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color={colors.primary} />
+    <View style={styles.accountContainerWrapper}>
+      <View style={[styles.accountContainer, isDark && styles.accountContainerDark]}>
+        <View style={styles.accountInfoRow}>
+          <View style={styles.accountSection}>
+            <View style={styles.accountIcon}>{accountIcon}</View>
+            <View style={styles.accountDetails}>
+              <Text style={[styles.accountTitle, isDark && styles.accountTitleDark]}>
+                {accountName}
+              </Text>
             </View>
-          ) : (
-            <Text style={[styles.accountBalance, isDark && styles.accountBalanceDark]}>
-              {`${formatBalance(balance, unit)} ${unit}`}
+          </View>
+          <View style={styles.accountSection}>
+            <View style={styles.accountDetails}>
+              {loading ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                </View>
+              ) : (
+                <>
+                  <Text style={[styles.accountBalance, isDark && styles.accountBalanceDark]}>
+                    {isLightningAccount
+                      ? `${formatBalance(lightningBalance, unit)} ${unit}`
+                      : `${formatBalance(balance, unit)} ${unit}`}
+                  </Text>
+                  {isLightningAccount && (
+                    <View style={styles.lightningInfo}>
+                      <Text
+                        style={[styles.lightningChannels, isDark && styles.lightningChannelsDark]}
+                      >
+                        {lightningChannels.length} channels
+                      </Text>
+                      <View
+                        style={[styles.nodeStatus, nodeConnected && styles.nodeStatusConnected]}
+                      >
+                        <Text
+                          style={[
+                            styles.nodeStatusText,
+                            nodeConnected && styles.nodeStatusTextConnected,
+                          ]}
+                        >
+                          {nodeConnected ? '●' : '○'}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                </>
+              )}
+            </View>
+          </View>
+        </View>
+        <View style={styles.buttonsContainer}>
+          <TouchableOpacity
+            style={[styles.transactionsButton, isDark && styles.transactionsButtonDark]}
+            onPress={handleNavigate}
+          >
+            <Ionicons name="list" size={16} color={isDark ? colors.text.dark : colors.text.light} />
+            <Text
+              style={[styles.transactionsButtonText, isDark && styles.transactionsButtonTextDark]}
+            >
+              Transações
             </Text>
+          </TouchableOpacity>
+          {isLightningAccount && (
+            <TouchableOpacity
+              style={[styles.lightningButton, isDark && styles.lightningButtonDark]}
+              onPress={handleOpenLightningChannels}
+            >
+              <Ionicons name="flash" size={16} color={colors.primary} />
+              <Text style={[styles.lightningButtonText, isDark && styles.lightningButtonTextDark]}>
+                {lightningChannels.length > 0 ? 'Gerenciar Canais' : 'Abrir Canal'}
+              </Text>
+            </TouchableOpacity>
           )}
-          <Ionicons
-            name="chevron-forward"
-            size={24}
-            color={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
-          />
         </View>
       </View>
-    </Pressable>
+    </View>
   )
 }
 
@@ -154,6 +206,9 @@ const styles = StyleSheet.create({
     // flex: 1,
     // backgroundColor: '#ff0000',
     // padding: 16,
+  },
+  accountContainerWrapper: {
+    // gap: 12,
   },
   loadingContainer: {
     flexDirection: 'row',
@@ -179,28 +234,33 @@ const styles = StyleSheet.create({
   },
   flatList: {
     // paddingBottom: 48,
-    gap: 1,
+    gap: 24,
   },
   accountsList: {
     // flex: 1,
   },
   accountContainer: {
     backgroundColor: colors.white,
-    borderTopLeftRadius: 36,
-    borderTopRightRadius: 36,
-    borderBottomLeftRadius: 36,
-    borderBottomRightRadius: 36,
+    borderRadius: 36,
     padding: 16,
-    flexDirection: 'row',
-    gap: 24,
     // marginBottom: 12,
     // overflow: 'hidden',
-    // flexDirection: 'row',
     alignItems: 'center',
+  },
+  accountInfoRow: {
+    flexDirection: 'row',
     justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 16,
   },
   accountContainerDark: {
-    backgroundColor: alpha(colors.background.light, 0.05),
+    backgroundColor: 'linear-gradient(to bottom, rgba(255,255,255,0.1), rgba(0,0,0,0.05))',
+    // simulate liquid glass borders
+    borderWidth: 1,
+    borderTopColor: alpha(colors.white, 0.1),
+    borderBottomColor: alpha(colors.white, 0.05),
+    borderLeftColor: alpha(colors.white, 0.075),
+    borderRightColor: alpha(colors.white, 0.05),
   },
   accountSection: {
     flexDirection: 'row',
@@ -255,5 +315,90 @@ const styles = StyleSheet.create({
   balanceUnit: {
     fontSize: 14,
     color: colors.primary,
+  },
+  lightningInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  lightningChannels: {
+    fontSize: 12,
+    color: colors.textSecondary.light,
+  },
+  lightningChannelsDark: {
+    color: colors.textSecondary.dark,
+  },
+  nodeStatus: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nodeStatusConnected: {
+    backgroundColor: colors.success,
+  },
+  nodeStatusText: {
+    fontSize: 6,
+    color: colors.white,
+    fontWeight: 'bold',
+  },
+  nodeStatusTextConnected: {
+    color: colors.white,
+  },
+  lightningButton: {
+    backgroundColor: alpha(colors.primary, 0.1),
+    borderRadius: 32,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    // borderWidth: 1,
+    // borderColor: colors.primary,
+    flex: 1,
+  },
+  lightningButtonDark: {
+    backgroundColor: alpha(colors.primary, 0.1),
+    // borderColor: colors.primary,
+  },
+  lightningButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  lightningButtonTextDark: {
+    color: colors.primary,
+  },
+  buttonsContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'flex-end',
+  },
+  transactionsButton: {
+    backgroundColor: alpha(colors.black, 0.05),
+    borderRadius: 32,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    // borderWidth: 1,
+    // borderColor: colors.primary,
+    flex: 1,
+  },
+  transactionsButtonDark: {
+    backgroundColor: alpha(colors.white, 0.1),
+    // borderColor: colors.primary,
+  },
+  transactionsButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text.light,
+  },
+  transactionsButtonTextDark: {
+    color: colors.text.dark,
   },
 })

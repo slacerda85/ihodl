@@ -1,14 +1,14 @@
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { Link } from 'expo-router'
-import { StyleSheet, Text, useColorScheme, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useSettings } from '../store'
 
 export default function WalletActions() {
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === 'dark'
+  const { isDark } = useSettings()
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container}>
       {/* Seed phrase */}
       <View>
         <Link
@@ -37,7 +37,7 @@ export default function WalletActions() {
           <Text style={[styles.text, styles.errorText]}>Delete wallet</Text>
         </Link>
       </View>
-    </View>
+    </ScrollView>
   )
 }
 

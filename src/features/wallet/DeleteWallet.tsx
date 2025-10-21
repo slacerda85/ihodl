@@ -1,19 +1,19 @@
 import colors from '@/ui/colors'
-import { Pressable, StyleSheet, Text, useColorScheme, View, ActivityIndicator } from 'react-native'
+import { StyleSheet, Text, View, ActivityIndicator } from 'react-native'
 
 import { useCallback, useState } from 'react'
 import { useRouter } from 'expo-router'
 // import { deleteWallet } from '@/lib/wallet'
 import { alpha } from '@/ui/utils'
-import { useWallet } from '../store'
+import { useWallet, useSettings } from '../store'
+import Button from '@/ui/Button'
 
 export default function DeleteWallet() {
   const { activeWalletId, wallets, deleteWallet } = useWallet()
   const walletName = wallets.find(w => w.walletId === activeWalletId)?.walletName
 
   const router = useRouter()
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === 'dark'
+  const { isDark } = useSettings()
 
   const [submitting, setSubmitting] = useState<boolean>(false)
 
@@ -35,21 +35,29 @@ export default function DeleteWallet() {
       <Text style={[styles.modalText, isDark && styles.modalTextDark]}>
         {`Unlink wallet "${walletName}" from this app?`}
       </Text>
-      <Pressable
-        style={[styles.button, styles.buttonFirst, styles.buttonLast, isDark && styles.buttonDark]}
+      <Button
         onPress={handleDeleteWallet}
+        style={{
+          backgroundColor: colors.error,
+          padding: 16,
+          borderRadius: 8,
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexDirection: 'row',
+          gap: 12,
+        }}
       >
-        {submitting ? <ActivityIndicator color={colors.error} /> : null}
+        {submitting ? <ActivityIndicator color={colors.white} /> : null}
         <Text
           style={{
-            color: colors.error,
+            color: colors.white,
             fontSize: 16,
             textAlign: 'center',
           }}
         >
           {submitting ? 'Deleting...' : 'Delete'}
         </Text>
-      </Pressable>
+      </Button>
     </View>
   )
 }

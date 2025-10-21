@@ -1,7 +1,7 @@
 import { Text, View, StyleSheet, useColorScheme, ActivityIndicator, Pressable } from 'react-native'
 import { useHeaderHeight } from '@react-navigation/elements'
 import colors from '@/ui/colors'
-import { useBlockchain } from '@/features/store'
+import { useBlockchain, useSettings } from '@/features/store'
 
 // Helper function to format bytes
 function formatBytes(bytes: number): string {
@@ -15,10 +15,12 @@ function formatBytes(bytes: number): string {
 export default function BlockchainScreen() {
   const headerHeight = useHeaderHeight()
   const colorScheme = useColorScheme()
-  const isDark = colorScheme === 'dark'
+  const { colorMode } = useSettings()
+  const effectiveColorMode = colorMode === 'auto' ? (colorScheme ?? 'light') : colorMode
+  const isDark = effectiveColorMode === 'dark'
 
-  const { isSyncing, lastSyncedHeight, currentHeight, syncProgress, syncHeadersManually } =
-    useBlockchain()
+  const { blockchain, syncHeadersManually } = useBlockchain()
+  const { isSyncing, lastSyncedHeight, currentHeight, syncProgress } = blockchain
 
   const progressPercentage = Math.round(syncProgress * 100)
   const syncedBlocks = lastSyncedHeight || 0
@@ -30,7 +32,7 @@ export default function BlockchainScreen() {
 
   return (
     <View style={[styles.container, isDark && styles.containerDark]}>
-      <View style={[styles.content, { paddingTop: headerHeight + 16 }]}>
+      <View style={styles.content}>
         {/* Sync Status Card */}
         <View style={[styles.card, isDark && styles.cardDark]}>
           <Text style={[styles.cardTitle, isDark && styles.cardTitleDark]}>
@@ -127,8 +129,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+    padding: 16,
   },
   card: {
     backgroundColor: colors.white,

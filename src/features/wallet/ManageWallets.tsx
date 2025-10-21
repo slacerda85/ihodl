@@ -1,19 +1,17 @@
 import React, { Fragment } from 'react'
 import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator } from 'react-native'
-import { useColorScheme } from 'react-native'
 import colors from '@/ui/colors'
 import { useRouter } from 'expo-router'
 import { alpha } from '@/ui/utils'
 import Divider from '@/ui/Divider'
 import CreateWalletIcon from './CreateWalletIcon'
 import ImportWalletIcon from './ImportWalletIcon'
-import { useWallet } from '../store'
+import { useWallet, useSettings } from '../store'
 // import { setActiveWalletId } from '@/lib/wallet'
 
 export default function ManageWallets() {
   const router = useRouter()
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === 'dark'
+  const { isDark } = useSettings()
   const { wallets, activeWalletId, setActiveWallet, loadingWalletState, setLoadingWallet } =
     useWallet()
 

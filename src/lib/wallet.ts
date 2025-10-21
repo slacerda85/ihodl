@@ -2,12 +2,22 @@ import { Account } from '@/models/account'
 import { fromMnemonic, toMnemonic } from '@/lib/key'
 import { createEntropy, randomUUID } from '@/lib/crypto'
 import { WalletData } from '@/models/wallet'
+import {
+  storeWalletSeedPhrase,
+  getWalletSeedPhrase,
+  removeWalletSeedPhrase,
+} from '@/lib/secureStorage'
 
 export interface CreateWalletParams {
   walletName: string
   seedPhrase?: string
   cold: boolean
   accounts?: Account[]
+}
+
+export interface CreateWalletResult {
+  wallet: WalletData
+  seedPhrase: string
 }
 
 /**
@@ -19,26 +29,33 @@ export interface CreateWalletParams {
  * @param {boolean} params.cold - Indicates if this is a cold wallet
  * @param {Account[]} [params.accounts] - Optional array of accounts to add to the wallet. If not provided, default accounts will be used
  *
- * @returns {WalletData} The newly created wallet data
+ * @returns {CreateWalletResult} The newly created wallet data and seed phrase
  *
  * @throws {Error} When wallet creation fails
  *
  * @example
  * // Create a new wallet with a random seed phrase
- * const wallet = createWallet({
+ * const result = createWallet({
  *   walletName: "My Bitcoin Wallet",
  *   cold: false
  * });
+ * console.log(result.seedPhrase); // Access the seed phrase
+ * console.log(result.wallet); // Access the wallet data
  *
  * @example
  * // Restore a wallet from an existing seed phrase
- * const restoredWallet = createWallet({
+ * const restoredResult = createWallet({
  *   walletName: "Restored Wallet",
  *   seedPhrase: "your twelve word seed phrase here",
  *   cold: true
  * });
  */
-function createWallet({ walletName, seedPhrase, cold, accounts }: CreateWalletParams): WalletData {
+function createWallet({
+  walletName,
+  seedPhrase,
+  cold,
+  accounts,
+}: CreateWalletParams): CreateWalletResult {
   try {
     const walletId = randomUUID()
     const entropy = seedPhrase ? fromMnemonic(seedPhrase) : createEntropy(16)
@@ -50,11 +67,17 @@ function createWallet({ walletName, seedPhrase, cold, accounts }: CreateWalletPa
         coinType: 0, // Bitcoin
         accountIndex: 0, // Default account index
       },
-      // Bitcoin Taproot (future)
+      // Lightning Network
       {
-        purpose: 86, // Taproot
+        purpose: 9735, // Lightning
         coinType: 0, // Bitcoin
         accountIndex: 0, // Default account index
+        lightning: {
+          type: 'node',
+          chain: 0, // Bitcoin mainnet
+          lnVer: 0, // BOLT
+          nodeIndex: 0,
+        },
       },
     ]
 
@@ -65,11 +88,13 @@ function createWallet({ walletName, seedPhrase, cold, accounts }: CreateWalletPa
     const newWallet: WalletData = {
       walletId,
       walletName,
-      seedPhrase: seedPhraseToUse,
       cold,
       accounts: accountsToAdd,
     }
-    return newWallet
+    return {
+      wallet: newWallet,
+      seedPhrase: seedPhraseToUse,
+    }
   } catch (error) {
     console.error('Error creating wallet:', error)
     throw new Error('Failed to create wallet', {
@@ -79,3 +104,35 @@ function createWallet({ walletName, seedPhrase, cold, accounts }: CreateWalletPa
 }
 
 export { createWallet }
+
+/**
+ * Securely stores a wallet's seed phrase
+ * @param walletId - The wallet identifier
+ * @param seedPhrase - The seed phrase to encrypt and store
+ * @param password - User password for encryption
+ */
+export async function storeWalletSeed(
+  walletId: string,
+  seedPhrase: string,
+  password: string,
+): Promise<void> {
+  return storeWalletSeedPhrase(walletId, seedPhrase, password)
+}
+
+/**
+ * Retrieves a wallet's seed phrase from secure storage
+ * @param walletId - The wallet identifier
+ * @param password - User password for decryption
+ * @returns The decrypted seed phrase or null if not found
+ */
+export async function getWalletSeed(walletId: string, password: string): Promise<string | null> {
+  return getWalletSeedPhrase(walletId, password)
+}
+
+/**
+ * Removes a wallet's seed phrase from secure storage
+ * @param walletId - The wallet identifier
+ */
+export async function removeWalletSeed(walletId: string): Promise<void> {
+  return removeWalletSeedPhrase(walletId)
+}

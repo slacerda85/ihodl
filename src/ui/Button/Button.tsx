@@ -1,5 +1,9 @@
-import { Button as AndroidButton, ButtonProps } from '@expo/ui/jetpack-compose'
+import { Pressable, PressableProps } from 'react-native'
 
-export default function Button(props: ButtonProps) {
-  return <AndroidButton {...props}>{props.children}</AndroidButton>
+interface ButtonProps extends PressableProps {
+  children: React.ReactNode
+}
+
+export default function Button({ children, ...props }: ButtonProps) {
+  return <Pressable {...props}>{children}</Pressable>
 }

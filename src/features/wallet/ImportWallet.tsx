@@ -6,15 +6,16 @@ import {
   ScrollView,
   Pressable,
   StyleSheet,
-  useColorScheme,
   FlatList,
+  Switch,
 } from 'react-native'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { useRouter } from 'expo-router'
 import wordlist from 'bip39/src/wordlists/english.json'
 // import { randomUUID } from '@/lib/crypto'
-import { useWallet } from '../store'
+import { useWallet, useSettings } from '../store'
+import Button from '@/ui/Button'
 
 export default function ImportWallet() {
   const router = useRouter()
@@ -24,8 +25,9 @@ export default function ImportWallet() {
   const [currentWord, setCurrentWord] = useState<string>('')
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [showSuggestions, setShowSuggestions] = useState<boolean>(false)
-  const colorScheme = useColorScheme()
-  const isDark = colorScheme === 'dark'
+  const [password, setPassword] = useState<string>('')
+  const [usePassword, setUsePassword] = useState<boolean>(false)
+  const { isDark } = useSettings()
 
   useEffect(() => {
     if (currentWord.length > 0) {
@@ -74,18 +76,14 @@ export default function ImportWallet() {
       return
     }
     try {
-      createWallet({
-        walletName,
-        seedPhrase,
-        cold: false,
-        accounts: [
-          {
-            purpose: 84,
-            coinType: 0,
-            accountIndex: 0,
-          },
-        ],
-      })
+      createWallet(
+        {
+          walletName,
+          seedPhrase,
+          cold: false,
+        },
+        usePassword && password ? password : undefined,
+      )
     } catch (error) {
       console.error('Error importing wallet:', error)
     } finally {
@@ -122,6 +120,25 @@ export default function ImportWallet() {
         </View>
 
         <View style={styles.section}>
+          <View style={styles.checkboxContainer}>
+            <Switch onValueChange={setUsePassword} value={usePassword} />
+            <Text style={[styles.checkboxText, isDark && styles.checkboxTextDark]}>
+              Encrypt wallet seed with password
+            </Text>
+          </View>
+          {usePassword && (
+            <TextInput
+              style={[styles.input, isDark && styles.inputDark]}
+              placeholder="Enter password for encryption"
+              placeholderTextColor={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+          )}
+        </View>
+
+        <View style={styles.section}>
           <TextInput
             style={[styles.seedInput, isDark && styles.inputDark]}
             placeholder="Enter seed phrase (12-24 words)"
@@ -149,9 +166,9 @@ export default function ImportWallet() {
           </View>
         </View>
 
-        <Pressable
-          onPress={handleImportWallet}
+        <Button
           disabled={!walletName.trim() || !isValidSeedPhrase()}
+          onPress={handleImportWallet}
           style={[
             styles.button,
             styles.primaryButton,
@@ -159,7 +176,7 @@ export default function ImportWallet() {
           ]}
         >
           <Text style={styles.buttonText}>Import wallet</Text>
-        </Pressable>
+        </Button>
       </View>
     </ScrollView>
   )
@@ -257,5 +274,18 @@ const styles = StyleSheet.create({
     color: colors.white,
     textAlign: 'center',
     fontWeight: '500',
+  },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  checkboxText: {
+    fontSize: 16,
+    color: colors.text.light,
+    marginLeft: 8,
+  },
+  checkboxTextDark: {
+    color: colors.text.dark,
   },
 })
