@@ -1,4 +1,12 @@
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native'
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  ActivityIndicator,
+  TouchableOpacity,
+  Pressable,
+} from 'react-native'
 import { Account } from '@/models/account'
 import BitcoinLogo from '@/assets/bitcoin-logo'
 import LightningLogo from '@/assets/lightning-logo'
@@ -173,7 +181,7 @@ function AccountDetails({ account }: { account: Account }) {
           </View>
         </View>
         <View style={styles.buttonsContainer}>
-          <TouchableOpacity
+          <Pressable
             style={[styles.transactionsButton, isDark && styles.transactionsButtonDark]}
             onPress={handleNavigate}
           >
@@ -183,9 +191,9 @@ function AccountDetails({ account }: { account: Account }) {
             >
               Transações
             </Text>
-          </TouchableOpacity>
+          </Pressable>
           {isLightningAccount && (
-            <TouchableOpacity
+            <Pressable
               style={[styles.lightningButton, isDark && styles.lightningButtonDark]}
               onPress={handleOpenLightningChannels}
             >
@@ -193,7 +201,7 @@ function AccountDetails({ account }: { account: Account }) {
               <Text style={[styles.lightningButtonText, isDark && styles.lightningButtonTextDark]}>
                 {lightningChannels.length > 0 ? 'Gerenciar Canais' : 'Abrir Canal'}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           )}
         </View>
       </View>
@@ -378,7 +386,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   transactionsButton: {
-    backgroundColor: alpha(colors.black, 0.05),
+    backgroundColor: alpha(colors.black, 0.08),
     borderRadius: 32,
     padding: 12,
     flexDirection: 'row',
@@ -386,12 +394,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     // borderWidth: 1,
-    // borderColor: colors.primary,
+    // borderColor: alpha(colors.black, 0.1),
     flex: 1,
   },
   transactionsButtonDark: {
-    backgroundColor: alpha(colors.white, 0.1),
-    // borderColor: colors.primary,
+    backgroundColor: alpha(colors.white, 0.08),
+    // borderColor: alpha(colors.white, 0.2),
   },
   transactionsButtonText: {
     fontSize: 14,

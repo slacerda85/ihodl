@@ -282,10 +282,10 @@ export default function TransactionsScreen() {
   }
 
   return (
-    <ContentContainer>
+    <View>
       <FlatList
         contentContainerStyle={{
-          paddingTop: 32,
+          // paddingTop: headerHeight + 16,
           paddingBottom: 16,
           gap: 2,
         }}
@@ -293,7 +293,7 @@ export default function TransactionsScreen() {
         keyExtractor={item => (item.isDate ? item.date : item.tx.txid)}
         renderItem={renderItem}
         ListHeaderComponent={
-          <View style={{ paddingBottom: 16 }}>
+          <View style={{ paddingBottom: 16, alignItems: 'center' }}>
             <Text style={[styles.statsText, isDark && styles.statsTextDark]}>
               {`Received: ${stats.receivedCount} | Sent: ${stats.sentCount} | Self: ${stats.selfCount}`}
             </Text>
@@ -301,7 +301,7 @@ export default function TransactionsScreen() {
         }
         showsVerticalScrollIndicator={false}
       />
-    </ContentContainer>
+    </View>
   )
 }
 
@@ -413,6 +413,7 @@ const styles = StyleSheet.create({
     paddingRight: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     borderWidth: 1,
     borderTopColor: alpha(colors.white, 0.1),
     borderLeftColor: alpha(colors.white, 0.075),
@@ -451,9 +452,14 @@ const styles = StyleSheet.create({
     color: colors.text.dark,
   },
   balancePositive: {
-    color: colors.success,
+    color: '#FFA500',
+    textShadowColor: '#FF8C00',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
+    fontWeight: '600',
   },
   balanceNegative: {
-    color: colors.error,
+    color: colors.disabled,
+    fontWeight: '500',
   },
 })

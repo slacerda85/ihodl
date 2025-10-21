@@ -4,6 +4,7 @@ import colors from '@/ui/colors'
 import SwapIcon from './SwapIcon'
 import { useWallet, useTransactions, useSettings } from '../store'
 import { formatBalance } from './utils'
+import { alpha } from '@/ui/utils'
 
 export default function WalletBalance() {
   const { isDark } = useSettings()
@@ -56,7 +57,7 @@ export default function WalletBalance() {
       >
         <View style={{ flex: 1 }}></View>
 
-        <Text style={[styles.balanceAmount, isDark && styles.balanceAmountDark]}>
+        <Text style={[styles.balanceAmount /* , isDark && styles.balanceAmountDark */]}>
           {formatBalance(balance, unit)}
         </Text>
         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
@@ -66,7 +67,7 @@ export default function WalletBalance() {
           >
             <View style={styles.unitContainer}>
               <Text style={styles.balanceCurrency}>{unit}</Text>
-              <SwapIcon size={12} color={colors.primary} />
+              <SwapIcon size={12} color={colors.textSecondary.dark} />
             </View>
           </Pressable>
           <View style={{ flex: 1 }}></View>
@@ -101,15 +102,22 @@ const styles = StyleSheet.create({
   balanceAmount: {
     fontSize: 22,
     fontWeight: '700',
-    color: colors.text.light,
+    color: '#FFA500',
+    textShadowColor: '#FF8C00',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
   balanceAmountDark: {
     color: colors.text.dark,
   },
   balanceCurrency: {
-    fontSize: 22,
+    // fontSize: 22,
     fontWeight: '700',
-    color: colors.primary,
+    // color: colors.primary,
+    color: colors.textSecondary.dark,
+    /* textShadowColor: '#FF8C00',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8, */
   },
   unitToggle: {
     paddingHorizontal: 5,
@@ -125,9 +133,10 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   unitButton: {
-    borderRadius: 8,
-    // backgroundColor: alpha(colors.primary, 0.1),
-    padding: 4,
+    borderRadius: 32,
+    paddingHorizontal: 16,
+    backgroundColor: alpha(colors.background.light, 0.15),
+    paddingVertical: 8,
     alignItems: 'center',
   },
 })

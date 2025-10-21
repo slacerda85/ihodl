@@ -126,7 +126,10 @@ export default function WalletScreen() {
             <Text style={styles.buttonText}>Send</Text>
           </Button>
 
-          <Button onPress={handleReceive} style={[styles.button, styles.outlinedButton]}>
+          <Button
+            onPress={handleReceive}
+            style={[styles.button, isDark ? styles.secondaryButtonDark : styles.secondaryButton]}
+          >
             <Text style={[styles.buttonTextSecondary, isDark && styles.buttonTextSecondaryDark]}>
               Receive
             </Text>
@@ -214,15 +217,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   outlinedButton: {
-    borderWidth: 1,
-    borderColor: colors.primary,
+    // borderWidth: 1,
+    // borderColor: colors.primary,
     backgroundColor: 'transparent',
   },
   secondaryButton: {
-    backgroundColor: colors.background.dark,
+    backgroundColor: alpha(colors.background.dark, 0.15),
   },
   secondaryButtonDark: {
-    backgroundColor: colors.background.light,
+    backgroundColor: alpha(colors.background.light, 0.15),
   },
   buttonText: {
     color: colors.white,
@@ -234,10 +237,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '500',
     fontSize: 16,
-    color: colors.primary,
+    color: colors.textSecondary.light,
   },
   buttonTextSecondaryDark: {
-    color: colors.primary,
+    color: colors.textSecondary.dark,
   },
   accountsSection: {
     // backgroundColor: 'red',

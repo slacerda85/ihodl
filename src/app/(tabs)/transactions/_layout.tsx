@@ -1,8 +1,6 @@
-import { Stack, useRouter } from 'expo-router'
-import Button from '@/ui/Button'
+import { Stack } from 'expo-router'
 import colors from '@/ui/colors'
 import { useSettings } from '@/features/store/useSettings'
-import { MaterialIcons } from '@expo/vector-icons'
 
 export default function TransactionsLayout() {
   const { isDark } = useSettings()
@@ -24,7 +22,6 @@ export default function TransactionsLayout() {
         options={{
           headerTitleAlign: 'center',
           title: `Transactions`,
-          //  headerLeft: HeaderLeft,
         }}
       />
       <Stack.Screen
@@ -32,8 +29,6 @@ export default function TransactionsLayout() {
         options={{
           headerTitleAlign: 'center',
           title: `Transaction Details`,
-
-          // headerLeft: HeaderLeft,
         }}
       />
     </Stack>
