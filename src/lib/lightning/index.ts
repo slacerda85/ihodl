@@ -74,22 +74,7 @@ export {
   restoreLightningNode,
 } from './storage'
 
-export type { IBlockchainClient, BlockchainClientConfig } from '../blockchain'
-
-export {
-  ElectrumBlockchainClient,
-  blockchainClient,
-  initializeBlockchainClient,
-  getTransactionFeeEstimate,
-  monitorChannelFunding,
-  waitForConfirmations,
-} from '../blockchain'
-
-export {
-  createBlockchainClient,
-  createElectrumClient,
-  createBlockchainClientWithTest,
-} from '../blockchain'
+export { LightningNodeImpl } from './node'
 
 export type {
   LightningClient,

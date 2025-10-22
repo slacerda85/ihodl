@@ -68,6 +68,13 @@ const loadPersistedState = (): AppState => {
           ...parsed.lightning,
           // Reset connection state on app start (don't persist connection)
           lightningConnection: initialAppState.lightning.lightningConnection,
+          // Reset local node instance but keep config and stats
+          localNode: {
+            ...initialAppState.lightning.localNode,
+            ...parsed.lightning?.localNode,
+            isRunning: false, // Always start stopped
+            node: null, // Don't persist the node instance
+          },
         },
       }
     }
@@ -120,6 +127,19 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           currentHeight: state.blockchain.currentHeight,
           syncProgress: state.blockchain.syncProgress,
           // Don't persist isSyncing as it should reset to false on app start
+        },
+        lightning: {
+          lightningWallets: state.lightning.lightningWallets,
+          lightningConfigs: state.lightning.lightningConfigs,
+          connectedNodes: state.lightning.connectedNodes,
+          // Persist local node config and stats but not the running instance
+          localNode: {
+            isRunning: state.lightning.localNode.isRunning,
+            stats: state.lightning.localNode.stats,
+            config: state.lightning.localNode.config,
+            // Don't persist the node instance itself
+            node: null,
+          },
         },
       }
 

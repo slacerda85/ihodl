@@ -13,7 +13,13 @@ import LightningLogo from '@/assets/lightning-logo'
 import { ReactNode } from 'react'
 import { alpha } from '@/ui/utils'
 import colors from '@/ui/colors'
-import { useWallet, useTransactions, useSettings, useLightning } from '../store'
+import {
+  useWallet,
+  useTransactions,
+  useSettings,
+  useLightning,
+  useLightningChannels,
+} from '../store'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { formatBalance } from './utils'
@@ -95,7 +101,9 @@ function AccountDetails({ account }: { account: Account }) {
 
   const { loadingWalletState: loadingWallet } = useWallet()
   const { loadingTxState: loadingTransactions, getBalance } = useTransactions()
-  const { getLightningBalance, getLightningChannels, isNodeConnected } = useLightning()
+  const { isNodeConnected } = useLightning()
+  const { totalBalance: lightningTotalBalance, channels: lightningChannels } =
+    useLightningChannels()
   const loading = loadingWallet || loadingTransactions
   const { unit, activeWalletId } = useWallet()
 
@@ -104,10 +112,8 @@ function AccountDetails({ account }: { account: Account }) {
 
   // Get Lightning data if this is a Lightning account
   const isLightningAccount = account.purpose === 9735
-  const lightningBalance =
-    isLightningAccount && activeWalletId ? getLightningBalance(activeWalletId) : 0
-  const lightningChannels =
-    isLightningAccount && activeWalletId ? getLightningChannels(activeWalletId) : []
+  const lightningBalance = isLightningAccount ? lightningTotalBalance : 0
+  const lightningChannelsCount = isLightningAccount ? lightningChannels.length : 0
   const nodeConnected =
     isLightningAccount && activeWalletId ? isNodeConnected(activeWalletId) : false
 
@@ -159,7 +165,7 @@ function AccountDetails({ account }: { account: Account }) {
                       <Text
                         style={[styles.lightningChannels, isDark && styles.lightningChannelsDark]}
                       >
-                        {lightningChannels.length} channels
+                        {nodeConnected ? `${lightningChannelsCount} canais` : 'Desconectado'}
                       </Text>
                       <View
                         style={[styles.nodeStatus, nodeConnected && styles.nodeStatusConnected]}
@@ -199,7 +205,7 @@ function AccountDetails({ account }: { account: Account }) {
             >
               <Ionicons name="flash" size={16} color={colors.primary} />
               <Text style={[styles.lightningButtonText, isDark && styles.lightningButtonTextDark]}>
-                {lightningChannels.length > 0 ? 'Gerenciar Canais' : 'Abrir Canal'}
+                Gerenciar
               </Text>
             </Pressable>
           )}
@@ -262,7 +268,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   accountContainerDark: {
-    backgroundColor: 'linear-gradient(to bottom, rgba(255,255,255,0.1), rgba(0,0,0,0.05))',
+    backgroundColor: 'linear-gradient(to bottom, rgba(255,255,255,0.05), rgba(0,0,0,0.05))',
     // simulate liquid glass borders
     borderWidth: 1,
     borderTopColor: alpha(colors.white, 0.1),

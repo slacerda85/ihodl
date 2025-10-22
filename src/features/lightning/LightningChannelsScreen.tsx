@@ -5,6 +5,7 @@ import { useLightningChannels, useWallet, useSettings } from '../store'
 import { LightningChannel, ChannelStatus, LightningInvoice } from '@/lib/lightning'
 import { formatBalance } from '../wallet/utils'
 import colors from '@/ui/colors'
+import { alpha } from '@/ui/utils'
 import OpenChannelModal from './OpenChannelModal'
 import CreateInvoiceModal from './CreateInvoiceModal'
 import InvoiceDisplayModal from './InvoiceDisplayModal'
@@ -172,17 +173,25 @@ export default function LightningChannelsScreen() {
   }
 
   useEffect(() => {
+    console.log(
+      '[LightningChannelsScreen] Component mounted or wallet config changed, loading channels...',
+    )
     if (isWalletConfigured) {
       loadChannelsAsync()
     }
   }, [isWalletConfigured]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Debug: log when channels change
+  /* useEffect(() => {
+    console.log('[LightningChannelsScreen] Channels updated:', channels.length, 'channels')
+  }, [channels]) */
 
   return (
     <>
       <FlatList
         data={channels}
         keyExtractor={item => item.channelId}
-        ListHeaderComponent={
+        /* ListHeaderComponent={
           <View style={styles.header}>
             <Text style={[styles.title, isDark && styles.titleDark]}>Canais Lightning</Text>
             <View style={styles.summary}>
@@ -199,7 +208,7 @@ export default function LightningChannelsScreen() {
               )}
             </View>
           </View>
-        }
+        } */
         renderItem={({ item }) => (
           <ChannelItem channel={item} onPress={handleChannelPress} isDark={isDark} />
         )}
@@ -226,7 +235,9 @@ export default function LightningChannelsScreen() {
             </Pressable>
           </View>
         }
-        contentContainerStyle={channels.length === 0 ? styles.emptyList : styles.listContent}
+        contentContainerStyle={
+          channels.length === 0 ? styles.emptyList : [styles.listContent, styles.containerPadding]
+        }
         showsVerticalScrollIndicator={false}
       />
 
@@ -266,11 +277,12 @@ export default function LightningChannelsScreen() {
 
 const styles = StyleSheet.create({
   header: {
+    paddingHorizontal: 16,
     marginBottom: 24,
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '500',
     color: colors.text.light,
     marginBottom: 8,
   },
@@ -290,26 +302,32 @@ const styles = StyleSheet.create({
     color: colors.textSecondary.dark,
   },
   receiveButton: {
-    backgroundColor: colors.success,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
+    backgroundColor: alpha(colors.success, 0.1),
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   receiveButtonDark: {
-    backgroundColor: colors.success,
+    backgroundColor: alpha(colors.success, 0.1),
   },
   receiveButtonText: {
-    color: colors.white,
+    color: colors.success,
     fontSize: 14,
     fontWeight: 'bold',
   },
   listContent: {
     paddingBottom: 80, // Space for FAB
   },
+  containerPadding: {
+    paddingHorizontal: 16,
+  },
   channelItem: {
     backgroundColor: colors.white,
     marginVertical: 8,
-    borderRadius: 8,
+    borderRadius: 36,
     padding: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -318,7 +336,12 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   channelItemDark: {
-    backgroundColor: colors.background.dark,
+    backgroundColor: 'linear-gradient(to bottom, rgba(255,255,255,0.05), rgba(0,0,0,0.05))',
+    borderWidth: 1,
+    borderTopColor: alpha(colors.white, 0.1),
+    borderBottomColor: alpha(colors.white, 0.05),
+    borderLeftColor: alpha(colors.white, 0.075),
+    borderRightColor: alpha(colors.white, 0.05),
     shadowColor: colors.white,
     shadowOpacity: 0.1,
   },
@@ -414,7 +437,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary.dark,
   },
   emptyContainer: {
-    flex: 1,
+    // flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 32,
@@ -465,9 +488,9 @@ const styles = StyleSheet.create({
   },
   openChannelButton: {
     backgroundColor: colors.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderRadius: 32,
     marginTop: 16,
   },
   openChannelButtonDark: {

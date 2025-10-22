@@ -8,7 +8,7 @@ export const P2P_CONSTANTS = {
   PROTOCOL_VERSION: 0,
 
   // Network magic bytes (Bitcoin mainnet)
-  NETWORK_MAGIC: Buffer.from([0xf9, 0xbe, 0xb4, 0xd9]),
+  NETWORK_MAGIC: new Uint8Array([0xf9, 0xbe, 0xb4, 0xd9]),
 
   // Message length limits
   MAX_MESSAGE_LENGTH: 65535, // 2^16 - 1

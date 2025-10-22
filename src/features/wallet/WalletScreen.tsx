@@ -4,6 +4,7 @@ import { StyleSheet, Text, Pressable, View } from 'react-native'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { useWallet, useSettings } from '../store'
+import { GlassView, GlassContainer } from 'expo-glass-effect'
 
 // Components
 import WalletBalance from './WalletBalance'
@@ -122,19 +123,21 @@ export default function WalletScreen() {
       <View style={{ gap: 32 }}>
         <WalletBalance />
         <View style={styles.actionsSection}>
-          <Button onPress={handleSend} style={[styles.button, styles.primaryButton]}>
-            <Text style={styles.buttonText}>Send</Text>
+          <Button onPress={handleSend} style={{ flex: 1 }}>
+            <GlassView isInteractive style={styles.button} tintColor={alpha(colors.primary, 0.8)}>
+              <Text style={[styles.buttonText]}>Send</Text>
+            </GlassView>
           </Button>
 
-          <Button
-            onPress={handleReceive}
-            style={[styles.button, isDark ? styles.secondaryButtonDark : styles.secondaryButton]}
-          >
-            <Text style={[styles.buttonTextSecondary, isDark && styles.buttonTextSecondaryDark]}>
-              Receive
-            </Text>
+          <Button onPress={handleReceive} style={{ flex: 1 }}>
+            <GlassView isInteractive style={styles.button}>
+              <Text style={[styles.buttonTextSecondary, isDark && styles.buttonTextSecondaryDark]}>
+                Receive
+              </Text>
+            </GlassView>
           </Button>
         </View>
+
         <View style={styles.accountsSection}>
           <Text style={[styles.accountsHeader, isDark && styles.accountsHeaderDark]}>Accounts</Text>
 
@@ -208,24 +211,17 @@ const styles = StyleSheet.create({
   },
   button: {
     flex: 1,
-    padding: 16,
     borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
   primaryButton: {
-    backgroundColor: colors.primary,
+    boxShadow: '0 1px 8px rgba(0,0,0,0.05)',
+    backgroundColor: alpha(colors.primary, 0.8),
   },
-  outlinedButton: {
-    // borderWidth: 1,
-    // borderColor: colors.primary,
-    backgroundColor: 'transparent',
-  },
-  secondaryButton: {
-    backgroundColor: alpha(colors.background.dark, 0.15),
-  },
-  secondaryButtonDark: {
-    backgroundColor: alpha(colors.background.light, 0.15),
+  primaryButtonDark: {
+    backgroundColor: alpha(colors.primary, 0.2),
+    boxShadow: `0 1px 2px ${alpha(colors.primary, 0.4)}`,
   },
   buttonText: {
     color: colors.white,
@@ -240,7 +236,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary.light,
   },
   buttonTextSecondaryDark: {
-    color: colors.textSecondary.dark,
+    color: alpha(colors.textSecondary.dark, 0.85),
   },
   accountsSection: {
     // backgroundColor: 'red',

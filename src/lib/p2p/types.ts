@@ -16,25 +16,25 @@ export interface P2PConnection {
   isConnected: boolean
   lastActivity: number
   handshakeComplete: boolean
-  encryptionKey?: Buffer
-  decryptionKey?: Buffer
-  ephemeralKey?: Buffer
+  encryptionKey?: Uint8Array
+  decryptionKey?: Uint8Array
+  ephemeralKey?: Uint8Array
 }
 
 export interface NoiseHandshakeState {
   initiator: boolean
-  localEphemeralKey: Buffer
-  remoteEphemeralKey?: Buffer
-  localStaticKey: Buffer
-  remoteStaticKey?: Buffer
-  chainingKey: Buffer
-  handshakeHash: Buffer
+  localEphemeralKey: Uint8Array
+  remoteEphemeralKey?: Uint8Array
+  localStaticKey: Uint8Array
+  remoteStaticKey?: Uint8Array
+  chainingKey: Uint8Array
+  handshakeHash: Uint8Array
   phase: 'init' | 'ephemeral' | 'static' | 'complete'
 }
 
 export interface P2PMessage {
   type: number
-  payload: Buffer
+  payload: Uint8Array
   timestamp: number
 }
 
@@ -55,14 +55,14 @@ export interface IConnectionManager {
 }
 
 export interface IMessageEncryptor {
-  encryptMessage(message: Buffer, key: Buffer): Buffer
-  decryptMessage(encryptedData: Buffer, key: Buffer): Buffer
-  generateNoiseKeys(): { publicKey: Buffer; privateKey: Buffer }
+  encryptMessage(message: Uint8Array, key: Uint8Array): Uint8Array
+  decryptMessage(encryptedData: Uint8Array, key: Uint8Array): Uint8Array
+  generateNoiseKeys(): { publicKey: Uint8Array; privateKey: Uint8Array }
   performNoiseHandshake(
-    localPrivateKey: Buffer,
-    remotePublicKey: Buffer,
+    localPrivateKey: Uint8Array,
+    remotePublicKey: Uint8Array,
     initiator: boolean,
-  ): Promise<{ encryptionKey: Buffer; decryptionKey: Buffer }>
+  ): Promise<{ encryptionKey: Uint8Array; decryptionKey: Uint8Array }>
 }
 
 export interface IPeerDiscovery {

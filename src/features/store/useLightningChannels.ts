@@ -158,22 +158,32 @@ export const useLightningChannels = () => {
   /**
    * Checks if wallet is configured
    */
-  const isWalletConfigured = useCallback((): boolean => {
-    return activeWalletId ? !!state.lightning?.lightningConfigs[activeWalletId] : false
-  }, [state.lightning?.lightningConfigs, activeWalletId])
+  // const isWalletConfigured = useCallback((): boolean => {
+  //   return activeWalletId ? !!state.lightning?.lightningConfigs[activeWalletId] : false
+  // }, [state.lightning?.lightningConfigs, activeWalletId])
 
   /**
    * Checks if node is connected
    */
-  const isNodeConnected = useCallback((): boolean => {
-    return activeWalletId ? !!state.lightning?.connectedNodes[activeWalletId] : false
-  }, [state.lightning?.connectedNodes, activeWalletId])
+  // const isNodeConnected = useCallback((): boolean => {
+  //   return activeWalletId ? !!state.lightning?.connectedNodes[activeWalletId] : false
+  // }, [state.lightning?.connectedNodes, activeWalletId])
 
   return {
-    // State
-    channels: getLocalChannels(),
-    totalBalance: getTotalLocalBalance(),
-    activeChannelsCount: getActiveChannels().length,
+    // State - these should be reactive to state changes
+    channels: activeWalletId
+      ? state.lightning?.lightningWallets[activeWalletId]?.channels || []
+      : [],
+    totalBalance: activeWalletId
+      ? (state.lightning?.lightningWallets[activeWalletId]?.channels || [])
+          .filter(channel => channel.active)
+          .reduce((total, channel) => total + channel.localBalance, 0)
+      : 0,
+    activeChannelsCount: activeWalletId
+      ? (state.lightning?.lightningWallets[activeWalletId]?.channels || []).filter(
+          channel => channel.active,
+        ).length
+      : 0,
 
     // Actions
     openChannelAsync,
@@ -193,8 +203,10 @@ export const useLightningChannels = () => {
     getTotalRemoteBalance,
 
     // Status
-    isWalletConfigured: isWalletConfigured(),
-    isNodeConnected: isNodeConnected(),
+    isWalletConfigured: activeWalletId
+      ? !!state.lightning?.lightningConfigs[activeWalletId]
+      : false,
+    isNodeConnected: activeWalletId ? !!state.lightning?.connectedNodes[activeWalletId] : false,
 
     // Loading state
     isLoading: state.lightning?.loadingLightningState || false,

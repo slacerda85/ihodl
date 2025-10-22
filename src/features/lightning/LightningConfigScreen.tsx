@@ -15,6 +15,7 @@ import {
 import { useRouter } from 'expo-router'
 import { useLightning, useWallet, useLightningChannels, useSettings } from '../store'
 import { LightningConfig, authenticatedLightningClient } from '@/lib/lightning'
+import type { LightningNodeConfig } from '@/lib/lightning/node'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 
@@ -33,9 +34,11 @@ interface DetectedNode {
 const LightningConfigScreen: React.FC = () => {
   const router = useRouter()
   const { activeWalletId } = useWallet()
-  const { getLightningConfig, saveLightningConfig, initializeLightningWallet } = useLightning()
-  const { openChannelAsync, isWalletConfigured } = useLightningChannels()
+  const { getLightningConfig, saveLightningConfig, initializeLightningWallet, setNodeConnection } =
+    useLightning()
+  const { isWalletConfigured } = useLightningChannels()
   const { isDark } = useSettings()
+  const { localNode, startLocalNode, stopLocalNode, getLocalNodeInfo } = useLightning()
 
   // Auto-detection state
   const [isDetecting, setIsDetecting] = useState(false)
@@ -52,8 +55,13 @@ const LightningConfigScreen: React.FC = () => {
   const [timeout, setTimeout] = useState('30000')
 
   // Auto-channel opening state
-  const [isOpeningChannels, setIsOpeningChannels] = useState(false)
-  const [autoChannelProgress, setAutoChannelProgress] = useState<string>('')
+  // const [isOpeningChannels, setIsOpeningChannels] = useState(false)
+  // const [autoChannelProgress, setAutoChannelProgress] = useState<string>('')
+
+  // Local node state (now from store)
+  // const [isLocalNodeRunning, setIsLocalNodeRunning] = useState(false)
+  // const [localNode, setLocalNode] = useState<LightningNodeImpl | null>(null)
+  // const [localNodeStats, setLocalNodeStats] = useState<any>(null)
 
   // Status
   const [isConnecting, setIsConnecting] = useState(false)
@@ -274,13 +282,16 @@ const LightningConfigScreen: React.FC = () => {
         // Initialize wallet if needed
         await initializeLightningWallet(activeWalletId, config)
 
+        // Mark as connected
+        setNodeConnection(activeWalletId, true)
+
         setConnectionStatus('connected')
         Alert.alert('Sucesso', `Conectado ao nó ${nodeInfo.alias || nodeInfo.pubKey}`)
 
-        // Auto-open channels if this is a fresh setup
-        if (!isWalletConfigured) {
-          await autoOpenChannels(nodeInfo.pubKey)
-        }
+        // TODO: Auto-open channels if this is a fresh setup
+        // if (!isWalletConfigured) {
+        //   await autoOpenChannels(nodeInfo.pubKey)
+        // }
       } catch (error) {
         console.error('Connection failed:', error)
         setConnectionStatus('error')
@@ -292,83 +303,7 @@ const LightningConfigScreen: React.FC = () => {
         setIsConnecting(false)
       }
     },
-    [activeWalletId, saveLightningConfig, initializeLightningWallet, isWalletConfigured],
-  )
-
-  // Auto-open recommended channels
-  const autoOpenChannels = useCallback(
-    async (localNodePubkey: string) => {
-      setIsOpeningChannels(true)
-      setAutoChannelProgress('Analisando rede Lightning...')
-
-      try {
-        // Get recommended peers (this would be implemented with a peer recommendation service)
-        const recommendedPeers = [
-          {
-            pubkey: '03864ef025fde8fb587d989186ce6a4a186895ee44a926bfc370e2c366597a3f8f452', // ACINQ
-            host: '34.239.230.56:9735',
-            alias: 'ACINQ',
-          },
-          {
-            pubkey: '03abf6f44c355dec0d5aa155bdbdd6e0c8fefe318eff402de65c6eb2e1be55dc3eb4', // River Financial
-            host: '104.196.249.140:9735',
-            alias: 'River Financial',
-          },
-        ]
-
-        setAutoChannelProgress(
-          `Abrindo canais com ${recommendedPeers.length} peers recomendados...`,
-        )
-
-        for (const peer of recommendedPeers) {
-          try {
-            setAutoChannelProgress(`Conectando com ${peer.alias}...`)
-
-            // Connect to peer first
-            const config = getLightningConfig(activeWalletId!)
-            if (!config) continue
-
-            const clientConfig = {
-              url: config.nodeUrl,
-              auth: {
-                cert: config.tlsCert,
-                macaroon: config.macaroon,
-                apiKey: config.apiKey,
-              },
-              type: config.type,
-              timeout: config.timeout,
-            }
-
-            const client = authenticatedLightningClient(clientConfig)
-            await client.connectPeer(peer.pubkey, peer.host)
-
-            setAutoChannelProgress(`Abrindo canal com ${peer.alias}...`)
-
-            // Open channel with recommended amount
-            await openChannelAsync({
-              nodePubkey: peer.pubkey,
-              localFundingAmount: 100000, // 0.001 BTC
-              targetConf: 1,
-              private: false,
-            })
-
-            setAutoChannelProgress(`Canal com ${peer.alias} aberto com sucesso!`)
-          } catch (error) {
-            console.warn(`Failed to open channel with ${peer.alias}:`, error)
-            setAutoChannelProgress(`Erro ao abrir canal com ${peer.alias}, continuando...`)
-          }
-        }
-
-        setAutoChannelProgress('Configuração automática concluída!')
-        Alert.alert('Sucesso', 'Canais automáticos configurados com sucesso!')
-      } catch (error) {
-        console.error('Auto channel opening failed:', error)
-        setAutoChannelProgress('Erro na configuração automática de canais')
-      } finally {
-        setIsOpeningChannels(false)
-      }
-    },
-    [activeWalletId, getLightningConfig, openChannelAsync],
+    [activeWalletId, saveLightningConfig, initializeLightningWallet, setNodeConnection],
   )
 
   // Manual config validation
@@ -439,6 +374,9 @@ const LightningConfigScreen: React.FC = () => {
       const nodeInfo = await client.getInfo()
 
       setConnectionStatus('connected')
+      if (activeWalletId) {
+        setNodeConnection(activeWalletId, true)
+      }
       Alert.alert('Sucesso', `Conectado ao nó ${nodeInfo.alias || nodeInfo.pubKey}`)
     } catch (error) {
       console.error('Manual connection test failed:', error)
@@ -473,12 +411,33 @@ const LightningConfigScreen: React.FC = () => {
     }
   }
 
-  // Auto-detect on mount
-  useEffect(() => {
-    if (activeWalletId && !isWalletConfigured) {
-      detectNodes()
+  // Handle local node start
+  const handleStartLocalNode = useCallback(async () => {
+    if (!activeWalletId) return
+
+    try {
+      await startLocalNode()
+      setNodeConnection(activeWalletId, true)
+      Alert.alert('Sucesso', 'Nó Lightning local iniciado com sucesso!')
+    } catch (error) {
+      console.error('Failed to start local node:', error)
+      Alert.alert('Erro', `Falha ao iniciar nó local: ${error}`)
     }
-  }, [activeWalletId, isWalletConfigured, detectNodes])
+  }, [activeWalletId, startLocalNode, setNodeConnection])
+
+  // Handle local node stop
+  const handleStopLocalNode = useCallback(async () => {
+    try {
+      await stopLocalNode()
+      if (activeWalletId) {
+        setNodeConnection(activeWalletId, false)
+      }
+      Alert.alert('Sucesso', 'Nó Lightning local parado com sucesso!')
+    } catch (error) {
+      console.error('Failed to stop local node:', error)
+      Alert.alert('Erro', `Falha ao parar nó local: ${error}`)
+    }
+  }, [stopLocalNode, activeWalletId, setNodeConnection])
 
   // Render detected node item
   const renderDetectedNode = ({ item }: { item: DetectedNode }) => (
@@ -547,6 +506,44 @@ const LightningConfigScreen: React.FC = () => {
           )}
         </View>
 
+        {/* Local Node Section */}
+        <View style={[styles.section, isDark && styles.sectionDark]}>
+          <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
+            Nó Lightning Local
+          </Text>
+          <Text style={[styles.sectionDescription, isDark && styles.sectionDescriptionDark]}>
+            Execute seu próprio nó Lightning diretamente no app
+          </Text>
+
+          <View style={styles.nodeStatusContainer}>
+            <View
+              style={[styles.nodeStatusIndicator, localNode.isRunning && styles.nodeStatusActive]}
+            >
+              <Text style={styles.nodeStatusText}>{localNode.isRunning ? 'ATIVO' : 'INATIVO'}</Text>
+            </View>
+            {localNode.stats && (
+              <View style={styles.nodeStats}>
+                <Text style={[styles.nodeStatsText, isDark && styles.nodeStatsTextDark]}>
+                  Canais: {localNode.stats.channels} | Peers: {localNode.stats.peers}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.button,
+              styles.localNodeButton,
+              localNode.isRunning && styles.localNodeButtonStop,
+            ]}
+            onPress={localNode.isRunning ? handleStopLocalNode : handleStartLocalNode}
+          >
+            <Text style={styles.localNodeButtonText}>
+              {localNode.isRunning ? 'Parar Nó Local' : 'Iniciar Nó Local'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Auto-Detection Section */}
         {!showManualConfig && (
           <View style={[styles.section, isDark && styles.sectionDark]}>
@@ -606,11 +603,12 @@ const LightningConfigScreen: React.FC = () => {
         )}
 
         {/* Auto Channel Opening Progress */}
-        {isOpeningChannels && (
+        {/* TODO: Re-enable when auto channel opening is implemented */}
+        {false && (
           <View style={[styles.progressSection, isDark && styles.progressSectionDark]}>
             <ActivityIndicator size="small" color={colors.primary} />
             <Text style={[styles.progressText, isDark && styles.progressTextDark]}>
-              {autoChannelProgress}
+              Configurando canais automaticamente...
             </Text>
           </View>
         )}
@@ -1180,6 +1178,49 @@ const styles = StyleSheet.create({
   },
   infoTextDark: {
     color: colors.textSecondary.dark,
+  },
+  nodeStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  nodeStatusIndicator: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: colors.error,
+  },
+  nodeStatusActive: {
+    backgroundColor: colors.success,
+  },
+  nodeStatusText: {
+    color: colors.white,
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  nodeStats: {
+    marginLeft: 12,
+  },
+  nodeStatsText: {
+    fontSize: 14,
+    color: colors.textSecondary.light,
+  },
+  nodeStatsTextDark: {
+    color: colors.textSecondary.dark,
+  },
+  localNodeButton: {
+    backgroundColor: colors.success,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  localNodeButtonStop: {
+    backgroundColor: colors.error,
+  },
+  localNodeButtonText: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 })
 

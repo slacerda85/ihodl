@@ -13,6 +13,7 @@ import {
   LightningConfig,
   LightningWalletData,
 } from '@/lib/lightning'
+import { initialLightningState } from './lightning'
 
 // Lightning hook
 export const useLightning = () => {
@@ -24,6 +25,9 @@ export const useLightning = () => {
     lightningConfigs: state.lightning?.lightningConfigs || {},
     loadingLightningState: state.lightning?.loadingLightningState || false,
     connectedNodes: state.lightning?.connectedNodes || {},
+
+    // Local node state
+    localNode: state.lightning?.localNode || initialLightningState.localNode,
 
     // Computed
     getLightningWallet: (walletId: string) => state.lightning?.lightningWallets?.[walletId] || null,
@@ -286,6 +290,108 @@ export const useLightning = () => {
           type: 'LIGHTNING',
           action: { type: 'SET_LOADING_LIGHTNING', payload: false },
         })
+      }
+    },
+
+    // Local node actions
+    startLocalNode: async (config?: import('@/lib/lightning/node').LightningNodeConfig) => {
+      try {
+        const { LightningNodeImpl } = await import('@/lib/lightning/node')
+        const defaultConfig: import('@/lib/lightning/node').LightningNodeConfig = {
+          network: 'testnet',
+          listenPort: 9735,
+          maxChannels: 10,
+          maxPeers: 20,
+          alias: 'iHODL Mobile Node',
+          color: '#FF6B35',
+          ...config,
+        }
+
+        const node = new LightningNodeImpl(defaultConfig)
+        await node.initialize()
+        await node.start()
+
+        // Update store
+        dispatch({
+          type: 'LIGHTNING',
+          action: {
+            type: 'SET_LOCAL_NODE_STATE',
+            payload: {
+              isRunning: true,
+              node,
+              stats: node.getNetworkStats(),
+              config: defaultConfig,
+            },
+          },
+        })
+
+        // Set up periodic stats update
+        const statsInterval = setInterval(() => {
+          try {
+            const stats = node.getNetworkStats()
+            dispatch({
+              type: 'LIGHTNING',
+              action: {
+                type: 'UPDATE_LOCAL_NODE_STATE',
+                payload: { updates: { stats } },
+              },
+            })
+          } catch (error) {
+            console.error('Failed to update node stats:', error)
+          }
+        }, 5000)
+
+        // Store interval on node instance for cleanup
+        ;(node as any)._statsInterval = statsInterval
+
+        return node
+      } catch (error) {
+        console.error('Failed to start local node:', error)
+        throw error
+      }
+    },
+
+    stopLocalNode: async () => {
+      try {
+        const currentNode = state.lightning?.localNode?.node
+        if (currentNode) {
+          // Clear stats interval
+          if ((currentNode as any)._statsInterval) {
+            clearInterval((currentNode as any)._statsInterval)
+          }
+
+          await currentNode.stop()
+        }
+
+        // Update store
+        dispatch({
+          type: 'LIGHTNING',
+          action: {
+            type: 'SET_LOCAL_NODE_STATE',
+            payload: {
+              isRunning: false,
+              node: null,
+              stats: null,
+              config: state.lightning?.localNode?.config || null,
+            },
+          },
+        })
+      } catch (error) {
+        console.error('Failed to stop local node:', error)
+        throw error
+      }
+    },
+
+    getLocalNodeInfo: async () => {
+      try {
+        const currentNode = state.lightning?.localNode?.node
+        if (currentNode && state.lightning?.localNode?.isRunning) {
+          return await currentNode.getInfo()
+        }
+        return null
+      } catch (error) {
+        console.error('Failed to get local node info:', error)
+        return null
       }
     },
   }

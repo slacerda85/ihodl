@@ -25,6 +25,18 @@ export type LightningState = {
     connected: boolean
     nodeInfo: import('@/lib/lightning').LightningNode | null
   }
+  // Local Lightning node state
+  localNode: {
+    isRunning: boolean
+    node: import('@/lib/lightning/node').LightningNodeImpl | null
+    stats: {
+      channels: number
+      peers: number
+      capacity: number
+      status: string
+    } | null
+    config: import('@/lib/lightning/node').LightningNodeConfig | null
+  }
 }
 
 // Lightning Actions
@@ -76,6 +88,14 @@ export type LightningAction =
         }>
       }
     }
+  | {
+      type: 'SET_LOCAL_NODE_STATE'
+      payload: { isRunning: boolean; node: any; stats: any; config: any }
+    }
+  | {
+      type: 'UPDATE_LOCAL_NODE_STATE'
+      payload: { updates: Partial<{ isRunning: boolean; node: any; stats: any; config: any }> }
+    }
 
 // Initial state
 export const initialLightningState: LightningState = {
@@ -87,6 +107,12 @@ export const initialLightningState: LightningState = {
     config: null,
     connected: false,
     nodeInfo: null,
+  },
+  localNode: {
+    isRunning: false,
+    node: null,
+    stats: null,
+    config: null,
   },
 }
 
@@ -306,6 +332,26 @@ export const lightningReducer: Reducer<LightningState, LightningAction> = (state
         },
       }
 
+    case 'SET_LOCAL_NODE_STATE':
+      return {
+        ...state,
+        localNode: {
+          isRunning: action.payload.isRunning,
+          node: action.payload.node,
+          stats: action.payload.stats,
+          config: action.payload.config,
+        },
+      }
+
+    case 'UPDATE_LOCAL_NODE_STATE':
+      return {
+        ...state,
+        localNode: {
+          ...state.localNode,
+          ...action.payload.updates,
+        },
+      }
+
     default:
       return state
   }
@@ -420,6 +466,18 @@ export const lightningActions = {
     type: 'UPDATE_LIGHTNING_CONNECTION',
     payload: { updates },
   }),
+
+  setLocalNodeState: (isRunning: boolean, node: any, stats: any, config: any): LightningAction => ({
+    type: 'SET_LOCAL_NODE_STATE',
+    payload: { isRunning, node, stats, config },
+  }),
+
+  updateLocalNodeState: (
+    updates: Partial<{ isRunning: boolean; node: any; stats: any; config: any }>,
+  ): LightningAction => ({
+    type: 'UPDATE_LOCAL_NODE_STATE',
+    payload: { updates },
+  }),
 }
 
 // Selectors
@@ -456,4 +514,8 @@ export const lightningSelectors = {
   isLightningConnected: (state: LightningState) => state.lightningConnection.connected,
 
   getLightningNodeInfo: (state: LightningState) => state.lightningConnection.nodeInfo,
+
+  getLocalNodeState: (state: LightningState) => state.localNode,
+
+  isLocalNodeRunning: (state: LightningState) => state.localNode.isRunning,
 }

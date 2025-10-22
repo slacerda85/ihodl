@@ -38,11 +38,34 @@ export class P2PEngine implements IP2PEngine {
     // Create connection
     const connection = await this.connectionManager.createConnection(peerAddress)
 
-    // TODO: Perform Noise handshake for encryption
-    // const keys = await this.encryptor.performNoiseHandshake(localPrivateKey, remotePublicKey, true)
-    // connection.encryptionKey = keys.encryptionKey
-    // connection.decryptionKey = keys.decryptionKey
-    // connection.handshakeComplete = true
+    // Perform Noise handshake for encryption
+    try {
+      // Generate local keys for handshake
+      const localKeys = this.encryptor.generateNoiseKeys()
+
+      // For now, use a placeholder remote public key
+      // In production, this would be obtained from node discovery
+      const remotePublicKey = Buffer.from(peerAddress.pubkey || '02', 'hex')
+
+      const keys = await this.encryptor.performNoiseHandshake(
+        localKeys.privateKey,
+        remotePublicKey,
+        true, // We're the initiator
+      )
+
+      connection.encryptionKey = keys.encryptionKey
+      connection.decryptionKey = keys.decryptionKey
+      connection.handshakeComplete = true
+
+      console.log(`Noise handshake completed for peer: ${connection.id}`)
+    } catch (error) {
+      console.warn(
+        `Noise handshake failed for peer ${peerAddress.host}:${peerAddress.port}:`,
+        error,
+      )
+      // Continue without encryption for now
+      connection.handshakeComplete = false
+    }
 
     // Add peer to known peers
     this.peerDiscovery.addKnownPeer(peerAddress)
@@ -76,7 +99,7 @@ export class P2PEngine implements IP2PEngine {
     }
 
     try {
-      let dataToSend: Buffer
+      let dataToSend: Uint8Array
 
       if (connection.handshakeComplete && connection.encryptionKey) {
         // Encrypt message if handshake is complete
@@ -200,22 +223,28 @@ export class P2PEngine implements IP2PEngine {
   /**
    * Serialize a P2P message for transmission
    */
-  private serializeMessage(message: P2PMessage): Buffer {
+  private serializeMessage(message: P2PMessage): Uint8Array {
     // Simple serialization - in production, this would follow Lightning BOLT 1 format
-    const typeBuf = Buffer.alloc(2)
-    typeBuf.writeUInt16BE(message.type, 0)
+    const typeBuf = new Uint8Array(2)
+    new DataView(typeBuf.buffer).setUint16(0, message.type, false) // Big-endian
 
-    const lengthBuf = Buffer.alloc(2)
-    lengthBuf.writeUInt16BE(message.payload.length, 0)
+    const lengthBuf = new Uint8Array(2)
+    new DataView(lengthBuf.buffer).setUint16(0, message.payload.length, false) // Big-endian
 
-    return Buffer.concat([typeBuf, lengthBuf, message.payload])
+    // Concatenate arrays
+    const result = new Uint8Array(4 + message.payload.length)
+    result.set(typeBuf, 0)
+    result.set(lengthBuf, 2)
+    result.set(message.payload, 4)
+
+    return result
   }
 
   /**
    * Handle incoming message from a connection
    * This would be called by the connection manager
    */
-  private handleIncomingMessage(connectionId: string, data: Buffer): void {
+  private handleIncomingMessage(connectionId: string, data: Uint8Array): void {
     try {
       const connection = this.getConnection(connectionId)
       if (!connection) {
@@ -252,13 +281,14 @@ export class P2PEngine implements IP2PEngine {
   /**
    * Deserialize a received P2P message
    */
-  private deserializeMessage(data: Buffer): P2PMessage {
+  private deserializeMessage(data: Uint8Array): P2PMessage {
     if (data.length < 4) {
       throw new Error('Message too short')
     }
 
-    const type = data.readUInt16BE(0)
-    const length = data.readUInt16BE(2)
+    const view = new DataView(data.buffer, data.byteOffset)
+    const type = view.getUint16(0, false) // Big-endian
+    const length = view.getUint16(2, false) // Big-endian
 
     if (data.length !== 4 + length) {
       throw new Error('Invalid message length')
