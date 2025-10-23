@@ -210,7 +210,8 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   button: {
-    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',

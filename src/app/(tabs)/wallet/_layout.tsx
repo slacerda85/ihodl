@@ -7,6 +7,7 @@ import { useCallback, useEffect } from 'react'
 import { useWallet, useSettings } from '@/features/store'
 import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
 import { ExtendedStackNavigationOptions } from 'expo-router/build/layouts/StackClient'
+import { alpha } from '@/ui/utils'
 
 function HeaderRight() {
   const { isDark } = useSettings()
@@ -24,7 +25,11 @@ function HeaderRight() {
         <Ionicons
           name="ellipsis-vertical"
           size={24}
-          color={isDark ? colors.text.dark : colors.text.light}
+          color={
+            isDark
+              ? alpha(colors.textSecondary.dark, 0.85)
+              : alpha(colors.textSecondary.light, 0.85)
+          }
         />
       </Pressable>
     </Link>
@@ -65,7 +70,11 @@ function ManageWallets() {
         <IconSymbol
           name="wallet.bifold"
           size={28}
-          color={isDark ? colors.text.dark : colors.text.light}
+          color={
+            isDark
+              ? alpha(colors.textSecondary.dark, 0.85)
+              : alpha(colors.textSecondary.light, 0.85)
+          }
         />
       </Pressable>
     </View>
@@ -95,7 +104,9 @@ const CloseModalButton = ({ title }: { title?: string }) => {
         style={{
           fontSize: 16,
           // fontWeight: 'bold',
-          color: isDark ? colors.text.dark : colors.text.light,
+          color: isDark
+            ? alpha(colors.textSecondary.dark, 0.85)
+            : alpha(colors.textSecondary.light, 0.85),
           // padding: 8,
         }}
       >

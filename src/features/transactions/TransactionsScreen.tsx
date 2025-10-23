@@ -12,6 +12,7 @@ import ContentContainer from '@/ui/ContentContainer'
 import { useWallet, useTransactions, useSettings } from '../store'
 import Divider from '@/ui/Divider'
 import { getWalletSeedPhrase } from '@/lib/secureStorage'
+import { GlassContainer, GlassView } from 'expo-glass-effect'
 // import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
 
 // Define types for our transaction list items
@@ -230,11 +231,6 @@ export default function TransactionsScreen() {
     if (item.isDate) {
       return <Text style={[styles.date, isDark && styles.dateDark]}>{item.date}</Text>
     } else {
-      // Verificar se é o primeiro/último item do grupo
-      const isFirstInGroup = index === 0 || data[index - 1].isDate
-      const isLastInGroup =
-        index === data.length - 1 || (index + 1 < data.length && data[index + 1].isDate)
-
       // Determinar estilo do tipo de transação
       const typeLabel =
         item.type === 'received' ? 'Received' : item.type === 'sent' ? 'Sent' : 'Self Transfer'
@@ -245,36 +241,32 @@ export default function TransactionsScreen() {
       return (
         <View>
           <Pressable
-            style={[
-              styles.transactionPressable,
-              isDark && styles.transactionsPressableDark,
-              isFirstInGroup && styles.first,
-              isLastInGroup && styles.last,
-            ]}
             onPress={() => {
               // Navigate to transaction details
               router.push(`/transactions/${item.tx.txid}` as any)
             }}
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <BitcoinLogo width={32} height={32} />
-              <View>
-                <Text style={[styles.type, isDark && styles.typeDark]}>{typeLabel}</Text>
-                <Text style={[styles.address, isDark && styles.addressDark]}>
-                  {item.type === 'received' ? 'From' : item.type === 'sent' ? 'To' : ''}{' '}
-                  {truncateAddress(item.address, 6)}
-                </Text>
+            <GlassView isInteractive style={styles.transactionPressable}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <BitcoinLogo width={32} height={32} />
+                <View>
+                  <Text style={[styles.type, isDark && styles.typeDark]}>{typeLabel}</Text>
+                  <Text style={[styles.address, isDark && styles.addressDark]}>
+                    {item.type === 'received' ? 'From' : item.type === 'sent' ? 'To' : ''}{' '}
+                    {truncateAddress(item.address, 6)}
+                  </Text>
+                </View>
               </View>
-            </View>
-            <Text
-              style={[
-                styles.balance,
-                isDark && styles.balanceDark,
-                isPositive ? styles.balancePositive : styles.balanceNegative,
-              ]}
-            >
-              {`${prefix}${formatBalance(item.amount, unit)} ${unit}`}
-            </Text>
+              <Text
+                style={[
+                  styles.balance,
+                  isDark && styles.balanceDark,
+                  isPositive ? styles.balancePositive : styles.balanceNegative,
+                ]}
+              >
+                {`${prefix}${formatBalance(item.amount, unit)} ${unit}`}
+              </Text>
+            </GlassView>
           </Pressable>
         </View>
       )
@@ -282,12 +274,12 @@ export default function TransactionsScreen() {
   }
 
   return (
-    <View>
+    <GlassContainer>
       <FlatList
         contentContainerStyle={{
           // paddingTop: headerHeight + 16,
           paddingBottom: 16,
-          gap: 2,
+          gap: 4,
         }}
         data={data}
         keyExtractor={item => (item.isDate ? item.date : item.tx.txid)}
@@ -301,7 +293,7 @@ export default function TransactionsScreen() {
         }
         showsVerticalScrollIndicator={false}
       />
-    </View>
+    </GlassContainer>
   )
 }
 
@@ -406,7 +398,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary.dark,
   },
   transactionPressable: {
-    backgroundColor: colors.white,
     paddingTop: 12,
     paddingBottom: 12,
     paddingLeft: 12,
@@ -414,32 +405,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderWidth: 1,
-    borderTopColor: alpha(colors.white, 0.1),
-    borderLeftColor: alpha(colors.white, 0.075),
-    borderRightColor: alpha(colors.white, 0.05),
-    borderBottomColor: alpha(colors.white, 0.05),
+    borderRadius: 32,
   },
   transactionsPressableDark: {
-    backgroundColor: alpha(colors.white, 0.1),
+    // backgroundColor: alpha(colors.white, 0.1),
   },
   first: {
-    /* borderTopWidth: 1,
-    borderTopColor: alpha(colors.white, 0.1),
-    borderLeftWidth: 1,
-    borderLeftColor: alpha(colors.white, 0.075),
-    borderRightWidth: 1,
-    borderRightColor: alpha(colors.white, 0.05), */
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
   },
   last: {
-    /* borderLeftWidth: 1,
-    borderLeftColor: alpha(colors.white, 0.075),
-    borderRightWidth: 1,
-    borderRightColor: alpha(colors.white, 0.05),
-    borderBottomWidth: 1,
-    borderBottomColor: alpha(colors.white, 0.05), */
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
   },
@@ -453,9 +428,9 @@ const styles = StyleSheet.create({
   },
   balancePositive: {
     color: '#FFA500',
-    textShadowColor: '#FF8C00',
+    textShadowColor: '#FF8C0077',
     textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 4,
+    textShadowRadius: 2,
     fontWeight: '600',
   },
   balanceNegative: {

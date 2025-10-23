@@ -23,6 +23,7 @@ import {
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { formatBalance } from './utils'
+import { GlassView } from 'expo-glass-effect'
 
 const purposeToLabel: Record<number, string> = {
   44: 'Legacy',
@@ -137,15 +138,18 @@ function AccountDetails({ account }: { account: Account }) {
 
   return (
     <View style={styles.accountContainerWrapper}>
-      <View style={[styles.accountContainer, isDark && styles.accountContainerDark]}>
+      <GlassView style={[styles.accountContainer, isDark && styles.accountContainerDark]}>
         <View style={styles.accountInfoRow}>
           <View style={styles.accountSection}>
             <View style={styles.accountIcon}>{accountIcon}</View>
-            <View style={styles.accountDetails}>
+            <GlassView
+              style={styles.accountDetails}
+              tintColor={alpha(colors.background.light, 0.1)}
+            >
               <Text style={[styles.accountTitle, isDark && styles.accountTitleDark]}>
                 {accountName}
               </Text>
-            </View>
+            </GlassView>
           </View>
           <View style={styles.accountSection}>
             <View style={styles.accountDetails}>
@@ -188,15 +192,27 @@ function AccountDetails({ account }: { account: Account }) {
         </View>
         <View style={styles.buttonsContainer}>
           <Pressable
-            style={[styles.transactionsButton, isDark && styles.transactionsButtonDark]}
+            style={{ flex: 1 }}
+            /* style={[styles.transactionsButton, isDark && styles.transactionsButtonDark]} */
             onPress={handleNavigate}
           >
-            <Ionicons name="list" size={16} color={isDark ? colors.text.dark : colors.text.light} />
-            <Text
-              style={[styles.transactionsButtonText, isDark && styles.transactionsButtonTextDark]}
+            <GlassView
+              style={styles.transactionsButton}
+              tintColor={
+                isDark ? alpha(colors.background.light, 0.05) : alpha(colors.background.dark, 0.1)
+              }
             >
-              Transações
-            </Text>
+              <Ionicons
+                name="list"
+                size={16}
+                color={isDark ? colors.text.dark : colors.text.light}
+              />
+              <Text
+                style={[styles.transactionsButtonText, isDark && styles.transactionsButtonTextDark]}
+              >
+                Transações
+              </Text>
+            </GlassView>
           </Pressable>
           {isLightningAccount && (
             <Pressable
@@ -210,7 +226,7 @@ function AccountDetails({ account }: { account: Account }) {
             </Pressable>
           )}
         </View>
-      </View>
+      </GlassView>
     </View>
   )
 }
@@ -254,8 +270,8 @@ const styles = StyleSheet.create({
     // flex: 1,
   },
   accountContainer: {
-    backgroundColor: colors.white,
-    borderRadius: 36,
+    // backgroundColor: colors.white,
+    borderRadius: 32,
     padding: 16,
     // marginBottom: 12,
     // overflow: 'hidden',
@@ -268,13 +284,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   accountContainerDark: {
-    backgroundColor: 'linear-gradient(to bottom, rgba(255,255,255,0.05), rgba(0,0,0,0.05))',
-    // simulate liquid glass borders
+    /*  backgroundColor: 'linear-gradient(to bottom, rgba(255,255,255,0.05), rgba(0,0,0,0.05))',
+    
     borderWidth: 1,
     borderTopColor: alpha(colors.white, 0.1),
     borderBottomColor: alpha(colors.white, 0.05),
     borderLeftColor: alpha(colors.white, 0.075),
-    borderRightColor: alpha(colors.white, 0.05),
+    borderRightColor: alpha(colors.white, 0.05), */
   },
   accountSection: {
     flexDirection: 'row',
@@ -291,7 +307,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary.light,
   },
   accountTitleDark: {
-    backgroundColor: alpha(colors.white, 0.2),
+    // backgroundColor: alpha(colors.white, 0.2),
     color: colors.text.dark,
   },
   accountUnit: {
@@ -307,6 +323,8 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   accountDetails: {
+    padding: 4,
+    borderRadius: 8,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -392,7 +410,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   transactionsButton: {
-    backgroundColor: alpha(colors.black, 0.08),
+    // backgroundColor: alpha(colors.black, 0.08),
     borderRadius: 32,
     padding: 12,
     flexDirection: 'row',
@@ -404,7 +422,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   transactionsButtonDark: {
-    backgroundColor: alpha(colors.white, 0.08),
+    // backgroundColor: alpha(colors.white, 0.08),
     // borderColor: alpha(colors.white, 0.2),
   },
   transactionsButtonText: {

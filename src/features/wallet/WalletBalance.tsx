@@ -53,25 +53,23 @@ export default function WalletBalance() {
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: 8,
+          gap: 16,
         }}
       >
-        <View style={{ flex: 1 }}></View>
-
         <Text style={[styles.balanceAmount, isDark && styles.balanceAmountDark]}>
           {formatBalance(balance, unit)}
         </Text>
-        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
-          <Pressable onPress={() => setUnit(unit === 'BTC' ? 'Sats' : 'BTC')} style={{ flex: 1 }}>
-            <GlassView isInteractive style={styles.unitButton}>
-              <View style={styles.unitContainer}>
-                <Text style={styles.balanceCurrency}>{unit}</Text>
-                <SwapIcon size={16} color={alpha(colors.textSecondary.dark, 0.7)} />
-              </View>
-            </GlassView>
-          </Pressable>
-          <View style={{ flex: 1 }}></View>
-        </View>
+        <Pressable onPress={() => setUnit(unit === 'BTC' ? 'Sats' : 'BTC')}>
+          <GlassView isInteractive style={styles.unitButton}>
+            <Text style={[styles.balanceCurrency, isDark && styles.balanceCurrencyDark]}>
+              {unit}
+            </Text>
+            <SwapIcon
+              size={16}
+              color={alpha(colors.textSecondary[isDark ? 'dark' : 'light'], 0.7)}
+            />
+          </GlassView>
+        </Pressable>
       </View>
     </View>
   )
@@ -101,12 +99,14 @@ const styles = StyleSheet.create({
     color: colors.textSecondary.dark,
   },
   balanceAmount: {
+    flex: 1,
     fontSize: 36,
     fontWeight: '700',
     color: colors.textSecondary.light,
     textShadowColor: alpha(colors.text.light, 0.2),
     textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 8,
+    textShadowRadius: 2,
+    textAlign: 'right',
   },
   balanceAmountDark: {
     color: colors.textSecondary.dark, // '#FFA500',
@@ -118,10 +118,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     // color: colors.primary,
-    color: colors.textSecondary.dark,
+    color: colors.textSecondary.light,
     /* textShadowColor: '#FF8C00',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 8, */
+  },
+  balanceCurrencyDark: {
+    // color: colors.primary,
+    color: alpha(colors.textSecondary.dark, 0.85),
   },
   unitToggle: {
     paddingHorizontal: 5,
@@ -139,13 +143,10 @@ const styles = StyleSheet.create({
   unitButton: {
     borderRadius: 32,
     paddingHorizontal: 16,
-    /* backgroundColor: alpha(colors.background.light, 0.8),
-    boxShadow: '0 1px 8px rgba(0,0,0,0.05)', */
     paddingVertical: 12,
     alignItems: 'center',
-  },
-  unitButtonDark: {
-    /* boxShadow: `0 1px 2px ${alpha(colors.background.light, 0.4)}`,
-    backgroundColor: alpha(colors.background.light, 0.2), */
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
   },
 })
