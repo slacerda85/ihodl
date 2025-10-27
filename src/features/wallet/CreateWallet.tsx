@@ -1,19 +1,12 @@
-import React, { useState } from 'react'
-import {
-  View,
-  Text,
-  TextInput,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  ActivityIndicator,
-} from 'react-native'
+import { useState } from 'react'
+import { View, Text, TextInput, StyleSheet, Switch, ActivityIndicator } from 'react-native'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
 import { useRouter } from 'expo-router'
-import { useWallet, useSettings } from '../store'
+import { useWallet, useSettings } from '@/features/storage'
 import Button from '@/ui/Button'
+import { GlassView } from 'expo-glass-effect'
 
 export default function CreateWallet() {
   const { isDark } = useSettings()
@@ -53,93 +46,79 @@ export default function CreateWallet() {
   }
 
   return (
-    <ScrollView style={[styles.scrollView, isDark && styles.scrollViewDark]}>
-      <View style={[styles.container, isDark && styles.containerDark]}>
-        <View style={styles.section}>
-          <TextInput
-            autoFocus
-            style={[styles.input, isDark && styles.inputDark]}
-            placeholder="Enter wallet name"
-            placeholderTextColor={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
-            value={walletName}
-            onChangeText={setWalletName}
-          />
-        </View>
-        <View style={styles.section}>
-          <View style={styles.checkboxContainer}>
-            <Switch onValueChange={setUsePassword} value={usePassword} />
-            <Text style={[styles.checkboxText, isDark && styles.checkboxTextDark]}>
-              Encrypt wallet seed with password
-            </Text>
-          </View>
-          {usePassword && (
-            <TextInput
-              style={[styles.input, isDark && styles.inputDark]}
-              placeholder="Enter password for encryption"
-              placeholderTextColor={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
-          )}
-        </View>
+    <View style={styles.root}>
+      <TextInput
+        autoFocus
+        style={[styles.input, isDark && styles.inputDark]}
+        placeholder="Enter wallet name"
+        placeholderTextColor={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
+        value={walletName}
+        onChangeText={setWalletName}
+      />
+
+      <GlassView style={styles.toggleContainer}>
+        <Text style={[styles.toggleText, isDark && styles.toggleTextDark]}>
+          Enable seed passphrase
+        </Text>
+        <Switch onValueChange={setUsePassword} value={usePassword} />
+      </GlassView>
+      {usePassword && (
+        <TextInput
+          style={[styles.input, isDark && styles.inputDark]}
+          placeholder="Enter password for encryption"
+          placeholderTextColor={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+        />
+      )}
+
+      <GlassView style={styles.coldWalletInfo}>
         <View
-          style={[
-            styles.toggleSection,
-            isDark && styles.toggleSectionDark,
-            offline ? (isDark ? styles.toggleSectionActiveDark : styles.toggleSectionActive) : null,
-          ]}
+          style={{
+            width: '100%',
+            flexDirection: 'row',
+            gap: 8,
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
         >
-          <View style={styles.toggleContainer}>
-            <Switch onValueChange={handleToggleOffline} value={offline} />
-            <Text style={[styles.toggleText, isDark && styles.toggleTextDark]}>
-              Offline mode (cold wallet)
-            </Text>
-          </View>
-          <View style={styles.infoBox}>
-            <IconSymbol
-              name="info.circle.fill"
-              size={16}
-              style={styles.infoIcon}
-              color={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
-            />
-            <Text style={[styles.infoText, isDark && styles.infoTextDark]}>
-              Prevents this wallet to access the internet. Transactions are available by using QR
-              codes.
-            </Text>
-          </View>
-        </View>
-        <Button
-          onPress={handleCreateWallet}
-          style={[styles.button, offline ? styles.outlinedButton : styles.primaryButton]}
-        >
-          {submitting ? (
-            <ActivityIndicator color={offline ? colors.primary : colors.white} />
-          ) : null}
-          <Text style={[styles.buttonText, offline ? styles.buttonTextOutlined : null]}>
-            {submitting ? 'Creating...' : offline ? 'Create cold wallet' : 'Create wallet'}
+          <Text style={[styles.toggleText, isDark && styles.toggleTextDark]}>
+            Offline mode (cold wallet)
           </Text>
-        </Button>
-      </View>
-    </ScrollView>
+          <Switch onValueChange={handleToggleOffline} value={offline} />
+        </View>
+        <GlassView style={styles.infoBox} tintColor={alpha(colors.info, 0.2)}>
+          <IconSymbol
+            name="info.circle.fill"
+            size={16}
+            style={styles.infoIcon}
+            color={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
+          />
+          <Text style={[styles.infoText, isDark && styles.infoTextDark]}>
+            Prevents this wallet to access the internet. Transactions are available by using QR
+            codes.
+          </Text>
+        </GlassView>
+      </GlassView>
+
+      <Button onPress={handleCreateWallet} tintColor={alpha(colors.primary, 0.8)}>
+        {submitting ? <ActivityIndicator color={offline ? colors.primary : colors.white} /> : null}
+        <Text style={{ color: isDark ? colors.textSecondary.dark : colors.textSecondary.light }}>
+          {submitting ? 'Creating...' : offline ? 'Create cold wallet' : 'Create wallet'}
+        </Text>
+      </Button>
+      {/* </View> */}
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
-  scrollView: {
+  root: {
     flex: 1,
-    // backgroundColor: colors.background.light,
-  },
-  scrollViewDark: {
-    // backgroundColor: colors.background.dark,
-  },
-  container: {
-    padding: 16,
+    padding: 20,
     marginBottom: 24,
     gap: 24,
-  },
-  containerDark: {
-    // No additional styles needed as it inherits from scrollViewDark
   },
   section: {
     marginBottom: 0,
@@ -158,7 +137,7 @@ const styles = StyleSheet.create({
     height: 48,
     // borderWidth: 1,
     // borderColor: alpha(colors.black, 0.2),
-    borderRadius: 16,
+    borderRadius: 32,
     backgroundColor: alpha(colors.black, 0.05),
     color: colors.text.light,
   },
@@ -184,9 +163,12 @@ const styles = StyleSheet.create({
     // Custom styling for active toggle in dark mode if needed
   },
   toggleContainer: {
+    borderRadius: 32,
+    padding: 22,
     flexDirection: 'row',
     gap: 12,
     alignItems: 'center',
+    justifyContent: 'space-between',
     // justifyContent: 'space-between',
   },
   toggleText: {
@@ -221,9 +203,16 @@ const styles = StyleSheet.create({
     transform: [{ translateX: 24 }],
   },
   infoBox: {
-    marginVertical: 8,
+    borderRadius: 20,
+    padding: 20,
+    // marginVertical: 8,
     flexDirection: 'row',
     alignItems: 'flex-start',
+  },
+  coldWalletInfo: {
+    borderRadius: 32,
+    padding: 20,
+    gap: 24,
   },
   infoIcon: {
     marginRight: 8,
@@ -273,11 +262,11 @@ const styles = StyleSheet.create({
   buttonTextDark: {
     color: colors.black,
   },
-  checkboxContainer: {
+  /* checkboxContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
-  },
+  }, */
   checkboxText: {
     fontSize: 16,
     color: colors.text.light,

@@ -1,38 +1,18 @@
 import React, { createContext, useContext, useReducer, ReactNode, useEffect, useRef } from 'react'
-import { appReducer, initialAppState, AppState, AppAction } from './store'
+import { appReducer, initialAppState, AppState, AppAction } from './storage'
 import { MMKV } from 'react-native-mmkv'
-import { electrumActions } from './electrum'
+import { initializeElectrumPeers } from './electrum/electrum'
 
 const storage = new MMKV()
 const STORAGE_KEY = 'app-state'
 
-// Initialize Electrum peers on app startup
-const initializeElectrumPeers = async (dispatch: React.Dispatch<AppAction>, state: AppState) => {
+// Clear persisted state (useful for testing)
+export const clearPersistedState = () => {
   try {
-    console.log('[StoreProvider] Initializing Electrum peers...')
-
-    // Check if we have any saved trusted peers
-    const hasTrustedPeers = state.electrum.trustedPeers.length > 0
-
-    if (!hasTrustedPeers) {
-      console.log(
-        '[StoreProvider] No saved trusted peers found, this appears to be first app launch',
-      )
-      console.log('[StoreProvider] Performing initial peer discovery and testing...')
-    } else {
-      console.log(
-        `[StoreProvider] Found ${state.electrum.trustedPeers.length} saved trusted peers, updating if needed...`,
-      )
-    }
-
-    // Always update trusted peers (this will fetch new peers if needed and test them)
-    const actions = await electrumActions.updateTrustedPeers(() => ({ electrum: state.electrum }))
-    actions.forEach(action => dispatch({ type: 'ELECTRUM', action }))
-
-    console.log('[StoreProvider] Electrum peers initialization completed')
+    storage.delete(STORAGE_KEY)
+    console.log('[StorageProvider] Persisted state cleared')
   } catch (error) {
-    console.error('[StoreProvider] Error initializing Electrum peers:', error)
-    // Don't throw - we don't want to break app startup
+    console.error('Error clearing persisted state:', error)
   }
 }
 
@@ -63,19 +43,15 @@ const loadPersistedState = (): AppState => {
           ...initialAppState.blockchain,
           ...parsed.blockchain,
         }, // Persist blockchain sync state
-        lightning: {
+        /* lightning: {
           ...initialAppState.lightning,
           ...parsed.lightning,
-          // Reset connection state on app start (don't persist connection)
-          lightningConnection: initialAppState.lightning.lightningConnection,
-          // Reset local node instance but keep config and stats
-          localNode: {
-            ...initialAppState.lightning.localNode,
-            ...parsed.lightning?.localNode,
-            isRunning: false, // Always start stopped
-            node: null, // Don't persist the node instance
-          },
-        },
+          
+        }, */
+        electrum: {
+          ...initialAppState.electrum,
+          ...parsed.electrum,
+        }, // Persist electrum peer state
       }
     }
   } catch (error) {
@@ -85,15 +61,15 @@ const loadPersistedState = (): AppState => {
 }
 
 // Context
-type StoreContextType = {
+type StorageContextType = {
   state: AppState
   dispatch: React.Dispatch<AppAction>
 }
 
-const StoreContext = createContext<StoreContextType | undefined>(undefined)
+const StorageContext = createContext<StorageContextType | undefined>(undefined)
 
 // Provider
-export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const StorageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(appReducer, loadPersistedState())
   const hasInitializedPeers = useRef(false)
 
@@ -103,7 +79,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       hasInitializedPeers.current = true
       initializeElectrumPeers(dispatch, state)
     }
-  }, [dispatch, state])
+  }, [dispatch]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Persist state changes
   useEffect(() => {
@@ -128,18 +104,15 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           syncProgress: state.blockchain.syncProgress,
           // Don't persist isSyncing as it should reset to false on app start
         },
-        lightning: {
-          lightningWallets: state.lightning.lightningWallets,
-          lightningConfigs: state.lightning.lightningConfigs,
-          connectedNodes: state.lightning.connectedNodes,
-          // Persist local node config and stats but not the running instance
-          localNode: {
-            isRunning: state.lightning.localNode.isRunning,
-            stats: state.lightning.localNode.stats,
-            config: state.lightning.localNode.config,
-            // Don't persist the node instance itself
-            node: null,
-          },
+        /* lightning: {
+          spvEnabled: state.lightning.spvEnabled,
+          channels: state.lightning.channels,
+          // Don't persist loading state
+        }, */
+        electrum: {
+          trustedPeers: state.electrum.trustedPeers,
+          lastPeerUpdate: state.electrum.lastPeerUpdate,
+          // Don't persist loadingPeers as it should reset to false on app start
         },
       }
 
@@ -149,14 +122,25 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   }, [state])
 
-  return <StoreContext.Provider value={{ state, dispatch }}>{children}</StoreContext.Provider>
+  return <StorageContext.Provider value={{ state, dispatch }}>{children}</StorageContext.Provider>
 }
 
-// Hook to use the store
-export const useStore = () => {
-  const context = useContext(StoreContext)
+export const useStorage = (): StorageContextType => {
+  const context = useContext(StorageContext)
   if (!context) {
-    throw new Error('useStore must be used within a StoreProvider')
+    throw new Error('useStorage must be used within a StorageProvider')
   }
   return context
+}
+
+// Hook to clear persisted state (useful for testing)
+export const useClearPersistedState = () => {
+  return clearPersistedState
+}
+
+// Effect to clear persisted state on mount (useful for testing)
+export const useClearPersistedStateOnMount = () => {
+  useEffect(() => {
+    clearPersistedState()
+  }, [])
 }

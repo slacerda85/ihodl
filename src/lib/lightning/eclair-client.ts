@@ -2,12 +2,9 @@ import type {
   LightningClient,
   LightningClientConfig,
   LightningNode,
-  LightningChannel,
   PaymentResult,
   LightningInvoice,
   LightningPayment,
-  Peer,
-  OpenChannelParams,
   CreateInvoiceParams,
 } from './types'
 
@@ -51,26 +48,6 @@ export class EclairClient implements LightningClient {
       console.error('Eclair getInfo error:', error)
       throw new Error(`Failed to get Eclair node info: ${error}`)
     }
-  }
-
-  async listChannels(): Promise<LightningChannel[]> {
-    // TODO: Implement Eclair REST API call to channels
-    throw new Error('Eclair listChannels not implemented')
-  }
-
-  async getChannel(channelId: string): Promise<LightningChannel | null> {
-    // TODO: Implement Eclair REST API call to channel/{channelId}
-    throw new Error('Eclair getChannel not implemented')
-  }
-
-  async openChannel(params: OpenChannelParams): Promise<{ channelId: string }> {
-    // TODO: Implement Eclair REST API call to open
-    throw new Error('Eclair openChannel not implemented')
-  }
-
-  async closeChannel(channelId: string, force: boolean = false): Promise<void> {
-    // TODO: Implement Eclair REST API call to close
-    throw new Error('Eclair closeChannel not implemented')
   }
 
   async createInvoice(params: CreateInvoiceParams): Promise<LightningInvoice> {
@@ -129,31 +106,11 @@ export class EclairClient implements LightningClient {
     throw new Error('Eclair listInvoices not implemented')
   }
 
-  async describeGraph(): Promise<{ nodes: LightningNode[]; channels: LightningChannel[] }> {
-    // TODO: Implement Eclair REST API call to network
-    throw new Error('Eclair describeGraph not implemented')
-  }
-
   async estimateFee(
     destination: string,
     amount: number,
   ): Promise<{ fee: number; probability: number }> {
     // TODO: Implement Eclair REST API call to findroute
     throw new Error('Eclair estimateFee not implemented')
-  }
-
-  async connectPeer(pubkey: string, host: string): Promise<void> {
-    // TODO: Implement Eclair REST API call to connect
-    throw new Error('Eclair connectPeer not implemented')
-  }
-
-  async disconnectPeer(pubkey: string): Promise<void> {
-    // TODO: Implement Eclair REST API call to disconnect
-    throw new Error('Eclair disconnectPeer not implemented')
-  }
-
-  async listPeers(): Promise<Peer[]> {
-    // TODO: Implement Eclair REST API call to peers
-    throw new Error('Eclair listPeers not implemented')
   }
 }

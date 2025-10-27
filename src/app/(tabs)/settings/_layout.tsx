@@ -1,4 +1,4 @@
-import { useSettings } from '@/features/store'
+import { useSettings } from '@/features/storage'
 import colors from '@/ui/colors'
 import { Stack } from 'expo-router'
 

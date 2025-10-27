@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { View, ActivityIndicator } from 'react-native'
 import Svg, { Rect } from 'react-native-svg'
 import qrcode from 'qrcode-generator'
 
 interface QRCodeProps {
   value: string
-  size: number
+  size: number | 'auto'
   color: string
   backgroundColor: string
 }
@@ -13,19 +13,20 @@ interface QRCodeProps {
 export default function QRCode({ value, size, color, backgroundColor }: QRCodeProps) {
   const [qrElements, setQrElements] = useState<React.ReactElement[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [containerSize, setContainerSize] = useState(size === 'auto' ? 0 : size)
 
-  useEffect(() => {
-    // Generate QR code asynchronously to avoid blocking UI
-    const generateQR = () => {
+  const generateQR = useCallback(
+    (qrSize: number) => {
+      if (qrSize <= 0) return
+
       setIsLoading(true)
-      // Use setTimeout to defer generation to next tick
-      setTimeout(() => {
+      try {
         const qr = qrcode(0, 'L') // Type 0, error correction L
         qr.addData(value)
         qr.make()
 
         const moduleCount = qr.getModuleCount()
-        const moduleSize = size / moduleCount
+        const moduleSize = qrSize / moduleCount
 
         const elements = []
 
@@ -48,31 +49,49 @@ export default function QRCode({ value, size, color, backgroundColor }: QRCodePr
 
         setQrElements(elements)
         setIsLoading(false)
-      }, 0)
-    }
+      } catch (error) {
+        console.error('Error generating QR code:', error)
+        setIsLoading(false)
+      }
+    },
+    [value, color],
+  )
 
-    generateQR()
-  }, [value, size, color]) // Regenerate when props change
+  useEffect(() => {
+    const qrSize = size === 'auto' ? containerSize : size
+    if (qrSize > 0) {
+      generateQR(qrSize)
+    }
+  }, [generateQR, size, containerSize])
+
+  const handleLayout = (event: any) => {
+    if (size === 'auto') {
+      const { width, height } = event.nativeEvent.layout
+      const minSize = Math.min(width, height)
+      if (minSize !== containerSize) {
+        setContainerSize(minSize)
+      }
+    }
+  }
+
+  const viewStyle =
+    size === 'auto' ? { flex: 1, backgroundColor } : { width: size, height: size, backgroundColor }
 
   if (isLoading) {
     return (
-      <View
-        style={{
-          width: size,
-          height: size,
-          backgroundColor,
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}
-      >
+      <View style={viewStyle}>
         <ActivityIndicator size="small" color={color} />
       </View>
     )
   }
 
   return (
-    <View style={{ width: size, height: size, backgroundColor }}>
-      <Svg width={size} height={size}>
+    <View style={viewStyle} onLayout={size === 'auto' ? handleLayout : undefined}>
+      <Svg
+        width={size === 'auto' ? '100%' : containerSize}
+        height={size === 'auto' ? '100%' : containerSize}
+        viewBox={size === 'auto' ? `0 0 ${containerSize} ${containerSize}` : undefined}
+      >
         {qrElements}
       </Svg>
     </View>

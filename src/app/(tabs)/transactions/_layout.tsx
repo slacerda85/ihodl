@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router'
 import colors from '@/ui/colors'
-import { useSettings } from '@/features/store/useSettings'
+import { useSettings } from '@/features/storage'
 
 export default function TransactionsLayout() {
   const { isDark } = useSettings()

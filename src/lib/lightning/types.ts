@@ -27,14 +27,6 @@ export interface LightningClientConfig {
 export interface LightningClient {
   /** Get node information */
   getInfo(): Promise<LightningNode>
-  /** List channels */
-  listChannels(): Promise<LightningChannel[]>
-  /** Get channel information */
-  getChannel(channelId: string): Promise<LightningChannel | null>
-  /** Open channel */
-  openChannel(params: OpenChannelParams): Promise<{ channelId: string }>
-  /** Close channel */
-  closeChannel(channelId: string, force?: boolean): Promise<void>
   /** Create invoice */
   createInvoice(params: CreateInvoiceParams): Promise<LightningInvoice>
   /** Pay invoice */
@@ -43,30 +35,8 @@ export interface LightningClient {
   listPayments(): Promise<LightningPayment[]>
   /** List invoices */
   listInvoices(): Promise<LightningInvoice[]>
-  /** Get network graph */
-  describeGraph(): Promise<{ nodes: LightningNode[]; channels: LightningChannel[] }>
   /** Estimate routing fee */
   estimateFee(destination: string, amount: number): Promise<{ fee: number; probability: number }>
-  /** Connect to peer */
-  connectPeer(pubkey: string, host: string): Promise<void>
-  /** Disconnect from peer */
-  disconnectPeer(pubkey: string): Promise<void>
-  /** List peers */
-  listPeers(): Promise<Peer[]>
-}
-
-/**
- * Peer information
- */
-export interface Peer {
-  /** Public key */
-  pubKey: string
-  /** Address */
-  address: string
-  /** Inbound connection */
-  inbound: boolean
-  /** Ping time */
-  pingTime: number
 }
 
 /**
@@ -153,30 +123,6 @@ export interface CreateInvoiceParams {
   fallbackAddr?: string
   /** Private channels only */
   private?: boolean
-}
-
-/**
- * Parameters for opening a Lightning channel
- */
-export interface OpenChannelParams {
-  /** Node public key to connect to */
-  nodePubkey: string
-  /** Local funding amount in satoshis */
-  localFundingAmount: number
-  /** Push amount to remote in satoshis */
-  pushSat?: number
-  /** Target confirmations */
-  targetConf?: number
-  /** Minimum HTLC size in satoshis */
-  minHtlcMsat?: number
-  /** Remote CSV delay */
-  remoteCsvDelay?: number
-  /** Minimum depth */
-  minConfs?: number
-  /** Whether channel is private */
-  private?: boolean
-  /** Commitment type */
-  commitmentType?: CommitmentType
 }
 
 /**

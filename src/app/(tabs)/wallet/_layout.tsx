@@ -4,7 +4,7 @@ import colors from '@/ui/colors'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { useCallback, useEffect } from 'react'
-import { useWallet, useSettings } from '@/features/store'
+import { useWallet, useSettings } from '@/features/storage'
 import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
 import { ExtendedStackNavigationOptions } from 'expo-router/build/layouts/StackClient'
 import { alpha } from '@/ui/utils'
@@ -128,6 +128,13 @@ export default function WalletLayout() {
       ios: 'modal',
       default: 'transparentModal',
     }),
+    contentStyle: {
+      paddingTop: Platform.OS === 'ios' ? 64 : 0,
+      backgroundColor: 'transparent',
+      /* isDark
+        ? alpha(colors.background.dark, 0.1)
+        : alpha(colors.background.light, 0.1), */
+    },
   }
 
   return (
@@ -137,7 +144,7 @@ export default function WalletLayout() {
         headerTransparent: true,
         headerTintColor: isDark ? colors.text.dark : colors.text.light,
         contentStyle: {
-          backgroundColor: colors.background[isDark ? 'dark' : 'light'],
+          backgroundColor: isDark ? colors.background.dark : colors.background.light,
         },
       }}
     >
@@ -163,7 +170,6 @@ export default function WalletLayout() {
         name="create"
         options={{
           ...modalOptions,
-
           animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
           title: 'Create wallet',
           headerRight:

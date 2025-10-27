@@ -1,5 +1,5 @@
 import { WalletData } from '@/models/wallet'
-import { Reducer } from './types'
+import { Reducer } from '../types'
 
 // Wallet State
 export type WalletState = {

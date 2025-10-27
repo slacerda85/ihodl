@@ -10,6 +10,29 @@ export type CoinType = 0 // Bitcoin
 
 export type LightningAccountType = 'node' | 'channel' | 'funding_wallet'
 
+export type LightningDerivedKeys = {
+  nodeKey?: {
+    privateKey: Uint8Array
+    publicKey: Uint8Array
+    nodeId: string
+  }
+  fundingKeys?: {
+    privateKey: Uint8Array
+    publicKey: Uint8Array
+    address: string
+  }
+  channelKeys?: {
+    channelId: string
+    fundingPrivateKey: Uint8Array
+    paymentPrivateKey: Uint8Array
+    delayedPrivateKey: Uint8Array
+    revocationPrivateKey: Uint8Array
+    htlcPrivateKey: Uint8Array
+    ptlcPrivateKey: Uint8Array
+    perCommitmentPrivateKey: Uint8Array
+  }
+}
+
 export type Account = {
   purpose: Purpose
   coinType: CoinType
@@ -22,5 +45,6 @@ export type Account = {
     nodeIndex?: number // For node accounts
     channelId?: string // For channel accounts
     caseIndex?: number // For funding wallet accounts
+    derivedKeys?: LightningDerivedKeys // Derived keys from seed
   }
 }

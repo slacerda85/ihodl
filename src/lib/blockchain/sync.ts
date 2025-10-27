@@ -26,7 +26,59 @@ export async function getCurrentBlockHeight(socket?: any): Promise<number> {
 }
 
 /**
- * Function to get block header from Electrum by height
+ * Function to get block headers in batch from Electrum
+ */
+export async function getBlockHeadersBatch(
+  startHeight: number,
+  count: number,
+  socket?: any,
+): Promise<BlockHeader[]> {
+  try {
+    const response = await callElectrumMethod<{
+      count: number
+      hex: string
+      max: number
+    }>('blockchain.block.headers', [startHeight, count], socket)
+
+    const { count: returnedCount, hex: headersHex } = response.result || {}
+
+    if (!headersHex || returnedCount === 0) {
+      return []
+    }
+
+    const headers: BlockHeader[] = []
+    const headerSize = 80 // 80 bytes per header
+
+    for (let i = 0; i < returnedCount; i++) {
+      const offset = i * headerSize * 2 // 2 hex chars per byte
+      const headerHex = headersHex.substring(offset, offset + headerSize * 2)
+      const headerBytes = new Uint8Array(
+        headerHex.match(/.{1,2}/g)!.map((byte: string) => parseInt(byte, 16)),
+      )
+      const view = new DataView(headerBytes.buffer)
+
+      const header: BlockHeader = {
+        version: view.getUint32(0, true),
+        previousBlockHash: headerBytes.slice(4, 36),
+        merkleRoot: headerBytes.slice(36, 68),
+        timestamp: view.getUint32(68, true),
+        bits: view.getUint32(72, true),
+        nonce: view.getUint32(76, true),
+        height: startHeight + i,
+      }
+
+      headers.push(header)
+    }
+
+    return headers
+  } catch (error) {
+    console.error(`Error getting block headers batch from ${startHeight}:`, error)
+    throw error
+  }
+}
+
+/**
+ * Function to get block header from Electrum by height (fallback method)
  */
 export async function getBlockHeaderFromElectrum(
   height: number,
@@ -57,7 +109,7 @@ export async function getBlockHeaderFromElectrum(
 }
 
 /**
- * Function to sync blockchain headers
+ * Function to sync blockchain headers with batch optimization
  */
 export async function syncHeaders(
   maxSizeGB: number = 1,
@@ -78,35 +130,91 @@ export async function syncHeaders(
       ? Math.max(lastHeader.height! + 1, startHeight)
       : startHeight
 
+    // Validate that we have a valid sync range
+    if (effectiveStartHeight > currentHeight) {
+      console.log(
+        `[blockchain] No sync needed: effective start height (${effectiveStartHeight}) >= current height (${currentHeight})`,
+      )
+      return
+    }
+
     console.log(
       `Syncing headers from ${effectiveStartHeight} to ${currentHeight} (max ${maxHeaders} headers)`,
     )
 
-    for (let height = effectiveStartHeight; height <= currentHeight; height++) {
-      const header = await getBlockHeaderFromElectrum(height, socket)
-      const previousHeader =
-        height > 0 ? getBlockHeaderByHeight(height - 1) || undefined : undefined
+    const batchSize = 2016 // Maximum headers per batch as per Electrum protocol
+    let syncedCount = 0
 
-      // console.log(`Fetched header for height ${height}, hash: ${uint8ArrayToHex(header.hash!)}`)
+    for (let height = effectiveStartHeight; height <= currentHeight; height += batchSize) {
+      const remainingHeaders = currentHeight - height + 1
+      const currentBatchSize = Math.min(batchSize, remainingHeaders)
 
-      if (!validateBlockHeader(header, previousHeader)) {
-        console.error(`Invalid header at height ${height}`)
-        break
+      try {
+        console.log(`[blockchain] Downloading batch: ${height} to ${height + currentBatchSize - 1}`)
+        const headers = await getBlockHeadersBatch(height, currentBatchSize, socket)
+
+        // Process and validate headers in batch
+        for (let i = 0; i < headers.length; i++) {
+          const header = headers[i]
+          const previousHeader =
+            header.height! > 0 ? getBlockHeaderByHeight(header.height! - 1) || undefined : undefined
+
+          // Validate header
+          if (!validateBlockHeader(header, previousHeader)) {
+            console.error(`Invalid header at height ${header.height}`)
+            break
+          }
+
+          // Store header
+          storeBlockHeader(header)
+          syncedCount++
+
+          // Call progress callback
+          if (onProgress) {
+            onProgress(header.height!, currentHeight)
+          }
+        }
+
+        // Yield control to allow UI updates
+        await new Promise(resolve => setTimeout(resolve, 1))
+      } catch (batchError) {
+        console.error(
+          `[blockchain] Error in batch ${height}-${height + currentBatchSize - 1}:`,
+          batchError,
+        )
+        // Fall back to individual header fetching for this batch
+        console.log(
+          `[blockchain] Falling back to individual header fetching for batch starting at ${height}`,
+        )
+
+        for (let h = height; h < height + currentBatchSize && h <= currentHeight; h++) {
+          try {
+            const header = await getBlockHeaderFromElectrum(h, socket)
+            const previousHeader = h > 0 ? getBlockHeaderByHeight(h - 1) || undefined : undefined
+
+            if (!validateBlockHeader(header, previousHeader)) {
+              console.error(`Invalid header at height ${h}`)
+              break
+            }
+
+            storeBlockHeader(header)
+            syncedCount++
+
+            if (onProgress) {
+              onProgress(h, currentHeight)
+            }
+
+            // Yield control
+            await new Promise(resolve => setTimeout(resolve, 1))
+          } catch (headerError) {
+            console.error(`[blockchain] Error fetching individual header ${h}:`, headerError)
+            break
+          }
+        }
       }
-
-      storeBlockHeader(header)
-      // console.log(`Synced header ${height}`)
-
-      // Call progress callback if provided
-      if (onProgress) {
-        onProgress(height, currentHeight)
-      }
-
-      // Yield control to allow UI updates (small delay)
-      await new Promise(resolve => setTimeout(resolve, 1))
     }
 
-    console.log('Headers synced')
+    console.log(`[blockchain] Synced ${syncedCount} headers successfully`)
   } catch (error) {
     console.error('Error syncing headers:', error)
   } finally {

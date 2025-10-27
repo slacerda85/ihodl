@@ -8,6 +8,8 @@ export {
   unauthenticatedLightningClient,
 } from './clients'
 
+export { createLightningWalletProvider, BreezWalletProvider, breezClient } from './client'
+
 export {
   LIGHTNING_PURPOSE,
   LIGHTNING_CHAIN_BITCOIN,
@@ -49,21 +51,7 @@ export {
   parseChannelId,
 } from './utils'
 
-export {
-  initializeLightningWallet,
-  saveLightningWalletData,
-  loadLightningWalletData,
-  saveLightningConfig,
-  loadLightningConfig,
-  getLightningTransactionHistory,
-  openChannel,
-  closeChannel,
-  listChannels,
-  disconnectFromNode,
-  getNodeInfo,
-  createInvoice,
-  estimateRoutingFee,
-} from './wallet'
+export { initializeLightningWallet, createInvoice, estimateRoutingFee } from './wallet'
 
 export {
   LightningSecureStorage,
@@ -74,8 +62,6 @@ export {
   restoreLightningNode,
 } from './storage'
 
-export { LightningNodeImpl } from './node'
-
 export type {
   LightningClient,
   LightningClientConfig,
@@ -83,7 +69,6 @@ export type {
   LightningChannel,
   LightningInvoice,
   LightningPayment,
-  Peer,
   ChannelStatus,
   ChannelType,
   CommitmentType,
@@ -91,7 +76,6 @@ export type {
   HtlcStatus,
   PaymentStatus,
   HtlcAttemptStatus,
-  OpenChannelParams,
   CreateInvoiceParams,
   PaymentResult,
   LightningChannelKeyset,
@@ -114,3 +98,5 @@ export type {
   SecureStorageConfig,
   LightningNodeState,
 } from './types'
+
+export type { LightningWalletConfig, LightningWalletProvider } from './client'

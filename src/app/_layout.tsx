@@ -1,11 +1,11 @@
-import AuthProvider from '@/features/auth/AuthProvider'
+import { useEffect, useState } from 'react'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
-import InactivityOverlay from '@/features/auth/InactivityOverlay'
 import * as SplashScreen from 'expo-splash-screen'
-import { useEffect, useState } from 'react'
+import AuthProvider from '@/features/auth/AuthProvider'
 import AuthScreen from '@/features/auth/AuthScreen'
-import { StoreProvider, useSettings } from '@/features/store'
+import InactivityOverlay from '@/features/auth/InactivityOverlay'
+import { StorageProvider, useSettings } from '@/features/storage'
 
 SplashScreen.preventAutoHideAsync()
 
@@ -21,11 +21,7 @@ function AppContent() {
   return (
     <>
       <Stack>
-        <Stack.Screen
-          name="index"
-          options={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}
-        />
-
+        <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       </Stack>
       <StatusBar style={isDark ? 'light' : 'dark'} />
@@ -47,12 +43,12 @@ export default function RootLayout() {
   }
 
   return (
-    <StoreProvider>
+    <StorageProvider>
       <AuthProvider>
         <AppContent />
         <InactivityOverlay />
         <AuthScreen />
       </AuthProvider>
-    </StoreProvider>
+    </StorageProvider>
   )
 }

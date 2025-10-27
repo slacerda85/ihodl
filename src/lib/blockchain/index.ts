@@ -51,6 +51,7 @@ export {
   getTransactionFeeEstimate,
   monitorChannelFunding,
   waitForConfirmations,
+  broadcastTransaction,
 } from './client'
 
 // Client factory functions

@@ -15,9 +15,11 @@ import * as Clipboard from 'expo-clipboard'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
-import { useWallet, useSettings } from '../store'
+import { useWallet, useSettings } from '@/features/storage'
 import { UsedAddress } from '@/lib/address'
 import QRCode from '@/ui/QRCode'
+import Button from '@/ui/Button'
+import { IconButton } from '@/ui/Button'
 
 // Address generation utilities - separated for better organization
 
@@ -126,6 +128,11 @@ export default function Receive() {
     )
   }
 
+  const calcScreenWidth = () => {
+    const screenWidth = window.innerWidth
+    return screenWidth - 32 // subtract padding
+  }
+
   return (
     <>
       <ScrollView style={[styles.scrollView, isDark && styles.scrollViewDark]}>
@@ -150,66 +157,74 @@ export default function Receive() {
           {/* Address Display with QR Code Section */}
           {selectedAddress && activeWallet && !isLoadingAddresses && (
             <View style={[styles.sectionBox, isDark && styles.sectionBoxDark]}>
-              <Text style={[styles.subtitle, isDark && styles.subtitleDark]}>
-                {activeWallet ? `Wallet: ${activeWallet.walletName}` : 'No wallet selected'}
-              </Text>
-              <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>Address</Text>
-              <Text style={[styles.addressText, isDark && styles.addressTextDark]}>
-                {selectedAddress}
-              </Text>
               <View style={styles.qrContainer}>
                 <QRCode
                   value={`${selectedAddress}`}
-                  size={180}
+                  size={
+                    // calculate screen width minus padding
+                    calcScreenWidth() < 300 ? calcScreenWidth() : 300
+                  }
                   color={isDark ? colors.text.dark : colors.text.light}
                   backgroundColor="transparent"
                 />
               </View>
-              <View style={styles.buttonRow}>
-                <Pressable
-                  style={[
-                    styles.button,
-                    styles.secondaryButton,
-                    isDark && styles.secondaryButtonDark,
-                  ]}
-                  onPress={handleCopyAddress}
-                >
-                  <IconSymbol name="doc.on.doc" size={20} color={colors.primary} />
-                  <Text style={styles.secondaryButtonText}>Copy</Text>
-                </Pressable>
+              {/* <View style={styles.buttonRow}> */}
+              <Button
+                variant="solid"
+                backgroundColor={isDark ? alpha(colors.white, 0.05) : alpha(colors.black, 0.03)}
+                color={colors.textSecondary[isDark ? 'dark' : 'light']}
+                startIcon={
+                  <IconSymbol
+                    name="doc.on.doc"
+                    size={20}
+                    color={colors.textSecondary[isDark ? 'dark' : 'light']}
+                  />
+                }
+                onPress={handleCopyAddress}
+              >
+                Copy
+              </Button>
 
-                <Pressable
-                  style={[
-                    styles.button,
-                    styles.secondaryButton,
-                    isDark && styles.secondaryButtonDark,
-                  ]}
-                  onPress={handleShareAddress}
-                >
-                  <IconSymbol name="square.and.arrow.up" size={20} color={colors.primary} />
-                  <Text style={styles.secondaryButtonText}>Share</Text>
-                </Pressable>
-              </View>
-              <Pressable
-                style={[
-                  styles.button,
-                  styles.secondaryButton,
-                  isDark && styles.secondaryButtonDark,
-                ]}
+              <Button
+                variant="solid"
+                backgroundColor={isDark ? alpha(colors.white, 0.05) : alpha(colors.black, 0.03)}
+                color={colors.textSecondary[isDark ? 'dark' : 'light']}
+                startIcon={
+                  <IconSymbol
+                    name="square.and.arrow.up"
+                    size={20}
+                    color={colors.textSecondary[isDark ? 'dark' : 'light']}
+                  />
+                }
+                onPress={handleShareAddress}
+              >
+                Share
+              </Button>
+              {/* </View> */}
+              <Button
+                variant="solid"
+                backgroundColor={isDark ? alpha(colors.white, 0.05) : alpha(colors.black, 0.03)}
+                color={colors.textSecondary[isDark ? 'dark' : 'light']}
+                startIcon={
+                  <IconSymbol
+                    name="list.bullet"
+                    size={20}
+                    color={colors.textSecondary[isDark ? 'dark' : 'light']}
+                  />
+                }
                 onPress={() => setShowUsedAddresses(true)}
               >
-                <IconSymbol name="list.bullet" size={20} color={colors.primary} />
-                <Text style={styles.secondaryButtonText}>
-                  View Used Addresses ({usedReceivingAddresses.length + usedChangeAddresses.length})
-                </Text>
-              </Pressable>
-              <Pressable
-                style={[styles.button, styles.primaryButton]}
+                View Used Addresses ({usedReceivingAddresses.length + usedChangeAddresses.length})
+              </Button>
+              <Button
+                variant="solid"
+                backgroundColor={alpha(colors.primary, 0.7)}
+                color={colors.white}
+                startIcon={<IconSymbol name="plus" size={20} color={colors.white} />}
                 onPress={handleGenerateNewAddress}
               >
-                <IconSymbol name="plus" size={20} color={colors.primary} />
-                <Text style={styles.primaryButtonText}>Generate New Address</Text>
-              </Pressable>
+                Generate New Address
+              </Button>
             </View>
           )}
           {/* Info Section */}
@@ -243,9 +258,18 @@ export default function Receive() {
             <Text style={[styles.modalTitle, isDark && styles.modalTitleDark]}>
               Used Addresses ({usedReceivingAddresses.length + usedChangeAddresses.length})
             </Text>
-            <Pressable style={styles.closeButton} onPress={() => setShowUsedAddresses(false)}>
-              <IconSymbol name="xmark" size={24} color={colors.text.light} />
-            </Pressable>
+            <IconButton
+              icon={
+                <IconSymbol
+                  name="xmark"
+                  size={24}
+                  color={isDark ? colors.text.dark : colors.text.light}
+                />
+              }
+              variant="solid"
+              backgroundColor="transparent"
+              onPress={() => setShowUsedAddresses(false)}
+            />
           </View>
 
           {/* Tabs */}
@@ -339,18 +363,18 @@ const styles = StyleSheet.create({
     // No additional styles needed
   },
   contentWrapper: {
-    paddingHorizontal: 24,
-    paddingTop: 24,
+    padding: 24,
+    paddingTop: 32,
     gap: 24,
   },
   contentWrapperDark: {
     // No additional styles needed
   },
   sectionBox: {
-    backgroundColor: colors.white,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    borderRadius: 16,
+    // backgroundColor: colors.white,
+    // paddingVertical: 16,
+    // paddingHorizontal: 16,
+    // borderRadius: 16,
     gap: 24,
   },
   sectionBoxFirst: {
@@ -362,7 +386,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 16,
   },
   sectionBoxDark: {
-    backgroundColor: alpha(colors.background.light, 0.05),
+    // backgroundColor: alpha(colors.background.light, 0.05),
   },
   sectionTitle: {
     fontSize: 18,
@@ -381,7 +405,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary.dark,
   },
   qrContainer: {
-    padding: 8,
+    // padding: 8,
     alignItems: 'center',
     justifyContent: 'center',
     // padding: 8,
@@ -465,40 +489,11 @@ const styles = StyleSheet.create({
     color: colors.textSecondary.dark,
   },
   buttonRow: {
-    flexDirection: 'row',
+    // backgroundColor: 'blue',
+    // flex: 1,
+    // flexDirection: 'row',
     gap: 12,
     // marginBottom: 12,
-  },
-  button: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    flex: 1,
-  },
-  primaryButton: {
-    backgroundColor: colors.primary,
-  },
-  secondaryButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  secondaryButtonDark: {
-    borderColor: colors.primary,
-  },
-  primaryButtonText: {
-    color: colors.white,
-    fontWeight: '500',
-    fontSize: 16,
-  },
-  secondaryButtonText: {
-    color: colors.primary,
-    fontWeight: '500',
-    fontSize: 16,
   },
   infoBox: {
     flexDirection: 'row',
@@ -559,9 +554,6 @@ const styles = StyleSheet.create({
   },
   modalTitleDark: {
     color: colors.text.dark,
-  },
-  closeButton: {
-    padding: 8,
   },
   modalContent: {
     padding: 16,

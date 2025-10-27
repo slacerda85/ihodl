@@ -40,7 +40,7 @@ export async function storeWalletSeedPhrase(
  */
 export async function getWalletSeedPhrase(
   walletId: string,
-  password: string,
+  password?: string,
 ): Promise<string | null> {
   try {
     const encryptedSeed = secureStorage.getString(`${STORAGE_KEYS.WALLET_SEED_PHRASE}_${walletId}`)

@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { View, Text, StyleSheet, FlatList, Pressable, Alert, RefreshControl } from 'react-native'
-import { useRouter } from 'expo-router'
-import { useLightning, useWallet } from '../store'
+import { useLightning, useWallet } from '@/features/storage'
 import { LightningChannel, ChannelStatus } from '@/lib/lightning'
 import { formatBalance } from '../wallet/utils'
 
@@ -174,21 +173,21 @@ const ChannelActionsModal: React.FC<ChannelActionsModalProps> = ({
 }
 
 const LightningChannels: React.FC = () => {
-  const router = useRouter()
-  const { getLightningChannels, getLightningBalance, loadChannels, closeChannel } = useLightning()
-  const { unit, activeWalletId } = useWallet()
+  const { channels, getActiveChannels } = useLightning()
+  const { unit } = useWallet()
 
   const [selectedChannel, setSelectedChannel] = useState<LightningChannel | null>(null)
   const [modalVisible, setModalVisible] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
-  const channels = getLightningChannels(activeWalletId || '')
+  const activeChannels = getActiveChannels()
+  const totalBalance = activeChannels.reduce((total, channel) => total + channel.localBalance, 0)
 
   const handleRefresh = async () => {
     setRefreshing(true)
-    if (activeWalletId) {
-      await loadChannels(activeWalletId)
-    }
+    // In SPV mode, we don't need to load channels from external sources
+    // Channels are managed locally
+    await new Promise(resolve => setTimeout(resolve, 500)) // Simulate refresh
     setRefreshing(false)
   }
 
@@ -198,27 +197,12 @@ const LightningChannels: React.FC = () => {
   }
 
   const handleCloseChannel = async (channelId: string, force: boolean) => {
-    try {
-      await closeChannel(activeWalletId!, channelId, force)
-      Alert.alert('Sucesso', `Canal ${force ? 'forçadamente ' : ''}fechado com sucesso!`)
-      // Refresh channels list
-      if (activeWalletId) {
-        await loadChannels(activeWalletId)
-      }
-    } catch (error) {
-      console.error('Error closing channel:', error)
-      Alert.alert('Erro', 'Falha ao fechar canal Lightning')
-    }
+    // SPV mode doesn't support channel closing yet
+    Alert.alert(
+      'Funcionalidade não disponível',
+      'O fechamento de canais não está disponível no modo SPV. Use um nó Lightning completo para esta funcionalidade.',
+    )
   }
-
-  useEffect(() => {
-    if (activeWalletId) {
-      loadChannels(activeWalletId)
-    }
-  }, [activeWalletId]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const totalBalance = activeWalletId ? getLightningBalance(activeWalletId) : 0
-  const activeChannels = channels.filter(c => c.active).length
 
   return (
     <View style={styles.container}>
@@ -226,7 +210,7 @@ const LightningChannels: React.FC = () => {
         <Text style={styles.title}>Canais Lightning</Text>
         <View style={styles.summary}>
           <Text style={styles.summaryText}>
-            {activeChannels} canais ativos • {formatBalance(totalBalance, unit)} {unit}
+            {activeChannels.length} canais ativos • {formatBalance(totalBalance, unit)} {unit}
           </Text>
         </View>
       </View>
@@ -252,9 +236,10 @@ const LightningChannels: React.FC = () => {
         onCloseChannel={handleCloseChannel}
       />
 
-      <Pressable style={styles.fab} onPress={() => router.push('/wallet/open-channel' as any)}>
+      {/* FAB hidden in SPV mode since channel opening is not supported */}
+      {/* <Pressable style={styles.fab} onPress={() => router.push('/wallet/open-channel' as any)}>
         <Text style={styles.fabText}>+</Text>
-      </Pressable>
+      </Pressable> */}
     </View>
   )
 }

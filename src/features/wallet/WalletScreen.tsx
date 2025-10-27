@@ -1,29 +1,23 @@
 // React and React Native
 import { Link, useRouter } from 'expo-router'
-import { StyleSheet, Text, Pressable, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
-import { useWallet, useSettings } from '../store'
-import { GlassView, GlassContainer } from 'expo-glass-effect'
+import { useWallet, useSettings } from '@/features/storage'
 
 // Components
 import WalletBalance from './WalletBalance'
 import WalletAccounts from './WalletAccounts'
-import Divider from '@/ui/Divider'
 import CreateWalletIcon from './CreateWalletIcon'
 import ImportWalletIcon from './ImportWalletIcon'
 import ContentContainer from '@/ui/ContentContainer'
 import Button from '@/ui/Button'
-import { useHeaderHeight } from '@react-navigation/elements'
+// import { useHeaderHeight } from '@react-navigation/elements'
 
 export default function WalletScreen() {
   const router = useRouter()
-  const headerHeight = useHeaderHeight()
   // theme
   const { isDark } = useSettings()
-
-  // Hook de inicialização para carregar transações automaticamente
-  // useInitialize() // Removido para evitar inicialização duplicada
 
   function handleSend() {
     // Navigate to send screen
@@ -31,7 +25,6 @@ export default function WalletScreen() {
   }
 
   function handleReceive() {
-    // Navigate to receive screen
     router.push('/wallet/receive' as any)
   }
 
@@ -44,57 +37,27 @@ export default function WalletScreen() {
   }
 
   const { activeWalletId, wallets } = useWallet()
-  // Removed fetchTransactions call - now handled by TransactionsScreen
-
-  // Transaction sync logic can be handled by individual components that need it
 
   if (wallets === undefined || wallets?.length === 0) {
     // create link to wallet/manage
     return (
       <ContentContainer>
         <View style={styles.emptyState}>
-          <Text style={[styles.walletName, isDark && styles.walletNameDark]}>No wallets found</Text>
-          <Divider
-            orientation="horizontal"
-            color={
-              isDark ? alpha(colors.background.light, 0.05) : alpha(colors.background.dark, 0.05)
-            }
-          />
-          <View>
-            <Pressable
-              onPress={handleCreateWallet}
-              style={[
-                styles.neutralButton,
-                styles.neutralButtonFirst,
-                isDark && styles.neutralButtonDark,
-              ]}
-            >
-              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <CreateWalletIcon size={24} color={colors.primary} />
-                <Text style={styles.neutralButtonText}>Create New Wallet</Text>
-              </View>
-            </Pressable>
-            <Divider
-              orientation="horizontal"
-              color={isDark ? alpha(colors.background.light, 0.1) : colors.background.light}
-            />
+          <Button
+            onPress={handleCreateWallet}
+            variant="glass"
+            startIcon={<CreateWalletIcon size={24} color={colors.primary} />}
+          >
+            <Text style={styles.neutralButtonText}>New Wallet</Text>
+          </Button>
 
-            <Pressable
-              onPress={handleImportWallet}
-              style={[
-                styles.neutralButton,
-                styles.neutralButtonLast,
-                // styles.secondaryButton,
-                isDark && styles.neutralButtonDark,
-              ]}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <ImportWalletIcon size={24} color={colors.primary} />
-
-                <Text style={styles.neutralButtonText}>Import Wallet</Text>
-              </View>
-            </Pressable>
-          </View>
+          <Button
+            onPress={handleImportWallet}
+            variant="glass"
+            startIcon={<ImportWalletIcon size={24} color={colors.primary} />}
+          >
+            <Text style={styles.neutralButtonText}>Import Wallet</Text>
+          </Button>
         </View>
       </ContentContainer>
     )
@@ -123,18 +86,14 @@ export default function WalletScreen() {
       <View style={{ gap: 32 }}>
         <WalletBalance />
         <View style={styles.actionsSection}>
-          <Button onPress={handleSend} style={{ flex: 1 }}>
-            <GlassView isInteractive style={styles.button} tintColor={alpha(colors.primary, 0.8)}>
-              <Text style={[styles.buttonText]}>Send</Text>
-            </GlassView>
+          <Button onPress={handleSend} style={{ flex: 1 }} tintColor={alpha(colors.primary, 0.7)}>
+            <Text style={[styles.buttonText]}>Send</Text>
           </Button>
 
           <Button onPress={handleReceive} style={{ flex: 1 }}>
-            <GlassView isInteractive style={styles.button}>
-              <Text style={[styles.buttonTextSecondary, isDark && styles.buttonTextSecondaryDark]}>
-                Receive
-              </Text>
-            </GlassView>
+            <Text style={[styles.buttonTextSecondary, isDark && styles.buttonTextSecondaryDark]}>
+              Receive
+            </Text>
           </Button>
         </View>
 
@@ -292,8 +251,6 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 16,
   },
   neutralButtonText: {
-    fontSize: 14,
-    fontWeight: '400',
     color: colors.primary,
   },
   selectedWalletBox: {

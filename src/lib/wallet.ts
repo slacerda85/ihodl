@@ -1,12 +1,14 @@
-import { Account } from '@/models/account'
-import { fromMnemonic, toMnemonic } from '@/lib/key'
-import { createEntropy, randomUUID } from '@/lib/crypto'
+import { Account, LightningDerivedKeys } from '@/models/account'
+import { fromMnemonic, toMnemonic, createRootExtendedKey } from '@/lib/key'
+import { createEntropy, randomUUID, uint8ArrayToHex } from '@/lib/crypto'
 import { WalletData } from '@/models/wallet'
+import { storeWalletSeedPhrase, getWalletSeedPhrase } from '@/lib/secureStorage'
 import {
-  storeWalletSeedPhrase,
-  getWalletSeedPhrase,
-  removeWalletSeedPhrase,
-} from '@/lib/secureStorage'
+  deriveExtendedLightningKey,
+  deriveNodeKey,
+  deriveFundingWalletAddress,
+  deriveLightningChannelKeyset,
+} from '@/lib/lightning/keys'
 
 export interface CreateWalletParams {
   walletName: string
@@ -59,6 +61,7 @@ function createWallet({
   try {
     const walletId = randomUUID()
     const entropy = seedPhrase ? fromMnemonic(seedPhrase) : createEntropy(16)
+    const masterKey = createRootExtendedKey(entropy)
 
     const defaultAccounts: Account[] = [
       // Bitcoin Native Segwit
@@ -83,13 +86,16 @@ function createWallet({
 
     const accountsToAdd = accounts ?? defaultAccounts
 
+    // Derive Lightning keys for accounts that need them
+    const accountsWithKeys = accountsToAdd.map(account => deriveLightningKeys(masterKey, account))
+
     const seedPhraseToUse = seedPhrase ?? toMnemonic(entropy)
 
     const newWallet: WalletData = {
       walletId,
       walletName,
       cold,
-      accounts: accountsToAdd,
+      accounts: accountsWithKeys,
     }
     return {
       wallet: newWallet,
@@ -103,7 +109,62 @@ function createWallet({
   }
 }
 
-export { createWallet }
+/**
+ * Derives Lightning keys for an account based on its type
+ * @param masterKey - The master extended key from seed
+ * @param account - The account configuration
+ * @returns The account with derived keys
+ */
+function deriveLightningKeys(masterKey: Uint8Array, account: Account): Account {
+  if (account.purpose !== 9735 || !account.lightning) {
+    return account
+  }
+
+  const lightningKey = deriveExtendedLightningKey(masterKey)
+  const { type, chain, lnVer, nodeIndex, channelId, caseIndex } = account.lightning
+
+  const derivedKeys: LightningDerivedKeys = {}
+
+  if (type === 'node' && nodeIndex !== undefined) {
+    const nodeKey = deriveNodeKey(lightningKey, chain, nodeIndex)
+    derivedKeys.nodeKey = {
+      privateKey: nodeKey.privateKey,
+      publicKey: nodeKey.publicKey,
+      nodeId: uint8ArrayToHex(nodeKey.publicKey),
+    }
+  }
+
+  if (type === 'funding_wallet' && caseIndex !== undefined) {
+    const fundingWallet = deriveFundingWalletAddress(lightningKey, chain, caseIndex, 0)
+    derivedKeys.fundingKeys = {
+      privateKey: fundingWallet.privateKey,
+      publicKey: fundingWallet.publicKey,
+      address: fundingWallet.address,
+    }
+  }
+
+  if (type === 'channel' && channelId) {
+    const channelKeyset = deriveLightningChannelKeyset(lightningKey, channelId, chain, lnVer)
+    derivedKeys.channelKeys = {
+      channelId: channelKeyset.channelId,
+      fundingPrivateKey: channelKeyset.fundingPrivateKey,
+      paymentPrivateKey: channelKeyset.paymentPrivateKey,
+      delayedPrivateKey: channelKeyset.delayedPrivateKey,
+      revocationPrivateKey: channelKeyset.revocationPrivateKey,
+      htlcPrivateKey: channelKeyset.htlcPrivateKey,
+      ptlcPrivateKey: channelKeyset.ptlcPrivateKey,
+      perCommitmentPrivateKey: channelKeyset.perCommitmentPrivateKey,
+    }
+  }
+
+  return {
+    ...account,
+    lightning: {
+      ...account.lightning,
+      derivedKeys,
+    },
+  }
+}
 
 /**
  * Securely stores a wallet's seed phrase
@@ -129,10 +190,4 @@ export async function getWalletSeed(walletId: string, password: string): Promise
   return getWalletSeedPhrase(walletId, password)
 }
 
-/**
- * Removes a wallet's seed phrase from secure storage
- * @param walletId - The wallet identifier
- */
-export async function removeWalletSeed(walletId: string): Promise<void> {
-  return removeWalletSeedPhrase(walletId)
-}
+export { createWallet }

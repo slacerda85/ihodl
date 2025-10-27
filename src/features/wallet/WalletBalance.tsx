@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-nati
 import { useState, useEffect } from 'react'
 import colors from '@/ui/colors'
 import SwapIcon from './SwapIcon'
-import { useWallet, useTransactions, useSettings } from '../store'
+import { useWallet, useTransactions, useSettings } from '@/features/storage'
 import { formatBalance } from './utils'
 import { alpha } from '@/ui/utils'
 import { GlassView } from 'expo-glass-effect'

@@ -1,7 +1,8 @@
 import { Text, View, StyleSheet, useColorScheme, ActivityIndicator, Pressable } from 'react-native'
 import { useHeaderHeight } from '@react-navigation/elements'
 import colors from '@/ui/colors'
-import { useBlockchain, useSettings } from '@/features/store'
+import { useBlockchain, useSettings } from '@/features/storage'
+import Button from '@/ui/Button'
 
 // Helper function to format bytes
 function formatBytes(bytes: number): string {
@@ -13,7 +14,6 @@ function formatBytes(bytes: number): string {
 }
 
 export default function BlockchainScreen() {
-  const headerHeight = useHeaderHeight()
   const colorScheme = useColorScheme()
   const { colorMode } = useSettings()
   const effectiveColorMode = colorMode === 'auto' ? (colorScheme ?? 'light') : colorMode
@@ -97,21 +97,27 @@ export default function BlockchainScreen() {
         </View>
 
         {/* Manual Sync Button */}
-        <Pressable
-          style={[styles.button, isSyncing && styles.buttonDisabled]}
-          onPress={syncHeadersManually}
+        <Button
+          variant="solid"
+          backgroundColor={isSyncing ? colors.background.light : colors.primary}
+          glassStyle={styles.button}
           disabled={isSyncing}
+          onPress={syncHeadersManually}
         >
           <Text style={[styles.buttonText, isSyncing && styles.buttonTextDisabled]}>
             {isSyncing ? 'Synchronizing...' : 'Sync Now'}
           </Text>
-        </Pressable>
+        </Button>
 
         {/* Info Text */}
         <View style={styles.infoContainer}>
           <Text style={[styles.infoText, isDark && styles.infoTextDark]}>
             The blockchain headers are synchronized to verify transactions and maintain network
             security. This process runs automatically in the background.
+          </Text>
+          <Text style={[styles.spvText, isDark && styles.spvTextDark]}>
+            SPV (Simplified Payment Verification) mode: Only block headers are downloaded, providing
+            fast synchronization while maintaining security through proof-of-work validation.
           </Text>
         </View>
       </View>
@@ -265,5 +271,16 @@ const styles = StyleSheet.create({
   },
   infoTextDark: {
     color: colors.textSecondary.dark,
+  },
+  spvText: {
+    fontSize: 14,
+    color: colors.primary,
+    textAlign: 'center',
+    lineHeight: 20,
+    fontStyle: 'italic',
+    marginTop: 8,
+  },
+  spvTextDark: {
+    color: colors.primary,
   },
 })

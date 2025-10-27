@@ -1,11 +1,11 @@
-import { useStore } from './StoreProvider'
+import { useStorage } from '../StorageProvider'
 import { useCallback, useEffect } from 'react'
 import { syncHeaders, getLastSyncedHeader, getCurrentBlockHeight } from '@/lib/blockchain'
-import { useSettings } from './useSettings'
+import { useSettings } from '../settings/useSettings'
 
 // Blockchain hook
 export const useBlockchain = () => {
-  const { state, dispatch } = useStore()
+  const { state, dispatch } = useStorage()
   const { maxBlockchainSizeGB } = useSettings()
 
   // Shared sync function to eliminate code duplication
@@ -49,7 +49,7 @@ export const useBlockchain = () => {
               })
             }
           },
-          { blockchain: state.blockchain }, // Pass only blockchain state to avoid circular deps
+          { electrum: state.electrum }, // Pass electrum state for peer management
         )
 
         const updatedLast = getLastSyncedHeader()
@@ -72,7 +72,7 @@ export const useBlockchain = () => {
         dispatch({ type: 'BLOCKCHAIN', action: { type: 'SET_SYNCING', payload: false } })
       }
     },
-    [maxBlockchainSizeGB, dispatch, state.blockchain],
+    [maxBlockchainSizeGB, dispatch, state.blockchain, state.electrum],
   )
 
   // Manual sync function
@@ -112,48 +112,65 @@ export const useBlockchain = () => {
 
   // Auto-sync on mount and periodically
   useEffect(() => {
-    // Validate data consistency on mount
-    validateDataConsistency()
+    let mounted = true
 
     // Initial sync on mount
-    performSync()
+    const initSync = async () => {
+      if (!mounted) return
+      await validateDataConsistency()
+      if (!mounted) return
+      await performSync()
+    }
+    initSync()
 
-    // Check for new blocks every 10 minutes
+    return () => {
+      mounted = false
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Separate effect for periodic checks
+  useEffect(() => {
     const interval = setInterval(
       async () => {
         try {
           const current = await getCurrentBlockHeight()
+
+          // Always update current height if it changed
           if (current !== state.blockchain.currentHeight) {
             dispatch({
               type: 'BLOCKCHAIN',
               action: { type: 'SET_CURRENT_HEIGHT', payload: current },
             })
-            // Only sync if we're not already syncing and there's a significant height difference
-            if (!state.blockchain.isSyncing && state.blockchain.lastSyncedHeight) {
-              const heightDiff = current - state.blockchain.lastSyncedHeight
-              if (heightDiff > 0) {
-                console.log(
-                  `📈 [useBlockchain] New blocks detected (${heightDiff}), triggering sync`,
-                )
-                performSync()
-              }
+          }
+
+          // Only sync if we're not already syncing and there's work to do
+          if (!state.blockchain.isSyncing && state.blockchain.lastSyncedHeight !== null) {
+            const heightDiff = current - state.blockchain.lastSyncedHeight
+
+            // Only sync if there are new blocks AND the last synced height is not ahead of current
+            if (heightDiff > 0 && state.blockchain.lastSyncedHeight < current) {
+              console.log(`📈 [useBlockchain] New blocks detected (${heightDiff}), triggering sync`)
+              performSync()
+            } else if (heightDiff < 0) {
+              console.warn(
+                `⚠️ [useBlockchain] Last synced height (${state.blockchain.lastSyncedHeight}) is ahead of current height (${current}), skipping sync`,
+              )
             }
           }
         } catch (error) {
           console.error('❌ [useBlockchain] Error checking for new blocks:', error)
         }
       },
-      10 * 60 * 1000, // 10 minutes
+      2 * 60 * 1000, // 2 minutes for faster SPV updates
     )
 
     return () => clearInterval(interval)
   }, [
-    performSync,
-    validateDataConsistency,
     state.blockchain.currentHeight,
     state.blockchain.isSyncing,
     state.blockchain.lastSyncedHeight,
     dispatch,
+    performSync,
   ])
 
   return {

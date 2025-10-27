@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { View, Text, StyleSheet, ScrollView } from 'react-native'
-import { useWallet, useSettings } from '../store'
+import { useWallet, useSettings } from '@/features/storage'
 import { alpha } from '@/ui/utils'
 import colors from '@/ui/colors'
 import Divider from '@/ui/Divider'

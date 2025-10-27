@@ -1,5 +1,5 @@
 import { ColorMode } from '@/models/settings'
-import { Reducer } from './types'
+import { Reducer } from '../types'
 
 // Settings State
 export type SettingsState = {

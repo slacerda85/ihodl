@@ -9,7 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native'
-import { useWallet } from '../store'
+import { useWallet } from '@/features/storage'
 
 interface CreateInvoiceModalProps {
   visible: boolean

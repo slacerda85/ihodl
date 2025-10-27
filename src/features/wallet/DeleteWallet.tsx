@@ -5,7 +5,7 @@ import { useCallback, useState } from 'react'
 import { useRouter } from 'expo-router'
 // import { deleteWallet } from '@/lib/wallet'
 import { alpha } from '@/ui/utils'
-import { useWallet, useSettings } from '../store'
+import { useWallet, useSettings } from '@/features/storage'
 import Button from '@/ui/Button'
 
 export default function DeleteWallet() {
@@ -20,15 +20,18 @@ export default function DeleteWallet() {
   const handleDeleteWallet = useCallback(async () => {
     try {
       setSubmitting(true)
-      if (!activeWalletId) return
-      deleteWallet(activeWalletId)
+      if (activeWalletId) {
+        deleteWallet(activeWalletId)
+      }
     } catch (error) {
       console.error('Error deleting wallet:', error)
     } finally {
       setSubmitting(false)
-      router.dismiss(2)
+      setTimeout(() => router.dismiss(2), 0)
     }
   }, [deleteWallet, router, activeWalletId])
+
+  if (!activeWalletId) return null
 
   return (
     <View style={styles.modalContainer}>
@@ -37,6 +40,7 @@ export default function DeleteWallet() {
       </Text>
       <Button
         onPress={handleDeleteWallet}
+        disabled={activeWalletId == null || submitting}
         style={{
           backgroundColor: colors.error,
           padding: 16,

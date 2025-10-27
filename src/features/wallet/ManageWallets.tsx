@@ -6,7 +6,7 @@ import { alpha } from '@/ui/utils'
 import Divider from '@/ui/Divider'
 import CreateWalletIcon from './CreateWalletIcon'
 import ImportWalletIcon from './ImportWalletIcon'
-import { useWallet, useSettings } from '../store'
+import { useWallet, useSettings } from '@/features/storage'
 // import { setActiveWalletId } from '@/lib/wallet'
 
 export default function ManageWallets() {

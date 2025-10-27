@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useWallet, useTransactions } from '../../store'
+import { useWallet, useTransactions } from '@/features/storage'
 
 /**
  * Hook personalizado para gerenciar o carregamento automático de transações

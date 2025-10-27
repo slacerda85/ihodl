@@ -5,9 +5,11 @@ import * as Clipboard from 'expo-clipboard'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
-import { useTransactions, useSettings } from '../store'
+import { useTransactions, useSettings } from '@/features/storage'
 import QRCode from '@/ui/QRCode'
 import ContentContainer from '@/ui/ContentContainer'
+import { GlassView } from 'expo-glass-effect'
+import Button from '@/ui/Button'
 
 export default function TransactionDetails() {
   const { txid } = useLocalSearchParams<{ txid: string }>()
@@ -71,11 +73,10 @@ export default function TransactionDetails() {
   return (
     <ContentContainer>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <View style={[styles.container, isDark && styles.containerDark]}>
+        <View style={styles.container}>
           {/* Main Section */}
-          <View style={[styles.section, isDark && styles.sectionDark]}>
+          <GlassView style={[styles.section, isDark && styles.sectionDark]}>
             <View style={styles.item}>
-              <Text style={[styles.title, isDark && styles.titleDark]}>Transaction Details</Text>
               <Text
                 style={[
                   styles.status,
@@ -97,28 +98,24 @@ export default function TransactionDetails() {
               <Text style={[styles.label, isDark && styles.labelDark]}>Transaction ID</Text>
               <Text style={[styles.txid, isDark && styles.txidDark]}>{tx.txid}</Text>
               <View style={styles.buttonRow}>
-                <Pressable
-                  style={[
-                    styles.button,
-                    styles.secondaryButton,
-                    isDark && styles.secondaryButtonDark,
-                  ]}
+                <Button
+                  style={{ flex: 1 }}
+                  glassStyle={styles.button}
+                  startIcon={<IconSymbol name="doc.on.doc" size={16} color={colors.primary} />}
                   onPress={handleCopyTxid}
                 >
-                  <IconSymbol name="doc.on.doc" size={16} color={colors.primary} />
                   <Text style={styles.secondaryButtonText}>Copy</Text>
-                </Pressable>
-                <Pressable
-                  style={[
-                    styles.button,
-                    styles.secondaryButton,
-                    isDark && styles.secondaryButtonDark,
-                  ]}
+                </Button>
+                <Button
+                  style={{ flex: 1 }}
+                  glassStyle={styles.button}
+                  startIcon={
+                    <IconSymbol name="square.and.arrow.up" size={16} color={colors.primary} />
+                  }
                   onPress={handleShareTxid}
                 >
-                  <IconSymbol name="square.and.arrow.up" size={16} color={colors.primary} />
                   <Text style={styles.secondaryButtonText}>Share</Text>
-                </Pressable>
+                </Button>
               </View>
             </View>
 
@@ -127,7 +124,8 @@ export default function TransactionDetails() {
               <View style={styles.qrContainer}>
                 <QRCode
                   value={tx.txid}
-                  size={150}
+                  size={250}
+                  // fullWidth
                   color={isDark ? colors.text.dark : colors.text.light}
                   backgroundColor="transparent"
                 />
@@ -172,7 +170,7 @@ export default function TransactionDetails() {
               <Text style={[styles.label, isDark && styles.labelDark]}>Outputs</Text>
               <Text style={[styles.value, isDark && styles.valueDark]}>{outputCount}</Text>
             </View>
-          </View>
+          </GlassView>
         </View>
       </ScrollView>
     </ContentContainer>
@@ -184,20 +182,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   container: {
-    // padding: 16,
-    gap: 16,
-  },
-  containerDark: {
-    // No additional styles
+    // gap: 16,
   },
   section: {
-    backgroundColor: colors.white,
+    // backgroundColor: colors.white,
     padding: 16,
     borderRadius: 12,
     gap: 24,
   },
   sectionDark: {
-    backgroundColor: alpha(colors.background.light, 0.1),
+    // backgroundColor: alpha(colors.background.light, 0.1),
   },
   item: {
     // No specific styles, just a container
@@ -252,6 +246,8 @@ const styles = StyleSheet.create({
     color: colors.text.dark,
   },
   qrContainer: {
+    backgroundColor: 'blue',
+    width: '100%',
     alignItems: 'center',
     padding: 16,
   },
@@ -282,23 +278,20 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   button: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
     flex: 1,
   },
-  secondaryButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: colors.primary,
+  /* secondaryButton: {
+    // backgroundColor: 'transparent',
+    // borderWidth: 1,
+    // borderColor: colors.primary,
   },
   secondaryButtonDark: {
-    borderColor: colors.primary,
-  },
+    // borderColor: colors.primary,
+  }, */
   secondaryButtonText: {
     color: colors.primary,
     fontSize: 14,

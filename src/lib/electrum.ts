@@ -927,6 +927,26 @@ async function getMempoolTransactions(addresses: string[]): Promise<Tx[]> {
   }
 }
 
+/**
+ * Broadcast a raw transaction to the Bitcoin network
+ * @param rawTxHex - Raw transaction hex string
+ * @param socket - Optional TLSSocket to reuse
+ * @returns Promise resolving to transaction ID
+ */
+async function broadcastTransaction(rawTxHex: string, socket?: TLSSocket): Promise<string> {
+  try {
+    const data = await callElectrumMethod<string>(
+      'blockchain.transaction.broadcast',
+      [rawTxHex],
+      socket,
+    )
+    return data.result!
+  } catch (error) {
+    console.error('Error broadcasting transaction:', error)
+    throw error
+  }
+}
+
 export {
   connect,
   getPeers,
@@ -945,4 +965,5 @@ export {
   estimateFeeRate,
   getRecommendedFeeRates,
   getMempoolTransactions,
+  broadcastTransaction,
 }

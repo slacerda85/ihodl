@@ -1,14 +1,20 @@
 import React, { useState, useEffect } from 'react'
-import { View, Text, StyleSheet, FlatList, Pressable, RefreshControl } from 'react-native'
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  Switch,
+  Alert,
+} from 'react-native'
 import { useRouter } from 'expo-router'
-import { useLightningChannels, useWallet, useSettings } from '../store'
-import { LightningChannel, ChannelStatus, LightningInvoice } from '@/lib/lightning'
+import { useLightningChannels, useLightning, useWallet, useSettings } from '@/features/storage'
+import { LightningChannel, ChannelStatus } from '@/lib/lightning'
 import { formatBalance } from '../wallet/utils'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
-import OpenChannelModal from './OpenChannelModal'
-import CreateInvoiceModal from './CreateInvoiceModal'
-import InvoiceDisplayModal from './InvoiceDisplayModal'
 
 interface ChannelItemProps {
   channel: LightningChannel
@@ -107,29 +113,21 @@ const ChannelItem: React.FC<ChannelItemProps> = ({ channel, onPress, isDark }) =
 
 export default function LightningChannelsScreen() {
   const router = useRouter()
-  const {
-    channels,
-    totalBalance,
-    activeChannelsCount,
-    loadChannelsAsync,
-    openChannelAsync,
-    createInvoiceAsync,
-    isWalletConfigured,
-  } = useLightningChannels()
-  const { unit } = useWallet()
+  const { channels } = useLightningChannels()
+  const { spvEnabled, setSpvEnabled } = useLightning()
   const { isDark } = useSettings()
 
   const [refreshing, setRefreshing] = useState(false)
-  const [showOpenModal, setShowOpenModal] = useState(false)
-  const [showCreateInvoiceModal, setShowCreateInvoiceModal] = useState(false)
-  const [showInvoiceDisplayModal, setShowInvoiceDisplayModal] = useState(false)
-  const [currentInvoice, setCurrentInvoice] = useState<LightningInvoice | null>(null)
+  const [lightningEnabled, setLightningEnabled] = useState(spvEnabled)
+  const [isInitializing, setIsInitializing] = useState(false)
 
   const handleRefresh = async () => {
-    if (!isWalletConfigured) return
+    if (!spvEnabled) return
 
     setRefreshing(true)
-    await loadChannelsAsync()
+    // In SPV mode, we don't need to load channels from external sources
+    // Channels are managed locally
+    await new Promise(resolve => setTimeout(resolve, 500)) // Simulate refresh
     setRefreshing(false)
   }
 
@@ -137,78 +135,43 @@ export default function LightningChannelsScreen() {
     router.push(`/wallet/channel-actions?channelId=${channel.channelId}` as any)
   }
 
-  const handleCreateInvoice = async (params: {
-    amount: number
-    description: string
-    expiry?: number
-  }) => {
-    try {
-      const invoice = await createInvoiceAsync(params)
-      setCurrentInvoice(invoice)
-      setShowInvoiceDisplayModal(true)
-      setShowCreateInvoiceModal(false)
-    } catch (error) {
-      console.error('Error creating invoice:', error)
-      // Error handling is done in the hook
-    }
-  }
-
-  const handleOpenChannel = async (params: {
-    nodePubkey: string
-    localFundingAmount: number
-    pushSat?: number
-    targetConf?: number
-    minHtlcMsat?: number
-    remoteCsvDelay?: number
-    minConfs?: number
-    private?: boolean
-  }) => {
-    try {
-      await openChannelAsync(params)
-      setShowOpenModal(false)
-    } catch (error) {
-      console.error('Error opening channel:', error)
-      // Error handling is done in the hook
+  const handleToggleLightning = async (enabled: boolean) => {
+    if (enabled && !spvEnabled) {
+      setIsInitializing(true)
+      try {
+        // Enable SPV mode
+        setSpvEnabled(true)
+        setLightningEnabled(true)
+        Alert.alert('Sucesso', 'Lightning SPV ativado com sucesso!')
+      } catch (error) {
+        console.error('Erro ao ativar Lightning:', error)
+        Alert.alert('Erro', 'Falha ao ativar Lightning SPV')
+      } finally {
+        setIsInitializing(false)
+      }
+    } else if (!enabled) {
+      setSpvEnabled(false)
+      setLightningEnabled(false)
+      Alert.alert('Lightning desativado', 'Os canais permanecerão disponíveis para consulta')
     }
   }
 
   useEffect(() => {
     console.log(
-      '[LightningChannelsScreen] Component mounted or wallet config changed, loading channels...',
+      '[LightningChannelsScreen] Component mounted or SPV config changed, checking channels...',
     )
-    if (isWalletConfigured) {
-      loadChannelsAsync()
+    // In SPV mode, channels are managed locally, no need to load from external sources
+    if (spvEnabled) {
+      // Could potentially sync with Electrum here in the future
+      console.log('SPV enabled, channels available for viewing')
     }
-  }, [isWalletConfigured]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Debug: log when channels change
-  /* useEffect(() => {
-    console.log('[LightningChannelsScreen] Channels updated:', channels.length, 'channels')
-  }, [channels]) */
+  }, [spvEnabled]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
       <FlatList
         data={channels}
         keyExtractor={item => item.channelId}
-        /* ListHeaderComponent={
-          <View style={styles.header}>
-            <Text style={[styles.title, isDark && styles.titleDark]}>Canais Lightning</Text>
-            <View style={styles.summary}>
-              <Text style={[styles.summaryText, isDark && styles.summaryTextDark]}>
-                {activeChannelsCount} canais ativos • {formatBalance(totalBalance, unit)} {unit}
-              </Text>
-              {isWalletConfigured && (
-                <Pressable
-                  style={[styles.receiveButton, isDark && styles.receiveButtonDark]}
-                  onPress={() => setShowCreateInvoiceModal(true)}
-                >
-                  <Text style={styles.receiveButtonText}>Receber</Text>
-                </Pressable>
-              )}
-            </View>
-          </View>
-        } */
         renderItem={({ item }) => (
           <ChannelItem channel={item} onPress={handleChannelPress} isDark={isDark} />
         )}
@@ -222,54 +185,42 @@ export default function LightningChannelsScreen() {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={[styles.emptyText, isDark && styles.emptyTextDark]}>
-              Nenhum canal encontrado
+              Lightning Network
             </Text>
             <Text style={[styles.emptySubtext, isDark && styles.emptySubtextDark]}>
-              Configure sua conexão com um nó Lightning para começar
+              Ative o Lightning SPV para visualizar seus canais existentes
             </Text>
-            <Pressable
-              style={[styles.openChannelButton, isDark && styles.openChannelButtonDark]}
-              onPress={() => router.push('/wallet/lightning-config' as any)}
-            >
-              <Text style={styles.openChannelButtonText}>Configurar Lightning</Text>
-            </Pressable>
+
+            <View style={styles.toggleContainer}>
+              <Text style={[styles.toggleLabel, isDark && styles.toggleLabelDark]}>
+                Ativar Lightning SPV
+              </Text>
+              <Switch
+                value={lightningEnabled}
+                onValueChange={handleToggleLightning}
+                disabled={isInitializing}
+                trackColor={{ false: colors.textSecondary.light, true: colors.success }}
+                thumbColor={lightningEnabled ? colors.white : colors.white}
+              />
+            </View>
+
+            {isInitializing && (
+              <Text style={[styles.initializingText, isDark && styles.initializingTextDark]}>
+                Inicializando Lightning SPV...
+              </Text>
+            )}
+
+            {lightningEnabled && !isInitializing && (
+              <Text style={[styles.enabledText, isDark && styles.enabledTextDark]}>
+                ✅ Lightning SPV ativo - Você pode visualizar seus canais
+              </Text>
+            )}
           </View>
         }
         contentContainerStyle={
           channels.length === 0 ? styles.emptyList : [styles.listContent, styles.containerPadding]
         }
         showsVerticalScrollIndicator={false}
-      />
-
-      {/* Floating Action Button - Only show if wallet is configured */}
-      {isWalletConfigured && (
-        <Pressable
-          style={[styles.fab, isDark && styles.fabDark]}
-          onPress={() => setShowOpenModal(true)}
-        >
-          <Text style={styles.fabText}>+</Text>
-        </Pressable>
-      )}
-
-      {/* Open Channel Modal */}
-      <OpenChannelModal
-        visible={showOpenModal}
-        onClose={() => setShowOpenModal(false)}
-        onOpenChannel={handleOpenChannel}
-      />
-
-      {/* Create Invoice Modal */}
-      <CreateInvoiceModal
-        visible={showCreateInvoiceModal}
-        onClose={() => setShowCreateInvoiceModal(false)}
-        onCreateInvoice={handleCreateInvoice}
-      />
-
-      {/* Invoice Display Modal */}
-      <InvoiceDisplayModal
-        visible={showInvoiceDisplayModal}
-        onClose={() => setShowInvoiceDisplayModal(false)}
-        invoice={currentInvoice}
       />
     </>
   )
@@ -501,5 +452,42 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     textAlign: 'center',
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    marginTop: 16,
+    width: '100%',
+  },
+  toggleLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: colors.text.light,
+  },
+  toggleLabelDark: {
+    color: colors.text.dark,
+  },
+  initializingText: {
+    fontSize: 14,
+    color: colors.primary,
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  initializingTextDark: {
+    color: colors.primary,
+  },
+  enabledText: {
+    fontSize: 14,
+    color: colors.success,
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  enabledTextDark: {
+    color: colors.success,
   },
 })

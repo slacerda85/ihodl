@@ -34,6 +34,7 @@ interface GetTxHistoryParams {
   coinType?: CoinType
   accountStartIndex?: number
   gapLimit?: number
+  trustedPeers?: ElectrumPeer[]
 }
 
 interface GetTxHistoryResponse {
@@ -55,10 +56,8 @@ async function getTxHistory({
   coinType = 0,
   accountStartIndex = 0,
   gapLimit = 20,
-  state,
-}: GetTxHistoryParams & {
-  state?: { electrum: { trustedPeers: ElectrumPeer[] } }
-}): Promise<GetTxHistoryResponse> {
+  trustedPeers,
+}: GetTxHistoryParams): Promise<GetTxHistoryResponse> {
   let socket: any = null
   try {
     const txHistory: TxHistory[] = []
@@ -84,7 +83,7 @@ async function getTxHistory({
     const changeExtendedKey = deriveChildPrivateKey(accountExtendedKey, changeIndex)
 
     // connect to electrum server
-    socket = await connect(state)
+    socket = await connect(trustedPeers ? { electrum: { trustedPeers } } : undefined)
     console.log('[transactions] Established persistent Electrum connection for transaction history')
 
     // Generate all receiving addresses first
@@ -1566,3 +1565,94 @@ async function findAddressIndex(
 }
 
 export { getTxHistory, calculateBalance, findAddressIndex, selectUtxos, estimateTransactionSize }
+
+/**
+ * Processes txHistory to extract transactions and addresses
+ * @param txHistory - Array of TxHistory
+ * @returns Object with allTransactions, allAddresses, uniqueTransactions, uniqueAddresses
+ */
+export function processTxHistory(txHistory: TxHistory[]) {
+  // Extract all transactions and addresses
+  const allTransactions: any[] = []
+  const allAddresses: string[] = []
+
+  for (const addressData of txHistory) {
+    allAddresses.push(addressData.receivingAddress, addressData.changeAddress)
+    allTransactions.push(...addressData.txs)
+  }
+
+  // Remove duplicate transactions
+  const uniqueTransactions = Array.from(new Map(allTransactions.map(tx => [tx.txid, tx])).values())
+
+  const uniqueAddresses = [...new Set(allAddresses)]
+
+  return {
+    allTransactions,
+    allAddresses,
+    uniqueTransactions,
+    uniqueAddresses,
+  }
+}
+
+/**
+ * Calculates address cache from txHistory
+ * @param txHistory - Array of TxHistory
+ * @returns Object with usedReceivingAddresses, usedChangeAddresses
+ */
+export function calculateAddressCache(txHistory: TxHistory[]) {
+  const usedReceivingAddresses: any[] = txHistory
+    .filter(h => h.receivingAddress && h.txs.length > 0)
+    .map(h => ({
+      address: h.receivingAddress,
+      index: h.index,
+      type: 'receiving' as const,
+      transactions: h.txs,
+    }))
+
+  const usedChangeAddresses: any[] = txHistory
+    .filter(h => h.changeAddress && h.txs.length > 0)
+    .map(h => ({
+      address: h.changeAddress,
+      index: h.index,
+      type: 'change' as const,
+      transactions: h.txs,
+    }))
+
+  return {
+    usedReceivingAddresses,
+    usedChangeAddresses,
+  }
+}
+
+/**
+ * Finds the next unused receiving address
+ * @param rootExtendedKey - Root extended key
+ * @param usedAddresses - Set of used addresses
+ * @returns Next unused address or empty string if not found
+ */
+export function findNextUnusedAddress(
+  rootExtendedKey: Uint8Array,
+  usedAddresses: Set<string>,
+): string {
+  const purposeIndex = createHardenedIndex(84)
+  const purposeExtendedKey = deriveChildPrivateKey(rootExtendedKey, purposeIndex)
+  const coinTypeIndex = createHardenedIndex(0)
+  const coinTypeExtendedKey = deriveChildPrivateKey(purposeExtendedKey, coinTypeIndex)
+  const accountIndex = createHardenedIndex(0)
+  const accountExtendedKey = deriveChildPrivateKey(coinTypeExtendedKey, accountIndex)
+  const receivingExtendedKey = deriveChildPrivateKey(accountExtendedKey, 0)
+
+  let index = 0
+  const maxCheck = 100
+  while (index < maxCheck) {
+    const addressIndexExtendedKey = deriveChildPrivateKey(receivingExtendedKey, index)
+    const { privateKey } = splitRootExtendedKey(addressIndexExtendedKey)
+    const publicKey = createPublicKey(privateKey)
+    const address = createSegwitAddress(publicKey)
+    if (!usedAddresses.has(address)) {
+      return address
+    }
+    index++
+  }
+  return ''
+}

@@ -1,13 +1,40 @@
-import { useStore } from './StoreProvider'
-import { createWallet as createWalletLib, CreateWalletParams, storeWalletSeed } from '@/lib/wallet'
-import { useTransactions } from './useTransactions'
-import { useLightning } from './useLightning'
+import { useStorage } from '../StorageProvider'
+import {
+  createWallet as createWalletLib,
+  CreateWalletParams,
+  storeWalletSeed,
+  getWalletSeed,
+} from '@/lib/wallet'
+import { useTransactions } from '../transactions/useTransactions'
 
 // Wallet hook
 export const useWallet = () => {
-  const { state, dispatch } = useStore()
+  const { state, dispatch } = useStorage()
   const { getAddressCache } = useTransactions()
-  const { initializeLightningWallet } = useLightning()
+
+  // Get the mnemonic for the active wallet
+  const getActiveWalletMnemonic = async (): Promise<string | null> => {
+    const activeWalletId = state.wallet?.activeWalletId
+    if (!activeWalletId) {
+      console.warn('No active wallet found')
+      return null
+    }
+
+    try {
+      const mnemonic = await getWalletSeed(activeWalletId, '')
+      if (mnemonic) {
+        return mnemonic
+      }
+
+      console.error(
+        'Wallet seed not found or password required. Please implement wallet unlocking system.',
+      )
+      return null
+    } catch (error) {
+      console.error('Error retrieving wallet mnemonic:', error)
+      return null
+    }
+  }
 
   return {
     // State
@@ -21,39 +48,22 @@ export const useWallet = () => {
       wallet => wallet.walletId === state.wallet.activeWalletId,
     ),
 
+    // Helper
+    getActiveWalletMnemonic,
+
     // Actions
     createWallet: async (params: CreateWalletParams, password?: string) => {
       const result = createWalletLib(params)
       const { wallet, seedPhrase } = result
 
       // Store the seed phrase securely if password is provided
-      if (password) {
-        try {
-          await storeWalletSeed(wallet.walletId, seedPhrase, password)
-        } catch (error) {
-          console.error('Failed to store wallet seed securely:', error)
-          // Continue anyway - wallet can still be created without secure seed storage
-        }
+      if (!password) {
+        console.warn('No password provided. Wallet seed will not be stored securely.')
       }
+
+      await storeWalletSeed(wallet.walletId, seedPhrase, '')
 
       dispatch({ type: 'WALLET', action: { type: 'CREATE_WALLET', payload: wallet } })
-
-      // Initialize Lightning wallet if it has Lightning accounts
-      const hasLightningAccount = wallet.accounts.some(account => account.purpose === 9735)
-      if (hasLightningAccount) {
-        try {
-          await initializeLightningWallet(wallet.walletId, {
-            nodeUrl: '',
-            type: 'lnd',
-            authMethod: 'tls',
-            maxFeeLimit: 100000, // 100k sats
-            defaultCltvExpiry: 144, // 1 hour
-            timeoutSeconds: 30,
-          })
-        } catch (error) {
-          console.warn('Failed to initialize Lightning wallet:', error)
-        }
-      }
 
       // Set as active wallet
       dispatch({

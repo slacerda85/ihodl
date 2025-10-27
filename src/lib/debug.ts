@@ -8,7 +8,7 @@
 export function debugTxStorage() {
   console.log('=== Debug TX Storage ===')
   console.log('DEPRECATED: Sistema migrado para StoreProvider')
-  console.log('Use useStore hook para acessar dados')
+  console.log('Use useStorage hook para acessar dados')
   console.log('========================')
 }
 

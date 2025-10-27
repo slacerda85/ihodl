@@ -1,59 +1,38 @@
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  ActivityIndicator,
-  TouchableOpacity,
-  Pressable,
-} from 'react-native'
+import { View, Text, StyleSheet, FlatList, ActivityIndicator } from 'react-native'
 import { Account } from '@/models/account'
 import BitcoinLogo from '@/assets/bitcoin-logo'
 import LightningLogo from '@/assets/lightning-logo'
 import { ReactNode } from 'react'
 import { alpha } from '@/ui/utils'
 import colors from '@/ui/colors'
-import {
-  useWallet,
-  useTransactions,
-  useSettings,
-  useLightning,
-  useLightningChannels,
-} from '../store'
+import { useWallet, useTransactions, useSettings, useLightningChannels } from '@/features/storage'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { formatBalance } from './utils'
 import { GlassView } from 'expo-glass-effect'
+import Divider from '@/ui/Divider'
+import Button from '@/ui/Button'
 
-const purposeToLabel: Record<number, string> = {
-  44: 'Legacy',
-  49: 'SegWit',
-  84: 'Native SegWit',
-  86: 'Taproot',
-  9735: 'Lightning',
-  // Add more purposes as needed
+const LAYER_LABELS: Record<number, string> = {
+  1: 'On-Chain',
+  2: 'Lightning',
 }
 
-const purposeToIcon: Record<number, ReactNode> = {
+const PURPOSE_ICONS: Record<number, ReactNode> = {
   44: <BitcoinLogo width={32} height={32} />,
   49: <BitcoinLogo width={32} height={32} />,
   84: <BitcoinLogo width={32} height={32} />,
-  // 86: <Image source={require('@/assets/lightning-logo.png')} style={{ width: 32, height: 32 }} />,
   9735: <LightningLogo width={32} height={32} />,
-  // Add more purposes as needed
 }
-/* 
-const coinTypetoLabel: Record<CoinType, string> = {
-  0: 'BTC',
-} */
 
-function getPurposeIcon(purpose: number) {
-  return purposeToIcon[purpose] || <BitcoinLogo width={24} height={24} />
-}
+const getPurposeIcon = (purpose: number): ReactNode =>
+  PURPOSE_ICONS[purpose] || <BitcoinLogo width={24} height={24} />
+
+const isOnChainPurpose = (purpose: number): boolean => purpose !== 9735
+const isLightningPurpose = (purpose: number): boolean => purpose === 9735
 
 export default function WalletAccounts() {
   const { isDark } = useSettings()
-
   const { wallets, activeWalletId } = useWallet()
 
   if (!activeWalletId) {
@@ -67,178 +46,183 @@ export default function WalletAccounts() {
   }
 
   const accounts = wallets.find(wallet => wallet.walletId === activeWalletId)?.accounts || []
-  const renderAccount = ({ item }: { item: Account }) => {
-    if (accounts === undefined || accounts.length === 0) {
-      return (
-        <View style={styles.loadingContainer}>
-          <Text style={[styles.emptyState, isDark && styles.emptyStateDark]}>
-            No accounts found. Please create or import a wallet.
-          </Text>
-        </View>
-      )
-    }
 
-    return <AccountDetails account={item} />
+  if (accounts.length === 0) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={[styles.emptyState, isDark && styles.emptyStateDark]}>
+          No accounts found. Please create or import a wallet.
+        </Text>
+      </View>
+    )
+  }
+
+  // Separate accounts by type
+  const onChainAccounts = accounts.filter(account => isOnChainPurpose(account.purpose))
+  const lightningAccounts = accounts.filter(account => isLightningPurpose(account.purpose))
+
+  const sections = []
+
+  // Add On-Chain section if there are on-chain accounts
+  if (onChainAccounts.length > 0) {
+    sections.push({
+      title: 'On-Chain',
+      data: onChainAccounts,
+      type: 'onchain' as const,
+    })
+  }
+
+  // Add Lightning section if there are lightning accounts
+  if (lightningAccounts.length > 0) {
+    sections.push({
+      title: 'Lightning',
+      data: lightningAccounts,
+      type: 'lightning' as const,
+    })
   }
 
   return (
-    <View style={styles.container}>
+    <GlassView style={styles.container}>
       <FlatList
-        data={accounts}
-        renderItem={renderAccount}
-        keyExtractor={(item: Account) => item.purpose.toString()}
+        data={sections}
+        renderItem={({ item: section }) => (
+          <View style={styles.section}>
+            <View style={styles.sectionContent}>
+              {section.data.map((account, index) => (
+                <View key={account.purpose.toString()}>
+                  <AccountDetails account={account} />
+                  {index < section.data.length - 1 && (
+                    <View style={styles.accountSeparator}>
+                      <Divider
+                        height={1}
+                        width="100%"
+                        color={
+                          isDark
+                            ? alpha(colors.textSecondary.dark, 0.2)
+                            : alpha(colors.textSecondary.light, 0.2)
+                        }
+                      />
+                    </View>
+                  )}
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+        keyExtractor={item => item.title}
         contentContainerStyle={styles.flatList}
-        style={styles.accountsList}
         showsVerticalScrollIndicator={false}
         scrollEnabled={false}
+        ItemSeparatorComponent={() => <View style={styles.sectionSeparator} />}
       />
-    </View>
+    </GlassView>
   )
 }
 
-function AccountDetails({ account }: { account: Account }) {
+interface AccountDetailsProps {
+  account: Account
+}
+
+function AccountDetails({ account }: AccountDetailsProps) {
   const { isDark } = useSettings()
   const router = useRouter()
 
   const { loadingWalletState: loadingWallet } = useWallet()
   const { loadingTxState: loadingTransactions, getBalance } = useTransactions()
-  const { isNodeConnected } = useLightning()
-  const { totalBalance: lightningTotalBalance, channels: lightningChannels } =
-    useLightningChannels()
-  const loading = loadingWallet || loadingTransactions
-  const { unit, activeWalletId } = useWallet()
+  const {
+    totalBalance: lightningTotalBalance,
+    channels: lightningChannels,
+    breezConnected,
+  } = useLightningChannels()
 
-  // Calculate balance using the transactions hook
+  const { unit, activeWalletId } = useWallet()
+  const loading = loadingWallet || loadingTransactions
   const balance = activeWalletId ? getBalance(activeWalletId) : 0
 
-  // Get Lightning data if this is a Lightning account
   const isLightningAccount = account.purpose === 9735
   const lightningBalance = isLightningAccount ? lightningTotalBalance : 0
   const lightningChannelsCount = isLightningAccount ? lightningChannels.length : 0
-  const nodeConnected =
-    isLightningAccount && activeWalletId ? isNodeConnected(activeWalletId) : false
+  const nodeConnected = isLightningAccount ? breezConnected : false
 
-  // Format account name using purpose and coin type labels
-  const purposeLabel = purposeToLabel[account.purpose] || `Purpose ${account.purpose}`
-
-  const accountName = `${purposeLabel}`
-
-  // Get the appropriate icon
   const accountIcon = getPurposeIcon(account.purpose)
 
-  const handleNavigate = () => {
-    // Navigate to account details screen
+  const handleNavigateToTransactions = () => {
     router.push('/transactions')
   }
 
-  const handleOpenLightningChannels = () => {
-    // Navigate to lightning channels modal
-    router.push('/wallet/lightning-channels' as any)
+  const getLayerLabel = (purpose: number): string => {
+    return LAYER_LABELS[isLightningPurpose(purpose) ? 2 : 1] || 'Unknown Layer'
   }
 
   return (
-    <View style={styles.accountContainerWrapper}>
-      <GlassView style={[styles.accountContainer, isDark && styles.accountContainerDark]}>
-        <View style={styles.accountInfoRow}>
-          <View style={styles.accountSection}>
-            <View style={styles.accountIcon}>{accountIcon}</View>
-            <GlassView
-              style={styles.accountDetails}
-              tintColor={alpha(colors.background.light, 0.1)}
-            >
-              <Text style={[styles.accountTitle, isDark && styles.accountTitleDark]}>
-                {accountName}
-              </Text>
-            </GlassView>
-          </View>
-          <View style={styles.accountSection}>
-            <View style={styles.accountDetails}>
-              {loading ? (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="small" color={colors.primary} />
-                </View>
-              ) : (
-                <>
-                  <Text style={[styles.accountBalance, isDark && styles.accountBalanceDark]}>
-                    {isLightningAccount
-                      ? `${formatBalance(lightningBalance, unit)} ${unit}`
-                      : `${formatBalance(balance, unit)} ${unit}`}
-                  </Text>
-                  {isLightningAccount && (
-                    <View style={styles.lightningInfo}>
-                      <Text
-                        style={[styles.lightningChannels, isDark && styles.lightningChannelsDark]}
-                      >
-                        {nodeConnected ? `${lightningChannelsCount} canais` : 'Desconectado'}
-                      </Text>
-                      <View
-                        style={[styles.nodeStatus, nodeConnected && styles.nodeStatusConnected]}
-                      >
-                        <Text
-                          style={[
-                            styles.nodeStatusText,
-                            nodeConnected && styles.nodeStatusTextConnected,
-                          ]}
-                        >
-                          {nodeConnected ? '●' : '○'}
-                        </Text>
-                      </View>
-                    </View>
-                  )}
-                </>
-              )}
-            </View>
+    <View style={styles.accountContainer}>
+      <View style={styles.accountInfoRow}>
+        <View style={styles.accountSection}>
+          <View style={styles.accountIcon}>{accountIcon}</View>
+          <GlassView style={styles.accountDetails} tintColor={alpha(colors.background.light, 0.1)}>
+            <Text style={[styles.accountTitle, isDark && styles.accountTitleDark]}>
+              {getLayerLabel(account.purpose)}
+            </Text>
+          </GlassView>
+        </View>
+
+        <View style={styles.accountSection}>
+          <View style={styles.accountDetails}>
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color={colors.primary} />
+              </View>
+            ) : (
+              <>
+                <Text style={[styles.accountBalance, isDark && styles.accountBalanceDark]}>
+                  {isLightningAccount
+                    ? `${formatBalance(lightningBalance, unit)} ${unit}`
+                    : `${formatBalance(balance, unit)} ${unit}`}
+                </Text>
+              </>
+            )}
           </View>
         </View>
-        <View style={styles.buttonsContainer}>
-          <Pressable
-            style={{ flex: 1 }}
-            /* style={[styles.transactionsButton, isDark && styles.transactionsButtonDark]} */
-            onPress={handleNavigate}
-          >
-            <GlassView
-              style={styles.transactionsButton}
-              tintColor={
-                isDark ? alpha(colors.background.light, 0.05) : alpha(colors.background.dark, 0.1)
-              }
-            >
-              <Ionicons
-                name="list"
-                size={16}
-                color={isDark ? colors.text.dark : colors.text.light}
-              />
+      </View>
+
+      <View style={styles.buttonsContainer}>
+        {/* {isLightningAccount && (
+          <View style={styles.connectionStatus}>
+            <View style={[styles.nodeStatus, nodeConnected && styles.nodeStatusConnected]}>
               <Text
-                style={[styles.transactionsButtonText, isDark && styles.transactionsButtonTextDark]}
+                style={[styles.nodeStatusText, nodeConnected && styles.nodeStatusTextConnected]}
               >
-                Transações
+                {nodeConnected ? '●' : '○'}
               </Text>
-            </GlassView>
-          </Pressable>
-          {isLightningAccount && (
-            <Pressable
-              style={[styles.lightningButton, isDark && styles.lightningButtonDark]}
-              onPress={handleOpenLightningChannels}
-            >
-              <Ionicons name="flash" size={16} color={colors.primary} />
-              <Text style={[styles.lightningButtonText, isDark && styles.lightningButtonTextDark]}>
-                Gerenciar
-              </Text>
-            </Pressable>
-          )}
-        </View>
-      </GlassView>
+            </View>
+            <Text style={[styles.connectionStatusText, isDark && styles.connectionStatusTextDark]}>
+              {nodeConnected ? 'Conectado' : 'Desconectado'}
+            </Text>
+          </View>
+        )} */}
+
+        {/* <Button
+          style={{ flex: 1 }}
+          onPress={handleNavigateToTransactions}
+          startIcon={
+            <Ionicons name="list" size={16} color={isDark ? colors.text.dark : colors.text.light} />
+          }
+        >
+          <Text
+            style={[styles.transactionsButtonText, isDark && styles.transactionsButtonTextDark]}
+          >
+            Transações
+          </Text>
+        </Button> */}
+      </View>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
   container: {
-    // flex: 1,
-    // backgroundColor: '#ff0000',
-    // padding: 16,
-  },
-  accountContainerWrapper: {
-    // gap: 12,
+    backgroundColor: alpha(colors.background.dark, 0.1),
+    borderRadius: 32,
   },
   loadingContainer: {
     flexDirection: 'row',
@@ -263,34 +247,47 @@ const styles = StyleSheet.create({
     color: colors.textSecondary.dark,
   },
   flatList: {
-    // paddingBottom: 48,
-    gap: 24,
+    // gap: 16,
   },
-  accountsList: {
-    // flex: 1,
+  section: {
+    // marginBottom: 8,
+  },
+  sectionHeader: {
+    // paddingHorizontal: 16,
+    // paddingVertical: 8,
+    // marginBottom: 8,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text.light,
+  },
+  sectionTitleDark: {
+    color: colors.text.dark,
+  },
+  sectionContent: {
+    // Container for accounts within a section
+  },
+  sectionSeparator: {
+    height: 1,
+    width: '95%',
+    alignSelf: 'center',
+    backgroundColor: alpha(colors.background.dark, 0.1),
+  },
+  accountSeparator: {
+    marginVertical: 8,
   },
   accountContainer: {
-    // backgroundColor: colors.white,
+    // backgroundColor: 'green',
     borderRadius: 32,
     padding: 16,
-    // marginBottom: 12,
-    // overflow: 'hidden',
     alignItems: 'center',
   },
   accountInfoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     width: '100%',
-    marginBottom: 16,
-  },
-  accountContainerDark: {
-    /*  backgroundColor: 'linear-gradient(to bottom, rgba(255,255,255,0.05), rgba(0,0,0,0.05))',
-    
-    borderWidth: 1,
-    borderTopColor: alpha(colors.white, 0.1),
-    borderBottomColor: alpha(colors.white, 0.05),
-    borderLeftColor: alpha(colors.white, 0.075),
-    borderRightColor: alpha(colors.white, 0.05), */
+    // marginBottom: 16,
   },
   accountSection: {
     flexDirection: 'row',
@@ -307,13 +304,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary.light,
   },
   accountTitleDark: {
-    // backgroundColor: alpha(colors.white, 0.2),
     color: colors.text.dark,
-  },
-  accountUnit: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.primary,
   },
   accountIcon: {
     width: 32,
@@ -329,24 +320,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  accountBalanceWrapper: {
-    // backgroundColor: '',
-    // flexDirection: 'row',
-    // alignItems: 'center',
-    // gap: 4,
-    // padding: 16,
-  },
   accountBalance: {
     fontSize: 14,
-    // fontWeight: 'bold',
     color: colors.text.light,
   },
   accountBalanceDark: {
     color: colors.text.dark,
-  },
-  balanceUnit: {
-    fontSize: 14,
-    color: colors.primary,
   },
   lightningInfo: {
     flexDirection: 'row',
@@ -381,20 +360,12 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
   lightningButton: {
-    backgroundColor: alpha(colors.primary, 0.1),
     borderRadius: 32,
     padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    // borderWidth: 1,
-    // borderColor: colors.primary,
-    flex: 1,
-  },
-  lightningButtonDark: {
-    backgroundColor: alpha(colors.primary, 0.1),
-    // borderColor: colors.primary,
   },
   lightningButtonText: {
     fontSize: 14,
@@ -410,25 +381,36 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   transactionsButton: {
-    // backgroundColor: alpha(colors.black, 0.08),
     borderRadius: 32,
     padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    // borderWidth: 1,
-    // borderColor: alpha(colors.black, 0.1),
-    flex: 1,
-  },
-  transactionsButtonDark: {
-    // backgroundColor: alpha(colors.white, 0.08),
-    // borderColor: alpha(colors.white, 0.2),
   },
   transactionsButtonText: {
     fontSize: 14,
     fontWeight: '600',
     color: colors.text.light,
+  },
+  connectionStatus: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: alpha(colors.background.light, 0.5),
+  },
+  connectionStatusText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.text.light,
+  },
+  connectionStatusTextDark: {
+    color: colors.text.dark,
   },
   transactionsButtonTextDark: {
     color: colors.text.dark,

@@ -10,7 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native'
-import { useWallet } from '../store'
+import { useWallet } from '@/features/storage'
 import { validateChannelParams } from '@/lib/lightning'
 
 interface OpenChannelModalProps {

@@ -146,7 +146,7 @@ function encryptSeedPhrase(password: string, seedPhrase: string): string {
   }
 }
 
-function decryptSeedPhrase(password: string, encryptedSeedPhrase: string): string {
+function decryptSeedPhrase(password: string = '', encryptedSeedPhrase: string): string {
   try {
     const algorithm = 'aes-256-gcm'
 

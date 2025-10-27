@@ -1,6 +1,8 @@
 import { ElectrumPeer } from '@/models/electrum'
 import { updateTrustedPeers as updateTrustedPeersLib } from '@/lib/electrum'
-import { Reducer } from './types'
+import { Reducer } from '../types'
+import type { AppAction, AppState } from '../storage'
+import React from 'react'
 
 // Electrum State
 export type ElectrumState = {
@@ -88,4 +90,34 @@ export const electrumSelectors = {
   getTrustedPeers: (state: ElectrumState) => state.trustedPeers,
   getLastPeerUpdate: (state: ElectrumState) => state.lastPeerUpdate,
   isLoadingPeers: (state: ElectrumState) => state.loadingPeers,
+}
+
+// Initialize Electrum peers on app startup
+export const initializeElectrumPeers = async (
+  dispatch: React.Dispatch<AppAction>,
+  state: AppState,
+) => {
+  try {
+    console.log('[StorageProvider] Initializing Electrum peers...')
+
+    // Check if we have any saved trusted peers
+    const hasTrustedPeers = state.electrum.trustedPeers.length > 0
+
+    if (!hasTrustedPeers) {
+      console.log('[StorageProvider] No trusted peers found, discovering and testing')
+    } else {
+      console.log(
+        `[StorageProvider] Found ${state.electrum.trustedPeers.length} trusted peers, updating if needed...`,
+      )
+    }
+
+    // Always update trusted peers (this will fetch new peers if needed and test them)
+    const actions = await electrumActions.updateTrustedPeers(() => ({ electrum: state.electrum }))
+    actions.forEach(action => dispatch({ type: 'ELECTRUM', action }))
+
+    console.log('[StorageProvider] Electrum peers initialization completed')
+  } catch (error) {
+    console.error('[StoreProvider] Error initializing Electrum peers:', error)
+    // Don't throw - we don't want to break app startup
+  }
 }

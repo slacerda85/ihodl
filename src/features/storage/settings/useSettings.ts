@@ -1,12 +1,12 @@
-import { useStore } from './StoreProvider'
+import { useStorage } from '../StorageProvider'
 import { useColorScheme } from 'react-native'
 
 // Settings hook
 export const useSettings = () => {
-  const { state, dispatch } = useStore()
+  const { state, dispatch } = useStorage()
   const colorScheme = useColorScheme()
   const effectiveColorMode =
-    state.settings.colorMode === 'auto' ? (colorScheme ?? 'light') : state.settings.colorMode
+    state.settings.colorMode === 'auto' ? colorScheme : state.settings.colorMode
   const isDark = effectiveColorMode === 'dark'
 
   return {

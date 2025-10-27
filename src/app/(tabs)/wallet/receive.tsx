@@ -1,5 +1,5 @@
-import Receive from '@/features/wallet/Receive'
+import ReceiveScreen from '@/features/wallet/Receive'
 
 export default function ReceiveRoute() {
-  return <Receive />
+  return <ReceiveScreen />
 }

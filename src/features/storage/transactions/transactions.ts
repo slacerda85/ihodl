@@ -1,6 +1,6 @@
 import { Tx } from '@/models/transaction'
 import { UsedAddress } from '@/lib/address'
-import { Reducer } from './types'
+import { Reducer } from '../types'
 
 // Transactions State
 export type TransactionsState = {

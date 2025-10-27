@@ -1,22 +1,18 @@
-import { useStore } from './StoreProvider'
-import { processWalletTransactions } from '@/lib/utxo'
-import { getTxHistory } from '@/lib/transactions'
+import { useStorage } from '../StorageProvider'
 import {
-  createRootExtendedKey,
-  fromMnemonic,
-  createHardenedIndex,
-  deriveChildPrivateKey,
-  splitRootExtendedKey,
-  createPublicKey,
-} from '@/lib/key'
-import { createSegwitAddress } from '@/lib/address'
+  processTxHistory,
+  calculateAddressCache,
+  findNextUnusedAddress,
+  getTxHistory,
+} from '@/lib/transactions'
+import { processWalletTransactions } from '@/lib/utxo'
+import { createRootExtendedKey, fromMnemonic } from '@/lib/key'
 import { getMempoolTransactions as getMempoolTransactionsLib } from '@/lib/electrum'
-import { UsedAddress } from '@/lib/address'
 import { useCallback } from 'react'
 
 // Transactions hook
 export const useTransactions = () => {
-  const { state, dispatch } = useStore()
+  const { state, dispatch } = useStorage()
 
   // Helper function to fetch transactions
   const fetchTransactionsHelper = async (walletId: string, walletSeedPhrase: string) => {
@@ -43,37 +39,14 @@ export const useTransactions = () => {
       console.log(`📡 [fetchTransactions] Chamando getTxHistory...`)
       const { txHistory } = await getTxHistory({
         extendedKey: rootExtendedKey,
-        state,
+        trustedPeers: state.electrum.trustedPeers,
       })
       console.log(`📡 [fetchTransactions] getTxHistory retornou ${txHistory.length} endereços`)
 
-      // Extract all transactions and addresses
+      // Process txHistory
+      const { uniqueTransactions, uniqueAddresses } = processTxHistory(txHistory)
       console.log(
-        `🔧 [fetchTransactions] Processando ${txHistory.length} endereços do txHistory...`,
-      )
-      const allTransactions: any[] = []
-      const allAddresses: string[] = []
-
-      for (const addressData of txHistory) {
-        allAddresses.push(addressData.receivingAddress, addressData.changeAddress)
-        allTransactions.push(...addressData.txs)
-      }
-      console.log(
-        `🔧 [fetchTransactions] Extraído ${allTransactions.length} transações brutas e ${allAddresses.length} endereços do txHistory`,
-      )
-
-      // Remove duplicate transactions
-      console.log(`🔧 [fetchTransactions] Removendo transações duplicadas...`)
-      const uniqueTransactions = Array.from(
-        new Map(allTransactions.map(tx => [tx.txid, tx])).values(),
-      )
-      console.log(
-        `✅ [fetchTransactions] ${allTransactions.length} -> ${uniqueTransactions.length} transações únicas`,
-      )
-
-      const uniqueAddresses = [...new Set(allAddresses)]
-      console.log(
-        `✅ [fetchTransactions] Preparado cache: ${uniqueTransactions.length} txs, ${uniqueAddresses.length} endereços`,
+        `🔧 [fetchTransactions] Extraído ${uniqueTransactions.length} transações brutas e ${uniqueAddresses.length} endereços do txHistory`,
       )
 
       const newCache = {
@@ -90,46 +63,11 @@ export const useTransactions = () => {
       console.log(`✅ [fetchTransactions] Cache atualizado com sucesso para wallet ${walletId}`)
 
       // Calculate address cache
-      const usedReceivingAddresses: UsedAddress[] = txHistory
-        .filter(h => h.receivingAddress && h.txs.length > 0)
-        .map(h => ({
-          address: h.receivingAddress,
-          index: h.index,
-          type: 'receiving' as const,
-          transactions: h.txs,
-        }))
-      const usedChangeAddresses: UsedAddress[] = txHistory
-        .filter(h => h.changeAddress && h.txs.length > 0)
-        .map(h => ({
-          address: h.changeAddress,
-          index: h.index,
-          type: 'change' as const,
-          transactions: h.txs,
-        }))
+      const { usedReceivingAddresses, usedChangeAddresses } = calculateAddressCache(txHistory)
 
       // Find next unused receiving address
-      let nextUnusedAddress = ''
       const usedAddressSet = new Set(uniqueAddresses)
-      const purposeIndex = createHardenedIndex(84)
-      const purposeExtendedKey = deriveChildPrivateKey(rootExtendedKey, purposeIndex)
-      const coinTypeIndex = createHardenedIndex(0)
-      const coinTypeExtendedKey = deriveChildPrivateKey(purposeExtendedKey, coinTypeIndex)
-      const accountIndex = createHardenedIndex(0)
-      const accountExtendedKey = deriveChildPrivateKey(coinTypeExtendedKey, accountIndex)
-      const receivingExtendedKey = deriveChildPrivateKey(accountExtendedKey, 0)
-
-      let index = 0
-      const maxCheck = 100
-      while (!nextUnusedAddress && index < maxCheck) {
-        const addressIndexExtendedKey = deriveChildPrivateKey(receivingExtendedKey, index)
-        const { privateKey } = splitRootExtendedKey(addressIndexExtendedKey)
-        const publicKey = createPublicKey(privateKey)
-        const address = createSegwitAddress(publicKey)
-        if (!usedAddressSet.has(address)) {
-          nextUnusedAddress = address
-        }
-        index++
-      }
+      const nextUnusedAddress = findNextUnusedAddress(rootExtendedKey, usedAddressSet)
 
       const addressCache = {
         nextUnusedAddress,
@@ -187,7 +125,7 @@ export const useTransactions = () => {
       }),
 
     // Async Actions
-    fetchTransactions: useCallback(fetchTransactionsHelper, [dispatch, state]),
+    fetchTransactions: useCallback(fetchTransactionsHelper, [dispatch]), // eslint-disable-line react-hooks/exhaustive-deps
 
     fetchMempoolTransactions: async (walletId: string) => {
       console.log(

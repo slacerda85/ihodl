@@ -1,14 +1,14 @@
 import React from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { useLightningChannels, useSettings } from '../store'
+import { useLightningChannels, useSettings } from '@/features/storage'
 import colors from '@/ui/colors'
 import ContentContainer from '@/ui/ContentContainer'
 
 export default function ChannelActionsScreen() {
   const { channelId } = useLocalSearchParams<{ channelId: string }>()
   const router = useRouter()
-  const { channels, closeChannelAsync } = useLightningChannels()
+  const { channels } = useLightningChannels()
   const { isDark } = useSettings()
 
   // Find the channel from the store
@@ -18,27 +18,9 @@ export default function ChannelActionsScreen() {
     if (!channel) return
 
     Alert.alert(
-      force ? 'Forçar Fechamento' : 'Fechar Canal',
-      `Tem certeza que deseja ${force ? 'forçar o fechamento' : 'fechar'} este canal? ${
-        force ? 'Isso pode resultar em perda de fundos.' : ''
-      }`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: force ? 'Forçar Fechar' : 'Fechar',
-          style: force ? 'destructive' : 'default',
-          onPress: async () => {
-            try {
-              await closeChannelAsync(channel.channelId, force)
-              Alert.alert('Sucesso', `Canal ${force ? 'forçadamente ' : ''}fechado com sucesso!`)
-              router.back()
-            } catch (error) {
-              console.error('Error closing channel:', error)
-              Alert.alert('Erro', 'Falha ao fechar canal Lightning')
-            }
-          },
-        },
-      ],
+      'Funcionalidade Indisponível',
+      'Fechar canais não é suportado no modo SPV. Use um nó Lightning completo para gerenciar canais.',
+      [{ text: 'OK' }],
     )
   }
 

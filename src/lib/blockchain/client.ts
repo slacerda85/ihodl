@@ -14,6 +14,7 @@ import {
   callElectrumMethod,
   connect,
   close,
+  broadcastTransaction as broadcastTransactionElectrum,
 } from '../electrum'
 import { Tx } from '@/models/transaction'
 import { TLSSocket } from 'tls'
@@ -402,4 +403,16 @@ export async function waitForConfirmations(
 
     checkConfirmations()
   })
+}
+
+export async function broadcastTransaction(rawTxHex: string): Promise<string> {
+  console.log(`[lightning-blockchain] Broadcasting transaction: ${rawTxHex.substring(0, 20)}...`)
+  try {
+    const txid = await broadcastTransactionElectrum(rawTxHex)
+    console.log(`[lightning-blockchain] Transaction broadcasted successfully: ${txid}`)
+    return txid
+  } catch (error) {
+    console.error('[lightning-blockchain] Error broadcasting transaction:', error)
+    throw error
+  }
 }
