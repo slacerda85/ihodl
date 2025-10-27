@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 
 import { ActivityIndicator, StyleSheet, Switch, Text, TextInput, View } from 'react-native'
 
@@ -24,7 +24,7 @@ export default function CreateWallet() {
   const [password, setPassword] = useState<string>('')
   const [usePassword, setUsePassword] = useState<boolean>(false)
 
-  function handleCreateWallet() {
+  const handleCreateWallet = useCallback(() => {
     setSubmitting(true)
     if (walletName.trim().length === 0) {
       return
@@ -43,7 +43,7 @@ export default function CreateWallet() {
       setSubmitting(false)
       router.dismiss(2)
     }
-  }
+  }, [walletName, offline, usePassword, password, createWallet, router])
 
   function handleToggleOffline() {
     setOffline(prev => !prev)

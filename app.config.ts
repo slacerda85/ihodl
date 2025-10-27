@@ -31,7 +31,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     runtimeVersion: {
       policy: 'appVersion',
     },
-    icon: './assets/images/icon-full.png',
+    icon: './assets/images/icon.png',
     supportsTablet: true,
     infoPlist: {
       NSFaceIDUsageDescription: 'This app uses Face ID to secure your data',

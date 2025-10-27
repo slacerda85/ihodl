@@ -9,8 +9,10 @@ import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
 import { ExtendedStackNavigationOptions } from 'expo-router/build/layouts/StackClient'
 import { alpha } from '@/ui/utils'
 
-function HeaderRight() {
+function HeaderRight({ visible }: { visible: boolean }) {
   const { isDark } = useSettings()
+
+  if (!visible) return null
 
   return (
     <Link href="/wallet/actions" asChild>
@@ -37,9 +39,11 @@ function HeaderRight() {
 }
 
 // link to wallet/manage
-function ManageWallets() {
+function ManageWallets({ visible }: { visible: boolean }) {
   const router = useRouter()
   const { isDark } = useSettings()
+
+  if (!visible) return null
 
   function handleManageWallets() {
     router.push('/wallet/manage' as any)
@@ -151,8 +155,8 @@ export default function WalletLayout() {
       <Stack.Screen
         name="index"
         options={{
-          headerLeft: empty ? undefined : () => ManageWallets(),
-          headerRight: activeWalletId && !empty ? () => HeaderRight() : undefined,
+          headerLeft: () => <ManageWallets visible={!empty} />,
+          headerRight: () => <HeaderRight visible={!!(activeWalletId && !empty)} />,
           headerTitleAlign: 'center',
           title: selectedWallet?.walletName || (empty ? 'No wallets' : 'Select wallet'),
         }}

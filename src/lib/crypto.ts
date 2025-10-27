@@ -112,33 +112,38 @@ function encryptSeedPhrase(password: string, seedPhrase: string): string {
     const algorithm = 'aes-256-gcm'
 
     // Generate a random 16-byte salt for key derivation
-    const salt = QuickCrypto.randomBytes(16)
+    const salt = new Uint8Array(QuickCrypto.randomBytes(16))
 
     // Derive a 32-byte key from the password using PBKDF2
-    const key = QuickCrypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256')
+    const key = new Uint8Array(QuickCrypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256'))
 
     // Generate a random 12-byte nonce (IV)
-    const nonce = QuickCrypto.randomBytes(12)
+    const nonce = new Uint8Array(QuickCrypto.randomBytes(12))
 
     // Create the cipher with AES-256-GCM
     const cipher = QuickCrypto.createCipheriv(algorithm, key, nonce)
 
     // Encrypt the seed phrase
-    let encrypted = cipher.update(seedPhrase, 'utf8')
-    encrypted = Buffer.concat([encrypted, cipher.final()])
+    const encryptedPart = new Uint8Array(cipher.update(seedPhrase, 'utf8'))
+    const finalPart = new Uint8Array(cipher.final())
+
+    // Concatenate encrypted parts
+    const encrypted = new Uint8Array(encryptedPart.length + finalPart.length)
+    encrypted.set(encryptedPart)
+    encrypted.set(finalPart, encryptedPart.length)
 
     // Get the authentication tag (16 bytes)
-    const authTag = cipher.getAuthTag()
+    const authTag = new Uint8Array(cipher.getAuthTag())
 
     // Combine salt, nonce, encrypted data, and authTag into a single string
     return (
-      salt.toString('hex') +
+      uint8ArrayToHex(salt) +
       ':' +
-      nonce.toString('hex') +
+      uint8ArrayToHex(nonce) +
       ':' +
-      encrypted.toString('hex') +
+      uint8ArrayToHex(encrypted) +
       ':' +
-      authTag.toString('hex')
+      uint8ArrayToHex(authTag)
     )
   } catch (error) {
     console.error('Error encrypting seed phrase:', error)
@@ -152,13 +157,13 @@ function decryptSeedPhrase(password: string = '', encryptedSeedPhrase: string): 
 
     // Split the input string into salt, nonce, encrypted data, and authTag
     const [saltHex, nonceHex, encryptedHex, authTagHex] = encryptedSeedPhrase.split(':')
-    const salt = Buffer.from(saltHex, 'hex')
-    const nonce = Buffer.from(nonceHex, 'hex')
-    const encrypted = Buffer.from(encryptedHex, 'hex')
-    const authTag = Buffer.from(authTagHex, 'hex')
+    const salt = hexToUint8Array(saltHex)
+    const nonce = hexToUint8Array(nonceHex)
+    const encrypted = hexToUint8Array(encryptedHex)
+    const authTag = hexToUint8Array(authTagHex)
 
     // Derive the same 32-byte key from the password and salt
-    const key = QuickCrypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256')
+    const key = new Uint8Array(QuickCrypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256'))
 
     // Create the decipher with AES-256-GCM
     const decipher = QuickCrypto.createDecipheriv(algorithm, key, nonce)
@@ -167,10 +172,15 @@ function decryptSeedPhrase(password: string = '', encryptedSeedPhrase: string): 
     decipher.setAuthTag(authTag)
 
     // Decrypt the data
-    let decrypted = decipher.update(encrypted)
-    decrypted = Buffer.concat([decrypted, decipher.final()])
+    const decryptedPart = new Uint8Array(decipher.update(encrypted))
+    const finalPart = new Uint8Array(decipher.final())
 
-    return decrypted.toString('utf8')
+    // Concatenate decrypted parts
+    const decrypted = new Uint8Array(decryptedPart.length + finalPart.length)
+    decrypted.set(decryptedPart)
+    decrypted.set(finalPart, decryptedPart.length)
+
+    return new TextDecoder().decode(decrypted)
   } catch (error) {
     console.error('Error decrypting seed phrase:', error)
     throw new Error('Decryption failed')

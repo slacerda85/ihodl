@@ -22,35 +22,37 @@ const loadPersistedState = (): AppState => {
     const persistedState = storage.getString(STORAGE_KEY)
     if (persistedState) {
       const parsed = JSON.parse(persistedState)
+      // Exclude lightning from persisted state to avoid state shape issues
+      const { lightning, ...parsedWithoutLightning } = parsed
       // Merge with initial state to handle new properties
       return {
         ...initialAppState,
-        ...parsed,
+        ...parsedWithoutLightning,
         // Reset loading states on app start
         wallet: {
           ...initialAppState.wallet,
-          ...parsed.wallet,
+          ...parsedWithoutLightning.wallet,
           loadingWalletState: false,
         },
         transactions: {
           ...initialAppState.transactions,
-          ...parsed.transactions,
+          ...parsedWithoutLightning.transactions,
           loadingTxState: false,
           loadingMempoolState: false,
-          addressCaches: parsed.transactions?.addressCaches || {},
+          addressCaches: parsedWithoutLightning.transactions?.addressCaches || {},
         },
         blockchain: {
           ...initialAppState.blockchain,
-          ...parsed.blockchain,
+          ...parsedWithoutLightning.blockchain,
         }, // Persist blockchain sync state
         /* lightning: {
           ...initialAppState.lightning,
-          ...parsed.lightning,
+          ...parsedWithoutLightning.lightning,
           
         }, */
         electrum: {
           ...initialAppState.electrum,
-          ...parsed.electrum,
+          ...parsedWithoutLightning.electrum,
         }, // Persist electrum peer state
       }
     }
