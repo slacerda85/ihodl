@@ -1,12 +1,16 @@
 import { useState } from 'react'
-import { View, Text, TextInput, StyleSheet, Switch, ActivityIndicator } from 'react-native'
-import colors from '@/ui/colors'
-import { alpha } from '@/ui/utils'
-import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
-import { useRouter } from 'expo-router'
-import { useWallet, useSettings } from '@/features/storage'
-import Button from '@/ui/Button'
+
+import { ActivityIndicator, StyleSheet, Switch, Text, TextInput, View } from 'react-native'
+
 import { GlassView } from 'expo-glass-effect'
+import { useRouter } from 'expo-router'
+
+import { alpha } from '@/ui/utils'
+import Button from '@/ui/Button'
+import colors from '@/ui/colors'
+import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
+
+import { useSettings, useWallet } from '@/features/storage'
 
 export default function CreateWallet() {
   const { isDark } = useSettings()
@@ -55,12 +59,13 @@ export default function CreateWallet() {
         value={walletName}
         onChangeText={setWalletName}
       />
-
-      <GlassView style={styles.toggleContainer}>
-        <Text style={[styles.toggleText, isDark && styles.toggleTextDark]}>
-          Enable seed passphrase
-        </Text>
-        <Switch onValueChange={setUsePassword} value={usePassword} />
+      <GlassView style={styles.glass}>
+        <View style={styles.toggleContainer}>
+          <Text style={[styles.toggleText, isDark && styles.toggleTextDark]}>
+            Enable seed passphrase
+          </Text>
+          <Switch onValueChange={setUsePassword} value={usePassword} />
+        </View>
       </GlassView>
       {usePassword && (
         <TextInput
@@ -74,21 +79,16 @@ export default function CreateWallet() {
       )}
 
       <GlassView style={styles.coldWalletInfo}>
-        <View
-          style={{
-            width: '100%',
-            flexDirection: 'row',
-            gap: 8,
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
+        <View style={styles.toggleContainer}>
           <Text style={[styles.toggleText, isDark && styles.toggleTextDark]}>
             Offline mode (cold wallet)
           </Text>
           <Switch onValueChange={handleToggleOffline} value={offline} />
         </View>
-        <GlassView style={styles.infoBox} tintColor={alpha(colors.info, 0.2)}>
+        <GlassView
+          style={styles.infoBox}
+          tintColor={alpha(colors.background[isDark ? 'light' : 'dark'], 0.05)}
+        >
           <IconSymbol
             name="info.circle.fill"
             size={16}
@@ -108,7 +108,6 @@ export default function CreateWallet() {
           {submitting ? 'Creating...' : offline ? 'Create cold wallet' : 'Create wallet'}
         </Text>
       </Button>
-      {/* </View> */}
     </View>
   )
 }
@@ -120,56 +119,25 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     gap: 24,
   },
-  section: {
-    marginBottom: 0,
-  },
-  label: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: colors.text.light,
-    marginBottom: 8,
-  },
-  labelDark: {
-    color: colors.text.dark,
-  },
   input: {
     padding: 16,
     height: 48,
-    // borderWidth: 1,
-    // borderColor: alpha(colors.black, 0.2),
     borderRadius: 32,
     backgroundColor: alpha(colors.black, 0.05),
     color: colors.text.light,
   },
   inputDark: {
-    // borderColor: alpha(colors.white, 0.2),
     color: colors.text.dark,
     backgroundColor: alpha(colors.white, 0.1),
   },
-  toggleSection: {
-    backgroundColor: colors.white,
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  toggleSectionDark: {
-    backgroundColor: alpha(colors.white, 0.1),
-  },
-  toggleSectionActive: {
-    // borderColor: colors.secondary,
-  },
-  toggleSectionActiveDark: {
-    // Custom styling for active toggle in dark mode if needed
+  glass: {
+    borderRadius: 32,
+    padding: 20,
   },
   toggleContainer: {
-    borderRadius: 32,
-    padding: 22,
     flexDirection: 'row',
-    gap: 12,
     alignItems: 'center',
     justifyContent: 'space-between',
-    // justifyContent: 'space-between',
   },
   toggleText: {
     fontSize: 18,
@@ -179,40 +147,16 @@ const styles = StyleSheet.create({
   toggleTextDark: {
     color: alpha(colors.text.dark, 0.9),
   },
-  toggle: {
-    width: 56,
-    height: 32,
-    borderRadius: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 4,
-  },
-  toggleActive: {
-    backgroundColor: colors.secondary,
-  },
-  toggleInactive: {
-    backgroundColor: alpha(colors.secondary, 0.2),
-  },
-  toggleHandle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.white,
-  },
-  toggleHandleActive: {
-    transform: [{ translateX: 24 }],
-  },
-  infoBox: {
-    borderRadius: 20,
-    padding: 20,
-    // marginVertical: 8,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
   coldWalletInfo: {
     borderRadius: 32,
     padding: 20,
     gap: 24,
+  },
+  infoBox: {
+    borderRadius: 20,
+    padding: 20,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
   },
   infoIcon: {
     marginRight: 8,
@@ -224,55 +168,5 @@ const styles = StyleSheet.create({
   },
   infoTextDark: {
     color: colors.textSecondary.dark,
-  },
-  button: {
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  primaryButton: {
-    backgroundColor: colors.primary,
-  },
-  outlinedButton: {
-    borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: 'transparent',
-  },
-  secondaryButton: {
-    backgroundColor: colors.black,
-  },
-  secondaryButtonDark: {
-    backgroundColor: colors.background.light,
-  },
-  disabledButton: {
-    backgroundColor: alpha(colors.black, 0.2),
-  },
-  buttonText: {
-    color: colors.white,
-    textAlign: 'center',
-    fontWeight: '500',
-  },
-  buttonTextOutlined: {
-    color: colors.primary,
-  },
-  buttonTextDark: {
-    color: colors.black,
-  },
-  /* checkboxContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  }, */
-  checkboxText: {
-    fontSize: 16,
-    color: colors.text.light,
-    marginLeft: 8,
-  },
-  checkboxTextDark: {
-    color: colors.text.dark,
   },
 })
