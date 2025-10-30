@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   View,
   Text,
@@ -10,12 +10,20 @@ import {
   Alert,
   Switch,
 } from 'react-native'
+import { useRouter } from 'expo-router'
+import { GlassView } from 'expo-glass-effect'
+
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
-import { useRouter } from 'expo-router'
-import { fromBech32, fromBase58check } from '@/lib/address'
+
 import { useWallet, useTransactions, useSettings } from '@/features/storage'
+
+import { formatBalance } from './utils'
+import SendLightning from './SendLightning'
+
+import { fromBech32, fromBase58check, createSegwitAddress } from '@/lib/address'
+import { UTXO } from '@/lib/utxo'
 import {
   fromMnemonic,
   createRootExtendedKey,
@@ -25,13 +33,8 @@ import {
   splitRootExtendedKey,
 } from '@/lib/key'
 import { buildTransaction, signTransaction, sendTransaction } from '@/lib/transactions'
-import { formatBalance } from './utils'
-import { UTXO } from '@/lib/utxo'
-import { createSegwitAddress } from '@/lib/address'
 import { getRecommendedFeeRates } from '@/lib/electrum'
 import { getWalletSeedPhrase } from '@/lib/secureStorage'
-import SendLightning from './SendLightning'
-import { GlassView } from 'expo-glass-effect'
 
 type SendMode = 'onchain' | 'lightning'
 
@@ -63,6 +66,9 @@ export default function Send() {
     urgent: number
   } | null>(null)
   const [loadingFeeRates, setLoadingFeeRates] = useState<boolean>(false)
+  const [selectedFeeRate, setSelectedFeeRate] = useState<'slow' | 'normal' | 'fast' | 'urgent'>(
+    'normal',
+  )
 
   // Check if we have cached data for the active wallet
   const hasTransactionData = activeWalletId
@@ -200,6 +206,7 @@ export default function Send() {
       if (autoFeeAdjustment) {
         setFeeRate(rates.normal)
         setFeeRateInput(rates.normal.toString())
+        setSelectedFeeRate('normal')
       }
 
       console.log('[Send] Fee rates updated:', rates)
@@ -212,6 +219,7 @@ export default function Send() {
         if (autoFeeAdjustment) {
           setFeeRate(fallbackRates.normal)
           setFeeRateInput(fallbackRates.normal.toString())
+          setSelectedFeeRate('normal')
         }
       }
     } finally {
@@ -226,16 +234,13 @@ export default function Send() {
     }
   }, [autoFeeAdjustment, feeRates, fetchRecommendedFeeRates])
 
-  // Effect to update fee rate when auto-adjustment is toggled
+  // Effect to update fee rate when selectedFeeRate changes
   useEffect(() => {
-    if (autoFeeAdjustment && feeRates) {
-      setFeeRate(feeRates.normal)
-      setFeeRateInput(feeRates.normal.toString())
-    } else if (!autoFeeAdjustment && feeRates) {
-      // When disabling auto-adjustment, keep current rate
-      setFeeRateInput(feeRate.toString())
+    if (feeRates && !autoFeeAdjustment) {
+      setFeeRate(feeRates[selectedFeeRate])
+      setFeeRateInput(feeRates[selectedFeeRate].toString())
     }
-  }, [autoFeeAdjustment, feeRates, feeRate])
+  }, [selectedFeeRate, feeRates, autoFeeAdjustment])
 
   // Function to normalize amount input (convert commas to dots)
   const normalizeAmount = (text: string): string => {
@@ -458,7 +463,7 @@ export default function Send() {
   }
 
   return (
-    <View style={[styles.container, isDark && styles.containerDark]}>
+    <View style={styles.container}>
       {/* Mode Selector */}
       <View style={[styles.selectorContainer, isDark && styles.selectorContainerDark]}>
         <Pressable
@@ -500,94 +505,95 @@ export default function Send() {
       </View>
 
       {/* Content */}
-      <GlassView style={{ flex: 1, borderRadius: 32 }}>
-        {mode === 'onchain' ? (
-          <ScrollView style={[styles.scrollView, isDark && styles.scrollViewDark]}>
-            <View style={[styles.contentContainer, isDark && styles.contentContainerDark]}>
-              <View style={styles.section}>
-                <Text style={[styles.label, isDark && styles.labelDark]}>Recipient Address</Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    isDark && styles.inputDark,
-                    addressValid === false && styles.inputError,
-                    addressValid === true && styles.inputValid,
-                  ]}
-                  placeholder="Enter Bitcoin address (bc1...)"
-                  placeholderTextColor={
-                    isDark ? colors.textSecondary.dark : colors.textSecondary.light
-                  }
-                  value={recipientAddress}
-                  onChangeText={setRecipientAddress}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                {addressValid === false && (
-                  <Text style={styles.errorText}>Invalid Bitcoin address</Text>
-                )}
-                {addressValid === true && (
-                  <Text style={styles.validText}>✓ Valid Bitcoin address</Text>
-                )}
-              </View>
+      {/* <GlassView style={{ borderRadius: 32 }}> */}
+      {mode === 'onchain' ? (
+        <ScrollView style={[styles.scrollView, isDark && styles.scrollViewDark]}>
+          <View style={[styles.contentContainer, isDark && styles.contentContainerDark]}>
+            <View style={styles.section}>
+              <Text style={[styles.label, isDark && styles.labelDark]}>Recipient Address</Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  isDark && styles.inputDark,
+                  addressValid === false && styles.inputError,
+                  addressValid === true && styles.inputValid,
+                ]}
+                placeholder="Enter Bitcoin address (bc1...)"
+                placeholderTextColor={
+                  isDark ? colors.textSecondary.dark : colors.textSecondary.light
+                }
+                value={recipientAddress}
+                onChangeText={setRecipientAddress}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {addressValid === false && (
+                <Text style={styles.errorText}>Invalid Bitcoin address</Text>
+              )}
+              {addressValid === true && (
+                <Text style={styles.validText}>✓ Valid Bitcoin address</Text>
+              )}
+            </View>
 
-              <View style={styles.section}>
-                <Text style={[styles.label, isDark && styles.labelDark]}>Amount (BTC)</Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    isDark && styles.inputDark,
-                    amountValid === false && styles.inputError,
-                    amountValid === true && styles.inputValid,
-                  ]}
-                  placeholder="0.00000000"
-                  placeholderTextColor={
-                    isDark ? colors.textSecondary.dark : colors.textSecondary.light
-                  }
-                  value={amountInput}
-                  onChangeText={handleAmountChange}
-                  keyboardType="decimal-pad"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                {amountValid === false && amount <= 0 && (
-                  <Text style={styles.errorText}>Amount must be greater than 0</Text>
-                )}
-                {amountValid === false && amount > 0 && (
-                  <Text style={styles.errorText}>
-                    Insufficient balance including estimated fees. Remaining:{' '}
-                    {formatBalance(
-                      Math.max(
-                        0,
-                        availableBalance - amount - (Math.round(feeRate) * 250) / 100000000,
-                      ),
-                      unit,
-                    )}{' '}
-                    {unit}
+            <View style={styles.section}>
+              <Text style={[styles.label, isDark && styles.labelDark]}>Amount (BTC)</Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  isDark && styles.inputDark,
+                  amountValid === false && styles.inputError,
+                  amountValid === true && styles.inputValid,
+                ]}
+                placeholder="0.00000000"
+                placeholderTextColor={
+                  isDark ? colors.textSecondary.dark : colors.textSecondary.light
+                }
+                value={amountInput}
+                onChangeText={handleAmountChange}
+                keyboardType="decimal-pad"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {amountValid === false && amount <= 0 && (
+                <Text style={styles.errorText}>Amount must be greater than 0</Text>
+              )}
+              {amountValid === false && amount > 0 && (
+                <Text style={styles.errorText}>
+                  Insufficient balance including estimated fees. Remaining:{' '}
+                  {formatBalance(
+                    Math.max(
+                      0,
+                      availableBalance - amount - (Math.round(feeRate) * 250) / 100000000,
+                    ),
+                    unit,
+                  )}{' '}
+                  {unit}
+                </Text>
+              )}
+              {amountValid === true && <Text style={styles.validText}>✓ Sufficient balance</Text>}
+              <View style={styles.balanceContainer}>
+                <Text style={[styles.balanceText, isDark && styles.balanceTextDark]}>
+                  Available: {formatBalance(availableBalance, unit)} {unit}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.section}>
+              <View style={styles.feeHeader}>
+                <Text style={[styles.label, isDark && styles.labelDark]}>Fee Rate (sat/vB)</Text>
+                <View style={styles.autoFeeContainer}>
+                  <Text style={[styles.autoFeeLabel, isDark && styles.autoFeeLabelDark]}>
+                    Auto-adjust
                   </Text>
-                )}
-                {amountValid === true && <Text style={styles.validText}>✓ Sufficient balance</Text>}
-                <View style={styles.balanceContainer}>
-                  <Text style={[styles.balanceText, isDark && styles.balanceTextDark]}>
-                    Available: {formatBalance(availableBalance, unit)} {unit}
-                  </Text>
+                  <Switch
+                    value={autoFeeAdjustment}
+                    onValueChange={setAutoFeeAdjustment}
+                    trackColor={{ false: '#767577', true: colors.primary }}
+                    thumbColor={autoFeeAdjustment ? colors.white : '#f4f3f4'}
+                  />
                 </View>
               </View>
-
-              <View style={styles.section}>
-                <View style={styles.feeHeader}>
-                  <Text style={[styles.label, isDark && styles.labelDark]}>Fee Rate (sat/vB)</Text>
-                  <View style={styles.autoFeeContainer}>
-                    <Text style={[styles.autoFeeLabel, isDark && styles.autoFeeLabelDark]}>
-                      Auto-adjust
-                    </Text>
-                    <Switch
-                      value={autoFeeAdjustment}
-                      onValueChange={setAutoFeeAdjustment}
-                      trackColor={{ false: '#767577', true: colors.primary }}
-                      thumbColor={autoFeeAdjustment ? colors.white : '#f4f3f4'}
-                    />
-                  </View>
-                </View>
+              {autoFeeAdjustment ? null : (
                 <TextInput
                   style={[styles.input, isDark && styles.inputDark]}
                   placeholder="1"
@@ -599,127 +605,148 @@ export default function Send() {
                   keyboardType="decimal-pad"
                   autoCapitalize="none"
                   autoCorrect={false}
-                  editable={!autoFeeAdjustment}
                 />
-                {loadingFeeRates && (
-                  <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="small" color={colors.primary} />
-                    <Text style={[styles.loadingText, isDark && styles.loadingTextDark]}>
-                      Fetching network fee rates...
-                    </Text>
-                  </View>
-                )}
-                {autoFeeAdjustment && feeRates && (
-                  <View style={styles.feeRatesContainer}>
-                    <Text style={[styles.feeRatesTitle, isDark && styles.feeRatesTitleDark]}>
-                      Network Fee Rates:
-                    </Text>
-                    <View style={styles.feeRatesGrid}>
-                      <View style={styles.feeRateOption}>
-                        <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
-                          Slow
-                        </Text>
-                        <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
-                          {feeRates.slow} sat/vB
-                        </Text>
-                      </View>
-                      <View style={styles.feeRateOption}>
-                        <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
-                          Normal
-                        </Text>
-                        <Text
-                          style={[
-                            styles.feeRateValue,
-                            isDark && styles.feeRateValueDark,
-                            styles.feeRateSelected,
-                          ]}
-                        >
-                          {feeRates.normal} sat/vB
-                        </Text>
-                      </View>
-                      <View style={styles.feeRateOption}>
-                        <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
-                          Fast
-                        </Text>
-                        <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
-                          {feeRates.fast} sat/vB
-                        </Text>
-                      </View>
-                      <View style={styles.feeRateOption}>
-                        <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
-                          Urgent
-                        </Text>
-                        <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
-                          {feeRates.urgent} sat/vB
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                )}
-                <View style={styles.infoBox}>
-                  <IconSymbol
-                    name="info.circle.fill"
-                    size={16}
-                    style={styles.infoIcon}
-                    color={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
-                  />
-                  <Text style={[styles.infoText, isDark && styles.infoTextDark]}>
-                    {autoFeeAdjustment
-                      ? loadingFeeRates
-                        ? 'Loading current network conditions...'
-                        : 'Fee rate is automatically adjusted based on network conditions.'
-                      : 'Higher fee rates result in faster confirmation times.'}
+              )}
+              {loadingFeeRates && (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                  <Text style={[styles.loadingText, isDark && styles.loadingTextDark]}>
+                    Fetching network fee rates...
                   </Text>
                 </View>
-              </View>
-
-              <View style={styles.section}>
-                <Text style={[styles.label, isDark && styles.labelDark]}>Memo (Optional)</Text>
-                <TextInput
-                  style={[styles.input, isDark && styles.inputDark]}
-                  placeholder="Add a note for this transaction"
-                  placeholderTextColor={
-                    isDark ? colors.textSecondary.dark : colors.textSecondary.light
-                  }
-                  value={memo}
-                  onChangeText={setMemo}
-                  multiline
-                  numberOfLines={3}
+              )}
+              {feeRates && (
+                <View style={[styles.feeRatesSelector, isDark && styles.feeRatesSelectorDark]}>
+                  <Text style={[styles.feeRatesTitle, isDark && styles.feeRatesTitleDark]}>
+                    {autoFeeAdjustment ? 'Network Fee Rates:' : 'Select Fee Rate:'}
+                  </Text>
+                  <View style={styles.feeRatesGrid}>
+                    <Pressable
+                      style={[
+                        styles.feeRateOption,
+                        selectedFeeRate === 'slow' && styles.feeRateOptionSelected,
+                        isDark && styles.feeRateOptionDark,
+                      ]}
+                      onPress={() => !autoFeeAdjustment && setSelectedFeeRate('slow')}
+                      disabled={autoFeeAdjustment}
+                    >
+                      <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
+                        Slow
+                      </Text>
+                      <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
+                        {feeRates.slow} sat/vB
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={[
+                        styles.feeRateOption,
+                        selectedFeeRate === 'normal' && styles.feeRateOptionSelected,
+                        isDark && styles.feeRateOptionDark,
+                      ]}
+                      onPress={() => !autoFeeAdjustment && setSelectedFeeRate('normal')}
+                      disabled={autoFeeAdjustment}
+                    >
+                      <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
+                        Normal
+                      </Text>
+                      <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
+                        {feeRates.normal} sat/vB
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={[
+                        styles.feeRateOption,
+                        selectedFeeRate === 'fast' && styles.feeRateOptionSelected,
+                        isDark && styles.feeRateOptionDark,
+                      ]}
+                      onPress={() => !autoFeeAdjustment && setSelectedFeeRate('fast')}
+                      disabled={autoFeeAdjustment}
+                    >
+                      <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
+                        Fast
+                      </Text>
+                      <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
+                        {feeRates.fast} sat/vB
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={[
+                        styles.feeRateOption,
+                        selectedFeeRate === 'urgent' && styles.feeRateOptionSelected,
+                        isDark && styles.feeRateOptionDark,
+                      ]}
+                      onPress={() => !autoFeeAdjustment && setSelectedFeeRate('urgent')}
+                      disabled={autoFeeAdjustment}
+                    >
+                      <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
+                        Urgent
+                      </Text>
+                      <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
+                        {feeRates.urgent} sat/vB
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              )}
+              <View style={styles.infoBox}>
+                <IconSymbol
+                  name="info.circle.fill"
+                  size={16}
+                  style={styles.infoIcon}
+                  color={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
                 />
+                <Text style={[styles.infoText, isDark && styles.infoTextDark]}>
+                  {autoFeeAdjustment
+                    ? loadingFeeRates
+                      ? 'Loading current network conditions...'
+                      : 'Fee rate is automatically adjusted based on network conditions.'
+                    : 'Higher fee rates result in faster confirmation times.'}
+                </Text>
               </View>
-
-              <Pressable
-                onPress={handleSend}
-                disabled={submitting || amountValid === false}
-                style={[styles.button, styles.primaryButton, submitting && styles.disabledButton]}
-              >
-                {submitting ? <ActivityIndicator color={colors.white} /> : null}
-                <Text style={styles.buttonText}>{submitting ? 'Sending...' : 'Send Bitcoin'}</Text>
-              </Pressable>
             </View>
-          </ScrollView>
-        ) : (
-          <SendLightning />
-        )}
-      </GlassView>
+
+            <View style={styles.section}>
+              <Text style={[styles.label, isDark && styles.labelDark]}>Memo (Optional)</Text>
+              <TextInput
+                style={[styles.input, isDark && styles.inputDark]}
+                placeholder="Add a note for this transaction"
+                placeholderTextColor={
+                  isDark ? colors.textSecondary.dark : colors.textSecondary.light
+                }
+                value={memo}
+                onChangeText={setMemo}
+                multiline
+                numberOfLines={3}
+              />
+            </View>
+
+            <Pressable
+              onPress={handleSend}
+              disabled={submitting || amountValid === false}
+              style={[styles.button, styles.primaryButton, submitting && styles.disabledButton]}
+            >
+              {submitting ? <ActivityIndicator color={colors.white} /> : null}
+              <Text style={styles.buttonText}>{submitting ? 'Sending...' : 'Send Bitcoin'}</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      ) : (
+        <SendLightning />
+      )}
+      {/* </GlassView> */}
     </View>
   )
 }
 
 const styles = StyleSheet.create({
+  // Container and selector
   container: {
-    flex: 1,
-    paddingTop: 64,
-    paddingHorizontal: 24,
-  },
-  containerDark: {
-    // No additional styles needed
+    padding: 24,
   },
   selectorContainer: {
     flexDirection: 'row',
     marginHorizontal: 24,
     marginTop: 24,
-    marginBottom: 16,
     backgroundColor: alpha(colors.black, 0.05),
     borderRadius: 32,
     padding: 4,
@@ -757,36 +784,35 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '600',
   },
-  scrollView: {
-    flex: 1,
-  },
-  scrollViewDark: {
-    // No additional styles needed
-  },
+
+  // Scroll and content
+  scrollView: {},
+  scrollViewDark: {},
   contentContainer: {
-    padding: 16,
-    marginBottom: 24,
+    paddingTop: 16,
+    // padding: 16,
     gap: 24,
   },
-  contentContainerDark: {
-    // No additional styles needed
-  },
+  contentContainerDark: {},
+
+  // Section and inputs
   section: {
     marginBottom: 0,
   },
   label: {
-    fontSize: 18,
+    marginLeft: 16,
+    fontSize: 14,
     fontWeight: '500',
-    color: colors.text.light,
+    color: alpha(colors.textSecondary.light, 0.7),
     marginBottom: 8,
   },
   labelDark: {
-    color: colors.text.dark,
+    color: alpha(colors.textSecondary.dark, 0.7),
   },
   input: {
     padding: 16,
     height: 48,
-    borderRadius: 16,
+    borderRadius: 32,
     backgroundColor: alpha(colors.black, 0.05),
     color: colors.text.light,
     fontSize: 16,
@@ -813,6 +839,8 @@ const styles = StyleSheet.create({
     color: colors.success,
     marginTop: 4,
   },
+
+  // Fee
   feeHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -848,9 +876,11 @@ const styles = StyleSheet.create({
   infoTextDark: {
     color: colors.textSecondary.dark,
   },
+
+  // Button
   button: {
     padding: 16,
-    borderRadius: 16,
+    borderRadius: 32,
     marginBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
@@ -869,6 +899,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontSize: 16,
   },
+
+  // Balance
   balanceContainer: {
     marginTop: 8,
     alignItems: 'flex-end',
@@ -881,6 +913,8 @@ const styles = StyleSheet.create({
   balanceTextDark: {
     color: colors.textSecondary.dark,
   },
+
+  // Loading
   loadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -895,11 +929,16 @@ const styles = StyleSheet.create({
   loadingTextDark: {
     color: colors.textSecondary.dark,
   },
-  feeRatesContainer: {
+
+  // Fee rates
+  feeRatesSelector: {
     marginTop: 8,
     padding: 12,
     backgroundColor: alpha(colors.black, 0.05),
-    borderRadius: 8,
+    borderRadius: 32,
+  },
+  feeRatesSelectorDark: {
+    backgroundColor: alpha(colors.white, 0.05),
   },
   feeRatesTitle: {
     fontSize: 14,
@@ -921,7 +960,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 8,
     backgroundColor: alpha(colors.white, 0.1),
-    borderRadius: 6,
+    borderRadius: 32,
+  },
+  feeRateOptionDark: {
+    backgroundColor: alpha(colors.black, 0.1),
+  },
+  feeRateOptionSelected: {
+    backgroundColor: alpha(colors.primary, 0.2),
+    borderWidth: 1,
+    borderColor: colors.primary,
   },
   feeRateLabel: {
     fontSize: 12,
@@ -938,23 +985,5 @@ const styles = StyleSheet.create({
   },
   feeRateValueDark: {
     color: colors.text.dark,
-  },
-  feeRateSelected: {
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  comingSoonContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  comingSoonText: {
-    fontSize: 18,
-    color: colors.textSecondary.light,
-    textAlign: 'center',
-  },
-  comingSoonTextDark: {
-    color: colors.textSecondary.dark,
   },
 })

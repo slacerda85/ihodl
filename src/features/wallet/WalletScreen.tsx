@@ -86,7 +86,7 @@ export default function WalletScreen() {
       <View style={{ gap: 32 }}>
         <WalletBalance />
         <View style={styles.actionsSection}>
-          <Button onPress={handleSend} style={{ flex: 1 }} tintColor={alpha(colors.primary, 0.7)}>
+          <Button onPress={handleSend} style={{ flex: 1 }} tintColor={alpha(colors.primary, 0.9)}>
             <Text style={[styles.buttonText]}>Send</Text>
           </Button>
 
@@ -202,13 +202,14 @@ const styles = StyleSheet.create({
     // backgroundColor: 'red',
   },
   accountsHeader: {
+    paddingLeft: 16,
     fontSize: 18,
     fontWeight: '500',
-    color: colors.text.light,
+    color: alpha(colors.textSecondary.light, 0.7),
     marginBottom: 16,
   },
   accountsHeaderDark: {
-    color: colors.text.dark,
+    color: alpha(colors.textSecondary.dark, 0.7),
   },
   sectionTitle: {
     fontSize: 18,

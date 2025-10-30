@@ -272,7 +272,7 @@ export default function TransactionsScreen() {
   }
 
   return (
-    <GlassContainer>
+    <GlassContainer style={{ padding: 16 }}>
       <FlatList
         contentContainerStyle={{
           // paddingTop: headerHeight + 16,
@@ -426,9 +426,7 @@ const styles = StyleSheet.create({
   },
   balancePositive: {
     color: '#FFA500',
-    textShadowColor: '#FF8C0077',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 2,
+
     fontWeight: '600',
   },
   balanceNegative: {

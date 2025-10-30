@@ -9,11 +9,7 @@ import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
 import { ExtendedStackNavigationOptions } from 'expo-router/build/layouts/StackClient'
 import { alpha } from '@/ui/utils'
 
-function HeaderRight({ visible }: { visible: boolean }) {
-  const { isDark } = useSettings()
-
-  if (!visible) return null
-
+function HeaderRight({ colorMode }: { colorMode: 'light' | 'dark' }) {
   return (
     <Link href="/wallet/actions" asChild>
       <Pressable
@@ -27,11 +23,7 @@ function HeaderRight({ visible }: { visible: boolean }) {
         <Ionicons
           name="ellipsis-vertical"
           size={24}
-          color={
-            isDark
-              ? alpha(colors.textSecondary.dark, 0.85)
-              : alpha(colors.textSecondary.light, 0.85)
-          }
+          color={alpha(colors.textSecondary[colorMode], 0.85)}
         />
       </Pressable>
     </Link>
@@ -39,11 +31,8 @@ function HeaderRight({ visible }: { visible: boolean }) {
 }
 
 // link to wallet/manage
-function ManageWallets({ visible }: { visible: boolean }) {
+function ManageWallets({ colorMode }: { colorMode: 'light' | 'dark' }) {
   const router = useRouter()
-  const { isDark } = useSettings()
-
-  if (!visible) return null
 
   function handleManageWallets() {
     router.push('/wallet/manage' as any)
@@ -74,11 +63,7 @@ function ManageWallets({ visible }: { visible: boolean }) {
         <IconSymbol
           name="wallet.bifold"
           size={28}
-          color={
-            isDark
-              ? alpha(colors.textSecondary.dark, 0.85)
-              : alpha(colors.textSecondary.light, 0.85)
-          }
+          color={alpha(colors.textSecondary[colorMode], 0.85)}
         />
       </Pressable>
     </View>
@@ -126,6 +111,7 @@ export default function WalletLayout() {
   const empty = wallets === undefined || wallets?.length === 0
 
   const { isDark } = useSettings()
+  const colorMode = isDark ? 'dark' : 'light'
 
   const modalOptions: ExtendedStackNavigationOptions = {
     presentation: Platform.select({
@@ -134,7 +120,7 @@ export default function WalletLayout() {
     }),
     contentStyle: {
       paddingTop: Platform.OS === 'ios' ? 64 : 0,
-      backgroundColor: 'transparent',
+      // backgroundColor: 'transparent',
       /* isDark
         ? alpha(colors.background.dark, 0.1)
         : alpha(colors.background.light, 0.1), */
@@ -155,8 +141,8 @@ export default function WalletLayout() {
       <Stack.Screen
         name="index"
         options={{
-          headerLeft: () => <ManageWallets visible={!empty} />,
-          headerRight: () => <HeaderRight visible={!!(activeWalletId && !empty)} />,
+          headerLeft: () => (empty ? null : <ManageWallets colorMode={colorMode} />),
+          headerRight: () => (empty ? null : <HeaderRight colorMode={colorMode} />),
           headerTitleAlign: 'center',
           title: selectedWallet?.walletName || (empty ? 'No wallets' : 'Select wallet'),
         }}

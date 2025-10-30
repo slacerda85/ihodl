@@ -23,9 +23,8 @@ export default function WalletBalance() {
         // Use the getBalance selector from useTransactions
         const newBalance = getBalance(activeWalletId)
         setBalance(newBalance)
-        console.log('[WalletBalance] Balance updated:', newBalance)
       } catch (error) {
-        console.error('[WalletBalance] Error getting balance:', error)
+        console.error('Error fetching balance:', error)
         setBalance(0)
       }
     } else {

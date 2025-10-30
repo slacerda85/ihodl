@@ -16,6 +16,7 @@ import wordlist from 'bip39/src/wordlists/english.json'
 // import { randomUUID } from '@/lib/crypto'
 import { useWallet, useSettings } from '@/features/storage'
 import Button from '@/ui/Button'
+import { GlassView } from 'expo-glass-effect'
 
 export default function ImportWallet() {
   const router = useRouter()
@@ -28,6 +29,7 @@ export default function ImportWallet() {
   const [password, setPassword] = useState<string>('')
   const [usePassword, setUsePassword] = useState<boolean>(false)
   const { isDark } = useSettings()
+  const [submitting, setSubmitting] = useState<boolean>(false)
 
   useEffect(() => {
     if (currentWord.length > 0) {
@@ -75,6 +77,7 @@ export default function ImportWallet() {
     if (!walletName.trim() || !isValidSeedPhrase()) {
       return
     }
+    setSubmitting(true)
     try {
       createWallet(
         {
@@ -87,7 +90,7 @@ export default function ImportWallet() {
     } catch (error) {
       console.error('Error importing wallet:', error)
     } finally {
-      // setSubmitting(false)
+      setSubmitting(false)
       router.dismiss(2)
     }
   }
@@ -103,10 +106,7 @@ export default function ImportWallet() {
   )
 
   return (
-    <ScrollView
-      style={[styles.scrollView, isDark && styles.scrollViewDark]}
-      keyboardShouldPersistTaps="handled"
-    >
+    <View style={[styles.scrollView, isDark && styles.scrollViewDark]}>
       <View style={[styles.container, isDark && styles.containerDark]}>
         <View style={styles.section}>
           <TextInput
@@ -119,24 +119,24 @@ export default function ImportWallet() {
           />
         </View>
 
-        <View style={styles.section}>
-          <View style={styles.checkboxContainer}>
-            <Switch onValueChange={setUsePassword} value={usePassword} />
-            <Text style={[styles.checkboxText, isDark && styles.checkboxTextDark]}>
-              Encrypt wallet seed with password
+        <GlassView style={styles.glass}>
+          <View style={styles.toggleContainer}>
+            <Text style={[styles.toggleText, isDark && styles.toggleTextDark]}>
+              Encrypt with passphrase
             </Text>
+            <Switch onValueChange={setUsePassword} value={usePassword} />
           </View>
-          {usePassword && (
-            <TextInput
-              style={[styles.input, isDark && styles.inputDark]}
-              placeholder="Enter password for encryption"
-              placeholderTextColor={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
-          )}
-        </View>
+        </GlassView>
+        {usePassword && (
+          <TextInput
+            style={[styles.input, isDark && styles.inputDark]}
+            placeholder="Enter passphrase"
+            placeholderTextColor={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+          />
+        )}
 
         <View style={styles.section}>
           <TextInput
@@ -169,16 +169,13 @@ export default function ImportWallet() {
         <Button
           disabled={!walletName.trim() || !isValidSeedPhrase()}
           onPress={handleImportWallet}
-          style={[
-            styles.button,
-            styles.primaryButton,
-            (!walletName.trim() || !isValidSeedPhrase()) && styles.buttonDisabled,
-          ]}
+          tintColor={alpha(colors.primary, 0.8)}
+          loading={submitting}
         >
           <Text style={styles.buttonText}>Import wallet</Text>
         </Button>
       </View>
-    </ScrollView>
+    </View>
   )
 }
 
@@ -194,13 +191,30 @@ const styles = StyleSheet.create({
     gap: 24,
   },
   containerDark: {},
+  glass: {
+    borderRadius: 32,
+    padding: 20,
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  toggleText: {
+    fontSize: 18,
+    fontWeight: '500',
+    color: alpha(colors.text.light, 0.8),
+  },
+  toggleTextDark: {
+    color: alpha(colors.text.dark, 0.9),
+  },
   section: {
     position: 'relative', // For positioning the suggestions
   },
   input: {
     padding: 16,
     height: 48,
-    borderRadius: 8,
+    borderRadius: 32,
     backgroundColor: alpha(colors.black, 0.05),
     color: colors.text.light,
   },
@@ -209,9 +223,9 @@ const styles = StyleSheet.create({
     backgroundColor: alpha(colors.white, 0.1),
   },
   seedInput: {
-    padding: 16,
+    padding: 20,
     minHeight: 120,
-    borderRadius: 8,
+    borderRadius: 32,
     backgroundColor: alpha(colors.black, 0.05),
     color: colors.text.light,
     textAlignVertical: 'top',

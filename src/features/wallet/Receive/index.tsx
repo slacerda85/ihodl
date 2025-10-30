@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { View, Text, StyleSheet, Pressable } from 'react-native'
-import { useSettings } from '@/features/storage'
+import { GlassView } from 'expo-glass-effect'
+
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
+import { useSettings } from '@/features/storage'
+
 import Receive from './Receive'
 import ReceiveLightning from './ReceiveLightning'
-import { GlassView } from 'expo-glass-effect'
 
 type ReceiveMode = 'onchain' | 'lightning'
 
@@ -14,7 +16,7 @@ export default function ReceiveScreen() {
   const [mode, setMode] = useState<ReceiveMode>('onchain')
 
   return (
-    <View style={[styles.container, isDark && styles.containerDark]}>
+    <View style={styles.container}>
       {/* Mode Selector */}
       <View style={[styles.selectorContainer, isDark && styles.selectorContainerDark]}>
         <Pressable
@@ -56,22 +58,16 @@ export default function ReceiveScreen() {
       </View>
 
       {/* Content */}
-      <GlassView style={{ flex: 1, borderRadius: 32 }}>
-        {mode === 'onchain' ? <Receive /> : <ReceiveLightning />}
-      </GlassView>
+      {/* <GlassView style={{ borderRadius: 32 }}> */}
+      {mode === 'onchain' ? <Receive /> : <ReceiveLightning />}
+      {/* </GlassView> */}
     </View>
   )
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    paddingTop: 64,
     paddingHorizontal: 24,
-    // backgroundColor: colors.background.light,
-  },
-  containerDark: {
-    // backgroundColor: colors.background.dark,
   },
   selectorContainer: {
     flexDirection: 'row',

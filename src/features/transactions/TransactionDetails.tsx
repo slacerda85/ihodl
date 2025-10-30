@@ -1,5 +1,5 @@
 import React from 'react'
-import { View, Text, ScrollView, Pressable, StyleSheet, Alert, Share } from 'react-native'
+import { View, Text, ScrollView, StyleSheet, Alert, Share } from 'react-native'
 import { useLocalSearchParams } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
 import colors from '@/ui/colors'
@@ -8,7 +8,6 @@ import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
 import { useTransactions, useSettings } from '@/features/storage'
 import QRCode from '@/ui/QRCode'
 import ContentContainer from '@/ui/ContentContainer'
-import { GlassView } from 'expo-glass-effect'
 import Button from '@/ui/Button'
 
 export default function TransactionDetails() {
@@ -25,7 +24,7 @@ export default function TransactionDetails() {
   if (!transaction) {
     return (
       <ContentContainer>
-        <View style={[styles.container, isDark && styles.containerDark]}>
+        <View style={styles.container}>
           <Text style={[styles.errorText, isDark && styles.errorTextDark]}>
             Transaction not found
           </Text>
@@ -75,7 +74,7 @@ export default function TransactionDetails() {
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.container}>
           {/* Main Section */}
-          <GlassView style={[styles.section, isDark && styles.sectionDark]}>
+          <View style={styles.section}>
             <View style={styles.item}>
               <Text
                 style={[
@@ -100,21 +99,34 @@ export default function TransactionDetails() {
               <View style={styles.buttonRow}>
                 <Button
                   style={{ flex: 1 }}
-                  glassStyle={styles.button}
-                  startIcon={<IconSymbol name="doc.on.doc" size={16} color={colors.primary} />}
+                  startIcon={
+                    <IconSymbol
+                      name="doc.on.doc"
+                      size={16}
+                      color={colors.textSecondary[isDark ? 'dark' : 'light']}
+                    />
+                  }
                   onPress={handleCopyTxid}
                 >
-                  <Text style={styles.secondaryButtonText}>Copy</Text>
+                  <Text style={{ color: colors.textSecondary[isDark ? 'dark' : 'light'] }}>
+                    Copy
+                  </Text>
                 </Button>
                 <Button
                   style={{ flex: 1 }}
                   glassStyle={styles.button}
                   startIcon={
-                    <IconSymbol name="square.and.arrow.up" size={16} color={colors.primary} />
+                    <IconSymbol
+                      name="square.and.arrow.up"
+                      size={16}
+                      color={colors.textSecondary[isDark ? 'dark' : 'light']}
+                    />
                   }
                   onPress={handleShareTxid}
                 >
-                  <Text style={styles.secondaryButtonText}>Share</Text>
+                  <Text style={{ color: colors.textSecondary[isDark ? 'dark' : 'light'] }}>
+                    Share
+                  </Text>
                 </Button>
               </View>
             </View>
@@ -124,7 +136,7 @@ export default function TransactionDetails() {
               <View style={styles.qrContainer}>
                 <QRCode
                   value={tx.txid}
-                  size={250}
+                  size={300}
                   // fullWidth
                   color={isDark ? colors.text.dark : colors.text.light}
                   backgroundColor="transparent"
@@ -170,7 +182,7 @@ export default function TransactionDetails() {
               <Text style={[styles.label, isDark && styles.labelDark]}>Outputs</Text>
               <Text style={[styles.value, isDark && styles.valueDark]}>{outputCount}</Text>
             </View>
-          </GlassView>
+          </View>
         </View>
       </ScrollView>
     </ContentContainer>
@@ -194,7 +206,7 @@ const styles = StyleSheet.create({
     // backgroundColor: alpha(colors.background.light, 0.1),
   },
   item: {
-    // No specific styles, just a container
+    gap: 8,
   },
   title: {
     fontSize: 20,
@@ -246,10 +258,10 @@ const styles = StyleSheet.create({
     color: colors.text.dark,
   },
   qrContainer: {
-    backgroundColor: 'blue',
+    // backgroundColor: 'blue',
     width: '100%',
     alignItems: 'center',
-    padding: 16,
+    // padding: 16,
   },
   amount: {
     fontSize: 24,

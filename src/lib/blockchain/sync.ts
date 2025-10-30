@@ -120,7 +120,6 @@ export async function syncHeaders(
   try {
     // Establish persistent connection for the entire sync
     socket = await connect(state)
-    console.log('[blockchain] Established persistent Electrum connection for header sync')
 
     const currentHeight = await getCurrentBlockHeight(socket)
     const lastHeader = getLastSyncedHeader()
@@ -132,15 +131,15 @@ export async function syncHeaders(
 
     // Validate that we have a valid sync range
     if (effectiveStartHeight > currentHeight) {
-      console.log(
+      /* console.log(
         `[blockchain] No sync needed: effective start height (${effectiveStartHeight}) >= current height (${currentHeight})`,
-      )
+      ) */
       return
     }
 
-    console.log(
+    /* console.log(
       `Syncing headers from ${effectiveStartHeight} to ${currentHeight} (max ${maxHeaders} headers)`,
-    )
+    ) */
 
     const batchSize = 2016 // Maximum headers per batch as per Electrum protocol
     let syncedCount = 0
@@ -150,7 +149,7 @@ export async function syncHeaders(
       const currentBatchSize = Math.min(batchSize, remainingHeaders)
 
       try {
-        console.log(`[blockchain] Downloading batch: ${height} to ${height + currentBatchSize - 1}`)
+        // console.log(`[blockchain] Downloading batch: ${height} to ${height + currentBatchSize - 1}`)
         const headers = await getBlockHeadersBatch(height, currentBatchSize, socket)
 
         // Process and validate headers in batch
@@ -183,9 +182,9 @@ export async function syncHeaders(
           batchError,
         )
         // Fall back to individual header fetching for this batch
-        console.log(
+        /* console.log(
           `[blockchain] Falling back to individual header fetching for batch starting at ${height}`,
-        )
+        ) */
 
         for (let h = height; h < height + currentBatchSize && h <= currentHeight; h++) {
           try {
@@ -221,7 +220,7 @@ export async function syncHeaders(
     // Close the persistent connection
     if (socket) {
       try {
-        console.log('[blockchain] Closing persistent Electrum connection')
+        // console.log('[blockchain] Closing persistent Electrum connection')
         close(socket)
       } catch (closeError) {
         console.error('[blockchain] Error closing persistent socket:', closeError)

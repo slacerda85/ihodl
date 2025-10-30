@@ -33,7 +33,6 @@ async function connect(state?: { electrum?: { trustedPeers?: any[] } }): Promise
   // First try trusted peers
   const trustedPeers = await readTrustedPeers(state)
   if (trustedPeers.length > 0) {
-    console.log(`[electrum] Found ${trustedPeers.length} trusted peers`)
     peers.push(...trustedPeers)
   } else {
     // Fallback to initial peers
@@ -45,8 +44,6 @@ async function connect(state?: { electrum?: { trustedPeers?: any[] } }): Promise
   // Try each server in the peers list
   for (const peer of randomPeers) {
     try {
-      console.log(`[electrum] peer ${peer.host}:${peer.port}`)
-
       // Initialize the socket
       const socket = await init()
 
@@ -86,7 +83,7 @@ function close(socket: TLSSocket): void {
   if (socket && !socket.destroyed) {
     socket.end()
     socket.destroy()
-    console.log('[electrum] Socket connection closed')
+    // console.log('[electrum] Socket connection closed')
   }
 }
 
@@ -99,7 +96,7 @@ async function getPeers(socket?: TLSSocket): Promise<ElectrumPeer[]> {
   try {
     console.log('[electrum] Fetching peers from server')
     const response = await callElectrumMethod<ElectrumPeer[]>('server.peers.subscribe', [], socket)
-    console.log(`[electrum] Received ${response.result?.length || 0} peers`)
+    // console.log(`[electrum] Received ${response.result?.length || 0} peers`)
 
     // filter peers with SSL (s) or TCP (t) support
     const filteredPeers = response.result?.filter(peer => {
@@ -217,7 +214,6 @@ async function updateTrustedPeers(state?: {
 
     // Get stored trusted peers first
     const storedTrustedPeers = await readTrustedPeers(state)
-    console.log(`[electrum] Found ${storedTrustedPeers.length} stored trusted peers`)
 
     // If we have recent trusted peers (less than 24 hours old), use them
     if (storedTrustedPeers.length >= 3) {
@@ -225,26 +221,18 @@ async function updateTrustedPeers(state?: {
       const hoursSinceUpdate = lastUpdate ? (Date.now() - lastUpdate) / (1000 * 60 * 60) : 25
 
       if (hoursSinceUpdate < 24) {
-        console.log(
-          `[electrum] Using recent trusted peers (${hoursSinceUpdate.toFixed(1)} hours old)`,
-        )
         return null
       }
     }
 
     // Connect to get a socket for fetching peers
     socket = await connect(state)
-    console.log('[electrum] Connected to Electrum server for peer discovery')
 
     // Fetch fresh peers from the network
     const networkPeers = await getPeers(socket)
-    console.log(`[electrum] Fetched ${networkPeers.length} peers from network`)
 
     // Convert network peers to connection options
     const networkConnectionOptions = peersToConnectionOptions(networkPeers)
-    console.log(
-      `[electrum] Converted ${networkConnectionOptions.length} network peers to connection options`,
-    )
 
     // Combine all available peers, removing duplicates
     const allPeersSet = new Set<string>()

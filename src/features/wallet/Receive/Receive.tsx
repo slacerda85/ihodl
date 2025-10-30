@@ -12,14 +12,17 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
+
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
-import { useWallet, useSettings } from '@/features/storage'
-import { UsedAddress } from '@/lib/address'
 import QRCode from '@/ui/QRCode'
 import Button from '@/ui/Button'
 import { IconButton } from '@/ui/Button'
+
+import { useWallet, useSettings } from '@/features/storage'
+
+import { UsedAddress } from '@/lib/address'
 
 // Address generation utilities - separated for better organization
 
@@ -168,38 +171,55 @@ export default function Receive() {
                   backgroundColor="transparent"
                 />
               </View>
-              {/* <View style={styles.buttonRow}> */}
-              <Button
-                variant="solid"
-                backgroundColor={isDark ? alpha(colors.white, 0.05) : alpha(colors.black, 0.03)}
-                color={colors.textSecondary[isDark ? 'dark' : 'light']}
-                startIcon={
-                  <IconSymbol
-                    name="doc.on.doc"
-                    size={20}
-                    color={colors.textSecondary[isDark ? 'dark' : 'light']}
-                  />
-                }
-                onPress={handleCopyAddress}
+              {/* Exibição do endereço */}
+              <Text style={[styles.addressText, isDark && styles.addressTextDark]}>
+                {selectedAddress}
+              </Text>
+              <View
+                style={{
+                  // backgroundColor: 'red',
+                  flexDirection: 'row',
+                  gap: 24,
+                }}
               >
-                Copy
-              </Button>
+                <Button
+                  // variant="solid"
+                  tintColor={
+                    isDark
+                      ? alpha(colors.background.light, 0.05)
+                      : alpha(colors.background.dark, 0.03)
+                  }
+                  style={{ flex: 1 }}
+                  color={colors.textSecondary[isDark ? 'dark' : 'light']}
+                  startIcon={
+                    <IconSymbol
+                      name="doc.on.doc"
+                      size={20}
+                      color={colors.textSecondary[isDark ? 'dark' : 'light']}
+                    />
+                  }
+                  onPress={handleCopyAddress}
+                >
+                  Copy
+                </Button>
 
-              <Button
-                variant="solid"
-                backgroundColor={isDark ? alpha(colors.white, 0.05) : alpha(colors.black, 0.03)}
-                color={colors.textSecondary[isDark ? 'dark' : 'light']}
-                startIcon={
-                  <IconSymbol
-                    name="square.and.arrow.up"
-                    size={20}
-                    color={colors.textSecondary[isDark ? 'dark' : 'light']}
-                  />
-                }
-                onPress={handleShareAddress}
-              >
-                Share
-              </Button>
+                <Button
+                  style={{ flex: 1 }}
+                  // variant="solid"
+                  tintColor={isDark ? alpha(colors.white, 0.05) : alpha(colors.black, 0.03)}
+                  color={colors.textSecondary[isDark ? 'dark' : 'light']}
+                  startIcon={
+                    <IconSymbol
+                      name="square.and.arrow.up"
+                      size={20}
+                      color={colors.textSecondary[isDark ? 'dark' : 'light']}
+                    />
+                  }
+                  onPress={handleShareAddress}
+                >
+                  Share
+                </Button>
+              </View>
               {/* </View> */}
               <Button
                 variant="solid"
@@ -228,7 +248,7 @@ export default function Receive() {
             </View>
           )}
           {/* Info Section */}
-          <View style={[styles.infoBox, isDark && styles.infoBoxDark]}>
+          {/* <View style={[styles.infoBox, isDark && styles.infoBoxDark]}>
             <IconSymbol
               name="info.circle.fill"
               size={20}
@@ -242,7 +262,7 @@ export default function Receive() {
                 transaction{'\n'}• Keep your wallet secure and backed up
               </Text>
             </View>
-          </View>
+          </View> */}
         </View>
       </ScrollView>
 
@@ -356,38 +376,20 @@ export default function Receive() {
 }
 
 const styles = StyleSheet.create({
-  scrollView: {
-    flex: 1,
-  },
-  scrollViewDark: {
-    // No additional styles needed
-  },
+  // Scroll and content
+  scrollView: {},
+  scrollViewDark: {},
   contentWrapper: {
     padding: 24,
-    paddingTop: 32,
     gap: 24,
   },
-  contentWrapperDark: {
-    // No additional styles needed
-  },
+  contentWrapperDark: {},
+
+  // Section
   sectionBox: {
-    // backgroundColor: colors.white,
-    // paddingVertical: 16,
-    // paddingHorizontal: 16,
-    // borderRadius: 16,
     gap: 24,
   },
-  sectionBoxFirst: {
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-  },
-  sectionBoxLast: {
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
-  },
-  sectionBoxDark: {
-    // backgroundColor: alpha(colors.background.light, 0.05),
-  },
+  sectionBoxDark: {},
   sectionTitle: {
     fontSize: 18,
     fontWeight: '500',
@@ -404,42 +406,17 @@ const styles = StyleSheet.create({
   subtitleDark: {
     color: colors.textSecondary.dark,
   },
+
+  // QR
   qrContainer: {
-    // padding: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    // padding: 8,
-    // borderRadius: 12,
-    // backgroundColor: alpha(colors.black, 0.03),
   },
-  qrContainerDark: {
-    // backgroundColor: alpha(colors.white, 0.05),
-  },
-  qrPlaceholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 200,
-    height: 200,
-  },
-  qrText: {
-    fontSize: 12,
-    color: colors.textSecondary.light,
-    textAlign: 'center',
-    marginTop: 16,
-  },
-  qrTextDark: {
-    color: colors.textSecondary.dark,
-  },
-  addressContainer: {
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: alpha(colors.black, 0.03),
-  },
-  addressContainerDark: {
-    backgroundColor: alpha(colors.white, 0.05),
-  },
+
+  // Address
   addressText: {
-    fontSize: 14,
+    paddingHorizontal: 12,
+    fontSize: 16,
     fontFamily: 'monospace',
     color: colors.text.light,
     textAlign: 'center',
@@ -447,91 +424,8 @@ const styles = StyleSheet.create({
   addressTextDark: {
     color: colors.text.dark,
   },
-  addressList: {
-    marginHorizontal: -16,
-    paddingHorizontal: 16,
-  },
-  addressCard: {
-    width: 160,
-    padding: 16,
-    marginRight: 12,
-    borderRadius: 12,
-    backgroundColor: alpha(colors.black, 0.03),
-    alignItems: 'center',
-  },
-  addressCardDark: {
-    backgroundColor: alpha(colors.white, 0.05),
-  },
-  addressCardActive: {
-    backgroundColor: colors.primary,
-  },
-  addressCardActiveDark: {
-    backgroundColor: colors.primary,
-  },
-  addressCardText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.text.light,
-    marginBottom: 4,
-  },
-  addressCardTextDark: {
-    color: colors.text.dark,
-  },
-  addressCardTextActive: {
-    color: colors.white,
-  },
-  addressCardAddress: {
-    fontSize: 12,
-    fontFamily: 'monospace',
-    color: colors.textSecondary.light,
-  },
-  addressCardAddressDark: {
-    color: colors.textSecondary.dark,
-  },
-  buttonRow: {
-    // backgroundColor: 'blue',
-    // flex: 1,
-    // flexDirection: 'row',
-    gap: 12,
-    // marginBottom: 12,
-  },
-  infoBox: {
-    flexDirection: 'row',
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: alpha(colors.info, 0.1),
-    borderWidth: 1,
-    borderColor: alpha(colors.info, 0.2),
-  },
-  infoBoxDark: {
-    backgroundColor: alpha(colors.info, 0.1),
-    borderColor: alpha(colors.info, 0.2),
-  },
-  infoIcon: {
-    marginRight: 12,
-    marginTop: 2,
-  },
-  infoContent: {
-    flex: 1,
-  },
-  infoTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: colors.text.light,
-    marginBottom: 4,
-  },
-  infoTitleDark: {
-    color: colors.text.dark,
-  },
-  infoText: {
-    fontSize: 14,
-    color: colors.textSecondary.light,
-    lineHeight: 20,
-  },
-  infoTextDark: {
-    color: colors.textSecondary.dark,
-  },
-  // Modal styles
+
+  // Modal
   modalContainer: {
     flex: 1,
     backgroundColor: colors.white,
@@ -559,9 +453,11 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 16,
   },
+
+  // Used addresses
   usedAddressItem: {
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 32,
     backgroundColor: alpha(colors.black, 0.03),
   },
   usedAddressItemDark: {
@@ -616,7 +512,8 @@ const styles = StyleSheet.create({
   moreTransactionsDark: {
     color: colors.primary,
   },
-  // Tab styles
+
+  // Tabs
   tabContainer: {
     flexDirection: 'row',
     paddingHorizontal: 16,
@@ -628,7 +525,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     alignItems: 'center',
-    borderRadius: 8,
+    borderRadius: 32,
     marginHorizontal: 4,
   },
   tabActive: {
