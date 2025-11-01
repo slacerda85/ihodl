@@ -38,13 +38,5 @@ export type Account = {
   coinType: CoinType
   accountIndex: number
   // Lightning-specific fields (optional, only used when purpose === 9735)
-  lightning?: {
-    type: LightningAccountType
-    chain: number // 0 for Bitcoin mainnet, 1 for testnet
-    lnVer: number // 0 for BOLT, 1 for Bifrost
-    nodeIndex?: number // For node accounts
-    channelId?: string // For channel accounts
-    caseIndex?: number // For funding wallet accounts
-    derivedKeys?: LightningDerivedKeys // Derived keys from seed
-  }
+  lightning?: {}
 }

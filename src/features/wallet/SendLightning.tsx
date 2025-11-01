@@ -13,7 +13,6 @@ import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
 import { useSettings } from '@/features/storage'
-import { breezClient } from '@/lib/lightning/client'
 import Button from '@/ui/Button'
 
 export default function SendLightning() {
@@ -26,6 +25,31 @@ export default function SendLightning() {
   const [amount, setAmount] = useState('')
   const [description, setDescription] = useState('')
   const [showDetails, setShowDetails] = useState(false)
+
+  // Mock Breez client functions
+  const mockPrepareSendPayment = async (params: any) => {
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 1500))
+
+    // Mock payment preparation response
+    const mockAmount = amount ? parseInt(amount) * 1000 : 1000000 // Default 1000 sats in msats
+    const mockFee = Math.floor(mockAmount * 0.001) // 0.1% fee
+
+    return {
+      id: 'mock-payment-' + Date.now(),
+      amountMsat: mockAmount,
+      feeMsat: mockFee,
+      bolt11: params.bolt11,
+    }
+  }
+
+  const mockSendPayment = async (params: any) => {
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 2000))
+
+    // Mock successful payment (no error thrown)
+    return { success: true }
+  }
 
   // Invoice validation
   const isValidInvoice = (inv: string): boolean => {
@@ -81,9 +105,9 @@ export default function SendLightning() {
 
     setIsPreparing(true)
     try {
-      const result = await breezClient.prepareSendPayment({
+      const result = await mockPrepareSendPayment({
         bolt11: invoice,
-      } as any)
+      })
 
       setPreparedPayment(result)
       setShowDetails(true)
@@ -101,9 +125,9 @@ export default function SendLightning() {
 
     setIsSending(true)
     try {
-      await breezClient.sendPayment({
+      await mockSendPayment({
         paymentId: preparedPayment.id,
-      } as any)
+      })
 
       // Payment was successful if no error was thrown
       Alert.alert('Sucesso!', 'Pagamento Lightning enviado com sucesso!')

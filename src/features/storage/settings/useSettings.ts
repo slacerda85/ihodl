@@ -13,6 +13,7 @@ export const useSettings = () => {
     // State
     colorMode: state.settings.colorMode,
     maxBlockchainSizeGB: state.settings.maxBlockchainSizeGB,
+    trampolineRoutingEnabled: state.settings.trampolineRoutingEnabled,
     userOverride: state.settings.userOverride,
     isDark,
 
@@ -21,5 +22,7 @@ export const useSettings = () => {
       dispatch({ type: 'SETTINGS', action: { type: 'SET_COLOR_MODE', payload: colorMode } }),
     setMaxBlockchainSize: (size: number) =>
       dispatch({ type: 'SETTINGS', action: { type: 'SET_MAX_BLOCKCHAIN_SIZE', payload: size } }),
+    setTrampolineRouting: (enabled: boolean) =>
+      dispatch({ type: 'SETTINGS', action: { type: 'SET_TRAMPOLINE_ROUTING', payload: enabled } }),
   }
 }

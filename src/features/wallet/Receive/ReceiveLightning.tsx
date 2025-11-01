@@ -14,81 +14,35 @@ import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
 import { useSettings } from '@/features/storage'
-import { useLightning } from '@/features/storage'
-import { useStorage } from '@/features/storage'
 import QRCode from '@/ui/QRCode'
 import Button from '@/ui/Button'
-import { breezClient } from '@/lib/lightning/client'
 
 export default function ReceiveLightning() {
   const { isDark } = useSettings()
-  const { state } = useStorage()
-  const { receivePayment, initializeBreezWithActiveWallet } = useLightning()
 
-  // Payment state
-  const [paymentRequest, setPaymentRequest] = useState<string | null>(null)
+  // Payment state - MOCK DATA
+  const [paymentRequest, setPaymentRequest] = useState<string | null>(
+    'lnbc1pvjluezpp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdpl2pkx2ctnv5sxxmmwwd5kgetjypeh2ursdae8g6twvus8g6rfwvs8qun0dfjkxaq8rkx3yf5tcsyz3d73gafnh3cax9rn449d9p5uxz9ezhhypd0elx87sjle52x86fux2ypatgddc6k63n7erqz25le42c4u4ecky03ylcqca784w',
+  )
   const [isGenerating, setIsGenerating] = useState(false)
 
   // Invoice configuration
   const [amount, setAmount] = useState('')
   const [description, setDescription] = useState('Pagamento via iHodl')
 
-  // Auto-generate invoice on mount and when config changes
+  // Mock invoice generation
   const generateInvoice = useCallback(async () => {
-    // Check if there's an active wallet first
-    const activeWalletId = state.wallet?.activeWalletId
-    if (!activeWalletId) {
-      Alert.alert(
-        'Erro',
-        'Nenhuma carteira ativa encontrada. Crie ou selecione uma carteira primeiro.',
-      )
-      return
-    }
-
-    // Initialize Breez if not connected
-    try {
-      if (!breezClient.isConnected()) {
-        console.log('Initializing Breez SDK...')
-        await initializeBreezWithActiveWallet()
-      }
-
-      // Verify connection
-      await breezClient.getInfo()
-    } catch (error) {
-      console.error('BreezClient initialization failed:', error)
-      Alert.alert('Erro', 'Falha ao conectar com a rede Lightning. Tente novamente.')
-      return
-    }
-
+    // Mock implementation - no real Lightning calls
     setIsGenerating(true)
-    try {
-      const request = {
-        paymentMethod: {
-          type: 'bolt11Invoice' as const,
-          description: description || 'Pagamento via iHodl',
-          amountSats: amount ? parseInt(amount) : undefined,
-        },
-      }
 
-      const response = await receivePayment(request)
-      setPaymentRequest(response.paymentRequest)
-
-      if (response.feeSats > 0) {
-        console.log(`Receive fee: ${response.feeSats} sats`)
-      }
-    } catch (error) {
-      console.error('Error generating invoice:', error)
-      Alert.alert('Erro', 'Falha ao gerar invoice Lightning')
-    } finally {
+    // Simulate API delay
+    setTimeout(() => {
+      const mockInvoice =
+        'lnbc1pvjluezpp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdpl2pkx2ctnv5sxxmmwwd5kgetjypeh2ursdae8g6twvus8g6rfwvs8qun0dfjkxaq8rkx3yf5tcsyz3d73gafnh3cax9rn449d9p5uxz9ezhhypd0elx87sjle52x86fux2ypatgddc6k63n7erqz25le42c4u4ecky03ylcqca784w'
+      setPaymentRequest(mockInvoice)
       setIsGenerating(false)
-    }
-  }, [
-    amount,
-    description,
-    state.wallet?.activeWalletId,
-    initializeBreezWithActiveWallet,
-    receivePayment,
-  ])
+    }, 1000)
+  }, [])
 
   useEffect(() => {
     generateInvoice()

@@ -7,21 +7,26 @@ import {
   View,
   Alert,
   TouchableOpacity,
+  Switch,
 } from 'react-native'
 import { useSettings } from '@/features/storage'
-import { useLightning } from '@/features/storage'
 import { clearPersistedState } from '@/features/storage/StorageProvider'
 import Picker from '@/ui/Picker/Picker'
 import { ColorMode } from '@/models/settings'
-import { LIGHTNING_SERVICE_PROVIDERS, DEFAULT_LSP } from '@/lib/lightning/constants'
 
 // Import all iOS UI components
 // import { Host, Button } from '@expo/ui/swift-ui'
 
 export default function SettingsScreen() {
   const colorScheme = useColorScheme()
-  const { colorMode, setColorMode, maxBlockchainSizeGB, setMaxBlockchainSize } = useSettings()
-  const { spvEnabled, selectedLsp, setSelectedLsp } = useLightning()
+  const {
+    colorMode,
+    setColorMode,
+    maxBlockchainSizeGB,
+    setMaxBlockchainSize,
+    trampolineRoutingEnabled,
+    setTrampolineRouting,
+  } = useSettings()
 
   const effectiveColorMode = colorMode === 'auto' ? (colorScheme ?? 'light') : colorMode
   const isDarkEffective = effectiveColorMode === 'dark'
@@ -62,20 +67,10 @@ export default function SettingsScreen() {
     { label: '5 GB', value: 5 },
   ]
 
-  // LSP options for SPV Lightning
-  const lspOptions = [
-    { label: `Auto (${LIGHTNING_SERVICE_PROVIDERS[DEFAULT_LSP].name})`, value: 'auto' },
-    ...Object.entries(LIGHTNING_SERVICE_PROVIDERS).map(([id, config]) => ({
-      label: `${config.name}${!config.isAvailable ? ' (Indisponível)' : ''}`,
-      value: id,
-    })),
-  ]
-
   const selectedThemeIndex = themeOptions.findIndex(option => option.value === colorMode)
   const selectedSizeIndex = blockchainSizeOptions.findIndex(
     option => option.value === maxBlockchainSizeGB,
   )
-  const selectedLspIndex = lspOptions.findIndex(option => option.value === selectedLsp)
 
   return (
     <ScrollView style={[styles.container, isDarkEffective && styles.containerDark]}>
@@ -109,26 +104,25 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      {spvEnabled && (
-        <View style={styles.section}>
-          <Text style={[styles.subtitle, isDarkEffective && styles.subtitleDark]}>
-            Lightning Service Provider
+      <View style={styles.section}>
+        <Text style={[styles.subtitle, isDarkEffective && styles.subtitleDark]}>
+          Configurações Lightning
+        </Text>
+        <View style={styles.settingRow}>
+          <Text style={[styles.label, isDarkEffective && styles.labelDark]}>
+            Trampoline Routing
           </Text>
-          <Text style={[styles.description, isDarkEffective && styles.descriptionDark]}>
-            Escolha o provedor para pagamentos Lightning SPV
-          </Text>
-          <View style={styles.settingRow}>
-            <Picker
-              options={lspOptions.map(opt => opt.label)}
-              selectedIndex={selectedLspIndex}
-              onOptionSelected={({ nativeEvent: { index } }) => {
-                setSelectedLsp(lspOptions[index].value)
-              }}
-              variant="segmented"
-            />
-          </View>
+          <Switch
+            value={trampolineRoutingEnabled}
+            onValueChange={setTrampolineRouting}
+            trackColor={{ false: colors.disabled, true: colors.primary }}
+            thumbColor={trampolineRoutingEnabled ? colors.white : colors.disabled}
+          />
         </View>
-      )}
+        <Text style={[styles.description, isDarkEffective && styles.descriptionDark]}>
+          Permite roteamento através de nós intermediários confiáveis para pagamentos mais rápidos
+        </Text>
+      </View>
 
       <View style={styles.section}>
         <Text style={[styles.subtitle, isDarkEffective && styles.subtitleDark]}>

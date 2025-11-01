@@ -5,7 +5,7 @@ import LightningLogo from '@/assets/lightning-logo'
 import { ReactNode } from 'react'
 import { alpha } from '@/ui/utils'
 import colors from '@/ui/colors'
-import { useWallet, useTransactions, useSettings, useLightningChannels } from '@/features/storage'
+import { useWallet, useTransactions, useSettings } from '@/features/storage'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { formatBalance } from './utils'
@@ -129,20 +129,13 @@ function AccountDetails({ account }: AccountDetailsProps) {
 
   const { loadingWalletState: loadingWallet } = useWallet()
   const { loadingTxState: loadingTransactions, getBalance } = useTransactions()
-  const {
-    totalBalance: lightningTotalBalance,
-    channels: lightningChannels,
-    breezConnected,
-  } = useLightningChannels()
 
   const { unit, activeWalletId } = useWallet()
   const loading = loadingWallet || loadingTransactions
   const balance = activeWalletId ? getBalance(activeWalletId) : 0
 
   const isLightningAccount = account.purpose === 9735
-  const lightningBalance = isLightningAccount ? lightningTotalBalance : 0
-  const lightningChannelsCount = isLightningAccount ? lightningChannels.length : 0
-  const nodeConnected = isLightningAccount ? breezConnected : false
+  const lightningBalance = 0 // Placeholder for lightning balance
 
   const accountIcon = getPurposeIcon(account.purpose)
 
@@ -322,10 +315,11 @@ const styles = StyleSheet.create({
   },
   accountBalance: {
     fontSize: 14,
-    color: colors.text.light,
+    fontWeight: '600',
+    color: alpha(colors.text.light, 0.7),
   },
   accountBalanceDark: {
-    color: colors.text.dark,
+    color: alpha(colors.text.dark, 0.7),
   },
   lightningInfo: {
     flexDirection: 'row',

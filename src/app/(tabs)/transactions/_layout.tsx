@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router'
 import colors from '@/ui/colors'
 import { useSettings } from '@/features/storage'
+import { Platform } from 'react-native'
 
 export default function TransactionsLayout() {
   const { isDark } = useSettings()
@@ -22,6 +23,9 @@ export default function TransactionsLayout() {
         options={{
           headerTitleAlign: 'center',
           title: `Transactions`,
+          contentStyle: {
+            paddingTop: Platform.OS === 'ios' ? 64 : 0,
+          },
         }}
       />
       <Stack.Screen

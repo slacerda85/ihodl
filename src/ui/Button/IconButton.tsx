@@ -1,13 +1,14 @@
 import { PressableProps } from 'react-native'
 import Button from './Button'
 
-interface IconButtonProps extends PressableProps {
+interface IconButtonProps extends Omit<PressableProps, 'disabled'> {
   icon: React.ReactNode
   tintColor?: string
   isInteractive?: boolean
   glassStyle?: any
   variant?: 'glass' | 'solid'
   backgroundColor?: string
+  disabled?: boolean
 }
 
 export default function IconButton({

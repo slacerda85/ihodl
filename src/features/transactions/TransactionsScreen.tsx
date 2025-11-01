@@ -237,61 +237,57 @@ export default function TransactionsScreen() {
       const prefix = isPositive ? '+' : '-'
 
       return (
-        <View>
-          <Pressable
-            onPress={() => {
-              // Navigate to transaction details
-              router.push(`/transactions/${item.tx.txid}` as any)
-            }}
-          >
-            <GlassView isInteractive style={styles.transactionPressable}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <BitcoinLogo width={32} height={32} />
-                <View>
-                  <Text style={[styles.type, isDark && styles.typeDark]}>{typeLabel}</Text>
-                  <Text style={[styles.address, isDark && styles.addressDark]}>
-                    {item.type === 'received' ? 'From' : item.type === 'sent' ? 'To' : ''}{' '}
-                    {truncateAddress(item.address, 6)}
-                  </Text>
-                </View>
+        <Pressable
+          onPress={() => {
+            // Navigate to transaction details
+            router.push(`/transactions/${item.tx.txid}` as any)
+          }}
+        >
+          <GlassView isInteractive style={styles.transactionPressable}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <BitcoinLogo width={32} height={32} />
+              <View>
+                <Text style={[styles.type, isDark && styles.typeDark]}>{typeLabel}</Text>
+                <Text style={[styles.address, isDark && styles.addressDark]}>
+                  {item.type === 'received' ? 'From' : item.type === 'sent' ? 'To' : ''}{' '}
+                  {truncateAddress(item.address, 6)}
+                </Text>
               </View>
-              <Text
-                style={[
-                  styles.balance,
-                  isDark && styles.balanceDark,
-                  isPositive ? styles.balancePositive : styles.balanceNegative,
-                ]}
-              >
-                {`${prefix}${formatBalance(item.amount, unit)} ${unit}`}
-              </Text>
-            </GlassView>
-          </Pressable>
-        </View>
+            </View>
+            <Text
+              style={[
+                styles.balance,
+                isDark && styles.balanceDark,
+                isPositive ? styles.balancePositive : styles.balanceNegative,
+              ]}
+            >
+              {`${prefix}${formatBalance(item.amount, unit)} ${unit}`}
+            </Text>
+          </GlassView>
+        </Pressable>
       )
     }
   }
 
   return (
-    <GlassContainer style={{ padding: 16 }}>
-      <FlatList
-        contentContainerStyle={{
-          // paddingTop: headerHeight + 16,
-          paddingBottom: 16,
-          gap: 4,
-        }}
-        data={data}
-        keyExtractor={item => (item.isDate ? item.date : item.tx.txid)}
-        renderItem={renderItem}
-        ListHeaderComponent={
-          <View style={{ paddingBottom: 16, alignItems: 'center' }}>
-            <Text style={[styles.statsText, isDark && styles.statsTextDark]}>
-              {`Received: ${stats.receivedCount} | Sent: ${stats.sentCount} | Self: ${stats.selfCount}`}
-            </Text>
-          </View>
-        }
-        showsVerticalScrollIndicator={false}
-      />
-    </GlassContainer>
+    <FlatList
+      contentContainerStyle={{
+        // paddingTop: headerHeight + 16,
+        padding: 20,
+        gap: 4,
+      }}
+      data={data}
+      keyExtractor={item => (item.isDate ? item.date : item.tx.txid)}
+      renderItem={renderItem}
+      ListHeaderComponent={
+        <View style={{ paddingBottom: 16, alignItems: 'center' }}>
+          <Text style={[styles.statsText, isDark && styles.statsTextDark]}>
+            {`Received: ${stats.receivedCount} | Sent: ${stats.sentCount} | Self: ${stats.selfCount}`}
+          </Text>
+        </View>
+      }
+      showsVerticalScrollIndicator={false}
+    />
   )
 }
 
@@ -365,20 +361,21 @@ const styles = StyleSheet.create({
   },
   statsText: {
     fontSize: 14,
-    color: colors.text.light,
+    color: alpha(colors.textSecondary.light, 0.7),
   },
   statsTextDark: {
-    color: colors.text.dark,
+    color: alpha(colors.textSecondary.dark, 0.7),
   },
   date: {
+    paddingLeft: 16,
     paddingTop: 16,
-    paddingBottom: 8,
+    // paddingBottom: 8,
     fontSize: 14,
     fontWeight: '600',
-    color: colors.textSecondary.light,
+    color: alpha(colors.textSecondary.light, 0.5),
   },
   dateDark: {
-    color: colors.textSecondary.dark,
+    color: alpha(colors.textSecondary.dark, 0.5),
   },
   type: {
     fontSize: 16,

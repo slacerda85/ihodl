@@ -17,12 +17,7 @@ import {
   BlockchainState,
   BlockchainAction,
 } from './blockchain/blockchain'
-import {
-  lightningReducer,
-  initialLightningState,
-  LightningState,
-  LightningAction,
-} from './lightning/lightning'
+
 import {
   electrumReducer,
   initialElectrumState,
@@ -36,7 +31,6 @@ export type AppState = {
   settings: SettingsState
   transactions: TransactionsState
   blockchain: BlockchainState
-  // lightning: LightningState
   electrum: ElectrumState
 }
 
@@ -46,7 +40,6 @@ export type AppAction =
   | { type: 'SETTINGS'; action: SettingsAction }
   | { type: 'TRANSACTIONS'; action: TransactionsAction }
   | { type: 'BLOCKCHAIN'; action: BlockchainAction }
-  // | { type: 'LIGHTNING'; action: LightningAction }
   | { type: 'ELECTRUM'; action: ElectrumAction }
 
 // Initial state
@@ -55,7 +48,6 @@ export const initialAppState: AppState = {
   settings: initialSettingsState,
   transactions: initialTransactionsState,
   blockchain: initialBlockchainState,
-  // lightning: initialLightningState,
   electrum: initialElectrumState,
 }
 
@@ -82,11 +74,6 @@ export const appReducer = (state: AppState, action: AppAction): AppState => {
         ...state,
         blockchain: blockchainReducer(state.blockchain, action.action),
       }
-    /* case 'LIGHTNING':
-      return {
-        ...state,
-        lightning: lightningReducer(state.lightning, action.action),
-      } */
     case 'ELECTRUM':
       return {
         ...state,

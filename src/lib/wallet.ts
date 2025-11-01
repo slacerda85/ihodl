@@ -1,14 +1,8 @@
-import { Account, LightningDerivedKeys } from '@/models/account'
-import { fromMnemonic, toMnemonic, createRootExtendedKey } from '@/lib/key'
-import { createEntropy, randomUUID, uint8ArrayToHex } from '@/lib/crypto'
+import { Account } from '@/models/account'
+import { fromMnemonic, toMnemonic } from '@/lib/key'
+import { createEntropy, randomUUID } from '@/lib/crypto'
 import { WalletData } from '@/models/wallet'
 import { storeWalletSeedPhrase, getWalletSeedPhrase } from '@/lib/secureStorage'
-import {
-  deriveExtendedLightningKey,
-  deriveNodeKey,
-  deriveFundingWalletAddress,
-  deriveLightningChannelKeyset,
-} from '@/lib/lightning/keys'
 
 export interface CreateWalletParams {
   walletName: string
@@ -61,7 +55,6 @@ function createWallet({
   try {
     const walletId = randomUUID()
     const entropy = seedPhrase ? fromMnemonic(seedPhrase) : createEntropy(16)
-    const masterKey = createRootExtendedKey(entropy)
 
     const defaultAccounts: Account[] = [
       // Bitcoin Native Segwit
@@ -75,19 +68,10 @@ function createWallet({
         purpose: 9735, // Lightning
         coinType: 0, // Bitcoin
         accountIndex: 0, // Default account index
-        lightning: {
-          type: 'node',
-          chain: 0, // Bitcoin mainnet
-          lnVer: 0, // BOLT
-          nodeIndex: 0,
-        },
       },
     ]
 
     const accountsToAdd = accounts ?? defaultAccounts
-
-    // Derive Lightning keys for accounts that need them
-    const accountsWithKeys = accountsToAdd.map(account => deriveLightningKeys(masterKey, account))
 
     const seedPhraseToUse = seedPhrase ?? toMnemonic(entropy)
 
@@ -95,7 +79,7 @@ function createWallet({
       walletId,
       walletName,
       cold,
-      accounts: accountsWithKeys,
+      accounts: accountsToAdd,
     }
     return {
       wallet: newWallet,
@@ -115,56 +99,6 @@ function createWallet({
  * @param account - The account configuration
  * @returns The account with derived keys
  */
-function deriveLightningKeys(masterKey: Uint8Array, account: Account): Account {
-  if (account.purpose !== 9735 || !account.lightning) {
-    return account
-  }
-
-  const lightningKey = deriveExtendedLightningKey(masterKey)
-  const { type, chain, lnVer, nodeIndex, channelId, caseIndex } = account.lightning
-
-  const derivedKeys: LightningDerivedKeys = {}
-
-  if (type === 'node' && nodeIndex !== undefined) {
-    const nodeKey = deriveNodeKey(lightningKey, chain, nodeIndex)
-    derivedKeys.nodeKey = {
-      privateKey: nodeKey.privateKey,
-      publicKey: nodeKey.publicKey,
-      nodeId: uint8ArrayToHex(nodeKey.publicKey),
-    }
-  }
-
-  if (type === 'funding_wallet' && caseIndex !== undefined) {
-    const fundingWallet = deriveFundingWalletAddress(lightningKey, chain, caseIndex, 0)
-    derivedKeys.fundingKeys = {
-      privateKey: fundingWallet.privateKey,
-      publicKey: fundingWallet.publicKey,
-      address: fundingWallet.address,
-    }
-  }
-
-  if (type === 'channel' && channelId) {
-    const channelKeyset = deriveLightningChannelKeyset(lightningKey, channelId, chain, lnVer)
-    derivedKeys.channelKeys = {
-      channelId: channelKeyset.channelId,
-      fundingPrivateKey: channelKeyset.fundingPrivateKey,
-      paymentPrivateKey: channelKeyset.paymentPrivateKey,
-      delayedPrivateKey: channelKeyset.delayedPrivateKey,
-      revocationPrivateKey: channelKeyset.revocationPrivateKey,
-      htlcPrivateKey: channelKeyset.htlcPrivateKey,
-      ptlcPrivateKey: channelKeyset.ptlcPrivateKey,
-      perCommitmentPrivateKey: channelKeyset.perCommitmentPrivateKey,
-    }
-  }
-
-  return {
-    ...account,
-    lightning: {
-      ...account.lightning,
-      derivedKeys,
-    },
-  }
-}
 
 /**
  * Securely stores a wallet's seed phrase

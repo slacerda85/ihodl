@@ -120,10 +120,6 @@ export default function WalletLayout() {
     }),
     contentStyle: {
       paddingTop: Platform.OS === 'ios' ? 64 : 0,
-      // backgroundColor: 'transparent',
-      /* isDark
-        ? alpha(colors.background.dark, 0.1)
-        : alpha(colors.background.light, 0.1), */
     },
   }
 
@@ -218,34 +214,6 @@ export default function WalletLayout() {
           ...modalOptions,
           animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
           title: 'Receive Bitcoin',
-          headerRight:
-            Platform.OS === 'ios' ? () => <CloseModalButton title="Cancel" /> : undefined,
-        }}
-      />
-      <Stack.Screen
-        name="lightning-channels"
-        options={{
-          ...modalOptions,
-          animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
-          title: 'Lightning Channels',
-          headerRight: Platform.OS === 'ios' ? () => <CloseModalButton title="Close" /> : undefined,
-        }}
-      />
-      <Stack.Screen
-        name="channel-actions"
-        options={{
-          ...modalOptions,
-          animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
-          title: 'Channel Actions',
-          headerRight: Platform.OS === 'ios' ? () => <CloseModalButton title="Close" /> : undefined,
-        }}
-      />
-      <Stack.Screen
-        name="open-channel"
-        options={{
-          ...modalOptions,
-          animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
-          title: 'Open Channel',
           headerRight:
             Platform.OS === 'ios' ? () => <CloseModalButton title="Cancel" /> : undefined,
         }}
