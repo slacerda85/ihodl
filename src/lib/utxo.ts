@@ -1,20 +1,4 @@
-import { ScriptPubKey } from '@/models/electrum'
-import { Tx } from '@/models/transaction'
-
-/**
- * Representa um UTXO (Unspent Transaction Output) corretamente
- */
-export interface UTXO {
-  txid: string
-  vout: number
-  address: string
-  value: number
-  blocktime: number
-  confirmations: number
-  isSpent: boolean
-  scriptPubKey: ScriptPubKey
-  // redeemScript: string
-}
+import { Tx, UTXO } from './transactions/types'
 
 /**
  * Calcula corretamente o saldo e UTXOs de uma carteira
@@ -49,6 +33,7 @@ export function calculateWalletBalance(
             hex: vout.scriptPubKey.hex,
             reqSigs: vout.scriptPubKey.reqSigs,
             type: vout.scriptPubKey.type,
+            address: vout.scriptPubKey.address,
             addresses: [vout.scriptPubKey.address],
           },
           // redeemScript: vout.redeemScript,

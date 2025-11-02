@@ -114,12 +114,11 @@ export async function getBlockHeaderFromElectrum(
 export async function syncHeaders(
   maxSizeGB: number = 1,
   onProgress?: (height: number, currentHeight?: number) => void,
-  state?: any,
 ): Promise<void> {
   let socket: any = null
   try {
     // Establish persistent connection for the entire sync
-    socket = await connect(state)
+    socket = await connect()
 
     const currentHeight = await getCurrentBlockHeight(socket)
     const lastHeader = getLastSyncedHeader()

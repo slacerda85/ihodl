@@ -1,11 +1,4 @@
-import { NetworkType } from './network'
-
-export interface KeyVersion {
-  private: Uint8Array
-  public: Uint8Array
-}
-
-export type KeyVersionType = 'bip32' | 'bip49' | 'bip84'
+import { KeyVersionType, KeyVersion, NetworkType } from './types'
 
 export const KEY_VERSIONS: Record<KeyVersionType, Record<NetworkType, KeyVersion>> = {
   bip32: {

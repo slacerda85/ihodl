@@ -1,20 +1,8 @@
 import { Account } from '@/lib/account'
 import { fromMnemonic, toMnemonic } from '@/lib/key'
 import { createEntropy, randomUUID } from '@/lib/crypto'
-import { WalletData } from './wallet/types'
+import { WalletData, CreateWalletParams, CreateWalletResult } from './types'
 import { storeWalletSeedPhrase, getWalletSeedPhrase } from '@/lib/secureStorage'
-
-export interface CreateWalletParams {
-  walletName: string
-  seedPhrase?: string
-  cold: boolean
-  accounts?: Account[]
-}
-
-export interface CreateWalletResult {
-  wallet: WalletData
-  seedPhrase: string
-}
 
 /**
  * Creates a new wallet with the provided parameters

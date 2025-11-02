@@ -1,4 +1,4 @@
-import { Tx } from '@/models/transaction'
+import { Tx } from '@/lib/transactions/types'
 import { Text, View, Pressable, FlatList, StyleSheet, ActivityIndicator } from 'react-native'
 import { useEffect } from 'react'
 import { useRouter } from 'expo-router'
@@ -10,7 +10,7 @@ import { alpha } from '@/ui/utils'
 import { useHeaderHeight } from '@react-navigation/elements'
 import { useWallet, useTransactions, useSettings } from '@/features/storage'
 import { getWalletSeedPhrase } from '@/lib/secureStorage'
-import { GlassContainer, GlassView } from 'expo-glass-effect'
+import { GlassView } from 'expo-glass-effect'
 // import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
 
 // Define types for our transaction list items

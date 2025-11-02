@@ -1,4 +1,4 @@
-import { ElectrumPeer } from '@/models/electrum'
+import { ElectrumPeer } from '@/lib/electrum'
 import { updateTrustedPeers as updateTrustedPeersLib } from '@/lib/electrum'
 import { Reducer } from '../types'
 import type { AppAction, AppState } from '../storage'
@@ -68,11 +68,8 @@ export const electrumActions = {
   }),
 
   // Async action to update trusted peers
-  updateTrustedPeers: async (
-    getState: () => { electrum: ElectrumState },
-  ): Promise<ElectrumAction[]> => {
-    const state = getState()
-    const updateData = await updateTrustedPeersLib(state)
+  updateTrustedPeers: async (): Promise<ElectrumAction[]> => {
+    const updateData = await updateTrustedPeersLib()
 
     if (updateData) {
       return [
@@ -100,7 +97,7 @@ export const initializeElectrumPeers = async (
   try {
     console.log('[initializeElectrumPeers] Initializing..')
     // Always update trusted peers (this will fetch new peers if needed and test them)
-    const actions = await electrumActions.updateTrustedPeers(() => ({ electrum: state.electrum }))
+    const actions = await electrumActions.updateTrustedPeers()
     actions.forEach(action => dispatch({ type: 'ELECTRUM', action }))
   } catch (error) {
     console.error('[initializeElectrumPeers] Error initializing Electrum peers:', error)

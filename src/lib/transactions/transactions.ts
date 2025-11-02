@@ -1,15 +1,15 @@
-import { CoinType, Purpose } from '@/models/account'
+import { CoinType, Purpose } from '@/lib/account'
 import {
   createHardenedIndex,
   createPublicKey,
   deriveChildPrivateKey,
   splitRootExtendedKey,
 } from '@/lib/key'
-import { connect, getTransactions, callElectrumMethod, close } from './electrum'
-import { createSegwitAddress, fromBech32, generateAddresses } from './address'
+import { connect, getTransactions, callElectrumMethod, close } from '../electrum'
+import { createSegwitAddress, fromBech32, generateAddresses } from '../address'
 import secp256k1 from 'secp256k1'
 import { hash256, hash160, uint8ArrayToHex, hexToUint8Array } from '@/lib/crypto'
-import { UTXO } from './utxo'
+import { UTXO } from './types'
 import {
   MINIMUN_CONFIRMATIONS,
   TxHistory,
@@ -17,7 +17,8 @@ import {
   WalletTransaction,
   TransactionType,
   TransactionStatus,
-} from '@/models/transaction'
+  UIFriendlyTransaction,
+} from './types'
 import {
   BuildTransactionParams,
   BuildTransactionResult,
@@ -25,8 +26,8 @@ import {
   SignTransactionResult,
   SendTransactionParams,
   SendTransactionResult,
-} from '@/models/transaction'
-import { ElectrumPeer } from '@/models/electrum'
+} from './types'
+import { ElectrumPeer } from '@/lib/electrum'
 
 interface GetTxHistoryParams {
   extendedKey: Uint8Array
@@ -50,7 +51,7 @@ interface GetTxHistoryResponse {
  * @param gapLimit - The gap limit for unused addresses (default is 20).
  * @returns An object containing the tx history.
  */
-async function getTxHistory({
+export async function getTxHistory({
   extendedKey,
   purpose = 84,
   coinType = 0,
@@ -83,7 +84,7 @@ async function getTxHistory({
     const changeExtendedKey = deriveChildPrivateKey(accountExtendedKey, changeIndex)
 
     // connect to electrum server
-    socket = await connect(trustedPeers ? { electrum: { trustedPeers } } : undefined)
+    socket = await connect()
     console.log('[transactions] Established persistent Electrum connection for transaction history')
 
     // Generate all receiving addresses first
@@ -234,6 +235,7 @@ function calculateBalance(txHistory: TxHistory[]): {
               hex: vout.scriptPubKey.hex,
               reqSigs: vout.scriptPubKey.reqSigs,
               type: vout.scriptPubKey.type,
+              address: vout.scriptPubKey.address,
               addresses: [vout.scriptPubKey.address],
             },
           }
@@ -247,11 +249,6 @@ function calculateBalance(txHistory: TxHistory[]): {
   const utxos = Array.from(utxosByAddress, ([address, utxos]) => ({ address, utxos }))
 
   return { balance, utxos }
-}
-
-export type UIFriendlyTransaction = WalletTransaction & {
-  fee: number | null
-  confirmations: number | null
 }
 
 export async function getFriendlyTransactions(
@@ -378,6 +375,7 @@ function getTransactionStatus(tx: Tx, minConfirmations: number): TransactionStat
   }
   return 'unknown'
 }
+
 /**
  * Creates a scriptPubKey for a Bitcoin address
  * @param address - Bitcoin address
@@ -1563,8 +1561,6 @@ async function findAddressIndex(
 
   return null
 }
-
-export { getTxHistory, calculateBalance, findAddressIndex, selectUtxos, estimateTransactionSize }
 
 /**
  * Processes txHistory to extract transactions and addresses

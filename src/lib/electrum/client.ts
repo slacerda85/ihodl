@@ -1,18 +1,13 @@
 import { TLSSocket, ConnectionOptions } from 'tls'
 import net from 'net'
-import { ElectrumMethod, ElectrumResponse, GetHistoryResult } from '@/models/electrum'
-import { JsonRpcRequest } from '@/models/rpc'
+import { ElectrumMethod, ElectrumResponse, GetHistoryResult, ElectrumPeer } from './types'
+import { JsonRpcRequest } from '../rpc'
 import { randomUUID } from 'expo-crypto'
-import { Tx } from '@/models/transaction'
+import { Tx } from '../transactions/types'
 import { fromBech32, toScriptHash, legacyToScriptHash } from '@/lib/address'
-import { ElectrumPeer } from '@/models/electrum'
-
-export const initialPeers /*  */ = [
-  { host: 'electrum1.bluewallet.io', port: 443, rejectUnauthorized: false },
-  { host: 'guichet.centure.cc', port: 50002, rejectUnauthorized: false },
-  /* { host: 'electrum.blockstream.info', port: 50002, rejectUnauthorized: false }, */
-  { host: 'api.ordimint.com', port: 50002, rejectUnauthorized: false },
-]
+import { initialPeers } from './constants'
+import { get, set, getNumber, setNumber } from '../storage'
+import { STORAGE_KEYS } from '../storage'
 
 // Connect to an Electrum server and return the socket
 async function init() {
@@ -27,11 +22,11 @@ async function init() {
   }
 }
 
-async function connect(state?: { electrum?: { trustedPeers?: any[] } }): Promise<TLSSocket> {
+async function connect(): Promise<TLSSocket> {
   console.log('[electrum] connecting Electrum peers...')
   const peers: ConnectionOptions[] = []
   // First try trusted peers
-  const trustedPeers = await readTrustedPeers(state)
+  const trustedPeers = await readTrustedPeers()
   if (trustedPeers.length > 0) {
     peers.push(...trustedPeers)
   } else {
@@ -202,22 +197,22 @@ async function testPeers(peers: ConnectionOptions[]): Promise<ConnectionOptions[
 
 /**
  * Update the list of trusted peers by testing available peers
- * @param state Optional state to read current trusted peers and last update time
  * @returns Object with trustedPeers and lastPeerUpdate data, or null if no update needed
  */
-async function updateTrustedPeers(state?: {
-  electrum?: { trustedPeers?: ElectrumPeer[]; lastPeerUpdate?: number | null }
-}): Promise<{ trustedPeers: ElectrumPeer[]; lastPeerUpdate: number } | null> {
+async function updateTrustedPeers(): Promise<{
+  trustedPeers: ElectrumPeer[]
+  lastPeerUpdate: number
+} | null> {
   let socket: TLSSocket | null = null
   try {
     console.log('[electrum] Updating trusted peers...')
 
     // Get stored trusted peers first
-    const storedTrustedPeers = await readTrustedPeers(state)
+    const storedTrustedPeers = await readTrustedPeers()
 
     // If we have recent trusted peers (less than 24 hours old), use them
     if (storedTrustedPeers.length >= 3) {
-      const lastUpdate = await getLastPeerUpdateTime(state)
+      const lastUpdate = await getNumber(STORAGE_KEYS.LAST_PEER_UPDATE)
       const hoursSinceUpdate = lastUpdate ? (Date.now() - lastUpdate) / (1000 * 60 * 60) : 25
 
       if (hoursSinceUpdate < 24) {
@@ -226,7 +221,7 @@ async function updateTrustedPeers(state?: {
     }
 
     // Connect to get a socket for fetching peers
-    socket = await connect(state)
+    socket = await connect()
 
     // Fetch fresh peers from the network
     const networkPeers = await getPeers(socket)
@@ -300,6 +295,9 @@ async function updateTrustedPeers(state?: {
       console.log(
         `[electrum] Prepared data for storage: ${trustedPeers.length} peers, timestamp: ${timestamp}`,
       )
+      // Save to storage
+      await set(STORAGE_KEYS.TRUSTED_PEERS, electrumPeers)
+      await setNumber(STORAGE_KEYS.LAST_PEER_UPDATE, timestamp)
       return { trustedPeers: electrumPeers, lastPeerUpdate: timestamp }
     } else {
       console.warn('[electrum] No trusted peers found, keeping existing')
@@ -321,38 +319,15 @@ async function updateTrustedPeers(state?: {
 }
 
 /**
- * Get the timestamp of the last peer update
- * @param state Optional state to read from store
- * @returns The timestamp or null if not found
- */
-async function getLastPeerUpdateTime(state?: {
-  electrum?: { lastPeerUpdate?: number | null }
-}): Promise<number | null> {
-  try {
-    if (state?.electrum?.lastPeerUpdate !== undefined) {
-      return state.electrum.lastPeerUpdate
-    } else {
-      console.log('[electrum] No last peer update time in state')
-      return null
-    }
-  } catch (error) {
-    console.error('[electrum] Error reading last peer update time:', error)
-    return null
-  }
-}
-
-/**
  * Read saved trusted Electrum peers from secure storage
- * @param state Optional state to read from store
  * @returns Array of trusted peers or empty array if none found
  */
-async function readTrustedPeers(state?: {
-  electrum?: { trustedPeers?: ElectrumPeer[] }
-}): Promise<ConnectionOptions[]> {
+async function readTrustedPeers(): Promise<ConnectionOptions[]> {
   try {
-    if (state?.electrum?.trustedPeers) {
+    const storedPeers = await get<ElectrumPeer[]>(STORAGE_KEYS.TRUSTED_PEERS)
+    if (storedPeers && storedPeers.length > 0) {
       // Convert ElectrumPeer format back to ConnectionOptions
-      return state.electrum.trustedPeers.map(peer => ({
+      return storedPeers.map(peer => ({
         host: peer[1], // hostname
         port: parseInt(
           peer[2].find(f => f.startsWith('s') || f.startsWith('t'))?.substring(1) || '50002',
@@ -360,7 +335,7 @@ async function readTrustedPeers(state?: {
         rejectUnauthorized: false,
       }))
     } else {
-      console.log('[electrum] No trusted peers in state, using initial peers')
+      console.log('[electrum] No trusted peers in storage, using initial peers')
       return []
     }
   } catch (error) {

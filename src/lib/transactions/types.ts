@@ -1,6 +1,15 @@
-import { UTXO } from '@/lib/utxo'
-
 export const MINIMUN_CONFIRMATIONS = 6
+
+export interface UTXO {
+  txid: string
+  vout: number
+  address: string
+  value: number
+  blocktime: number
+  confirmations: number
+  isSpent: boolean
+  scriptPubKey: ScriptPubKey
+}
 
 export type TxHistory = {
   receivingAddress: string
@@ -50,6 +59,7 @@ export type ScriptPubKey = {
   reqSigs: number
   type: string
   address: string
+  addresses?: string[]
 }
 
 export type TransactionType = 'received' | 'sent'
@@ -63,6 +73,11 @@ export type WalletTransaction = {
   toAddress: string
   amount: number
   status: TransactionStatus
+}
+
+export type UIFriendlyTransaction = WalletTransaction & {
+  fee: number | null
+  confirmations: number | null
 }
 
 // Types for transaction building and signing

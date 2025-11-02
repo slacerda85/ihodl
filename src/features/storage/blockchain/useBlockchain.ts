@@ -29,28 +29,24 @@ export const useBlockchain = () => {
           initialHeight,
         )
 
-        await syncHeaders(
-          maxBlockchainSizeGB,
-          (height, currentHeight) => {
-            // Update progress during sync
+        await syncHeaders(maxBlockchainSizeGB, (height, currentHeight) => {
+          // Update progress during sync
+          dispatch({
+            type: 'BLOCKCHAIN',
+            action: { type: 'SET_LAST_SYNCED_HEIGHT', payload: height },
+          })
+          if (currentHeight) {
             dispatch({
               type: 'BLOCKCHAIN',
-              action: { type: 'SET_LAST_SYNCED_HEIGHT', payload: height },
+              action: { type: 'SET_CURRENT_HEIGHT', payload: currentHeight },
             })
-            if (currentHeight) {
-              dispatch({
-                type: 'BLOCKCHAIN',
-                action: { type: 'SET_CURRENT_HEIGHT', payload: currentHeight },
-              })
-              const progress = height / currentHeight
-              dispatch({
-                type: 'BLOCKCHAIN',
-                action: { type: 'SET_SYNC_PROGRESS', payload: progress },
-              })
-            }
-          },
-          { electrum: state.electrum }, // Pass electrum state for peer management
-        )
+            const progress = height / currentHeight
+            dispatch({
+              type: 'BLOCKCHAIN',
+              action: { type: 'SET_SYNC_PROGRESS', payload: progress },
+            })
+          }
+        })
 
         const updatedLast = getLastSyncedHeader()
         const finalHeight = updatedLast?.height || null
@@ -72,7 +68,7 @@ export const useBlockchain = () => {
         dispatch({ type: 'BLOCKCHAIN', action: { type: 'SET_SYNCING', payload: false } })
       }
     },
-    [maxBlockchainSizeGB, dispatch, state.blockchain, state.electrum],
+    [maxBlockchainSizeGB, dispatch, state.blockchain],
   )
 
   // Manual sync function

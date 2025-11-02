@@ -1,4 +1,4 @@
-import { WalletData } from '@/models/wallet'
+import { WalletData } from '@/lib/wallet/types'
 import { Reducer } from '../types'
 
 // Wallet State

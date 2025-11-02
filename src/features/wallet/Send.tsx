@@ -23,7 +23,7 @@ import { formatBalance } from './utils'
 import SendLightning from './SendLightning'
 
 import { fromBech32, fromBase58check, createSegwitAddress } from '@/lib/address'
-import { UTXO } from '@/lib/utxo'
+import { UTXO } from '@/lib/transactions/types'
 import {
   fromMnemonic,
   createRootExtendedKey,

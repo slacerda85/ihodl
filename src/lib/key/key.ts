@@ -9,8 +9,8 @@ import {
 import { entropyToMnemonic, mnemonicToSeedSync } from '@/lib/bip39'
 import wordList from 'bip39/src/wordlists/english.json'
 import secp256k1 from 'secp256k1'
-import { CoinType, Purpose } from '@/models/account'
-import { KEY_VERSIONS } from '@/models/key'
+import { CoinType, Purpose } from '@/lib/account'
+import { KEY_VERSIONS } from './constants'
 
 function toMnemonic(entropy: Uint8Array): string {
   // check if nBytes is a valid length of 128, 160, 192, 224, or 256 bits

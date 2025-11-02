@@ -38,5 +38,14 @@ export type Account = {
   coinType: CoinType
   accountIndex: number
   // Lightning-specific fields (optional, only used when purpose === 9735)
-  lightning?: {}
+  lightning?: Record<string, never>
 }
+
+export interface KeyVersion {
+  private: Uint8Array
+  public: Uint8Array
+}
+
+export type KeyVersionType = 'bip32' | 'bip49' | 'bip84'
+
+export type NetworkType = 'mainnet' | 'testnet' | 'regtest'

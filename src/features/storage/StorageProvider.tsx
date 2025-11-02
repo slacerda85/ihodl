@@ -22,37 +22,31 @@ const loadPersistedState = (): AppState => {
     const persistedState = storage.getString(STORAGE_KEY)
     if (persistedState) {
       const parsed = JSON.parse(persistedState)
-      // Exclude lightning from persisted state to avoid state shape issues
-      const { lightning, ...parsedWithoutLightning } = parsed
+
       // Merge with initial state to handle new properties
       return {
         ...initialAppState,
-        ...parsedWithoutLightning,
+        ...parsed,
         // Reset loading states on app start
         wallet: {
           ...initialAppState.wallet,
-          ...parsedWithoutLightning.wallet,
+          ...parsed.wallet,
           loadingWalletState: false,
         },
         transactions: {
           ...initialAppState.transactions,
-          ...parsedWithoutLightning.transactions,
+          ...parsed.transactions,
           loadingTxState: false,
           loadingMempoolState: false,
-          addressCaches: parsedWithoutLightning.transactions?.addressCaches || {},
+          addressCaches: parsed.transactions?.addressCaches || {},
         },
         blockchain: {
           ...initialAppState.blockchain,
-          ...parsedWithoutLightning.blockchain,
-        }, // Persist blockchain sync state
-        /* lightning: {
-          ...initialAppState.lightning,
-          ...parsedWithoutLightning.lightning,
-          
-        }, */
+          ...parsed.blockchain,
+        },
         electrum: {
           ...initialAppState.electrum,
-          ...parsedWithoutLightning.electrum,
+          ...parsed.electrum,
         }, // Persist electrum peer state
       }
     }
@@ -106,11 +100,6 @@ export const StorageProvider: React.FC<{ children: ReactNode }> = ({ children })
           syncProgress: state.blockchain.syncProgress,
           // Don't persist isSyncing as it should reset to false on app start
         },
-        /* lightning: {
-          spvEnabled: state.lightning.spvEnabled,
-          channels: state.lightning.channels,
-          // Don't persist loading state
-        }, */
         electrum: {
           trustedPeers: state.electrum.trustedPeers,
           lastPeerUpdate: state.electrum.lastPeerUpdate,

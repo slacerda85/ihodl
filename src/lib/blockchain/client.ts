@@ -16,7 +16,7 @@ import {
   close,
   broadcastTransaction as broadcastTransactionElectrum,
 } from '../electrum'
-import { Tx } from '@/models/transaction'
+import { Tx } from '../transactions/types'
 import { TLSSocket } from 'tls'
 import type { IBlockchainClient, BlockchainClientConfig } from './types'
 import { getCurrentBlockHeight } from './sync'

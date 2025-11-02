@@ -1,4 +1,4 @@
-import { Tx } from '@/models/transaction'
+import { Tx } from '@/lib/transactions/types'
 import { UsedAddress } from '@/lib/address'
 import { Reducer } from '../types'
 
