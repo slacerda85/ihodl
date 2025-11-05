@@ -1,0 +1,29 @@
+appId: com.slacerda85.ihodl
+---
+# Teste de cenários de erro no Lightning
+- launchApp
+- tapOn: "Lightning"
+
+# Teste: Invoice inválida no envio
+- tapOn: "Enviar"
+- inputText: "invoice-invalida-123"
+- assertVisible: "Invoice Lightning inválida"
+- takeScreenshot: error_invalid_invoice
+
+# Teste: Falha na geração de invoice
+- tapOn: "Receber"
+- waitForAnimationToEnd
+# Simular erro (pode precisar de mock no app)
+- assertVisible: "Falha ao gerar invoice"
+- takeScreenshot: error_generation_failed
+
+# Teste: Falha no envio de pagamento
+- tapOn: "Enviar"
+- inputText: "lnbc10u1p3wxyhupp5exampleinvoice1234567890"
+- tapOn: "Preparar Pagamento"
+- waitForAnimationToEnd
+- tapOn: "Confirmar Pagamento"
+- waitForAnimationToEnd
+# Simular erro de envio
+- assertVisible: "Falha ao enviar pagamento"
+- takeScreenshot: error_send_failed

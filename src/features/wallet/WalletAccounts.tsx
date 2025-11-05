@@ -1,17 +1,14 @@
 import { View, Text, StyleSheet, FlatList, ActivityIndicator } from 'react-native'
-import { Account } from '@/models/account'
+import { Account } from '@/lib/account'
 import BitcoinLogo from '@/assets/bitcoin-logo'
 import LightningLogo from '@/assets/lightning-logo'
 import { ReactNode } from 'react'
 import { alpha } from '@/ui/utils'
 import colors from '@/ui/colors'
 import { useWallet, useTransactions, useSettings } from '@/features/storage'
-import { useRouter } from 'expo-router'
-import { Ionicons } from '@expo/vector-icons'
 import { formatBalance } from './utils'
 import { GlassView } from 'expo-glass-effect'
 import Divider from '@/ui/Divider'
-import Button from '@/ui/Button'
 
 const LAYER_LABELS: Record<number, string> = {
   1: 'On-Chain',
@@ -125,7 +122,6 @@ interface AccountDetailsProps {
 
 function AccountDetails({ account }: AccountDetailsProps) {
   const { isDark } = useSettings()
-  const router = useRouter()
 
   const { loadingWalletState: loadingWallet } = useWallet()
   const { loadingTxState: loadingTransactions, getBalance } = useTransactions()
@@ -138,10 +134,6 @@ function AccountDetails({ account }: AccountDetailsProps) {
   const lightningBalance = 0 // Placeholder for lightning balance
 
   const accountIcon = getPurposeIcon(account.purpose)
-
-  const handleNavigateToTransactions = () => {
-    router.push('/transactions')
-  }
 
   const getLayerLabel = (purpose: number): string => {
     return LAYER_LABELS[isLightningPurpose(purpose) ? 2 : 1] || 'Unknown Layer'

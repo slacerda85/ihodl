@@ -1,0 +1,14 @@
+appId: com.slacerda85.ihodl  # Substitua pelo seu bundle ID real
+---
+- launchApp
+- tapOn: "Carteira"  # Navegar para a aba carteira se necessário
+- tapOn: "Receber"  # Botão para receber
+- tapOn: "Lightning"  # Selecionar modo Lightning
+- assertVisible: "Gerando invoice..."  # Verificar se está carregando
+- waitForAnimationToEnd  # Aguardar animação terminar
+- assertVisible: "lightning:lnbc"  # Verificar se invoice foi gerada (começa com lightning:lnbc)
+- takeScreenshot: receive_invoice_generated
+- tapOn: "Copiar"  # Testar funcionalidade de copiar
+- assertVisible: "Copiado!"  # Verificar mensagem de sucesso
+- tapOn: "Compartilhar"  # Testar compartilhamento
+- takeScreenshot: receive_invoice_actions

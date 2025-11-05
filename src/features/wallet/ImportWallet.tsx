@@ -1,14 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import {
-  View,
-  Text,
-  TextInput,
-  ScrollView,
-  Pressable,
-  StyleSheet,
-  FlatList,
-  Switch,
-} from 'react-native'
+import { View, Text, TextInput, Pressable, StyleSheet, FlatList, Switch } from 'react-native'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { useRouter } from 'expo-router'

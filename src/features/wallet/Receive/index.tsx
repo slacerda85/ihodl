@@ -1,13 +1,12 @@
 import { useState } from 'react'
 import { View, Text, StyleSheet, Pressable } from 'react-native'
-import { GlassView } from 'expo-glass-effect'
 
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { useSettings } from '@/features/storage'
 
 import Receive from './Receive'
-import ReceiveLightning from './ReceiveLightning'
+import ReceiveLightning from '../../lightning/ReceiveLightning'
 
 type ReceiveMode = 'onchain' | 'lightning'
 

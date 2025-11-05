@@ -1,0 +1,47 @@
+appId: com.slacerda85.ihodl
+---
+# Teste completo do fluxo Lightning: da criação da wallet até geração de invoice
+- launchApp
+
+# Verificar se estamos na tela inicial
+- assertVisible: "iHodl"
+
+# Se não há wallet, criar uma nova
+- runFlow:
+    when:
+      visible: "Criar Carteira"
+    commands:
+      - tapOn: "Criar Carteira"
+      - inputText: "test-seed-phrase-for-e2e"  # Seed de teste
+      - tapOn: "Continuar"
+      - waitForAnimationToEnd
+
+# Navegar para Lightning
+- tapOn: "Lightning"  # Assumindo que há uma aba ou botão Lightning
+
+# Testar Receive Lightning
+- tapOn: "Receber"
+- assertVisible: "Gerando invoice..."
+- waitForAnimationToEnd
+- assertVisible: "lightning:lnbc"  # Invoice gerada
+- takeScreenshot: full_flow_receive_invoice
+
+# Testar configurações avançadas
+- tapOn: "Configurações Avançadas"
+- inputText: "1000"  # Valor em sats
+- inputText: "Pagamento de teste"  # Descrição
+- tapOn: "Gerar Nova Invoice"
+- waitForAnimationToEnd
+- assertVisible: "lightning:lnbc"  # Nova invoice
+- takeScreenshot: full_flow_custom_invoice
+
+# Testar Send Lightning
+- tapOn: "Enviar"
+- inputText: "lnbc10u1p3wxyhupp5exampleinvoice1234567890"
+- tapOn: "Preparar Pagamento"
+- waitForAnimationToEnd
+- assertVisible: "Detalhes do Pagamento"
+- tapOn: "Confirmar Pagamento"
+- waitForAnimationToEnd
+- assertVisible: "Sucesso!"
+- takeScreenshot: full_flow_send_success

@@ -1,5 +1,3 @@
-import { NetworkType } from '@/lib/account'
-
 export interface KeyVersion {
   private: Uint8Array
   public: Uint8Array

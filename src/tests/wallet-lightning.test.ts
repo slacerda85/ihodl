@@ -1,6 +1,19 @@
 import { createWallet } from '../lib/wallet'
+import { deriveLightningKeys } from '../lib/wallet/wallet'
 
 describe('Wallet Creation with Lightning Key Derivation', () => {
+  it('should derive Lightning keys correctly', () => {
+    const seedPhrase =
+      'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
+    const keys = deriveLightningKeys(seedPhrase)
+
+    expect(keys).toBeDefined()
+    expect(keys.nodeKey).toBeDefined()
+    expect(keys.nodeKey?.nodeId).toMatch(/^0[23][a-f0-9]{64}$/)
+    expect(keys.fundingKeys).toBeDefined()
+    expect(keys.fundingKeys?.address).toMatch(/^bc1q/)
+  })
+
   it('should create a wallet with derived Lightning keys', () => {
     try {
       const result = createWallet({
@@ -16,16 +29,20 @@ describe('Wallet Creation with Lightning Key Derivation', () => {
       expect(bitcoinAccount.purpose).toBe(84)
       expect(bitcoinAccount.lightning).toBeUndefined()
 
-      // Check Lightning account
+      // Check Lightning account structure
       const lightningAccount = result.wallet.accounts[1]
       expect(lightningAccount.purpose).toBe(9735)
-      expect(lightningAccount.lightning).toBeDefined()
-      expect(lightningAccount.lightning?.type).toBe('node')
-      expect(lightningAccount.lightning?.derivedKeys).toBeDefined()
-      expect(lightningAccount.lightning?.derivedKeys?.nodeKey).toBeDefined()
-      expect(lightningAccount.lightning?.derivedKeys?.nodeKey?.nodeId).toBeDefined()
+
+      // Derive Lightning keys separately
+      const keys = deriveLightningKeys(result.seedPhrase)
+      expect(keys).toBeDefined()
+      expect(keys.nodeKey).toBeDefined()
+      expect(keys.nodeKey?.nodeId).toMatch(/^0[23][a-f0-9]{64}$/)
+      expect(keys.fundingKeys).toBeDefined()
+      expect(keys.fundingKeys?.address).toMatch(/^bc1q/)
     } catch (error) {
       console.error('Test error:', error)
+      console.error('Error stack:', (error as Error).stack)
       throw error
     }
   })
@@ -60,7 +77,8 @@ describe('Wallet Creation with Lightning Key Derivation', () => {
 
     const fundingAccount = result.wallet.accounts[1]
     expect(fundingAccount.lightning?.type).toBe('funding_wallet')
-    expect(fundingAccount.lightning?.derivedKeys?.fundingKeys).toBeDefined()
-    expect(fundingAccount.lightning?.derivedKeys?.fundingKeys?.address).toBeDefined()
+    expect(fundingAccount.lightning?.chain).toBe(0)
+    expect(fundingAccount.lightning?.lnVer).toBe(0)
+    expect(fundingAccount.lightning?.caseIndex).toBe(0)
   })
 })

@@ -7,6 +7,7 @@ import { sha256 as nobleSha256 } from '@noble/hashes/sha2'
 import { ripemd160 } from '@noble/hashes/legacy'
 import { randomUUID as expoRandomUUID } from 'expo-crypto'
 import QuickCrypto from 'react-native-quick-crypto'
+import secp256k1 from 'secp256k1'
 
 // hash functions
 function createEntropy(size: number): Uint8Array {
@@ -26,6 +27,9 @@ function arrayToHex(array: Uint8Array): string {
 function hmacSHA512(chainCode: Uint8Array, data: Uint8Array): Uint8Array {
   // cant use Buffer
   return hmac.create(sha512, chainCode).update(data).digest()
+}
+function hmacSha256(key: Uint8Array, data: Uint8Array): Uint8Array {
+  return hmac.create(nobleSha256, key).update(data).digest()
 }
 function sha256(key: Uint8Array): Uint8Array {
   return nobleSha256(key)
@@ -56,8 +60,8 @@ function fromBase58(base58String: string): Uint8Array {
 }
 
 // Função para codificar em Bech32 ou Bech32m
-function encode(data: Buffer, prefix: string, version: number): string {
-  const dataArray = bech32.toWords(data)
+function encode(data: Uint8Array, prefix: string, version: number): string {
+  const dataArray = bech32.toWords(Array.from(data))
 
   // Escolhe o método de codificação com base na versão
   if (version === 0) {
@@ -68,16 +72,16 @@ function encode(data: Buffer, prefix: string, version: number): string {
 }
 
 // Função para decodificar de Bech32 ou Bech32m
-function decode(bech32String: string): { prefix: string; data: Buffer; version: number } {
+function decode(bech32String: string): { prefix: string; data: Uint8Array; version: number } {
   try {
     const { prefix, words } = bech32.decode(bech32String)
     // Se o checksum for válido para Bech32
-    return { prefix, data: Buffer.from(bech32.fromWords(words)), version: 0 }
+    return { prefix, data: new Uint8Array(bech32.fromWords(words)), version: 0 }
   } catch {
     try {
       // Tenta Bech32m se Bech32 falhar
       const { prefix, words } = bech32m.decode(bech32String)
-      return { prefix, data: Buffer.from(bech32.fromWords(words)), version: 1 }
+      return { prefix, data: new Uint8Array(bech32.fromWords(words)), version: 1 }
     } catch {
       throw new Error('Não é um endereço Bech32 ou Bech32m válido')
     }
@@ -187,11 +191,102 @@ function decryptSeedPhrase(password: string = '', encryptedSeedPhrase: string): 
   }
 }
 
+/**
+ * Signs a message using ECDSA with secp256k1
+ * @param message - Message to sign (as Uint8Array)
+ * @param privateKey - Private key (32 bytes)
+ * @returns Signature as Uint8Array (64 bytes, r + s)
+ */
+function signMessage(message: Uint8Array, privateKey: Uint8Array): Uint8Array {
+  if (!secp256k1.privateKeyVerify(privateKey)) {
+    throw new Error('Invalid private key')
+  }
+
+  const { signature } = secp256k1.ecdsaSign(message, privateKey)
+  return signature
+}
+
+/**
+ * Verifies an ECDSA signature with secp256k1
+ * @param message - Original message (as Uint8Array)
+ * @param signature - Signature (64 bytes, r + s)
+ * @param publicKey - Public key (33 or 65 bytes)
+ * @returns True if signature is valid
+ */
+function verifyMessage(message: Uint8Array, signature: Uint8Array, publicKey: Uint8Array): boolean {
+  if (!secp256k1.publicKeyVerify(publicKey)) {
+    throw new Error('Invalid public key')
+  }
+
+  return secp256k1.ecdsaVerify(signature, message, publicKey)
+}
+
+/**
+ * Signs a message using ECDSA with secp256k1 (hex string inputs/outputs)
+ * @param messageHex - Message to sign (as hex string)
+ * @param privateKeyHex - Private key (as hex string)
+ * @returns Signature as hex string
+ */
+function signMessageHex(messageHex: string, privateKeyHex: string): string {
+  const message = hexToUint8Array(messageHex)
+  const privateKey = hexToUint8Array(privateKeyHex)
+  const signature = signMessage(message, privateKey)
+  return uint8ArrayToHex(signature)
+}
+
+/**
+ * Verifies an ECDSA signature with secp256k1 (hex string inputs)
+ * @param messageHex - Original message (as hex string)
+ * @param signatureHex - Signature (as hex string)
+ * @param publicKeyHex - Public key (as hex string)
+ * @returns True if signature is valid
+ */
+function verifyMessageHex(messageHex: string, signatureHex: string, publicKeyHex: string): boolean {
+  const message = hexToUint8Array(messageHex)
+  const signature = hexToUint8Array(signatureHex)
+  const publicKey = hexToUint8Array(publicKeyHex)
+  return verifyMessage(message, signature, publicKey)
+}
+
+class Hash {
+  private data: Uint8Array | null = null
+
+  update(data: string | Uint8Array): Hash {
+    if (typeof data === 'string') {
+      this.data = new TextEncoder().encode(data)
+    } else {
+      this.data = data
+    }
+    return this
+  }
+
+  digest(): Uint8Array
+  digest(encoding: 'hex'): string
+  digest(encoding?: 'hex'): Uint8Array | string {
+    if (!this.data) {
+      throw new Error('No data to hash')
+    }
+    const hash = sha256(this.data)
+    if (encoding === 'hex') {
+      return uint8ArrayToHex(hash)
+    }
+    return hash
+  }
+}
+
+function createHash(algorithm: string): Hash {
+  if (algorithm !== 'sha256') {
+    throw new Error(`Unsupported hash algorithm: ${algorithm}`)
+  }
+  return new Hash()
+}
+
 export {
   createEntropy,
   hmacSeed,
   arrayToHex,
   hmacSHA512,
+  hmacSha256,
   sha256,
   hash256,
   hash160,
@@ -205,4 +300,9 @@ export {
   randomUUID,
   encryptSeedPhrase,
   decryptSeedPhrase,
+  signMessage,
+  verifyMessage,
+  signMessageHex,
+  verifyMessageHex,
+  createHash,
 }

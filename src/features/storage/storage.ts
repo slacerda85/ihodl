@@ -25,6 +25,13 @@ import {
   ElectrumAction,
 } from './electrum/electrum'
 
+import {
+  lightningReducer,
+  initialLightningState,
+  LightningState,
+  LightningAction,
+} from './lightning/lightning'
+
 // Combined State
 export type AppState = {
   wallet: WalletState
@@ -32,6 +39,7 @@ export type AppState = {
   transactions: TransactionsState
   blockchain: BlockchainState
   electrum: ElectrumState
+  lightning: LightningState
 }
 
 // Combined Actions
@@ -41,6 +49,7 @@ export type AppAction =
   | { type: 'TRANSACTIONS'; action: TransactionsAction }
   | { type: 'BLOCKCHAIN'; action: BlockchainAction }
   | { type: 'ELECTRUM'; action: ElectrumAction }
+  | { type: 'LIGHTNING'; action: LightningAction }
 
 // Initial state
 export const initialAppState: AppState = {
@@ -49,6 +58,7 @@ export const initialAppState: AppState = {
   transactions: initialTransactionsState,
   blockchain: initialBlockchainState,
   electrum: initialElectrumState,
+  lightning: initialLightningState,
 }
 
 // Root reducer
@@ -78,6 +88,11 @@ export const appReducer = (state: AppState, action: AppAction): AppState => {
       return {
         ...state,
         electrum: electrumReducer(state.electrum, action.action),
+      }
+    case 'LIGHTNING':
+      return {
+        ...state,
+        lightning: lightningReducer(state.lightning, action.action),
       }
     default:
       return state

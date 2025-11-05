@@ -66,6 +66,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   plugins: [
     'expo-router',
     'expo-font',
+    'expo-background-task',
     [
       'expo-local-authentication',
       {

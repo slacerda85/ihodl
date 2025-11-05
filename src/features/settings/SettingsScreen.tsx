@@ -7,26 +7,16 @@ import {
   View,
   Alert,
   TouchableOpacity,
-  Switch,
 } from 'react-native'
 import { useSettings } from '@/features/storage'
 import { clearPersistedState } from '@/features/storage/StorageProvider'
 import Picker from '@/ui/Picker/Picker'
 import { ColorMode } from '@/models/settings'
-
-// Import all iOS UI components
-// import { Host, Button } from '@expo/ui/swift-ui'
+import LightningSection from './LightningSection'
 
 export default function SettingsScreen() {
   const colorScheme = useColorScheme()
-  const {
-    colorMode,
-    setColorMode,
-    maxBlockchainSizeGB,
-    setMaxBlockchainSize,
-    trampolineRoutingEnabled,
-    setTrampolineRouting,
-  } = useSettings()
+  const { colorMode, setColorMode, maxBlockchainSizeGB, setMaxBlockchainSize } = useSettings()
 
   const effectiveColorMode = colorMode === 'auto' ? (colorScheme ?? 'light') : colorMode
   const isDarkEffective = effectiveColorMode === 'dark'
@@ -105,23 +95,7 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={[styles.subtitle, isDarkEffective && styles.subtitleDark]}>
-          Configurações Lightning
-        </Text>
-        <View style={styles.settingRow}>
-          <Text style={[styles.label, isDarkEffective && styles.labelDark]}>
-            Trampoline Routing
-          </Text>
-          <Switch
-            value={trampolineRoutingEnabled}
-            onValueChange={setTrampolineRouting}
-            trackColor={{ false: colors.disabled, true: colors.primary }}
-            thumbColor={trampolineRoutingEnabled ? colors.white : colors.disabled}
-          />
-        </View>
-        <Text style={[styles.description, isDarkEffective && styles.descriptionDark]}>
-          Permite roteamento através de nós intermediários confiáveis para pagamentos mais rápidos
-        </Text>
+        <LightningSection isDark={isDarkEffective} />
       </View>
 
       <View style={styles.section}>
@@ -153,6 +127,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.dark,
   },
   section: {
+    // backgroundColor: 'red',
     padding: 20,
   },
   title: {
@@ -167,7 +142,7 @@ const styles = StyleSheet.create({
   settingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 15,
+    // marginBottom: 15,
   },
   label: {
     fontSize: 18,

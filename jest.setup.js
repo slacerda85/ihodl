@@ -31,10 +31,95 @@ jest.mock('react-native-quick-crypto', () => ({
   createHmac: jest.fn(),
 }))
 
-// Mock para expo-crypto
-jest.mock('expo-crypto', () => ({
-  getRandomBytesAsync: jest.fn(),
-  digestStringAsync: jest.fn(),
+// Mock para @noble/hashes
+jest.mock('@noble/hashes/sha2', () => ({
+  sha256: jest.fn(data => {
+    // Simple mock implementation - return a Uint8Array of 32 bytes
+    const result = new Uint8Array(32)
+    for (let i = 0; i < 32; i++) {
+      result[i] = data[i % data.length] || 0
+    }
+    return result
+  }),
+}))
+
+// Mock para @noble/hashes/hmac
+jest.mock('@noble/hashes/hmac', () => ({
+  create: jest.fn(() => ({
+    update: jest.fn(() => ({
+      digest: jest.fn(() => new Uint8Array(32)),
+    })),
+  })),
+  hmac: jest.fn(() => new Uint8Array(64)), // For hmacSHA512
+}))
+
+// Mock para @noble/hashes/pbkdf2
+jest.mock('@noble/hashes/pbkdf2', () => ({
+  pbkdf2: jest.fn(() => new Uint8Array(64)),
+  pbkdf2Async: jest.fn(() => Promise.resolve(new Uint8Array(64))),
+}))
+
+// Mock para @noble/hashes/utils
+jest.mock('@noble/hashes/utils', () => ({
+  randomBytes: jest.fn(size => new Uint8Array(size)),
+  hmacSeed: jest.fn(entropy => {
+    // Simple mock - return entropy extended to 64 bytes
+    const result = new Uint8Array(64)
+    for (let i = 0; i < 64; i++) {
+      result[i] = entropy[i % entropy.length] || 0
+    }
+    return result
+  }),
+}))
+
+// Mock para src/lib/crypto.ts
+jest.mock('./src/lib/crypto', () => ({
+  sha256: jest.fn(data => {
+    // Simple mock implementation - return a Uint8Array of 32 bytes
+    const result = new Uint8Array(32)
+    for (let i = 0; i < 32; i++) {
+      result[i] = data[i % data.length] || 0
+    }
+    return result
+  }),
+  uint8ArrayToHex: jest.fn(arr => {
+    return Array.from(arr)
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('')
+  }),
+  hexToUint8Array: jest.fn(hex => {
+    const length = hex.length / 2
+    const array = new Uint8Array(length)
+    for (let i = 0; i < length; i++) {
+      array[i] = parseInt(hex.substr(i * 2, 2), 16)
+    }
+    return array
+  }),
+  createHash: jest.fn(() => ({
+    update: jest.fn(() => ({
+      digest: jest.fn(encoding => {
+        if (encoding === 'hex') return 'mockhash'
+        return new Uint8Array(32)
+      }),
+    })),
+  })),
+  hmacSeed: jest.fn(entropy => {
+    // Simple mock - return entropy extended to 64 bytes
+    const result = new Uint8Array(64)
+    for (let i = 0; i < 64; i++) {
+      result[i] = entropy[i % entropy.length] || 0
+    }
+    return result
+  }),
+  hmacSHA512: jest.fn(() => new Uint8Array(64)),
+  signMessage: jest.fn(() => new Uint8Array(64)), // Mock signature
+  verifyMessage: jest.fn(() => true), // Mock verification always succeeds
+  createEntropy: jest.fn(size => new Uint8Array(size)),
+  randomUUID: jest.fn(() => 'mock-uuid'),
+  encryptSeedPhrase: jest.fn(() => 'encrypted'),
+  decryptSeedPhrase: jest.fn(() => 'decrypted'),
+  signMessageHex: jest.fn(() => 'signature'),
+  verifyMessageHex: jest.fn(() => true),
 }))
 
 // Mock para react-native-tcp-socket
@@ -53,7 +138,7 @@ jest.mock('net', () => ({
   connect: jest.fn(),
 }))
 
-// Configuração global para testes
+// Global console mocks
 global.console = {
   ...console,
   // Suprime logs durante testes

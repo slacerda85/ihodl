@@ -107,9 +107,14 @@ export interface IBlockchainClient {
   getTransactionConfirmations(txid: string): Promise<number>
 
   /**
-   * Close connections and cleanup resources
+   * Broadcast a raw transaction to the network
    */
-  close(): Promise<void>
+  broadcastTransaction(rawTxHex: string): Promise<string>
+
+  /**
+   * Wait for transaction confirmations
+   */
+  waitForConfirmations(txid: string, minConfirmations: number): Promise<boolean>
 }
 
 /**

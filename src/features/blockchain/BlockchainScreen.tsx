@@ -1,5 +1,5 @@
-import { Text, View, StyleSheet, useColorScheme, ActivityIndicator, Pressable } from 'react-native'
-import { useHeaderHeight } from '@react-navigation/elements'
+import { Text, View, StyleSheet, useColorScheme, ActivityIndicator } from 'react-native'
+
 import colors from '@/ui/colors'
 import { useBlockchain, useSettings } from '@/features/storage'
 import Button from '@/ui/Button'

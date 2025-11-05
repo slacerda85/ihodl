@@ -1,4 +1,4 @@
-import { Tx, UTXO } from './transactions/types'
+import { Tx, UTXO } from './types'
 
 /**
  * Calcula corretamente o saldo e UTXOs de uma carteira

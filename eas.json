@@ -21,6 +21,14 @@
         "APP_VARIANT": "preview"
       }
     },
+    "e2e": {
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "buildType": "simulator"
+      }
+    },
     "production": {
       "autoIncrement": true
     }

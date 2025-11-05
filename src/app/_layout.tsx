@@ -6,6 +6,9 @@ import AuthProvider from '@/features/auth/AuthProvider'
 import AuthScreen from '@/features/auth/AuthScreen'
 import InactivityOverlay from '@/features/auth/InactivityOverlay'
 import { StorageProvider, useSettings } from '@/features/storage'
+import { BlockchainProvider } from '@/features/blockchain'
+import { LightningProvider } from '@/features/lightning/LightningProvider'
+import { useAppInitialization } from '@/features/app/useAppInitialization'
 
 SplashScreen.preventAutoHideAsync()
 
@@ -17,6 +20,22 @@ SplashScreen.setOptions({
 
 function AppContent() {
   const { isDark } = useSettings()
+  const { isInitializing, error } = useAppInitialization()
+
+  // Show loading state while initializing
+  if (isInitializing) {
+    return (
+      <Stack>
+        <Stack.Screen name="loading" options={{ headerShown: false }} />
+      </Stack>
+    )
+  }
+
+  // Show error state if initialization failed
+  if (error) {
+    console.error('[App] Initialization error:', error)
+    // You could show an error screen here
+  }
 
   return (
     <>
@@ -44,11 +63,15 @@ export default function RootLayout() {
 
   return (
     <StorageProvider>
-      <AuthProvider>
-        <AppContent />
-        <InactivityOverlay />
-        <AuthScreen />
-      </AuthProvider>
+      <BlockchainProvider>
+        <LightningProvider>
+          <AuthProvider>
+            <AppContent />
+            <InactivityOverlay />
+            <AuthScreen />
+          </AuthProvider>
+        </LightningProvider>
+      </BlockchainProvider>
     </StorageProvider>
   )
 }

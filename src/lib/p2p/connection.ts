@@ -4,6 +4,7 @@
  */
 
 import { Buffer } from 'buffer'
+import TcpSocket from 'react-native-tcp-socket'
 import { IConnectionManager, P2PConnection, PeerAddress, P2PConfig, P2PError } from './types'
 import { P2P_CONSTANTS, DEFAULT_P2P_CONFIG } from './constants'
 import { createConnectionId } from './utils'
@@ -30,7 +31,15 @@ export class ConnectionManager implements IConnectionManager {
     }
 
     try {
-      const socket: any = {} // Placeholder for TCP socket
+      const socket = TcpSocket.createConnection(
+        {
+          port: peerAddress.port,
+          host: peerAddress.host,
+        },
+        () => {
+          // Connection established
+        },
+      )
 
       const connection: P2PConnection = {
         id: connectionId,

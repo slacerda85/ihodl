@@ -4,8 +4,8 @@ import {
   calculateAddressCache,
   findNextUnusedAddress,
   getTxHistory,
+  processWalletTransactions,
 } from '@/lib/transactions'
-import { processWalletTransactions } from '@/lib/utxo'
 import { createRootExtendedKey, fromMnemonic } from '@/lib/key'
 import { getMempoolTransactions as getMempoolTransactionsLib } from '@/lib/electrum'
 import { useCallback } from 'react'

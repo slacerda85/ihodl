@@ -11,7 +11,6 @@ import {
   Switch,
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { GlassView } from 'expo-glass-effect'
 
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
@@ -20,7 +19,7 @@ import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
 import { useWallet, useTransactions, useSettings } from '@/features/storage'
 
 import { formatBalance } from './utils'
-import SendLightning from './SendLightning'
+import SendLightning from '../lightning/SendLightning'
 
 import { fromBech32, fromBase58check, createSegwitAddress } from '@/lib/address'
 import { UTXO } from '@/lib/transactions/types'

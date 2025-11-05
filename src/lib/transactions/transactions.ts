@@ -14,7 +14,6 @@ import {
   MINIMUN_CONFIRMATIONS,
   TxHistory,
   Tx,
-  WalletTransaction,
   TransactionType,
   TransactionStatus,
   UIFriendlyTransaction,
@@ -190,65 +189,6 @@ export async function getTxHistory({
       }
     }
   }
-}
-
-function calculateBalance(txHistory: TxHistory[]): {
-  balance: number
-  utxos: { address: string; utxos: UTXO[] }[]
-} {
-  const allTxs = new Map<string, Tx>()
-  const ourAddresses = new Set<string>()
-  const utxosByAddress = new Map<string, UTXO[]>()
-
-  // Collect all addresses and transactions
-  txHistory.forEach(history => {
-    if (history.receivingAddress) ourAddresses.add(history.receivingAddress)
-    if (history.changeAddress) ourAddresses.add(history.changeAddress)
-    history.txs.forEach(tx => {
-      allTxs.set(tx.txid, tx)
-    })
-  })
-
-  // Initialize UTXO arrays for each address
-  ourAddresses.forEach(addr => utxosByAddress.set(addr, []))
-
-  let balance = 0
-
-  allTxs.forEach((tx, txid) => {
-    tx.vout.forEach(vout => {
-      const addr = vout.scriptPubKey.address
-      if (addr && ourAddresses.has(addr)) {
-        const isSpent = Array.from(allTxs.values()).some(t =>
-          t.vin.some(vin => vin.txid === txid && vin.vout === vout.n),
-        )
-        if (!isSpent) {
-          const utxo: UTXO = {
-            txid,
-            vout: vout.n,
-            address: addr,
-            value: vout.value,
-            blocktime: tx.blocktime,
-            isSpent,
-            confirmations: tx.confirmations ?? 0,
-            scriptPubKey: {
-              asm: vout.scriptPubKey.asm,
-              hex: vout.scriptPubKey.hex,
-              reqSigs: vout.scriptPubKey.reqSigs,
-              type: vout.scriptPubKey.type,
-              address: vout.scriptPubKey.address,
-              addresses: [vout.scriptPubKey.address],
-            },
-          }
-          utxosByAddress.get(addr)!.push(utxo)
-          balance += vout.value
-        }
-      }
-    })
-  })
-
-  const utxos = Array.from(utxosByAddress, ([address, utxos]) => ({ address, utxos }))
-
-  return { balance, utxos }
 }
 
 export async function getFriendlyTransactions(

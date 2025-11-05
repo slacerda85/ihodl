@@ -33,12 +33,20 @@ export type LightningDerivedKeys = {
   }
 }
 
+export type LightningAccountData = {
+  type: LightningAccountType
+  derivedKeys?: LightningDerivedKeys
+  chain?: number
+  lnVer?: number
+  caseIndex?: number
+}
+
 export type Account = {
   purpose: Purpose
   coinType: CoinType
   accountIndex: number
   // Lightning-specific fields (optional, only used when purpose === 9735)
-  lightning?: Record<string, never>
+  lightning?: LightningAccountData
 }
 
 export interface KeyVersion {

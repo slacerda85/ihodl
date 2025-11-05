@@ -48,6 +48,10 @@ const loadPersistedState = (): AppState => {
           ...initialAppState.electrum,
           ...parsed.electrum,
         }, // Persist electrum peer state
+        lightning: {
+          ...initialAppState.lightning,
+          ...parsed.lightning,
+        }, // Persist lightning state
       }
     }
   } catch (error) {
@@ -104,6 +108,21 @@ export const StorageProvider: React.FC<{ children: ReactNode }> = ({ children })
           trustedPeers: state.electrum.trustedPeers,
           lastPeerUpdate: state.electrum.lastPeerUpdate,
           // Don't persist loadingPeers as it should reset to false on app start
+        },
+        lightning: {
+          channels: state.lightning.channels,
+          invoices: state.lightning.invoices,
+          payments: state.lightning.payments,
+          nodes: state.lightning.nodes,
+          lastGossipUpdate: state.lightning.lastGossipUpdate,
+          isRoutingEnabled: state.lightning.isRoutingEnabled,
+          trampolineEnabled: state.lightning.trampolineEnabled,
+          maxRoutingFee: state.lightning.maxRoutingFee,
+          maxRoutingHops: state.lightning.maxRoutingHops,
+          isConnected: state.lightning.isConnected,
+          lastConnectionAttempt: state.lightning.lastConnectionAttempt,
+          connectionErrors: state.lightning.connectionErrors,
+          // Don't persist runtime state (isInitialized, isRunning, loadingState)
         },
       }
 
