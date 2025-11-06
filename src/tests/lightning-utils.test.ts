@@ -168,8 +168,8 @@ describe('Lightning Utils', () => {
       expect(getBolt11Prefix('regtest')).toBe('lnbcrt')
     })
 
-    it('should default to testnet', () => {
-      expect(getBolt11Prefix()).toBe('lntb')
+    it('should default to mainnet', () => {
+      expect(getBolt11Prefix()).toBe('lnbc')
     })
   })
 

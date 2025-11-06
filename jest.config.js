@@ -7,9 +7,8 @@ module.exports = {
     '<rootDir>/src/**/*.(test|spec).(ts|tsx|js|jsx)',
   ],
   transformIgnorePatterns: [
-    'node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|@noble/ciphers))',
+    'node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|@noble/.*))',
     'src/lib/crypto.ts',
-    'node_modules/@noble/hashes',
   ],
   collectCoverageFrom: [
     'src/**/*.(ts|tsx)',
@@ -29,6 +28,9 @@ module.exports = {
     '^@noble/ciphers/chacha.js$': '<rootDir>/__mocks__/@noble/ciphers.js',
     '^@noble/ciphers$': '<rootDir>/__mocks__/@noble/ciphers.js',
     '^@noble/secp256k1$': '<rootDir>/__mocks__/@noble/secp256k1.js',
+    '^@noble/hashes/hmac$': '<rootDir>/__mocks__/@noble/hashes/hmac.js',
+    '^@noble/hashes/sha2$': '<rootDir>/__mocks__/@noble/hashes/sha2.js',
+    '^@noble/hashes/legacy$': '<rootDir>/__mocks__/@noble/hashes/legacy.js',
   },
   testTimeout: 10000,
 }

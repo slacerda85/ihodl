@@ -38,19 +38,19 @@ export default function ReceiveLightning() {
         return
       }
 
+      const amountValue = customAmount ? parseInt(customAmount) * 1000 : undefined // Convert to msats
+      const desc = customDescription || description
+
       setIsGeneratingInvoice(true)
       try {
-        const amountValue = customAmount ? parseInt(customAmount) * 1000 : undefined // Convert to msats
-        const desc = customDescription || description
-
         const invoice = await generateInvoice(amountValue, desc, 3600)
 
         setLastGeneratedInvoice(invoice)
         console.log('[ReceiveLightning] Generated invoice:', invoice.bolt11)
+        setIsGeneratingInvoice(false)
       } catch (error) {
         console.error('Error generating invoice:', error)
         Alert.alert('Erro', 'Falha ao gerar invoice. Tente novamente.')
-      } finally {
         setIsGeneratingInvoice(false)
       }
     },
@@ -58,10 +58,10 @@ export default function ReceiveLightning() {
   )
 
   // Regenerate invoice with advanced settings
-  const handleRegenerateWithSettings = useCallback(async () => {
+  const handleRegenerateWithSettings = async () => {
     await handleGenerateInvoice(amount, description)
     setShowAdvancedSettings(false)
-  }, [handleGenerateInvoice, amount, description])
+  }
 
   useEffect(() => {
     // Auto-generate zero-amount invoice on component mount
@@ -98,6 +98,15 @@ export default function ReceiveLightning() {
     }
   }
 
+  // Modal controls
+  const openAdvancedSettings = () => {
+    setShowAdvancedSettings(true)
+  }
+
+  const closeAdvancedSettings = () => {
+    setShowAdvancedSettings(false)
+  }
+
   return (
     <ScrollView style={[styles.scrollView, isDark && styles.scrollViewDark]}>
       <View style={styles.contentWrapper}>
@@ -122,10 +131,6 @@ export default function ReceiveLightning() {
                 backgroundColor="transparent"
               />
             </View>
-            {/* Exibição do endereço */}
-            <Text style={[styles.addressText, isDark && styles.addressTextDark]}>
-              {lastGeneratedInvoice.bolt11}
-            </Text>
 
             {/* Payment Info */}
             <View style={styles.paymentInfo}>
@@ -133,7 +138,7 @@ export default function ReceiveLightning() {
                 Valor:{' '}
                 {lastGeneratedInvoice.amount
                   ? `${lastGeneratedInvoice.amount / 1000} sats`
-                  : 'Valor variável'}
+                  : 'indefinido'}
               </Text>
               {lastGeneratedInvoice.channelOpeningFee &&
                 lastGeneratedInvoice.channelOpeningFee > 0 && (
@@ -185,17 +190,15 @@ export default function ReceiveLightning() {
           </View>
         )}
 
-        <View style={[styles.sectionBox, isDark && styles.sectionBoxDark]}>
-          <Button
-            variant="glass"
-            glassStyle={styles.settingsButton}
-            onPress={() => setShowAdvancedSettings(true)}
-            startIcon={<IconSymbol name="gear" size={20} color={colors.primary} />}
-            color={colors.primary}
-          >
-            Configurações Avançadas
-          </Button>
-        </View>
+        <Button
+          variant="glass"
+          glassStyle={styles.settingsButton}
+          onPress={openAdvancedSettings}
+          startIcon={<IconSymbol name="gear" size={20} color={colors.primary} />}
+          color={colors.primary}
+        >
+          Configurações Avançadas
+        </Button>
 
         {/* Info Section */}
         <View style={[styles.infoBox, isDark && styles.infoBoxDark]}>
@@ -217,18 +220,14 @@ export default function ReceiveLightning() {
         visible={showAdvancedSettings}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setShowAdvancedSettings(false)}
+        onRequestClose={closeAdvancedSettings}
       >
         <ScrollView style={[styles.modalContainer, isDark && styles.modalContainerDark]}>
           <View style={styles.modalHeader}>
             <Text style={[styles.modalTitle, isDark && styles.modalTitleDark]}>
               Configurações Avançadas
             </Text>
-            <Button
-              variant="solid"
-              backgroundColor="transparent"
-              onPress={() => setShowAdvancedSettings(false)}
-            >
+            <Button variant="solid" backgroundColor="transparent" onPress={closeAdvancedSettings}>
               <IconSymbol
                 name="xmark"
                 size={24}
@@ -357,7 +356,6 @@ const styles = StyleSheet.create({
   paymentInfo: {
     alignItems: 'center',
     gap: 8,
-    marginBottom: 16,
   },
   paymentType: {
     fontSize: 14,

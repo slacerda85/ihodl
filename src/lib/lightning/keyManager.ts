@@ -40,7 +40,7 @@ export class LightningKeyManager {
   async createNodeIdentity(
     seedPhrase: string,
     passphrase: string = '',
-    network: 'mainnet' | 'testnet' | 'regtest' = 'testnet',
+    network: 'mainnet' | 'testnet' | 'regtest' = 'mainnet',
   ): Promise<NodeIdentity> {
     await this.initialize()
 

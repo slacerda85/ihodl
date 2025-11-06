@@ -195,7 +195,7 @@ export class LNWallet {
       amountSat || 0,
       description,
       expirySeconds,
-      'testnet', // TODO: Get from config
+      'mainnet', // Use mainnet for production
       // TODO: Pass actual private key from wallet
     )
 

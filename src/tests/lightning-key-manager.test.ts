@@ -36,7 +36,7 @@ describe('LightningKeyManager', () => {
       expect(result).toHaveProperty('nodeId')
       expect(result).toHaveProperty('fundingAddress')
       expect(typeof result.nodeId).toBe('string')
-      expect(result.fundingAddress).toMatch(/^bc1q/) // Mainnet Bech32 address (default network)
+      expect(result.fundingAddress).toMatch(/^bc1q/) // Mainnet Bech32 address
     })
 
     it('should create identity with passphrase', async () => {

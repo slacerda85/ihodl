@@ -17,6 +17,8 @@ export interface LightningInvoice {
   payeePubKey?: string // BOLT 11 n field
   minFinalCltvExpiry?: number // BOLT 11 c field
   channelOpeningFee?: number // Fee for channel opening when no channels exist
+  paymentSecret?: string // BOLT 11 s field (payment secret)
+  network?: 'mainnet' | 'testnet' | 'regtest' // Network detected from prefix
 }
 
 export interface RoutingHint {

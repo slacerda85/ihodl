@@ -3,7 +3,7 @@
 export const LIGHTNING_CONSTANTS = {
   // BIP32 paths for Lightning
   BIP32_PURPOSE: 1017, // Purpose for Lightning Network
-  BIP32_COIN_TYPE: 1, // Bitcoin testnet, change to 0 for mainnet
+  BIP32_COIN_TYPE: 0, // Bitcoin mainnet
   BIP32_ACCOUNT: 0,
 
   // Invoice defaults

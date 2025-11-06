@@ -36,7 +36,7 @@ export async function generateInvoice(
   amount: number,
   description?: string,
   expirySeconds?: number,
-  network: 'mainnet' | 'testnet' | 'regtest' = 'testnet',
+  network: 'mainnet' | 'testnet' | 'regtest' = 'mainnet',
 ): Promise<LightningInvoice> {
   if (!validateInvoiceAmount(amount)) {
     throw new Error('Invalid invoice amount')
@@ -248,7 +248,7 @@ export async function openChannel(
   peerNodeId: string,
   amount: number,
   pushAmount: number = 0,
-  network: 'mainnet' | 'testnet' | 'regtest' = 'testnet',
+  network: 'mainnet' | 'testnet' | 'regtest' = 'mainnet',
 ): Promise<Channel> {
   if (!validateNodeId(peerNodeId)) {
     throw new Error('Invalid peer node ID')
@@ -464,7 +464,7 @@ export async function generateLightningWalletConfig(
     nodeId: nodeKey.nodeId,
     nodePrivateKey: nodeKey.privateKey,
     nodePublicKey: nodeKey.publicKey,
-    electrumServer: 'electrum.blockstream.info:50002', // Default testnet server
+    electrumServer: 'electrum.blockstream.info:50001', // Default mainnet server
   }
 }
 

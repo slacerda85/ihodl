@@ -110,7 +110,7 @@ describe('Lightning Network Protocol Suite', () => {
         expect(invoice).toBeDefined()
         expect(invoice.amount).toBe(amount)
         expect(invoice.description).toBe(description)
-        expect(invoice.paymentRequest).toMatch(/^lntb/) // testnet prefix
+        expect(invoice.paymentRequest).toMatch(/^lnbc/) // mainnet prefix
         expect(invoice.paymentHash).toMatch(/^[0-9a-f]{64}$/)
         expect(invoice.status).toBe('pending')
       })
@@ -119,9 +119,9 @@ describe('Lightning Network Protocol Suite', () => {
         const description = 'Donation'
         const invoice = await generateInvoice(0, description)
 
-        expect(invoice.amount).toBe(0)
+        expect(invoice.amount).toBe(0) // Should be exact amount when channels exist
         expect(invoice.description).toBe(description)
-        expect(invoice.paymentRequest).toMatch(/^lntb/) // testnet prefix
+        expect(invoice.paymentRequest).toMatch(/^lnbc/) // mainnet prefix
       })
 
       test('should reject invalid amounts', async () => {
@@ -476,7 +476,7 @@ describe('Lightning Network Protocol Suite', () => {
       expect(config?.nodeId).toBe('mock-node-id')
       expect(config?.nodePrivateKey).toBeInstanceOf(Uint8Array)
       expect(config?.nodePublicKey).toBeInstanceOf(Uint8Array)
-      expect(config?.electrumServer).toBe('electrum.blockstream.info:50002')
+      expect(config?.electrumServer).toBe('electrum.blockstream.info:50001')
     })
 
     test('should return null when Lightning keys are not available', async () => {
