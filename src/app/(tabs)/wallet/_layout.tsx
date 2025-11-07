@@ -128,7 +128,6 @@ export default function WalletLayout() {
   return (
     <Stack
       screenOptions={{
-        // headerShown: false,
         headerShadowVisible: false,
         headerTransparent: true,
         headerTintColor: isDark ? colors.text.dark : colors.text.light,

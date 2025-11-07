@@ -26,11 +26,14 @@ export default function WalletBalance() {
       const walletCache = cachedTransactions.find(cache => cache.walletId === walletId)
       if (!walletCache) return 0
 
-      // Simplified balance calculation - sum all received amounts
-      // In a real implementation, you'd need to track which outputs belong to the wallet
+      // Calculate balance from friendly transactions
       return walletCache.transactions.reduce((total, tx) => {
-        const received = tx.vout?.reduce((sum, vout) => sum + (vout.value || 0), 0) || 0
-        return total + received
+        if (tx.type === 'received') {
+          return total + tx.amount
+        } else if (tx.type === 'sent') {
+          return total - tx.amount
+        }
+        return total // for unknown types, don't change balance
       }, 0)
     },
     [cachedTransactions],
@@ -74,12 +77,15 @@ export default function WalletBalance() {
     <View style={styles.balanceSection}>
       <View
         style={{
+          width: '100%',
+          // backgroundColor: 'red',
           flexDirection: 'row',
           alignItems: 'center',
-          justifyContent: 'space-between',
+          justifyContent: 'center',
           gap: 16,
         }}
       >
+        <View style={{ flex: 1, alignItems: 'center' }} />
         <Text style={[styles.balanceAmount, isDark && styles.balanceAmountDark]}>
           {formatBalance(balance, unit)}
         </Text>
@@ -123,14 +129,14 @@ const styles = StyleSheet.create({
     color: colors.textSecondary.dark,
   },
   balanceAmount: {
-    flex: 1,
+    flex: 2,
     fontSize: 36,
     fontWeight: '700',
     color: colors.textSecondary.light,
     textShadowColor: alpha(colors.text.light, 0.2),
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
-    textAlign: 'right',
+    textAlign: 'center',
   },
   balanceAmountDark: {
     color: colors.textSecondary.dark, // '#FFA500',

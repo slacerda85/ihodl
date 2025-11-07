@@ -1,4 +1,4 @@
-import { Tx } from '@/lib/transactions/types'
+import { Tx, UIFriendlyTransaction } from '@/lib/transactions/types'
 import { UsedAddress } from '@/lib/address'
 
 // Base types for reducer pattern
@@ -31,7 +31,7 @@ export type TransactionsState = {
 
 export type CachedTransactions = {
   walletId: string
-  transactions: Tx[]
+  transactions: UIFriendlyTransaction[]
   addresses: string[]
   lastUpdated: number
 }

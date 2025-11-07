@@ -24,11 +24,15 @@ import { useWallet } from '@/features/wallet'
 import { useSettings } from '@/features/settings'
 
 import { UsedAddress } from '@/lib/address'
+import { useTransactions } from '@/features/transactions'
 
 // Address generation utilities - separated for better organization
 
 export default function Receive() {
   const { isDark } = useSettings()
+  const {
+    state: { addressCaches },
+  } = useTransactions()
 
   const { state: walletState } = useWallet()
   const { wallets, activeWalletId } = walletState
@@ -58,22 +62,22 @@ export default function Receive() {
       return
     }
 
-    // Check cache - should be pre-loaded by useWallet
-    // const cached = getAddressCache(activeWallet.walletId)
-    // if (cached) {
-    //   setUsedReceivingAddresses(cached.usedReceivingAddresses)
-    //   setUsedChangeAddresses(cached.usedChangeAddresses)
-    //   setNextUnusedAddress(cached.nextUnusedAddress)
-    //   setSelectedAddress(cached.nextUnusedAddress)
-    //   setIsLoadingAddresses(false)
-    //   setLoadingMessage('')
-    // } else {
-    // Fallback: if no cache (shouldn't happen with pre-loading), show loading
-    setIsLoadingAddresses(true)
-    setLoadingMessage('Loading addresses...')
-    setSelectedAddress('')
-    // }
-  }, [activeWallet, activeWalletId])
+    // Check cache - should be pre-loaded by useTransactions
+    const cached = addressCaches[activeWallet.walletId]
+    if (cached) {
+      setUsedReceivingAddresses(cached.usedReceivingAddresses)
+      setUsedChangeAddresses(cached.usedChangeAddresses)
+      setNextUnusedAddress(cached.nextUnusedAddress)
+      setSelectedAddress(cached.nextUnusedAddress)
+      setIsLoadingAddresses(false)
+      setLoadingMessage('')
+    } else {
+      // Fallback: if no cache (shouldn't happen with pre-loading), show loading
+      setIsLoadingAddresses(true)
+      setLoadingMessage('Loading addresses...')
+      setSelectedAddress('')
+    }
+  }, [activeWallet, activeWalletId, addressCaches])
 
   // Set selected address to next unused address when it changes
   useEffect(() => {
@@ -138,6 +142,10 @@ export default function Receive() {
     return screenWidth - 32 // subtract padding
   }
 
+  useEffect(() => {
+    console.log(nextUnusedAddress)
+  }, [nextUnusedAddress])
+
   return (
     <>
       <ScrollView style={[styles.scrollView, isDark && styles.scrollViewDark]}>
@@ -174,7 +182,10 @@ export default function Receive() {
                 />
               </View>
               {/* Exibição do endereço */}
-              <Text style={[styles.addressText, isDark && styles.addressTextDark]}>
+              <Text
+              // style={[styles.addressText, isDark && styles.addressTextDark]}
+              // numberOfLines={10}
+              >
                 {selectedAddress}
               </Text>
               <View
@@ -224,8 +235,8 @@ export default function Receive() {
               </View>
               {/* </View> */}
               <Button
-                variant="solid"
-                backgroundColor={isDark ? alpha(colors.white, 0.05) : alpha(colors.black, 0.03)}
+                // variant="solid"
+                // backgroundColor={isDark ? alpha(colors.white, 0.05) : alpha(colors.black, 0.03)}
                 color={colors.textSecondary[isDark ? 'dark' : 'light']}
                 startIcon={
                   <IconSymbol
@@ -239,32 +250,22 @@ export default function Receive() {
                 View Used Addresses ({usedReceivingAddresses.length + usedChangeAddresses.length})
               </Button>
               <Button
-                variant="solid"
-                backgroundColor={alpha(colors.primary, 0.7)}
-                color={colors.white}
-                startIcon={<IconSymbol name="plus" size={20} color={colors.white} />}
+                // variant="solid"
+                // backgroundColor={alpha(colors.primary, 0.7)}
+                color={colors.textSecondary[isDark ? 'dark' : 'light']}
+                startIcon={
+                  <IconSymbol
+                    name="plus"
+                    size={20}
+                    color={colors.textSecondary[isDark ? 'dark' : 'light']}
+                  />
+                }
                 onPress={handleGenerateNewAddress}
               >
                 Generate New Address
               </Button>
             </View>
           )}
-          {/* Info Section */}
-          {/* <View style={[styles.infoBox, isDark && styles.infoBoxDark]}>
-            <IconSymbol
-              name="info.circle.fill"
-              size={20}
-              color={colors.info}
-              style={styles.infoIcon}
-            />
-            <View style={styles.infoContent}>
-              <Text style={[styles.infoTitle, isDark && styles.infoTitleDark]}>Security Tips</Text>
-              <Text style={[styles.infoText, isDark && styles.infoTextDark]}>
-                • Always verify the address before sending{'\n'}• Use a fresh address for each
-                transaction{'\n'}• Keep your wallet secure and backed up
-              </Text>
-            </View>
-          </View> */}
         </View>
       </ScrollView>
 
@@ -335,8 +336,9 @@ export default function Receive() {
           </View>
 
           <FlatList
+            key={activeTab}
             data={(activeTab === 'receiving' ? usedReceivingAddresses : usedChangeAddresses) as any}
-            keyExtractor={item => item.address}
+            keyExtractor={(item, index) => item.address + index}
             renderItem={({ item }) => (
               <View style={[styles.usedAddressItem, isDark && styles.usedAddressItemDark]}>
                 <View style={styles.usedAddressHeader}>
@@ -357,7 +359,7 @@ export default function Receive() {
                       key={tx.txid}
                       style={[styles.transactionId, isDark && styles.transactionIdDark]}
                     >
-                      {tx.txid.substring(0, 16)}... ({tx.confirmations} conf.)
+                      {tx.txid} ({tx.confirmations} conf.)
                     </Text>
                   ))}
                   {item.transactions.length > 3 && (

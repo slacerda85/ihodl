@@ -18,9 +18,14 @@ import {
 import { MMKV } from 'react-native-mmkv'
 import { useElectrum } from '../electrum/ElectrumProvider'
 import { useWallet } from '../wallet/WalletProvider'
-import { getTxHistory, getFriendlyTransactions } from '@/lib/transactions'
+import {
+  getTxHistory,
+  getFriendlyTransactions,
+  calculateAddressCache,
+  findNextUnusedAddress,
+} from '@/lib/transactions'
 import { getWalletSeedPhrase } from '@/lib/secureStorage'
-import { fromMnemonic } from '@/lib/key'
+import { createRootExtendedKey, fromMnemonic } from '@/lib/key'
 
 const storage = new MMKV()
 const TRANSACTIONS_STORAGE_KEY = 'transactions-state'
@@ -51,7 +56,6 @@ const loadPersistedTransactionsState = (): TransactionsState => {
 type TransactionsContextType = {
   state: TransactionsState
   dispatch: React.Dispatch<TransactionsAction>
-  // Transaction functions
   fetchTransactionHistory: (walletId: string) => Promise<void>
   refreshTransactionHistory: () => Promise<void>
 }
@@ -65,27 +69,40 @@ export default function TransactionsProvider({ children }: { children: ReactNode
   const { state: walletState } = useWallet()
 
   // Cache timing constants
-  const CACHE_DURATION_MS = 10 * 60 * 1000 // 10 minutes (typical block time)
-  const lastCacheUpdateRef = useRef<Record<string, number>>({})
+  const CACHE_DURATION_MS = 30 * 60 * 1000 // 30 minutes
+
+  // Ref to track ongoing fetches to prevent duplicates
+  const ongoingFetches = useRef<Set<string>>(new Set())
 
   // Fetch transaction history for a specific wallet
   const fetchTransactionHistory = useCallback(
     async (walletId: string) => {
+      if (ongoingFetches.current.has(walletId)) {
+        console.log(`[TransactionsProvider] Fetch already in progress for wallet ${walletId}`)
+        return
+      }
+
+      ongoingFetches.current.add(walletId)
+
       const wallet = walletState.wallets.find(w => w.walletId === walletId)
       if (!wallet) {
-        throw new Error(`Wallet ${walletId} not found`)
+        console.error(`[TransactionsProvider] Wallet ${walletId} not found`)
+        ongoingFetches.current.delete(walletId)
+        return
       }
 
       const seedPhrase = await getWalletSeedPhrase(walletId, '')
       if (!seedPhrase) {
-        throw new Error(`Seed phrase not found for wallet ${walletId}`)
+        console.error(`[TransactionsProvider] Seed phrase not found for wallet ${walletId}`)
+        ongoingFetches.current.delete(walletId)
+        return
       }
 
       try {
         dispatch(transactionsActions.setLoadingTx(true))
 
         // Convert seed phrase to extended key
-        const extendedKey = fromMnemonic(seedPhrase)
+        const extendedKey = createRootExtendedKey(fromMnemonic(seedPhrase))
 
         // Fetch transaction history using the shared Electrum connection
         const { txHistory } = await getTxHistory({
@@ -99,18 +116,39 @@ export default function TransactionsProvider({ children }: { children: ReactNode
           getConnectionFn: getConnection,
         })
 
+        // Collect all addresses from txHistory
+        const allAddresses = new Set<string>()
+        txHistory.forEach(history => {
+          if (history.receivingAddress) allAddresses.add(history.receivingAddress)
+          if (history.changeAddress) allAddresses.add(history.changeAddress)
+        })
+
         // Update cache with new data
         const cacheData: CachedTransactions = {
           walletId,
-          transactions: txHistory.flatMap(tx => tx.txs),
-          addresses: txHistory.flatMap(h => [h.receivingAddress, h.changeAddress].filter(Boolean)),
+          transactions: friendlyTransactions,
+          addresses: Array.from(allAddresses),
           lastUpdated: Date.now(),
         }
 
         dispatch(transactionsActions.setWalletCache(walletId, cacheData))
 
-        // Update last cache update time
-        lastCacheUpdateRef.current[walletId] = Date.now()
+        // Calculate address cache using helper functions
+        const { usedReceivingAddresses, usedChangeAddresses } = calculateAddressCache(txHistory)
+
+        const usedAddresses = new Set<string>()
+        usedReceivingAddresses.forEach(addr => usedAddresses.add(addr.address))
+        usedChangeAddresses.forEach(addr => usedAddresses.add(addr.address))
+
+        const nextUnusedAddress = findNextUnusedAddress(extendedKey, usedAddresses)
+
+        const addressCache = {
+          nextUnusedAddress,
+          usedReceivingAddresses,
+          usedChangeAddresses,
+        }
+
+        dispatch(transactionsActions.setAddressCache(walletId, addressCache))
 
         console.log(
           `[TransactionsProvider] Fetched ${friendlyTransactions.length} transactions for wallet ${walletId}`,
@@ -120,8 +158,9 @@ export default function TransactionsProvider({ children }: { children: ReactNode
       } catch (error) {
         console.error('[TransactionsProvider] Error fetching transaction history:', error)
         dispatch(transactionsActions.setLoadingTx(false))
-        throw error
       }
+
+      ongoingFetches.current.delete(walletId)
     },
     [getConnection, walletState.wallets, dispatch],
   )
@@ -134,8 +173,16 @@ export default function TransactionsProvider({ children }: { children: ReactNode
       return
     }
 
-    const lastUpdate = lastCacheUpdateRef.current[activeWalletId] || 0
-    const timeSinceLastUpdate = Date.now() - lastUpdate
+    const cache = state.cachedTransactions.find(c => c.walletId === activeWalletId)
+    if (!cache || cache.transactions.length === 0) {
+      console.log(
+        `[TransactionsProvider] No cache or empty cache for wallet ${activeWalletId}, fetching`,
+      )
+      await fetchTransactionHistory(activeWalletId)
+      return
+    }
+
+    const timeSinceLastUpdate = Date.now() - cache.lastUpdated
 
     // Only refresh if cache is stale (older than CACHE_DURATION_MS)
     if (timeSinceLastUpdate < CACHE_DURATION_MS) {
@@ -151,7 +198,12 @@ export default function TransactionsProvider({ children }: { children: ReactNode
       `[TransactionsProvider] Refreshing transaction history for wallet ${activeWalletId}`,
     )
     await fetchTransactionHistory(activeWalletId)
-  }, [walletState.activeWalletId, fetchTransactionHistory, CACHE_DURATION_MS])
+  }, [
+    walletState.activeWalletId,
+    state.cachedTransactions,
+    fetchTransactionHistory,
+    CACHE_DURATION_MS,
+  ])
 
   // Auto-refresh transaction history when active wallet changes
   useEffect(() => {

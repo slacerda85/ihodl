@@ -187,16 +187,6 @@ export async function getTxHistory({
     return { txHistory }
   } catch (error) {
     throw new Error(`Failed to discover accounts: ${(error as Error).message}`)
-  } finally {
-    // Close the persistent connection
-    if (shouldCloseSocket && socket) {
-      try {
-        console.log('[transactions] Closing persistent Electrum connection')
-        close(socket)
-      } catch (closeError) {
-        console.error('[transactions] Error closing persistent socket:', closeError)
-      }
-    }
   }
 }
 

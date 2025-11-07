@@ -127,17 +127,37 @@ function AccountDetails({ account }: AccountDetailsProps) {
   const { isDark } = useSettings()
 
   const { state: walletState } = useWallet()
-  const { loadingWalletState: loadingWallet, unit, activeWalletId } = walletState
+  const { loadingWalletState: loadingWallet, unit } = walletState
   const { state: transactionsState } = useTransactions()
-  const { loadingTxState: loadingTransactions } = transactionsState
+  const { cachedTransactions, loadingTxState: loadingTransactions } = transactionsState
 
   const loading = loadingWallet || loadingTransactions
 
-  // Simplified balance calculation
-  const balance = 0 // Placeholder - would need proper balance calculation
+  // Calculate balance from transactions
+  const calculateBalance = (): number => {
+    if (!walletState.activeWalletId) return 0
+
+    const walletCache = cachedTransactions.find(
+      cache => cache.walletId === walletState.activeWalletId,
+    )
+    if (!walletCache) return 0
+
+    // For now, all transactions are considered on-chain
+    // TODO: Filter by account type when lightning is implemented
+    return walletCache.transactions.reduce((balance, tx) => {
+      if (tx.type === 'received') {
+        return balance + tx.amount
+      } else if (tx.type === 'sent') {
+        return balance - tx.amount
+      }
+      return balance
+    }, 0)
+  }
+
+  const balance = calculateBalance()
 
   const isLightningAccount = account.purpose === 9735
-  const lightningBalance = 0 // Placeholder for lightning balance
+  const lightningBalance = 0 // Placeholder for lightning balance - TODO: implement when lightning is ready
 
   const accountIcon = getPurposeIcon(account.purpose)
 
@@ -168,7 +188,7 @@ function AccountDetails({ account }: AccountDetailsProps) {
                 <Text style={[styles.accountBalance, isDark && styles.accountBalanceDark]}>
                   {isLightningAccount
                     ? `${formatBalance(lightningBalance, unit)} ${unit}`
-                    : `${formatBalance(balance, unit)} ${unit}`}
+                    : `${formatBalance(balance / 1e8, unit)} ${unit}`}
                 </Text>
               </>
             )}

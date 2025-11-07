@@ -248,37 +248,9 @@ function verifyMessageHex(messageHex: string, signatureHex: string, publicKeyHex
   return verifyMessage(message, signature, publicKey)
 }
 
-class Hash {
-  private data: Uint8Array | null = null
-
-  update(data: string | Uint8Array): Hash {
-    if (typeof data === 'string') {
-      this.data = new TextEncoder().encode(data)
-    } else {
-      this.data = data
-    }
-    return this
-  }
-
-  digest(): Uint8Array
-  digest(encoding: 'hex'): string
-  digest(encoding?: 'hex'): Uint8Array | string {
-    if (!this.data) {
-      throw new Error('No data to hash')
-    }
-    const hash = sha256(this.data)
-    if (encoding === 'hex') {
-      return uint8ArrayToHex(hash)
-    }
-    return hash
-  }
-}
-
-function createHash(algorithm: string): Hash {
-  if (algorithm !== 'sha256') {
-    throw new Error(`Unsupported hash algorithm: ${algorithm}`)
-  }
-  return new Hash()
+function createHash(algorithm: string) {
+  return QuickCrypto.createHash(algorithm)
+  // return new Hash()
 }
 
 export {
