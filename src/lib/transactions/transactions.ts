@@ -35,6 +35,7 @@ interface GetTxHistoryParams {
   accountStartIndex?: number
   gapLimit?: number
   trustedPeers?: ElectrumPeer[]
+  getConnectionFn?: () => Promise<any>
 }
 
 interface GetTxHistoryResponse {
@@ -57,8 +58,11 @@ export async function getTxHistory({
   accountStartIndex = 0,
   gapLimit = 20,
   trustedPeers,
+  getConnectionFn,
 }: GetTxHistoryParams): Promise<GetTxHistoryResponse> {
   let socket: any = null
+  let shouldCloseSocket = false
+
   try {
     const txHistory: TxHistory[] = []
 
@@ -83,7 +87,12 @@ export async function getTxHistory({
     const changeExtendedKey = deriveChildPrivateKey(accountExtendedKey, changeIndex)
 
     // connect to electrum server
-    socket = await connect()
+    if (getConnectionFn) {
+      socket = await getConnectionFn()
+    } else {
+      socket = await connect()
+      shouldCloseSocket = true
+    }
     console.log('[transactions] Established persistent Electrum connection for transaction history')
 
     // Generate all receiving addresses first
@@ -180,7 +189,7 @@ export async function getTxHistory({
     throw new Error(`Failed to discover accounts: ${(error as Error).message}`)
   } finally {
     // Close the persistent connection
-    if (socket) {
+    if (shouldCloseSocket && socket) {
       try {
         console.log('[transactions] Closing persistent Electrum connection')
         close(socket)
@@ -1323,7 +1332,11 @@ export function testTransactionDecode(txHex: string): {
 export async function sendTransaction({
   signedTransaction,
   txHex,
+  getConnectionFn,
 }: SendTransactionParams): Promise<SendTransactionResult> {
+  let socket: any
+  let shouldCloseSocket = false
+
   try {
     console.log('Broadcasting transaction:', txHex.substring(0, 100) + '...')
     console.log('Transaction hex length:', txHex.length)
@@ -1357,7 +1370,12 @@ export async function sendTransaction({
     console.log('Transaction validation passed, proceeding with broadcast...')
 
     // Connect to Electrum server
-    const socket = await connect()
+    if (getConnectionFn) {
+      socket = await getConnectionFn()
+    } else {
+      socket = await connect()
+      shouldCloseSocket = true
+    }
 
     // Broadcast the transaction using Electrum's blockchain.transaction.broadcast method
     const response = await callElectrumMethod<string>(
@@ -1381,6 +1399,10 @@ export async function sendTransaction({
       txid: '',
       success: false,
       error: (error as Error).message,
+    }
+  } finally {
+    if (shouldCloseSocket && socket) {
+      socket.end()
     }
   }
 }

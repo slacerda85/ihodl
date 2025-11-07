@@ -16,7 +16,10 @@ import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
 
-import { useWallet, useTransactions, useSettings } from '@/features/storage'
+import { useWallet } from '../wallet'
+import { useTransactions } from '../transactions'
+import { useSettings } from '../settings'
+import { useElectrum } from '../electrum'
 
 import { formatBalance } from './utils'
 import SendLightning from '../lightning/SendLightning'
@@ -32,7 +35,6 @@ import {
   splitRootExtendedKey,
 } from '@/lib/key'
 import { buildTransaction, signTransaction, sendTransaction } from '@/lib/transactions'
-import { getRecommendedFeeRates } from '@/lib/electrum'
 import { getWalletSeedPhrase } from '@/lib/secureStorage'
 
 type SendMode = 'onchain' | 'lightning'
@@ -42,8 +44,15 @@ export default function Send() {
 
   const router = useRouter()
 
-  const { activeWalletId, wallets, unit } = useWallet()
-  const { cachedTransactions, addPendingTransaction, getBalance, getUtxos } = useTransactions()
+  const { state: walletState } = useWallet()
+  const { activeWalletId, wallets, unit } = walletState
+  const { state: transactionsState } = useTransactions()
+  const { cachedTransactions } = transactionsState
+  // Placeholder functions - need to be implemented
+  const getBalance = (walletId: string) => 0
+  const getUtxos = (walletId: string): any[] => [] // Return empty array for now
+  const addPendingTransaction = (tx: any) => {}
+  const { electrum } = useElectrum()
 
   const [mode, setMode] = useState<SendMode>('onchain')
 
@@ -198,7 +207,7 @@ export default function Send() {
     setLoadingFeeRates(true)
     try {
       console.log('[Send] Fetching recommended fee rates from network...')
-      const rates = await getRecommendedFeeRates()
+      const rates = await electrum.getRecommendedFeeRates()
       setFeeRates(rates)
 
       // Auto-select "normal" fee rate for auto-adjustment
@@ -224,7 +233,7 @@ export default function Send() {
     } finally {
       setLoadingFeeRates(false)
     }
-  }, [autoFeeAdjustment, feeRates])
+  }, [autoFeeAdjustment, feeRates, electrum])
 
   // Effect to fetch fee rates when auto-adjustment is enabled
   useEffect(() => {

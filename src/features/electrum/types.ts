@@ -1,8 +1,8 @@
 import { ElectrumPeer } from '@/lib/electrum'
 import { updateTrustedPeers as updateTrustedPeersLib } from '@/lib/electrum'
-import { Reducer } from '../types'
-import type { AppAction, AppState } from '../storage'
-import React from 'react'
+
+// Base types for reducer pattern
+type Reducer<S, A> = (state: S, action: A) => S
 
 // Electrum State
 export type ElectrumState = {
@@ -87,20 +87,4 @@ export const electrumSelectors = {
   getTrustedPeers: (state: ElectrumState) => state.trustedPeers,
   getLastPeerUpdate: (state: ElectrumState) => state.lastPeerUpdate,
   isLoadingPeers: (state: ElectrumState) => state.loadingPeers,
-}
-
-// Initialize Electrum peers on app startup
-export const initializeElectrumPeers = async (
-  dispatch: React.Dispatch<AppAction>,
-  state: AppState,
-) => {
-  try {
-    console.log('[initializeElectrumPeers] Initializing..')
-    // Always update trusted peers (this will fetch new peers if needed and test them)
-    const actions = await electrumActions.updateTrustedPeers()
-    actions.forEach(action => dispatch({ type: 'ELECTRUM', action }))
-  } catch (error) {
-    console.error('[initializeElectrumPeers] Error initializing Electrum peers:', error)
-    // Don't throw - we don't want to break app startup
-  }
 }

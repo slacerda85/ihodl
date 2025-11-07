@@ -129,4 +129,6 @@ export interface BlockchainClientConfig {
   minConfirmations?: number
   /** Whether to use persistent connections */
   persistentConnection?: boolean
+  /** Optional function to get Electrum connection */
+  getConnectionFn?: () => Promise<any>
 }

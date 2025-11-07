@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router'
 import colors from '@/ui/colors'
-import { useSettings } from '@/features/storage'
+import { useSettings } from '@/features/settings'
 // import useStorage from '@/features/storage'
 
 export default function BlockchainLayout() {

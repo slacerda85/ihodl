@@ -10,7 +10,8 @@ import Button from '@/ui/Button'
 import colors from '@/ui/colors'
 import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
 
-import { useSettings, useWallet } from '@/features/storage'
+import { useSettings } from '@/features/settings'
+import { useWallet } from '@/features/wallet'
 
 export default function CreateWallet() {
   const { isDark } = useSettings()
@@ -24,24 +25,26 @@ export default function CreateWallet() {
   const [password, setPassword] = useState<string>('')
   const [usePassword, setUsePassword] = useState<boolean>(false)
 
-  const handleCreateWallet = useCallback(() => {
+  const handleCreateWallet = useCallback(async () => {
     setSubmitting(true)
     if (walletName.trim().length === 0) {
+      setSubmitting(false)
       return
     }
     try {
-      createWallet(
-        {
-          walletName,
-          cold: offline,
-        },
-        usePassword && password ? password : undefined,
-      )
-    } catch (error) {
-      console.error('Error creating wallet:', error)
-    } finally {
+      // Use the wallet hook to create wallet - it handles all the lib calls and state updates
+      await createWallet({
+        walletName,
+        offline,
+        usePassword,
+        password,
+      })
+
+      console.log('Wallet created successfully')
       setSubmitting(false)
       router.dismiss(2)
+    } catch (error) {
+      console.error('Error creating wallet:', error)
     }
   }, [walletName, offline, usePassword, password, createWallet, router])
 

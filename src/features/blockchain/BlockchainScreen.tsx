@@ -1,7 +1,8 @@
 import { Text, View, StyleSheet, useColorScheme, ActivityIndicator } from 'react-native'
 
 import colors from '@/ui/colors'
-import { useBlockchain, useSettings } from '@/features/storage'
+import { useBlockchain } from '@/features/blockchain'
+import { useSettings } from '@/features/settings'
 import Button from '@/ui/Button'
 
 // Helper function to format bytes
@@ -19,8 +20,8 @@ export default function BlockchainScreen() {
   const effectiveColorMode = colorMode === 'auto' ? (colorScheme ?? 'light') : colorMode
   const isDark = effectiveColorMode === 'dark'
 
-  const { blockchain, syncHeadersManually } = useBlockchain()
-  const { isSyncing, lastSyncedHeight, currentHeight, syncProgress } = blockchain
+  const { blockchainState, syncHeadersManually } = useBlockchain()
+  const { isSyncing, lastSyncedHeight, currentHeight, syncProgress } = blockchainState
 
   const progressPercentage = Math.round(syncProgress * 100)
   const syncedBlocks = lastSyncedHeight || 0

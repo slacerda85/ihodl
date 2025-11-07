@@ -8,7 +8,9 @@ import BitcoinLogo from '@/assets/bitcoin-logo'
 import { formatBalance } from '../wallet/utils'
 import { alpha } from '@/ui/utils'
 import { useHeaderHeight } from '@react-navigation/elements'
-import { useWallet, useTransactions, useSettings } from '@/features/storage'
+import { useWallet } from '@/features/wallet'
+import { useTransactions } from '@/features/transactions'
+import { useSettings } from '@/features/settings'
 import { getWalletSeedPhrase } from '@/lib/secureStorage'
 import { GlassView } from 'expo-glass-effect'
 // import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
@@ -34,13 +36,11 @@ export default function TransactionsScreen() {
   const { isDark } = useSettings()
   const router = useRouter()
 
-  const { activeWalletId, loadingWalletState: loadingWallet, unit, activeWallet } = useWallet()
-  const {
-    cachedTransactions,
-    getTransactionAnalysis,
-    loadingTxState: loadingTx,
-    fetchTransactions,
-  } = useTransactions()
+  const { state: walletState } = useWallet()
+  const { activeWalletId, loadingWalletState: loadingWallet, unit } = walletState
+  const activeWallet = walletState.wallets.find(w => w.walletId === activeWalletId)
+  const { state: transactionsState } = useTransactions()
+  const { cachedTransactions, loadingTxState: loadingTx } = transactionsState
 
   const loading = loadingWallet || loadingTx
 
@@ -52,20 +52,17 @@ export default function TransactionsScreen() {
   // Trigger fetch transactions if we don't have data
   useEffect(() => {
     const fetchTxData = async () => {
-      if (activeWalletId && !loading && !hasTransactionData && fetchTransactions && activeWallet) {
+      if (activeWalletId && !loading && !hasTransactionData && activeWallet) {
         try {
-          // TODO: Get password from user or state
-          const password = '' // Temporary: assume no password for now
-          const seedPhrase = await getWalletSeedPhrase(activeWalletId, password)
-          if (seedPhrase) {
-            console.log(
-              '🚀 [TransactionsScreen] Executando fetchTransactions para:',
-              activeWalletId,
-            )
-            fetchTransactions(activeWalletId, seedPhrase)
-          } else {
-            console.error('No seed phrase found for wallet:', activeWalletId)
-          }
+          // TODO: Implement fetchTransactions
+          // const password = '' // Temporary: assume no password for now
+          // const seedPhrase = await getWalletSeedPhrase(activeWalletId, password)
+          // if (seedPhrase) {
+          //   console.log('🚀 [TransactionsScreen] Executando fetchTransactions para:', activeWalletId)
+          //   fetchTransactions(activeWalletId, seedPhrase)
+          // } else {
+          //   console.error('No seed phrase found for wallet:', activeWalletId)
+          // }
         } catch (error) {
           console.error('Error getting wallet seed phrase:', error)
         }
@@ -73,7 +70,7 @@ export default function TransactionsScreen() {
     }
 
     fetchTxData()
-  }, [activeWalletId, loading, hasTransactionData, fetchTransactions, activeWallet])
+  }, [activeWalletId, loading, hasTransactionData, activeWallet])
 
   // Loading state - show this prominently
   if (loading) {
@@ -119,175 +116,28 @@ export default function TransactionsScreen() {
   // Get transaction analysis - this is optional, if it fails we show empty state
   let transactionAnalysis = null
   try {
-    transactionAnalysis =
-      activeWalletId && getTransactionAnalysis && typeof getTransactionAnalysis === 'function'
-        ? getTransactionAnalysis(activeWalletId)
-        : null
+    // TODO: Implement getTransactionAnalysis
+    transactionAnalysis = null
+    // transactionAnalysis =
+    //   activeWalletId && getTransactionAnalysis && typeof getTransactionAnalysis === 'function'
+    //     ? getTransactionAnalysis(activeWalletId)
+    //     : null
   } catch (error) {
     console.error('Error getting transaction analysis:', error)
   }
 
-  // No transaction analysis or no transactions
-  if (
-    !transactionAnalysis ||
-    !transactionAnalysis.transactions ||
-    transactionAnalysis.transactions.length === 0
-  ) {
-    return (
-      <View style={[styles.emptyContainer, { paddingTop: headerHeight + 16 }]}>
-        <View style={[styles.empty, isDark && styles.emptyDark]}>
-          <Text style={[styles.emptyText, isDark && styles.emptyTextDark]}>
-            No transactions found
-          </Text>
-          <Text style={[styles.emptySubText, isDark && styles.emptySubTextDark]}>
-            Transactions will appear here when you receive or send Bitcoin
-          </Text>
-        </View>
-      </View>
-    )
-  }
-
-  // Now we know we have valid transaction data
-  const { transactions, stats } = transactionAnalysis
-
-  // Agrupar transações por data
-  const grouped: Record<string, typeof transactions> = {}
-  for (const txData of transactions) {
-    // Verificar se blocktime existe e é válido
-    if (!txData.tx.blocktime || txData.tx.blocktime <= 0) {
-      console.warn('Transação sem blocktime válido:', txData.tx.txid)
-      continue
-    }
-
-    const date = new Date(txData.tx.blocktime * 1000).toISOString().split('T')[0]
-    if (!grouped[date]) {
-      grouped[date] = []
-    }
-    grouped[date].push(txData)
-  }
-
-  // Ordenar transações dentro de cada data por blocktime (mais recente primeiro)
-  for (const date in grouped) {
-    grouped[date].sort((a, b) => {
-      // Verificar se blocktime existe
-      if (!a.tx.blocktime || !b.tx.blocktime) return 0
-      return b.tx.blocktime - a.tx.blocktime
-    })
-  }
-
-  // Preparar dados para FlatList com cabeçalhos de data
-  const data: ListItem[] = []
-  const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a))
-
-  for (const date of sortedDates) {
-    // Formatar data para exibição
-    const displayDate = new Date(date).toLocaleDateString('pt-BR', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    })
-    data.push({ isDate: true, date: displayDate })
-
-    for (const txData of grouped[date]) {
-      // Determinar endereço de exibição baseado no tipo de transação
-      let displayAddress = 'Unknown'
-      if (txData.type === 'received') {
-        // Para transações recebidas, mostrar o primeiro endereço de origem (se disponível)
-        displayAddress =
-          txData.fromAddresses &&
-          Array.isArray(txData.fromAddresses) &&
-          txData.fromAddresses.length > 0
-            ? txData.fromAddresses[0]
-            : 'External'
-      } else if (txData.type === 'sent') {
-        // Para transações enviadas, mostrar o primeiro endereço de destino
-        displayAddress =
-          txData.toAddresses && Array.isArray(txData.toAddresses) && txData.toAddresses.length > 0
-            ? txData.toAddresses[0]
-            : 'External'
-      } else {
-        // Para self-transfer, mostrar um dos endereços da carteira
-        displayAddress =
-          txData.walletAddresses &&
-          Array.isArray(txData.walletAddresses) &&
-          txData.walletAddresses.length > 0
-            ? txData.walletAddresses[0]
-            : 'Self'
-      }
-
-      data.push({
-        isDate: false,
-        tx: txData.tx,
-        type: txData.type,
-        amount: Math.abs(txData.netAmount),
-        address: displayAddress,
-      })
-    }
-  }
-
-  const renderItem = ({ item, index }: { item: ListItem; index: number }) => {
-    if (item.isDate) {
-      return <Text style={[styles.date, isDark && styles.dateDark]}>{item.date}</Text>
-    } else {
-      // Determinar estilo do tipo de transação
-      const typeLabel =
-        item.type === 'received' ? 'Received' : item.type === 'sent' ? 'Sent' : 'Self Transfer'
-
-      const isPositive = item.type === 'received'
-      const prefix = isPositive ? '+' : '-'
-
-      return (
-        <Pressable
-          onPress={() => {
-            // Navigate to transaction details
-            router.push(`/transactions/${item.tx.txid}` as any)
-          }}
-        >
-          <GlassView isInteractive style={styles.transactionPressable}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <BitcoinLogo width={32} height={32} />
-              <View>
-                <Text style={[styles.type, isDark && styles.typeDark]}>{typeLabel}</Text>
-                <Text style={[styles.address, isDark && styles.addressDark]}>
-                  {item.type === 'received' ? 'From' : item.type === 'sent' ? 'To' : ''}{' '}
-                  {truncateAddress(item.address, 6)}
-                </Text>
-              </View>
-            </View>
-            <Text
-              style={[
-                styles.balance,
-                isDark && styles.balanceDark,
-                isPositive ? styles.balancePositive : styles.balanceNegative,
-              ]}
-            >
-              {`${prefix}${formatBalance(item.amount, unit)} ${unit}`}
-            </Text>
-          </GlassView>
-        </Pressable>
-      )
-    }
-  }
-
+  // No transaction analysis or no transactions - show empty state for now
   return (
-    <FlatList
-      contentContainerStyle={{
-        // paddingTop: headerHeight + 16,
-        padding: 20,
-        gap: 4,
-      }}
-      data={data}
-      keyExtractor={item => (item.isDate ? item.date : item.tx.txid)}
-      renderItem={renderItem}
-      ListHeaderComponent={
-        <View style={{ paddingBottom: 16, alignItems: 'center' }}>
-          <Text style={[styles.statsText, isDark && styles.statsTextDark]}>
-            {`Received: ${stats.receivedCount} | Sent: ${stats.sentCount} | Self: ${stats.selfCount}`}
-          </Text>
-        </View>
-      }
-      showsVerticalScrollIndicator={false}
-    />
+    <View style={[styles.emptyContainer, { paddingTop: headerHeight + 16 }]}>
+      <View style={[styles.empty, isDark && styles.emptyDark]}>
+        <Text style={[styles.emptyText, isDark && styles.emptyTextDark]}>
+          Transactions feature under development
+        </Text>
+        <Text style={[styles.emptySubText, isDark && styles.emptySubTextDark]}>
+          Transaction functionality will be implemented in a future update
+        </Text>
+      </View>
+    </View>
   )
 }
 

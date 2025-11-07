@@ -1,12 +1,8 @@
-import {
-  Channel,
-  LightningInvoice,
-  Payment,
-  LightningNode,
-  RoutingHint,
-} from '@/lib/lightning/types'
-import { Reducer } from '../types'
-import { useStorage } from '../StorageProvider'
+import { Channel, LightningInvoice, Payment, LightningNode } from '@/lib/lightning/types'
+import { useLightningState } from './LightningStateProvider'
+
+// Base types for reducer pattern
+type Reducer<S, A> = (state: S, action: A) => S
 
 // Lightning State
 export type LightningState = {
@@ -379,6 +375,7 @@ export const lightningActions = {
     type: 'CLEAR_CONNECTION_ERRORS',
   }),
 }
+
 export const lightningSelectors = {
   getLightningChannels: (state: LightningState) => state.channels,
 
@@ -395,142 +392,69 @@ export const lightningSelectors = {
 
 // Hook for using Lightning state
 export const useLightning = () => {
-  const { state, dispatch } = useStorage()
+  const { state, dispatch } = useLightningState()
   return {
-    lightningState: state.lightning,
+    lightningState: state,
     lightningActions: {
       addLightningChannel: (channel: Channel) =>
-        dispatch({
-          type: 'LIGHTNING',
-          action: lightningActions.addLightningChannel(channel),
-        }),
+        dispatch(lightningActions.addLightningChannel(channel)),
 
       updateLightningChannel: (channelId: string, updates: Partial<Channel>) =>
-        dispatch({
-          type: 'LIGHTNING',
-          action: lightningActions.updateLightningChannel(channelId, updates),
-        }),
+        dispatch(lightningActions.updateLightningChannel(channelId, updates)),
 
       removeLightningChannel: (channelId: string) =>
-        dispatch({
-          type: 'LIGHTNING',
-          action: lightningActions.removeLightningChannel(channelId),
-        }),
+        dispatch(lightningActions.removeLightningChannel(channelId)),
 
       addLightningInvoice: (invoice: LightningInvoice) =>
-        dispatch({
-          type: 'LIGHTNING',
-          action: lightningActions.addLightningInvoice(invoice),
-        }),
+        dispatch(lightningActions.addLightningInvoice(invoice)),
 
       updateLightningInvoice: (paymentHash: string, updates: Partial<LightningInvoice>) =>
-        dispatch({
-          type: 'LIGHTNING',
-          action: lightningActions.updateLightningInvoice(paymentHash, updates),
-        }),
+        dispatch(lightningActions.updateLightningInvoice(paymentHash, updates)),
 
       addLightningPayment: (payment: Payment) =>
-        dispatch({
-          type: 'LIGHTNING',
-          action: lightningActions.addLightningPayment(payment),
-        }),
+        dispatch(lightningActions.addLightningPayment(payment)),
 
       updateLightningPayment: (paymentHash: string, updates: Partial<Payment>) =>
-        dispatch({
-          type: 'LIGHTNING',
-          action: lightningActions.updateLightningPayment(paymentHash, updates),
-        }),
+        dispatch(lightningActions.updateLightningPayment(paymentHash, updates)),
 
       setLightningInitialized: (initialized: boolean) =>
-        dispatch({
-          type: 'LIGHTNING',
-          action: lightningActions.setLightningInitialized(initialized),
-        }),
+        dispatch(lightningActions.setLightningInitialized(initialized)),
 
       setLightningRunning: (running: boolean) =>
-        dispatch({
-          type: 'LIGHTNING',
-          action: lightningActions.setLightningRunning(running),
-        }),
+        dispatch(lightningActions.setLightningRunning(running)),
 
       setLightningLoading: (loading: boolean) =>
-        dispatch({
-          type: 'LIGHTNING',
-          action: lightningActions.setLightningLoading(loading),
-        }),
+        dispatch(lightningActions.setLightningLoading(loading)),
 
-      clearLightningState: () =>
-        dispatch({
-          type: 'LIGHTNING',
-          action: lightningActions.clearLightningState(),
-        }),
+      clearLightningState: () => dispatch(lightningActions.clearLightningState()),
 
       // Network actions
       updateNodeInfo: (nodeId: string, info: Partial<LightningNode>) =>
-        dispatch({
-          type: 'LIGHTNING',
-          action: lightningActions.updateNodeInfo(nodeId, info),
-        }),
+        dispatch(lightningActions.updateNodeInfo(nodeId, info)),
 
       updateChannelInfo: (channelId: string, channel: Partial<Channel>) =>
-        dispatch({
-          type: 'LIGHTNING',
-          action: lightningActions.updateChannelInfo(channelId, channel),
-        }),
+        dispatch(lightningActions.updateChannelInfo(channelId, channel)),
 
-      removeStaleData: (maxAge: number) =>
-        dispatch({
-          type: 'LIGHTNING',
-          action: lightningActions.removeStaleData(maxAge),
-        }),
+      removeStaleData: (maxAge: number) => dispatch(lightningActions.removeStaleData(maxAge)),
 
       setRoutingEnabled: (enabled: boolean) =>
-        dispatch({
-          type: 'LIGHTNING',
-          action: lightningActions.setRoutingEnabled(enabled),
-        }),
+        dispatch(lightningActions.setRoutingEnabled(enabled)),
 
       setTrampolineEnabled: (enabled: boolean) =>
-        dispatch({
-          type: 'LIGHTNING',
-          action: lightningActions.setTrampolineEnabled(enabled),
-        }),
+        dispatch(lightningActions.setTrampolineEnabled(enabled)),
 
-      setMaxRoutingFee: (fee: number) =>
-        dispatch({
-          type: 'LIGHTNING',
-          action: lightningActions.setMaxRoutingFee(fee),
-        }),
+      setMaxRoutingFee: (fee: number) => dispatch(lightningActions.setMaxRoutingFee(fee)),
 
-      setMaxRoutingHops: (hops: number) =>
-        dispatch({
-          type: 'LIGHTNING',
-          action: lightningActions.setMaxRoutingHops(hops),
-        }),
+      setMaxRoutingHops: (hops: number) => dispatch(lightningActions.setMaxRoutingHops(hops)),
 
-      setConnected: (connected: boolean) =>
-        dispatch({
-          type: 'LIGHTNING',
-          action: lightningActions.setConnected(connected),
-        }),
+      setConnected: (connected: boolean) => dispatch(lightningActions.setConnected(connected)),
 
       setConnectionAttempt: (timestamp: number) =>
-        dispatch({
-          type: 'LIGHTNING',
-          action: lightningActions.setConnectionAttempt(timestamp),
-        }),
+        dispatch(lightningActions.setConnectionAttempt(timestamp)),
 
-      addConnectionError: (error: string) =>
-        dispatch({
-          type: 'LIGHTNING',
-          action: lightningActions.addConnectionError(error),
-        }),
+      addConnectionError: (error: string) => dispatch(lightningActions.addConnectionError(error)),
 
-      clearConnectionErrors: () =>
-        dispatch({
-          type: 'LIGHTNING',
-          action: lightningActions.clearConnectionErrors(),
-        }),
+      clearConnectionErrors: () => dispatch(lightningActions.clearConnectionErrors()),
     },
     lightningSelectors,
   }

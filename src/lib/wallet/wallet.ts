@@ -92,9 +92,7 @@ function createWallet({
     }
   } catch (error) {
     console.error('Error creating wallet:', error)
-    throw new Error('Failed to create wallet', {
-      cause: JSON.stringify(error),
-    })
+    throw new Error('Failed to create wallet')
   }
 }
 
@@ -199,7 +197,7 @@ export function deriveLightningKeys(
     }
   } catch (error) {
     console.error('[deriveLightningKeys] Error deriving Lightning keys:', error)
-    throw new Error('Failed to derive Lightning keys', { cause: error })
+    throw new Error('Failed to derive Lightning keys')
   }
 }
 

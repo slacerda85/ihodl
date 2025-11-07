@@ -132,6 +132,7 @@ export interface SignTransactionResult {
 export interface SendTransactionParams {
   signedTransaction: any // bitcoinjs-lib Transaction
   txHex: string
+  getConnectionFn?: () => Promise<any>
 }
 
 export interface SendTransactionResult {

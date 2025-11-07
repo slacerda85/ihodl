@@ -2,12 +2,9 @@ import { useEffect, useState } from 'react'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as SplashScreen from 'expo-splash-screen'
-import AuthProvider from '@/features/auth/AuthProvider'
-import AuthScreen from '@/features/auth/AuthScreen'
+import { AppProviders } from '@/features/app/AppProviders'
 import InactivityOverlay from '@/features/auth/InactivityOverlay'
-import { StorageProvider, useSettings } from '@/features/storage'
-import { BlockchainProvider } from '@/features/blockchain'
-import { LightningProvider } from '@/features/lightning/LightningProvider'
+import AuthScreen from '@/features/auth/AuthScreen'
 import { useAppInitialization } from '@/features/app/useAppInitialization'
 
 SplashScreen.preventAutoHideAsync()
@@ -19,7 +16,6 @@ SplashScreen.setOptions({
 })
 
 function AppContent() {
-  const { isDark } = useSettings()
   const { isInitializing, error } = useAppInitialization()
 
   // Show loading state while initializing
@@ -38,13 +34,10 @@ function AppContent() {
   }
 
   return (
-    <>
-      <Stack>
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      </Stack>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-    </>
+    <Stack>
+      <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+    </Stack>
   )
 }
 
@@ -62,16 +55,11 @@ export default function RootLayout() {
   }
 
   return (
-    <StorageProvider>
-      <BlockchainProvider>
-        <LightningProvider>
-          <AuthProvider>
-            <AppContent />
-            <InactivityOverlay />
-            <AuthScreen />
-          </AuthProvider>
-        </LightningProvider>
-      </BlockchainProvider>
-    </StorageProvider>
+    <AppProviders>
+      <AppContent />
+      <InactivityOverlay />
+      <AuthScreen />
+      <StatusBar style="auto" />
+    </AppProviders>
   )
 }

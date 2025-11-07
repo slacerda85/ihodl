@@ -1,7 +1,7 @@
 import { bech32, bech32m } from 'bech32'
 import bs58check from 'bs58check'
 import { publicKeyVerify } from 'secp256k1'
-import { sha256 } from '@/lib/crypto'
+import { hash160, sha256 } from '@/lib/crypto'
 import {
   createRootExtendedKey,
   fromMnemonic,
@@ -76,11 +76,8 @@ function createSegwitAddress(publicKey: Uint8Array, version: number = 0): string
   if (!publicKeyVerify(publicKey)) {
     throw new Error('Invalid public key')
   }
-  // Satoshi's Hash160 (simplified for testing)
-  const hash = new Uint8Array(20)
-  for (let i = 0; i < 20; i++) {
-    hash[i] = publicKey[i % publicKey.length] || 0
-  }
+  // Satoshi's Hash160
+  const hash = hash160(publicKey)
   // Convert the hash to words (5-bit groups)
   const programWords = bech32.toWords(hash)
   // Prepend the version byte to the words array

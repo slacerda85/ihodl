@@ -5,7 +5,7 @@ import { Text, View, StyleSheet, Pressable, Animated } from 'react-native'
 import { Ionicons } from '@expo/vector-icons' // Assuming you have react-native-vector-icons installed
 import BitcoinLogo from '@/assets/bitcoin-logo'
 import colors from '@/ui/colors'
-import { useSettings } from '@/features/storage'
+import { useSettings } from '@/features/settings'
 
 export default function AuthScreen() {
   const { auth, authenticated } = useAuth()

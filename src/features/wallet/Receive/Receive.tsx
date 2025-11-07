@@ -20,7 +20,8 @@ import QRCode from '@/ui/QRCode'
 import Button from '@/ui/Button'
 import { IconButton } from '@/ui/Button'
 
-import { useWallet, useSettings } from '@/features/storage'
+import { useWallet } from '@/features/wallet'
+import { useSettings } from '@/features/settings'
 
 import { UsedAddress } from '@/lib/address'
 
@@ -29,7 +30,8 @@ import { UsedAddress } from '@/lib/address'
 export default function Receive() {
   const { isDark } = useSettings()
 
-  const { wallets, activeWalletId, getAddressCache } = useWallet()
+  const { state: walletState } = useWallet()
+  const { wallets, activeWalletId } = walletState
   const [selectedAddress, setSelectedAddress] = useState<string>('')
   const [showUsedAddresses, setShowUsedAddresses] = useState(false)
   const [activeTab, setActiveTab] = useState<'receiving' | 'change'>('receiving')
@@ -57,21 +59,21 @@ export default function Receive() {
     }
 
     // Check cache - should be pre-loaded by useWallet
-    const cached = getAddressCache(activeWallet.walletId)
-    if (cached) {
-      setUsedReceivingAddresses(cached.usedReceivingAddresses)
-      setUsedChangeAddresses(cached.usedChangeAddresses)
-      setNextUnusedAddress(cached.nextUnusedAddress)
-      setSelectedAddress(cached.nextUnusedAddress)
-      setIsLoadingAddresses(false)
-      setLoadingMessage('')
-    } else {
-      // Fallback: if no cache (shouldn't happen with pre-loading), show loading
-      setIsLoadingAddresses(true)
-      setLoadingMessage('Loading addresses...')
-      setSelectedAddress('')
-    }
-  }, [activeWallet, activeWalletId, getAddressCache])
+    // const cached = getAddressCache(activeWallet.walletId)
+    // if (cached) {
+    //   setUsedReceivingAddresses(cached.usedReceivingAddresses)
+    //   setUsedChangeAddresses(cached.usedChangeAddresses)
+    //   setNextUnusedAddress(cached.nextUnusedAddress)
+    //   setSelectedAddress(cached.nextUnusedAddress)
+    //   setIsLoadingAddresses(false)
+    //   setLoadingMessage('')
+    // } else {
+    // Fallback: if no cache (shouldn't happen with pre-loading), show loading
+    setIsLoadingAddresses(true)
+    setLoadingMessage('Loading addresses...')
+    setSelectedAddress('')
+    // }
+  }, [activeWallet, activeWalletId])
 
   // Set selected address to next unused address when it changes
   useEffect(() => {

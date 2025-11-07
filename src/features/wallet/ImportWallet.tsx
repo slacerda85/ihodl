@@ -4,14 +4,14 @@ import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { useRouter } from 'expo-router'
 import wordlist from 'bip39/src/wordlists/english.json'
-// import { randomUUID } from '@/lib/crypto'
-import { useWallet, useSettings } from '@/features/storage'
+import { useWallet } from './WalletProvider'
+import { useSettings } from '../settings/SettingsProvider'
 import Button from '@/ui/Button'
 import { GlassView } from 'expo-glass-effect'
 
 export default function ImportWallet() {
   const router = useRouter()
-  const { createWallet } = useWallet()
+  const { importWallet } = useWallet()
   const [walletName, setWalletName] = useState<string>('')
   const [seedPhrase, setSeedPhrase] = useState<string>('')
   const [currentWord, setCurrentWord] = useState<string>('')
@@ -64,25 +64,25 @@ export default function ImportWallet() {
     return words.length >= 12 && words.length <= 24
   }
 
-  function handleImportWallet() {
+  async function handleImportWallet() {
     if (!walletName.trim() || !isValidSeedPhrase()) {
       return
     }
     setSubmitting(true)
     try {
-      createWallet(
-        {
-          walletName,
-          seedPhrase,
-          cold: false,
-        },
-        usePassword && password ? password : undefined,
-      )
-    } catch (error) {
-      console.error('Error importing wallet:', error)
-    } finally {
+      // Use the wallet hook to import wallet - it handles all the lib calls and state updates
+      await importWallet({
+        walletName,
+        seedPhrase: seedPhrase.trim(),
+        usePassword,
+        password,
+      })
+
+      console.log('Wallet imported successfully')
       setSubmitting(false)
       router.dismiss(2)
+    } catch (error) {
+      console.error('Error importing wallet:', error)
     }
   }
 

@@ -1,5 +1,7 @@
 import { WalletData } from '@/lib/wallet/types'
-import { Reducer } from '../types'
+
+// Base types for reducer pattern
+type Reducer<S, A> = (state: S, action: A) => S
 
 // Wallet State
 export type WalletState = {

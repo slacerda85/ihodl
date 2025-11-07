@@ -4,7 +4,7 @@ import { StyleSheet, Text, View } from 'react-native'
 import colors from '@/ui/colors'
 import { router, useSegments } from 'expo-router'
 import { useAuth } from '../auth/AuthProvider'
-import { useSettings } from '@/features/storage'
+import { useSettings } from '@/features/settings'
 
 export default function HomeScreen() {
   const { authenticated } = useAuth()

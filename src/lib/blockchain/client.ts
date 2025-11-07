@@ -29,20 +29,28 @@ export class ElectrumBlockchainClient implements IBlockchainClient {
   private socket: TLSSocket | null = null
   private subscriptions: Map<string, (data: any) => void> = new Map()
   private isConnected = false
+  private getConnectionFn?: () => Promise<TLSSocket>
 
-  constructor(config: BlockchainClientConfig = {}) {
+  constructor(config: BlockchainClientConfig = {}, getConnectionFn?: () => Promise<TLSSocket>) {
     this.config = {
       network: config.network || 'mainnet',
       timeout: config.timeout || 30000,
       minConfirmations: config.minConfirmations || 1,
       persistentConnection: config.persistentConnection ?? true,
     }
+    this.getConnectionFn = getConnectionFn
   }
 
   /**
    * Initialize the client and establish connection if needed
    */
   private async ensureConnection(): Promise<TLSSocket> {
+    // If we have a connection function, use it
+    if (this.getConnectionFn) {
+      return await this.getConnectionFn()
+    }
+
+    // Otherwise, manage our own connection
     if (this.socket && this.isConnected) {
       return this.socket
     }
@@ -315,10 +323,69 @@ export class ElectrumBlockchainClient implements IBlockchainClient {
   }
 
   /**
+   * Broadcast a raw transaction to the network
+   */
+  async broadcastTransaction(rawTxHex: string): Promise<string> {
+    try {
+      const socket = await this.ensureConnection()
+      const response = await callElectrumMethod<string>(
+        'blockchain.transaction.broadcast',
+        [rawTxHex],
+        socket,
+      )
+      return response.result!
+    } catch (error) {
+      console.error('[lightning-blockchain] Error broadcasting transaction:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Wait for transaction confirmations
+   */
+  async waitForConfirmations(txid: string, minConfirmations: number): Promise<boolean> {
+    const startTime = Date.now()
+    const timeoutMs = 3600000 // 1 hour
+
+    return new Promise(resolve => {
+      const checkConfirmations = async () => {
+        try {
+          const confirmations = await this.getTransactionConfirmations(txid)
+
+          if (confirmations >= minConfirmations) {
+            console.log(
+              `[lightning-blockchain] Transaction ${txid} confirmed with ${confirmations} confirmations`,
+            )
+            resolve(true)
+            return
+          }
+
+          // Check timeout
+          if (Date.now() - startTime > timeoutMs) {
+            console.warn(`[lightning-blockchain] Timeout waiting for confirmations on ${txid}`)
+            resolve(false)
+            return
+          }
+
+          // Continue checking
+          setTimeout(checkConfirmations, 30000) // Check every 30 seconds
+        } catch (error) {
+          console.error(`[lightning-blockchain] Error checking confirmations for ${txid}:`, error)
+          // Continue checking despite errors
+          setTimeout(checkConfirmations, 30000)
+        }
+      }
+
+      checkConfirmations()
+    })
+  }
+
+  /**
    * Close connections and cleanup resources
    */
   async close(): Promise<void> {
-    if (this.socket) {
+    // Only close our own connection if we don't have a shared connection function
+    if (!this.getConnectionFn && this.socket) {
       try {
         close(this.socket)
         this.socket = null
@@ -340,8 +407,9 @@ export const blockchainClient = new ElectrumBlockchainClient()
 // Utility functions
 export async function initializeBlockchainClient(
   config?: BlockchainClientConfig,
+  getConnectionFn?: () => Promise<TLSSocket>,
 ): Promise<IBlockchainClient> {
-  const client = new ElectrumBlockchainClient(config)
+  const client = new ElectrumBlockchainClient(config, getConnectionFn)
   // Test connection
   await client.getBlockHeight()
   return client

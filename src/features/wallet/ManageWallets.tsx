@@ -6,14 +6,16 @@ import { alpha } from '@/ui/utils'
 import Divider from '@/ui/Divider'
 import CreateWalletIcon from './CreateWalletIcon'
 import ImportWalletIcon from './ImportWalletIcon'
-import { useWallet, useSettings } from '@/features/storage'
+import { useWallet } from './WalletProvider'
+import { useSettings } from '../settings/SettingsProvider'
+import { walletActions } from './types'
 // import { setActiveWalletId } from '@/lib/wallet'
 
 export default function ManageWallets() {
   const router = useRouter()
   const { isDark } = useSettings()
-  const { wallets, activeWalletId, setActiveWallet, loadingWalletState, setLoadingWallet } =
-    useWallet()
+  const { state, dispatch } = useWallet()
+  const { wallets, activeWalletId, loadingWalletState } = state
 
   function handleCreateWallet() {
     router.push('/wallet/create')
@@ -25,8 +27,8 @@ export default function ManageWallets() {
 
   function handleSelectWallet(walletId: string) {
     try {
-      setLoadingWallet(true)
-      setActiveWallet(walletId)
+      dispatch(walletActions.setLoadingWallet(true))
+      dispatch(walletActions.setActiveWallet(walletId))
       router.dismiss()
     } catch (error) {
       console.error('Error selecting wallet:', error)
@@ -34,7 +36,7 @@ export default function ManageWallets() {
     } finally {
       // Keep loading state active briefly to allow the UI to update
       setTimeout(() => {
-        setLoadingWallet(false)
+        dispatch(walletActions.setLoadingWallet(false))
       }, 500)
     }
   }

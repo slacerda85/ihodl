@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useRef, useCallback, useEffect } from 'react'
-import { useStorage } from '@/features/storage'
-import { lightningActions } from '@/features/storage/lightning/lightning'
+import { useLightningState } from './LightningStateProvider'
+import { useWallet } from '@/features/wallet'
+import { lightningActions } from './types'
 import { useBlockchain } from '@/features/blockchain'
 import { LNTransport, LNPeerAddr } from '@/lib/lightning/lntransport'
 import { GossipNetwork, GossipConfig } from '@/lib/lightning/gossip'
@@ -50,8 +51,8 @@ interface LightningProviderProps {
 }
 
 export function LightningProvider({ children }: LightningProviderProps) {
-  const { state, dispatch } = useStorage()
-  const lightningState = state.lightning
+  const { state: lightningState, dispatch: lightningDispatch } = useLightningState()
+  const { state: walletState } = useWallet()
   const { blockchainClient } = useBlockchain()
 
   // Shared refs across all hook instances
@@ -67,18 +68,18 @@ export function LightningProvider({ children }: LightningProviderProps) {
   // Helper function to dispatch Lightning actions
   const dispatchLightning = useCallback(
     (action: any) => {
-      dispatch({ type: 'LIGHTNING', action })
+      lightningDispatch(action)
     },
-    [dispatch],
+    [lightningDispatch],
   )
 
   // Get Lightning account from wallet
   const getLightningAccount = useCallback(() => {
-    const activeWallet = state.wallet.wallets.find(w => w.walletId === state.wallet.activeWalletId)
+    const activeWallet = walletState.wallets.find(w => w.walletId === walletState.activeWalletId)
     if (!activeWallet?.accounts) return null
 
     return activeWallet.accounts.find(acc => acc.purpose === 9735) || null
-  }, [state.wallet])
+  }, [walletState])
 
   // Initialize Gossip Network
   const initializeGossipNetwork = useCallback(async () => {

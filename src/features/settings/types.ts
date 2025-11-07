@@ -1,5 +1,7 @@
 import { ColorMode } from '@/models/settings'
-import { Reducer } from '../types'
+
+// Base types for reducer pattern
+type Reducer<S, A> = (state: S, action: A) => S
 
 // Settings State
 export type SettingsState = {

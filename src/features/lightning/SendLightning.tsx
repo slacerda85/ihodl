@@ -12,7 +12,7 @@ import * as Clipboard from 'expo-clipboard'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
-import { useSettings } from '@/features/storage'
+import { useSettings } from '@/features/settings'
 import Button from '@/ui/Button'
 
 export default function SendLightning() {

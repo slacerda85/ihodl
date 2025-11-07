@@ -3,7 +3,7 @@
 import { GossipNetwork, GossipConfig } from '@/lib/lightning/gossip'
 import { TrampolineRouter, TrampolineConfig } from '@/lib/lightning/trampoline'
 import { LNPeerAddr } from '@/lib/lightning/lntransport'
-import { AppState } from '@/features/storage/storage'
+import { LightningState } from '@/features/lightning/types'
 
 export interface LightningNetworkConfig {
   enableGossip: boolean
@@ -34,7 +34,7 @@ export class LightningNetworkManager {
   /**
    * Initialize the Lightning Network services (gossip, trampoline)
    */
-  async initialize(config: LightningNetworkConfig, state: AppState): Promise<void> {
+  async initialize(config: LightningNetworkConfig, lightningState: LightningState): Promise<void> {
     if (this.isInitialized) return
 
     try {
@@ -44,7 +44,7 @@ export class LightningNetworkManager {
       // STEP 1: Initialize Gossip Network (if enabled)
       if (config.enableGossip) {
         console.log('[LightningNetworkManager] Initializing Gossip Network...')
-        const gossipConfig = this.createGossipConfig(state)
+        const gossipConfig = this.createGossipConfig(lightningState)
         this.gossipNetwork = new GossipNetwork(gossipConfig)
       }
 
@@ -177,7 +177,7 @@ export class LightningNetworkManager {
   /**
    * Create gossip network configuration
    */
-  private createGossipConfig(state: AppState): GossipConfig {
+  private createGossipConfig(lightningState: LightningState): GossipConfig {
     // Use electrum trusted peers as initial gossip peers
     const knownPeers: LNPeerAddr[] = []
 
@@ -208,17 +208,19 @@ export class LightningNetworkManager {
 }
 
 // Factory function to create Lightning Network configuration from app state
-export function createLightningNetworkConfig(state: AppState): LightningNetworkConfig | null {
+export function createLightningNetworkConfig(
+  lightningState: LightningState,
+): LightningNetworkConfig | null {
   try {
     // Check if lightning features are enabled
-    if (!state.lightning.isRoutingEnabled && !state.lightning.trampolineEnabled) {
+    if (!lightningState.isRoutingEnabled && !lightningState.trampolineEnabled) {
       console.log('[createLightningNetworkConfig] Lightning network features not enabled')
       return null
     }
 
     return {
-      enableGossip: state.lightning.isRoutingEnabled,
-      enableTrampoline: state.lightning.trampolineEnabled,
+      enableGossip: lightningState.isRoutingEnabled,
+      enableTrampoline: lightningState.trampolineEnabled,
       maxPeers: 10, // TODO: Make configurable
       trustedNodes: [], // TODO: Load from configuration
     }

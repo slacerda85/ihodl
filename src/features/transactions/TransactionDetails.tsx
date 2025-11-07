@@ -5,7 +5,8 @@ import * as Clipboard from 'expo-clipboard'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
-import { useTransactions, useSettings } from '@/features/storage'
+import { useTransactions } from '@/features/transactions'
+import { useSettings } from '@/features/settings'
 import QRCode from '@/ui/QRCode'
 import ContentContainer from '@/ui/ContentContainer'
 import Button from '@/ui/Button'
@@ -14,7 +15,8 @@ export default function TransactionDetails() {
   const { txid } = useLocalSearchParams<{ txid: string }>()
   const { isDark } = useSettings()
 
-  const { cachedTransactions } = useTransactions()
+  const { state: transactionsState } = useTransactions()
+  const { cachedTransactions } = transactionsState
 
   // Find the transaction in caches
   const transaction = cachedTransactions

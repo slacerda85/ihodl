@@ -11,7 +11,7 @@ import {
   ScrollView,
 } from 'react-native'
 import colors from '@/ui/colors'
-import { useLightning } from '@/features/storage/lightning/lightning'
+import { useLightning } from '@/features/lightning/types'
 import { useColorScheme } from 'react-native'
 import { alpha } from '@/ui/utils'
 

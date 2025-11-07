@@ -1,15 +1,12 @@
 import { Tx } from '@/lib/transactions/types'
 import { UsedAddress } from '@/lib/address'
-import { Reducer } from '../types'
+
+// Base types for reducer pattern
+type Reducer<S, A> = (state: S, action: A) => S
 
 // Transactions State
 export type TransactionsState = {
-  cachedTransactions: {
-    walletId: string
-    transactions: Tx[]
-    addresses: string[]
-    lastUpdated: number
-  }[]
+  cachedTransactions: CachedTransactions[]
   pendingTransactions: {
     txid: string
     walletId: string
@@ -30,6 +27,13 @@ export type TransactionsState = {
       lastUpdated: number
     }
   }
+}
+
+export type CachedTransactions = {
+  walletId: string
+  transactions: Tx[]
+  addresses: string[]
+  lastUpdated: number
 }
 
 // Transactions Actions

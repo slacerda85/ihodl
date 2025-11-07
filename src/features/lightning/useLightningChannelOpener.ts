@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { useLightning } from '../storage/lightning/lightning'
+import { useLightning } from './types'
 import { Channel } from '@/lib/lightning/types'
 import { estimateRoutingFee } from '@/lib/lightning'
 

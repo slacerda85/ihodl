@@ -4,7 +4,8 @@ import colors from '@/ui/colors'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { useCallback, useEffect } from 'react'
-import { useWallet, useSettings } from '@/features/storage'
+import { useWallet } from '@/features/wallet'
+import { useSettings } from '@/features/settings'
 import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
 import { ExtendedStackNavigationOptions } from 'expo-router/build/layouts/StackClient'
 import { alpha } from '@/ui/utils'
@@ -106,7 +107,8 @@ const CloseModalButton = ({ title }: { title?: string }) => {
 }
 
 export default function WalletLayout() {
-  const { activeWalletId, wallets } = useWallet()
+  const { state: walletState } = useWallet()
+  const { activeWalletId, wallets } = walletState
   const selectedWallet = wallets?.find(wallet => wallet.walletId === activeWalletId)
   const empty = wallets === undefined || wallets?.length === 0
 
@@ -126,6 +128,7 @@ export default function WalletLayout() {
   return (
     <Stack
       screenOptions={{
+        // headerShown: false,
         headerShadowVisible: false,
         headerTransparent: true,
         headerTintColor: isDark ? colors.text.dark : colors.text.light,

@@ -3,7 +3,8 @@ import { Link, useRouter } from 'expo-router'
 import { StyleSheet, Text, View } from 'react-native'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
-import { useWallet, useSettings } from '@/features/storage'
+import { useWallet } from '@/features/wallet'
+import { useSettings } from '@/features/settings'
 
 // Components
 import WalletBalance from './WalletBalance'
@@ -36,7 +37,8 @@ export default function WalletScreen() {
     router.push('/wallet/import')
   }
 
-  const { activeWalletId, wallets } = useWallet()
+  const { state: walletState } = useWallet()
+  const { activeWalletId, wallets } = walletState
 
   if (wallets === undefined || wallets?.length === 0) {
     // create link to wallet/manage

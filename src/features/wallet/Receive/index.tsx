@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native'
 
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
-import { useSettings } from '@/features/storage'
+import { useSettings } from '../../settings/SettingsProvider'
 
 import Receive from './Receive'
 import ReceiveLightning from '../../lightning/ReceiveLightning'

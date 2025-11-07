@@ -1,8 +1,10 @@
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import colors from '@/ui/colors'
 import SwapIcon from './SwapIcon'
-import { useWallet, useTransactions, useSettings } from '@/features/storage'
+import { useWallet } from '@/features/wallet'
+import { useTransactions } from '@/features/transactions'
+import { useSettings } from '@/features/settings'
 import { formatBalance } from './utils'
 import { alpha } from '@/ui/utils'
 import { GlassView } from 'expo-glass-effect'
@@ -11,10 +13,33 @@ export default function WalletBalance() {
   const { isDark } = useSettings()
 
   const [balance, setBalance] = useState(0)
-  const { cachedTransactions, getBalance } = useTransactions()
-  const { loadingWalletState: loadingWallet, unit, setUnit, activeWalletId } = useWallet()
-  const { loadingTxState: loadingTx } = useTransactions()
+  const { state: transactionsState } = useTransactions()
+  const { cachedTransactions } = transactionsState
+  const { state: walletState, dispatch: walletDispatch } = useWallet()
+  const { loadingWalletState: loadingWallet, unit, activeWalletId } = walletState
+  const { loadingTxState: loadingTx } = transactionsState
   const loading = loadingWallet || loadingTx || false
+
+  // Calculate balance from cached transactions
+  const getBalance = useCallback(
+    (walletId: string) => {
+      const walletCache = cachedTransactions.find(cache => cache.walletId === walletId)
+      if (!walletCache) return 0
+
+      // Simplified balance calculation - sum all received amounts
+      // In a real implementation, you'd need to track which outputs belong to the wallet
+      return walletCache.transactions.reduce((total, tx) => {
+        const received = tx.vout?.reduce((sum, vout) => sum + (vout.value || 0), 0) || 0
+        return total + received
+      }, 0)
+    },
+    [cachedTransactions],
+  )
+
+  // Set unit function
+  const setUnit = (newUnit: 'BTC' | 'Sats') => {
+    walletDispatch({ type: 'SET_UNIT', payload: newUnit })
+  }
 
   // Update balance when dependencies change
   useEffect(() => {

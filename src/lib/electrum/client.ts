@@ -807,10 +807,13 @@ async function getRecommendedFeeRates(socket?: TLSSocket): Promise<{
   }
 }
 
-async function getMempoolTransactions(addresses: string[]): Promise<Tx[]> {
-  const socket = await connect()
+async function getMempoolTransactions(addresses: string[], socket?: TLSSocket): Promise<Tx[]> {
+  const managedSocket = !socket
+  let usedSocket: TLSSocket | null = null
 
   try {
+    usedSocket = socket || (await connect())
+
     const mempoolTxs: Tx[] = []
 
     // Filter and validate addresses
@@ -886,7 +889,15 @@ async function getMempoolTransactions(addresses: string[]): Promise<Tx[]> {
     console.log(`[electrum] Total mempool transactions found: ${mempoolTxs.length}`)
     return mempoolTxs
   } finally {
-    close(socket)
+    // Close socket if we created it
+    if (managedSocket && usedSocket) {
+      try {
+        console.log('[electrum] Closing managed socket connection')
+        close(usedSocket)
+      } catch (closeError) {
+        console.error('[electrum] Error closing socket:', closeError)
+      }
+    }
   }
 }
 
