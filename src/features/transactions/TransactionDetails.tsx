@@ -24,11 +24,18 @@ export default function TransactionDetails() {
     .find(item => item.tx.txid === txid)
 
   if (!transaction) {
+    const availableTxids = cachedTransactions
+      .flatMap(cache => cache.transactions.map(tx => tx.txid))
+      .join(', ')
     return (
       <ContentContainer>
         <View style={styles.container}>
           <Text style={[styles.errorText, isDark && styles.errorTextDark]}>
             Transaction not found
+          </Text>
+          <Text style={[styles.errorText, isDark && styles.errorTextDark]}>TXID: {txid}</Text>
+          <Text style={[styles.errorText, isDark && styles.errorTextDark]}>
+            Available transactions: {availableTxids}
           </Text>
         </View>
       </ContentContainer>
@@ -37,19 +44,22 @@ export default function TransactionDetails() {
 
   const { tx } = transaction
 
-  // Calculate basic info
-  const totalOutput = tx.vout?.reduce((sum, vout) => sum + (vout.value || 0), 0) || 0
+  // Calculate basic info using UIFriendlyTransaction fields
+  const amount = tx.amount
 
-  // Format date
-  const date = tx.blocktime ? new Date(tx.blocktime * 1000).toLocaleString() : 'Pending'
+  // Format date from UIFriendlyTransaction
+  const date = new Date(tx.date).toLocaleString()
 
-  // Status
+  // Status and confirmations from UIFriendlyTransaction
   const confirmations = tx.confirmations || 0
-  const status = confirmations > 0 ? 'Confirmed' : 'Pending'
-
-  // For addresses, we'll show input/output counts since detailed addresses may not be available
-  const inputCount = tx.vin?.length || 0
-  const outputCount = tx.vout?.length || 0
+  const status =
+    tx.status === 'confirmed'
+      ? 'Confirmed'
+      : tx.status === 'pending'
+        ? 'Pending'
+        : tx.status === 'processing'
+          ? 'Processing'
+          : 'Unknown'
 
   const handleCopyTxid = async () => {
     try {
@@ -149,10 +159,59 @@ export default function TransactionDetails() {
             {/* Amount */}
             <View style={styles.item}>
               <Text style={[styles.label, isDark && styles.labelDark]}>Amount</Text>
-              <Text style={[styles.amount, isDark && styles.amountDark]}>
-                {totalOutput.toFixed(8)} BTC
+              <Text
+                style={[
+                  styles.amount,
+                  isDark && styles.amountDark,
+                  tx.type === 'received' ? styles.amountPositive : styles.amountNegative,
+                ]}
+              >
+                {tx.type === 'received' ? '+' : '-'}
+                {amount.toFixed(8)} BTC
               </Text>
             </View>
+
+            {/* Type */}
+            <View style={styles.item}>
+              <Text style={[styles.label, isDark && styles.labelDark]}>Type</Text>
+              <Text style={[styles.value, isDark && styles.valueDark]}>
+                {tx.type === 'received'
+                  ? 'Received'
+                  : tx.type === 'sent'
+                    ? 'Sent'
+                    : 'Self Transfer'}
+              </Text>
+            </View>
+
+            {/* From Address */}
+            {tx.fromAddress && tx.fromAddress.trim() !== '' && (
+              <View style={styles.item}>
+                <Text style={[styles.label, isDark && styles.labelDark]}>
+                  {tx.type === 'received' ? 'From' : 'Sender'}
+                </Text>
+                <Text style={[styles.address, isDark && styles.addressDark]}>{tx.fromAddress}</Text>
+              </View>
+            )}
+
+            {/* To Address */}
+            {tx.toAddress && tx.toAddress.trim() !== '' && (
+              <View style={styles.item}>
+                <Text style={[styles.label, isDark && styles.labelDark]}>
+                  {tx.type === 'sent' ? 'To' : 'Recipient'}
+                </Text>
+                <Text style={[styles.address, isDark && styles.addressDark]}>{tx.toAddress}</Text>
+              </View>
+            )}
+
+            {/* Fee */}
+            {tx.fee && tx.fee > 0 && (
+              <View style={styles.item}>
+                <Text style={[styles.label, isDark && styles.labelDark]}>Fee</Text>
+                <Text style={[styles.value, isDark && styles.valueDark]}>
+                  {(tx.fee / 1e8).toFixed(8)} BTC
+                </Text>
+              </View>
+            )}
 
             {/* Date */}
             <View style={styles.item}>
@@ -164,25 +223,6 @@ export default function TransactionDetails() {
             <View style={styles.item}>
               <Text style={[styles.label, isDark && styles.labelDark]}>Confirmations</Text>
               <Text style={[styles.value, isDark && styles.valueDark]}>{confirmations}</Text>
-            </View>
-            {tx.size && (
-              <>
-                {/* Size */}
-                <View style={styles.item}>
-                  <Text style={[styles.label, isDark && styles.labelDark]}>Size</Text>
-                  <Text style={[styles.value, isDark && styles.valueDark]}>{tx.size} bytes</Text>
-                </View>
-              </>
-            )}
-
-            {/* Inputs/Outputs */}
-            <View style={styles.item}>
-              <Text style={[styles.label, isDark && styles.labelDark]}>Inputs</Text>
-              <Text style={[styles.value, isDark && styles.valueDark]}>{inputCount}</Text>
-            </View>
-            <View style={styles.item}>
-              <Text style={[styles.label, isDark && styles.labelDark]}>Outputs</Text>
-              <Text style={[styles.value, isDark && styles.valueDark]}>{outputCount}</Text>
             </View>
           </View>
         </View>
@@ -274,10 +314,10 @@ const styles = StyleSheet.create({
     color: colors.text.dark,
   },
   amountPositive: {
-    color: colors.success,
+    color: colors.primary,
   },
   amountNegative: {
-    color: colors.error,
+    color: colors.textSecondary.light,
   },
   value: {
     fontSize: 16,

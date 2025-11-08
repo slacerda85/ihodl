@@ -6,6 +6,8 @@ import { Ionicons } from '@expo/vector-icons' // Assuming you have react-native-
 import BitcoinLogo from '@/assets/bitcoin-logo'
 import colors from '@/ui/colors'
 import { useSettings } from '@/features/settings'
+import IHodlLogo from '@/assets/ihodl-logo'
+import IHodlLogoBorderLess from '@/assets/ihodl-logo-borderless'
 
 export default function AuthScreen() {
   const { auth, authenticated } = useAuth()
@@ -40,8 +42,18 @@ export default function AuthScreen() {
   return (
     <Modal visible={!authenticated} animationType="fade" transparent={true}>
       <View style={[styles.container, isDark && styles.containerDark]}>
-        <BitcoinLogo width={128} height={128} />
-        <Text style={[styles.title, isDark && styles.titleDark]}>ihodl</Text>
+        <View
+          style={{
+            // backgroundColor: 'red',
+            flexDirection: 'row',
+            padding: 8,
+            // alignItems: 'center',
+          }}
+        >
+          <Text style={[styles.title, isDark && styles.titleDark]}>i</Text>
+          <IHodlLogoBorderLess width={64} height={64} />
+          <Text style={[styles.title, isDark && styles.titleDark]}>odl</Text>
+        </View>
         <Pressable onPress={handleAuth} style={styles.buttonContainer}>
           <Animated.View style={{ transform: [{ rotate: rotation }] }}>
             <View style={styles.iconButton}>
@@ -72,9 +84,8 @@ const styles = StyleSheet.create({
   },
   title: {
     fontWeight: 'bold',
-    fontSize: 48,
+    fontSize: 64,
     color: colors.textSecondary.light,
-    marginTop: 16,
   },
   titleDark: {
     color: colors.textSecondary.dark,

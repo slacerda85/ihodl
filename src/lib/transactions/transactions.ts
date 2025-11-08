@@ -6,7 +6,7 @@ import {
   splitRootExtendedKey,
 } from '@/lib/key'
 import { connect, getTransactions, callElectrumMethod, close } from '../electrum'
-import { createSegwitAddress, fromBech32, generateAddresses } from '../address'
+import { createSegwitAddress, fromBech32, generateAddresses, UsedAddress } from '../address'
 import secp256k1 from 'secp256k1'
 import { hash256, hash160, uint8ArrayToHex, hexToUint8Array } from '@/lib/crypto'
 import { UTXO } from './types'
@@ -1548,7 +1548,7 @@ export function processTxHistory(txHistory: TxHistory[]) {
  * @returns Object with usedReceivingAddresses, usedChangeAddresses
  */
 export function calculateAddressCache(txHistory: TxHistory[]) {
-  const usedReceivingAddresses: any[] = txHistory
+  const usedReceivingAddresses: UsedAddress[] = txHistory
     .filter(h => h.receivingAddress && h.txs.length > 0)
     .map(h => ({
       address: h.receivingAddress,
@@ -1557,7 +1557,7 @@ export function calculateAddressCache(txHistory: TxHistory[]) {
       transactions: h.txs,
     }))
 
-  const usedChangeAddresses: any[] = txHistory
+  const usedChangeAddresses: UsedAddress[] = txHistory
     .filter(h => h.changeAddress && h.txs.length > 0)
     .map(h => ({
       address: h.changeAddress,

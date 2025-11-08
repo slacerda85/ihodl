@@ -5,6 +5,7 @@ import colors from '@/ui/colors'
 import { router, useSegments } from 'expo-router'
 import { useAuth } from '../auth/AuthProvider'
 import { useSettings } from '@/features/settings'
+import IHodlLogo from '@/assets/ihodl-logo'
 
 export default function HomeScreen() {
   const { authenticated } = useAuth()
@@ -20,7 +21,7 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <BitcoinLogo width={128} height={128} />
+      <IHodlLogo width={128} height={128} />
       <Text style={[styles.title, isDark && styles.titleDark]}>ihodl</Text>
     </View>
   )

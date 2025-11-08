@@ -1,14 +1,14 @@
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { Link } from 'expo-router'
-import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { useSettings } from '../settings/SettingsProvider'
 
 export default function WalletActions() {
   const { isDark } = useSettings()
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
       {/* Seed phrase */}
       <View>
         <Link
@@ -37,7 +37,7 @@ export default function WalletActions() {
           <Text style={[styles.text, styles.errorText]}>Delete wallet</Text>
         </Link>
       </View>
-    </ScrollView>
+    </View>
   )
 }
 
@@ -59,12 +59,12 @@ const styles = StyleSheet.create({
     backgroundColor: alpha(colors.background.light, 0.05),
   },
   buttonFirst: {
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
   },
   buttonLast: {
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
   },
   wrapper: {
     padding: 16,

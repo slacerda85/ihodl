@@ -342,7 +342,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   balanceNegative: {
-    color: colors.disabled,
+    color: colors.textSecondary.light,
     fontWeight: '500',
   },
 })
