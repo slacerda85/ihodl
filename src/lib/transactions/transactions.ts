@@ -43,6 +43,148 @@ interface GetTxHistoryResponse {
 }
 
 /**
+ * Derives the receiving and change extended keys from the root extended key
+ * @param extendedKey - The root extended private key
+ * @param purpose - The purpose index (default 84 for Native SegWit)
+ * @param coinType - The coin type index (default 0 for Bitcoin)
+ * @param accountStartIndex - The account index (default 0)
+ * @returns Object containing receiving and change extended keys
+ */
+function deriveExtendedKeys(
+  extendedKey: Uint8Array,
+  purpose: number = 84,
+  coinType: number = 0,
+  accountStartIndex: number = 0,
+): { receivingExtendedKey: Uint8Array; changeExtendedKey: Uint8Array } {
+  // purpose
+  const purposeIndex = createHardenedIndex(purpose)
+  const purposeExtendedKey = deriveChildPrivateKey(extendedKey, purposeIndex)
+
+  // coin type
+  const coinTypeIndex = createHardenedIndex(coinType)
+  const coinTypeExtendedKey = deriveChildPrivateKey(purposeExtendedKey, coinTypeIndex)
+
+  // accountIndex
+  const accountIndex = createHardenedIndex(accountStartIndex)
+  const accountExtendedKey = deriveChildPrivateKey(coinTypeExtendedKey, accountIndex)
+
+  // receiving (change 0)
+  const receivingIndex = 0
+  const receivingExtendedKey = deriveChildPrivateKey(accountExtendedKey, receivingIndex)
+
+  // change (change 1)
+  const changeIndex = 1
+  const changeExtendedKey = deriveChildPrivateKey(accountExtendedKey, changeIndex)
+
+  return { receivingExtendedKey, changeExtendedKey }
+}
+
+/**
+ * Generates receiving addresses with their corresponding change addresses
+ * @param receivingExtendedKey - The extended key for receiving addresses
+ * @param changeExtendedKey - The extended key for change addresses
+ * @param gapLimit - The gap limit for address generation
+ * @returns Array of address objects with receiving and change addresses
+ */
+function generateReceivingAddresses(
+  receivingExtendedKey: Uint8Array,
+  changeExtendedKey: Uint8Array,
+  gapLimit: number,
+): { address: string; changeAddress: string; index: number }[] {
+  return generateAddresses(receivingExtendedKey, changeExtendedKey, 0, gapLimit * 2).map(
+    ({ address, changeAddress, index }) => ({
+      address,
+      changeAddress: changeAddress!,
+      index,
+    }),
+  )
+}
+
+/**
+ * Generates change addresses
+ * @param changeExtendedKey - The extended key for change addresses
+ * @param gapLimit - The gap limit for address generation
+ * @returns Array of address objects with only change addresses
+ */
+function generateChangeAddresses(
+  changeExtendedKey: Uint8Array,
+  gapLimit: number,
+): { address: string; index: number }[] {
+  return generateAddresses(changeExtendedKey, undefined, 0, gapLimit * 2).map(
+    ({ address, index }) => ({ address, index }),
+  )
+}
+
+/**
+ * Fetches transactions for a list of addresses in parallel
+ * @param addresses - Array of addresses to fetch transactions for
+ * @param socket - The Electrum socket connection
+ * @returns Promise.allSettled results of transaction fetches
+ */
+async function fetchTransactionsForAddresses(
+  addresses: string[],
+  socket: any,
+): Promise<PromiseSettledResult<Tx[]>[]> {
+  console.log(`[transactions] Checking ${addresses.length} addresses in parallel...`)
+  return await Promise.allSettled(addresses.map(address => getTransactions(address, socket)))
+}
+
+/**
+ * Processes the results of transaction fetches and builds TxHistory
+ * @param results - The settled results from Promise.allSettled
+ * @param addresses - The address data array
+ * @param type - The type of addresses ('receiving' or 'change')
+ * @param gapLimit - The gap limit for unused addresses
+ * @returns Array of TxHistory objects
+ */
+function processTransactionResults(
+  results: PromiseSettledResult<Tx[]>[],
+  addresses: { address: string; changeAddress?: string; index: number }[],
+  type: 'receiving' | 'change',
+  gapLimit: number,
+): TxHistory[] {
+  const txHistory: TxHistory[] = []
+  let consecutiveUnused = 0
+
+  for (let i = 0; i < results.length && consecutiveUnused < gapLimit; i++) {
+    const result = results[i]
+    const addressData = addresses[i]
+
+    if (result.status === 'fulfilled') {
+      const transactions = result.value
+      if (transactions.length > 0) {
+        if (type === 'receiving') {
+          txHistory.push({
+            receivingAddress: addressData.address,
+            changeAddress: addressData.changeAddress!,
+            index: addressData.index,
+            txs: transactions,
+          })
+        } else {
+          txHistory.push({
+            receivingAddress: '',
+            changeAddress: addressData.address,
+            index: addressData.index,
+            txs: transactions,
+          })
+        }
+        consecutiveUnused = 0
+      } else {
+        consecutiveUnused++
+      }
+    } else {
+      console.warn(
+        `[transactions] Failed to check ${type} address ${addressData.address}:`,
+        result.reason,
+      )
+      consecutiveUnused++
+    }
+  }
+
+  return txHistory
+}
+
+/**
  * Discovers addresses and txs based on account parameters.
  * @param extendedKey - The extended private key (bip32) to derive from.
  * @param purpose - The purpose of the account (default is 84 for Native SegWit).
@@ -66,25 +208,13 @@ export async function getTxHistory({
   try {
     const txHistory: TxHistory[] = []
 
-    // purpose
-    const purposeIndex = createHardenedIndex(purpose)
-    const purposeExtendedKey = deriveChildPrivateKey(extendedKey, purposeIndex)
-
-    // coin type
-    const coinTypeIndex = createHardenedIndex(coinType)
-    const coinTypeExtendedKey = deriveChildPrivateKey(purposeExtendedKey, coinTypeIndex)
-
-    // accountIndex
-    const accountIndex = createHardenedIndex(accountStartIndex)
-    const accountExtendedKey = deriveChildPrivateKey(coinTypeExtendedKey, accountIndex)
-
-    // receiving (change 0)
-    const receivingIndex = 0
-    const receivingExtendedKey = deriveChildPrivateKey(accountExtendedKey, receivingIndex)
-
-    // change (change 1)
-    const changeIndex = 1
-    const changeExtendedKey = deriveChildPrivateKey(accountExtendedKey, changeIndex)
+    // Derive extended keys
+    const { receivingExtendedKey, changeExtendedKey } = deriveExtendedKeys(
+      extendedKey,
+      purpose,
+      coinType,
+      accountStartIndex,
+    )
 
     // connect to electrum server
     if (getConnectionFn) {
@@ -95,98 +225,55 @@ export async function getTxHistory({
     }
     console.log('[transactions] Established persistent Electrum connection for transaction history')
 
-    // Generate all receiving addresses first
+    // Generate receiving addresses
     console.log('[transactions] Generating receiving addresses...')
-    const receivingAddresses = generateAddresses(
+    const receivingAddresses = generateReceivingAddresses(
       receivingExtendedKey,
       changeExtendedKey,
-      0,
-      gapLimit * 2,
+      gapLimit,
     )
 
-    // Check all receiving addresses in parallel
-    console.log(
-      `[transactions] Checking ${receivingAddresses.length} receiving addresses in parallel...`,
-    )
-    const receivingResults = await Promise.allSettled(
-      receivingAddresses.map(({ address }) => getTransactions(address, socket)),
+    // Fetch transactions for receiving addresses
+    const receivingResults = await fetchTransactionsForAddresses(
+      receivingAddresses.map(({ address }) => address),
+      socket,
     )
 
     // Process receiving results
-    const receivingTxHistory: TxHistory[] = []
-    let consecutiveUnusedReceiving = 0
-    for (let i = 0; i < receivingResults.length && consecutiveUnusedReceiving < gapLimit; i++) {
-      const result = receivingResults[i]
-      const addressData = receivingAddresses[i]
-
-      if (result.status === 'fulfilled') {
-        const transactions = result.value
-        if (transactions.length > 0) {
-          receivingTxHistory.push({
-            receivingAddress: addressData.address,
-            changeAddress: addressData.changeAddress!,
-            index: addressData.index,
-            txs: transactions,
-          })
-          consecutiveUnusedReceiving = 0
-        } else {
-          consecutiveUnusedReceiving++
-        }
-      } else {
-        console.warn(
-          `[transactions] Failed to check receiving address ${addressData.address}:`,
-          result.reason,
-        )
-        consecutiveUnusedReceiving++
-      }
-    }
+    const receivingTxHistory = processTransactionResults(
+      receivingResults,
+      receivingAddresses,
+      'receiving',
+      gapLimit,
+    )
 
     // Generate change addresses
     console.log('[transactions] Generating change addresses...')
-    const changeAddresses = generateAddresses(changeExtendedKey, undefined, 0, gapLimit * 2).map(
-      ({ address, index }) => ({ address, index }),
-    )
+    const changeAddresses = generateChangeAddresses(changeExtendedKey, gapLimit)
 
-    // Check all change addresses in parallel
-    console.log(`[transactions] Checking ${changeAddresses.length} change addresses in parallel...`)
-    const changeResults = await Promise.allSettled(
-      changeAddresses.map(({ address }) => getTransactions(address, socket)),
+    // Fetch transactions for change addresses
+    const changeResults = await fetchTransactionsForAddresses(
+      changeAddresses.map(({ address }) => address),
+      socket,
     )
 
     // Process change results
-    const changeTxHistory: TxHistory[] = []
-    let consecutiveUnusedChange = 0
-    for (let i = 0; i < changeResults.length && consecutiveUnusedChange < gapLimit; i++) {
-      const result = changeResults[i]
-      const addressData = changeAddresses[i]
-
-      if (result.status === 'fulfilled') {
-        const transactions = result.value
-        if (transactions.length > 0) {
-          changeTxHistory.push({
-            receivingAddress: '',
-            changeAddress: addressData.address,
-            index: addressData.index,
-            txs: transactions,
-          })
-          consecutiveUnusedChange = 0
-        } else {
-          consecutiveUnusedChange++
-        }
-      } else {
-        console.warn(
-          `[transactions] Failed to check change address ${addressData.address}:`,
-          result.reason,
-        )
-        consecutiveUnusedChange++
-      }
-    }
+    const changeTxHistory = processTransactionResults(
+      changeResults,
+      changeAddresses.map(({ address, index }) => ({ address, index })),
+      'change',
+      gapLimit,
+    )
 
     txHistory.push(...receivingTxHistory, ...changeTxHistory)
 
     return { txHistory }
   } catch (error) {
     throw new Error(`Failed to discover accounts: ${(error as Error).message}`)
+  } finally {
+    if (shouldCloseSocket && socket) {
+      socket.end()
+    }
   }
 }
 
