@@ -9,7 +9,6 @@ import { useSettings } from '@/features/settings'
 import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
 import { ExtendedStackNavigationOptions } from 'expo-router/build/layouts/StackClient'
 import { alpha } from '@/ui/utils'
-import { background, glassEffect } from '@expo/ui/swift-ui/modifiers'
 
 function HeaderRight({ colorMode }: { colorMode: 'light' | 'dark' }) {
   return (

@@ -5,7 +5,7 @@ import {
   deriveChildPrivateKey,
   splitRootExtendedKey,
 } from '@/lib/key'
-import { connect, getTransactions, callElectrumMethod, close } from '../electrum'
+import { connect, getTransactions, callElectrumMethod } from '../electrum'
 import { createSegwitAddress, fromBech32, generateAddresses, UsedAddress } from '../address'
 import secp256k1 from 'secp256k1'
 import { hash256, hash160, uint8ArrayToHex, hexToUint8Array } from '@/lib/crypto'
@@ -84,14 +84,16 @@ function deriveExtendedKeys(
  * @param receivingExtendedKey - The extended key for receiving addresses
  * @param changeExtendedKey - The extended key for change addresses
  * @param gapLimit - The gap limit for address generation
+ * @param startIndex - The starting index for address generation
  * @returns Array of address objects with receiving and change addresses
  */
 function generateReceivingAddresses(
   receivingExtendedKey: Uint8Array,
   changeExtendedKey: Uint8Array,
   gapLimit: number,
+  startIndex: number = 0,
 ): { address: string; changeAddress: string; index: number }[] {
-  return generateAddresses(receivingExtendedKey, changeExtendedKey, 0, gapLimit * 2).map(
+  return generateAddresses(receivingExtendedKey, changeExtendedKey, startIndex, gapLimit * 2).map(
     ({ address, changeAddress, index }) => ({
       address,
       changeAddress: changeAddress!,
@@ -104,13 +106,15 @@ function generateReceivingAddresses(
  * Generates change addresses
  * @param changeExtendedKey - The extended key for change addresses
  * @param gapLimit - The gap limit for address generation
+ * @param startIndex - The starting index for address generation
  * @returns Array of address objects with only change addresses
  */
 function generateChangeAddresses(
   changeExtendedKey: Uint8Array,
   gapLimit: number,
+  startIndex: number = 0,
 ): { address: string; index: number }[] {
-  return generateAddresses(changeExtendedKey, undefined, 0, gapLimit * 2).map(
+  return generateAddresses(changeExtendedKey, undefined, startIndex, gapLimit * 2).map(
     ({ address, index }) => ({ address, index }),
   )
 }
@@ -127,6 +131,69 @@ async function fetchTransactionsForAddresses(
 ): Promise<PromiseSettledResult<Tx[]>[]> {
   console.log(`[transactions] Checking ${addresses.length} addresses in parallel...`)
   return await Promise.allSettled(addresses.map(address => getTransactions(address, socket)))
+}
+
+/**
+ * Fetches transaction history using pre-generated addresses
+ * @param receivingAddresses - Array of receiving addresses
+ * @param changeAddresses - Array of change addresses
+ * @param socket - The Electrum socket connection
+ * @param gapLimit - The gap limit for unused addresses
+ * @returns Object containing txHistory and information about unused addresses
+ */
+async function getTxHistoryFromAddresses(
+  receivingAddresses: string[],
+  changeAddresses: string[],
+  socket: any,
+  gapLimit: number,
+): Promise<{ txHistory: TxHistory[]; hasUnusedAddresses: boolean }> {
+  const txHistory: TxHistory[] = []
+
+  // Fetch transactions for receiving addresses
+  const receivingResults = await fetchTransactionsForAddresses(receivingAddresses, socket)
+
+  // Process receiving results
+  const receivingAddressData = receivingAddresses.map((address, index) => ({
+    address,
+    index,
+  }))
+  const receivingTxHistory = processTransactionResults(
+    receivingResults,
+    receivingAddressData.map(({ address, index }) => ({ address, index })),
+    'receiving',
+    gapLimit,
+  )
+
+  // Fetch transactions for change addresses
+  const changeResults = await fetchTransactionsForAddresses(changeAddresses, socket)
+
+  // Process change results
+  const changeAddressData = changeAddresses.map((address, index) => ({
+    address,
+    index,
+  }))
+  const changeTxHistory = processTransactionResults(
+    changeResults,
+    changeAddressData.map(({ address, index }) => ({ address, index })),
+    'change',
+    gapLimit,
+  )
+
+  txHistory.push(...receivingTxHistory, ...changeTxHistory)
+
+  // Check if there are unused addresses (gap limit not reached)
+  const totalReceiving = receivingAddresses.length
+  const usedReceiving = receivingTxHistory.length
+  const consecutiveUnusedReceiving = totalReceiving - usedReceiving
+
+  const totalChange = changeAddresses.length
+  const usedChange = changeTxHistory.length
+  const consecutiveUnusedChange = totalChange - usedChange
+
+  const hasUnusedAddresses =
+    consecutiveUnusedReceiving < gapLimit || consecutiveUnusedChange < gapLimit
+
+  return { txHistory, hasUnusedAddresses }
 }
 
 /**
@@ -1690,4 +1757,13 @@ export function findNextUnusedAddress(
     index++
   }
   return ''
+}
+
+export {
+  deriveExtendedKeys,
+  generateReceivingAddresses,
+  generateChangeAddresses,
+  fetchTransactionsForAddresses,
+  processTransactionResults,
+  getTxHistoryFromAddresses,
 }

@@ -1,7 +1,13 @@
-import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react'
-import { useColorScheme } from 'react-native'
-import { settingsReducer, initialSettingsState, SettingsState, SettingsAction } from './types'
+import React, { createContext, useContext, useReducer, ReactNode, useEffect, Dispatch } from 'react'
+import {
+  settingsReducer,
+  initialSettingsState,
+  SettingsState,
+  SettingsAction,
+  settingsActions,
+} from './state'
 import { MMKV } from 'react-native-mmkv'
+import { useColorScheme } from 'react-native'
 
 const storage = new MMKV()
 const SETTINGS_STORAGE_KEY = 'settings-state'
@@ -25,9 +31,10 @@ const loadPersistedSettingsState = (): SettingsState => {
 }
 
 // Context
-type SettingsContextType = {
-  state: SettingsState
-  dispatch: React.Dispatch<SettingsAction>
+type SettingsContextType = SettingsState & {
+  isDark: boolean
+  dispatch: Dispatch<SettingsAction>
+  actions: typeof settingsActions
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined)
@@ -35,6 +42,10 @@ const SettingsContext = createContext<SettingsContextType | undefined>(undefined
 // Provider
 export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(settingsReducer, loadPersistedSettingsState())
+  const colorScheme = useColorScheme()
+  const isDark =
+    state.colorMode === 'dark' || (state.colorMode === 'auto' && colorScheme === 'dark')
+  const actions = settingsActions
 
   // Persist state changes
   useEffect(() => {
@@ -45,29 +56,25 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     }
   }, [state])
 
-  return <SettingsContext.Provider value={{ state, dispatch }}>{children}</SettingsContext.Provider>
+  return (
+    <SettingsContext.Provider
+      value={{
+        ...state,
+        isDark,
+        dispatch,
+        actions,
+      }}
+    >
+      {children}
+    </SettingsContext.Provider>
+  )
 }
 
 // Hook that provides settings with derived values
 export const useSettings = () => {
-  const { state, dispatch } = useContext(SettingsContext)!
-  const colorScheme = useColorScheme()
-  const effectiveColorMode = state.colorMode === 'auto' ? colorScheme : state.colorMode
-  const isDark = effectiveColorMode === 'dark'
-
-  return {
-    // State
-    colorMode: state.colorMode,
-    maxBlockchainSizeGB: state.maxBlockchainSizeGB,
-    trampolineRoutingEnabled: state.trampolineRoutingEnabled,
-    userOverride: state.userOverride,
-    isDark,
-
-    // Actions
-    setColorMode: (colorMode: any) => dispatch({ type: 'SET_COLOR_MODE', payload: colorMode }),
-    setMaxBlockchainSize: (size: number) =>
-      dispatch({ type: 'SET_MAX_BLOCKCHAIN_SIZE', payload: size }),
-    setTrampolineRouting: (enabled: boolean) =>
-      dispatch({ type: 'SET_TRAMPOLINE_ROUTING', payload: enabled }),
+  const context = useContext(SettingsContext)
+  if (!context) {
+    throw new Error('useSettings must be used within a SettingsProvider')
   }
+  return context
 }

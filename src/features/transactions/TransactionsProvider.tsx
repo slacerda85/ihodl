@@ -19,10 +19,13 @@ import { MMKV } from 'react-native-mmkv'
 import { useElectrum } from '../electrum/ElectrumProvider'
 import { useWallet } from '../wallet/WalletProvider'
 import {
-  getTxHistory,
   getFriendlyTransactions,
   calculateAddressCache,
   findNextUnusedAddress,
+  deriveExtendedKeys,
+  generateReceivingAddresses,
+  generateChangeAddresses,
+  getTxHistoryFromAddresses,
 } from '@/lib/transactions'
 import { getWalletSeedPhrase } from '@/lib/secureStorage'
 import { createRootExtendedKey, fromMnemonic } from '@/lib/key'
@@ -66,13 +69,49 @@ const TransactionsContext = createContext<TransactionsContextType | undefined>(u
 export default function TransactionsProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(transactionsReducer, loadPersistedTransactionsState())
   const { getConnection } = useElectrum()
-  const { state: walletState } = useWallet()
+  const { wallets, activeWalletId } = useWallet()
 
   // Cache timing constants
   const CACHE_DURATION_MS = 30 * 60 * 1000 // 30 minutes
 
   // Ref to track ongoing fetches to prevent duplicates
   const ongoingFetches = useRef<Set<string>>(new Set())
+
+  // Ensure addresses are generated for a wallet
+  const ensureAddressesGenerated = useCallback(
+    async (walletId: string, extendedKey: Uint8Array) => {
+      if (state.generatedAddresses[walletId].receiving.length > 0) {
+        return state.generatedAddresses[walletId]
+      }
+
+      console.log(`[TransactionsProvider] Generating addresses for wallet ${walletId}`)
+
+      const { receivingExtendedKey, changeExtendedKey } = deriveExtendedKeys(extendedKey)
+
+      // Generate addresses in batches to avoid blocking UI
+      const gapLimit = 20
+      const receivingAddresses = generateReceivingAddresses(
+        receivingExtendedKey,
+        changeExtendedKey,
+        gapLimit,
+      ).map(item => item.address)
+
+      const changeAddresses = generateChangeAddresses(changeExtendedKey, gapLimit).map(
+        item => item.address,
+      )
+
+      const addresses = {
+        receiving: receivingAddresses,
+        change: changeAddresses,
+        startIndex: 0,
+      }
+
+      dispatch(transactionsActions.setGeneratedAddresses(walletId, addresses))
+
+      return addresses
+    },
+    [state.generatedAddresses, dispatch],
+  )
 
   // Fetch transaction history for a specific wallet
   const fetchTransactionHistory = useCallback(
@@ -84,7 +123,7 @@ export default function TransactionsProvider({ children }: { children: ReactNode
 
       ongoingFetches.current.add(walletId)
 
-      const wallet = walletState.wallets.find(w => w.walletId === walletId)
+      const wallet = wallets.find(w => w.walletId === walletId)
       if (!wallet) {
         console.error(`[TransactionsProvider] Wallet ${walletId} not found`)
         ongoingFetches.current.delete(walletId)
@@ -104,11 +143,66 @@ export default function TransactionsProvider({ children }: { children: ReactNode
         // Convert seed phrase to extended key
         const extendedKey = createRootExtendedKey(fromMnemonic(seedPhrase))
 
-        // Fetch transaction history using the shared Electrum connection
-        const { txHistory } = await getTxHistory({
-          extendedKey,
-          getConnectionFn: getConnection,
-        })
+        // Ensure addresses are generated
+        const addresses = await ensureAddressesGenerated(walletId, extendedKey)
+
+        // Get connection
+        const socket = await getConnection()
+
+        // Fetch transaction history using pre-generated addresses
+        const { txHistory, hasUnusedAddresses } = await getTxHistoryFromAddresses(
+          addresses.receiving,
+          addresses.change,
+          socket,
+          20, // gapLimit
+        )
+
+        // If all addresses were used, generate more
+        if (!hasUnusedAddresses) {
+          console.log(
+            `[TransactionsProvider] All addresses used, generating more for wallet ${walletId}`,
+          )
+          // Generate next batch of addresses
+          const { receivingExtendedKey, changeExtendedKey } = deriveExtendedKeys(
+            extendedKey,
+            84,
+            0,
+            0,
+          )
+
+          const nextStartIndex = addresses.receiving.length
+          const additionalReceiving = generateReceivingAddresses(
+            receivingExtendedKey,
+            changeExtendedKey,
+            20, // gapLimit
+            nextStartIndex,
+          ).map(item => item.address)
+
+          const additionalChange = generateChangeAddresses(
+            changeExtendedKey,
+            20,
+            nextStartIndex,
+          ).map(item => item.address)
+
+          // Fetch transactions for additional addresses
+          const { txHistory: additionalTxHistory } = await getTxHistoryFromAddresses(
+            additionalReceiving,
+            additionalChange,
+            socket,
+            20,
+          )
+
+          txHistory.push(...additionalTxHistory)
+
+          // Update generated addresses
+          const updatedAddresses = {
+            receiving: [...addresses.receiving, ...additionalReceiving],
+            change: [...addresses.change, ...additionalChange],
+            startIndex: nextStartIndex,
+          }
+
+          dispatch(transactionsActions.setGeneratedAddresses(walletId, updatedAddresses))
+        }
 
         // Convert to friendly transactions
         const friendlyTransactions = await getFriendlyTransactions(txHistory, {
@@ -162,12 +256,11 @@ export default function TransactionsProvider({ children }: { children: ReactNode
 
       ongoingFetches.current.delete(walletId)
     },
-    [getConnection, walletState.wallets, dispatch],
+    [getConnection, wallets, dispatch, ensureAddressesGenerated],
   )
 
   // Refresh transaction history for active wallet (with cache consideration)
   const refreshTransactionHistory = useCallback(async () => {
-    const activeWalletId = walletState.activeWalletId
     if (!activeWalletId) {
       console.log('[TransactionsProvider] No active wallet to refresh')
       return
@@ -198,23 +291,17 @@ export default function TransactionsProvider({ children }: { children: ReactNode
       `[TransactionsProvider] Refreshing transaction history for wallet ${activeWalletId}`,
     )
     await fetchTransactionHistory(activeWalletId)
-  }, [
-    walletState.activeWalletId,
-    state.cachedTransactions,
-    fetchTransactionHistory,
-    CACHE_DURATION_MS,
-  ])
+  }, [activeWalletId, state.cachedTransactions, fetchTransactionHistory, CACHE_DURATION_MS])
 
   // Auto-refresh transaction history when active wallet changes
   useEffect(() => {
-    if (walletState.activeWalletId) {
+    if (activeWalletId) {
       console.log(
-        `[TransactionsProvider] Active wallet changed to ${walletState.activeWalletId}, refreshing cache`,
+        `[TransactionsProvider] Active wallet changed to ${activeWalletId}, refreshing cache`,
       )
       refreshTransactionHistory()
     }
-  }, [walletState.activeWalletId, refreshTransactionHistory])
-
+  }, [activeWalletId, refreshTransactionHistory])
   return (
     <TransactionsContext.Provider
       value={{

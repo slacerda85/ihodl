@@ -8,14 +8,13 @@ import CreateWalletIcon from './CreateWalletIcon'
 import ImportWalletIcon from './ImportWalletIcon'
 import { useWallet } from './WalletProvider'
 import { useSettings } from '../settings/SettingsProvider'
-import { walletActions } from './types'
+import { walletActions } from './state'
 // import { setActiveWalletId } from '@/lib/wallet'
 
 export default function ManageWallets() {
   const router = useRouter()
   const { isDark } = useSettings()
-  const { state, dispatch } = useWallet()
-  const { wallets, activeWalletId, loadingWalletState } = state
+  const { wallets, activeWalletId, loading, dispatch } = useWallet()
 
   function handleCreateWallet() {
     router.push('/wallet/create')
@@ -73,7 +72,7 @@ export default function ManageWallets() {
                   >
                     <View style={{ flex: 1 }}>
                       <View style={styles.walletHeader}>
-                        {loadingWalletState ? (
+                        {loading ? (
                           <ActivityIndicator size={20} color={colors.primary} />
                         ) : (
                           <View style={styles.radioContainer}>

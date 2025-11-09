@@ -1,5 +1,3 @@
-import { ColorMode } from '@/models/settings'
-
 // Base types for reducer pattern
 type Reducer<S, A> = (state: S, action: A) => S
 
@@ -10,6 +8,8 @@ export type SettingsState = {
   userOverride?: boolean
   trampolineRoutingEnabled: boolean
 }
+
+export type ColorMode = 'light' | 'dark' | 'auto'
 
 // Settings Actions
 export type SettingsAction =

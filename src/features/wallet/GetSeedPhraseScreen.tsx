@@ -9,8 +9,7 @@ import { getWalletSeedPhrase } from '@/lib/secureStorage'
 
 export default function GetSeedPhraseScreen() {
   const { isDark } = useSettings()
-  const { state: walletState } = useWallet()
-  const { activeWalletId } = walletState
+  const { activeWalletId } = useWallet()
   const [seedPhrase, setSeedPhrase] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 

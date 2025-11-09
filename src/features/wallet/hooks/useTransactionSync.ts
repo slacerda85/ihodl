@@ -19,24 +19,19 @@ export function useTransactionSync(activeWalletId?: string) {
     // For now, just check if we need to load data
     if (
       activeWalletId &&
-      !walletState.loadingWalletState &&
+      !walletState.loading &&
       !transactionsState.loadingTxState &&
       !hasTransactionData
     ) {
       // Transaction fetching will be implemented later
       console.log('Transaction sync needed for wallet:', activeWalletId)
     }
-  }, [
-    activeWalletId,
-    walletState.loadingWalletState,
-    transactionsState.loadingTxState,
-    hasTransactionData,
-  ])
+  }, [activeWalletId, walletState.loading, transactionsState.loadingTxState, hasTransactionData])
 
   return {
-    loading: walletState.loadingWalletState || transactionsState.loadingTxState,
+    loading: walletState.loading || transactionsState.loadingTxState,
     hasTransactionData,
-    isWalletLoading: walletState.loadingWalletState,
+    isWalletLoading: walletState.loading,
     isTransactionLoading: transactionsState.loadingTxState,
   }
 }

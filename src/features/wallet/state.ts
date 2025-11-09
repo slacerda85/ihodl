@@ -8,7 +8,7 @@ export type WalletState = {
   wallets: WalletData[]
   activeWalletId: string | undefined
   unit: 'BTC' | 'Sats'
-  loadingWalletState: boolean
+  loading: boolean
 }
 
 // Wallet Actions
@@ -26,7 +26,7 @@ export const initialWalletState: WalletState = {
   wallets: [],
   activeWalletId: undefined,
   unit: 'BTC',
-  loadingWalletState: false,
+  loading: false,
 }
 
 // Reducer
@@ -77,7 +77,7 @@ export const walletReducer: Reducer<WalletState, WalletAction> = (state, action)
     case 'SET_LOADING_WALLET':
       return {
         ...state,
-        loadingWalletState: action.payload,
+        loading: action.payload,
       }
 
     default:

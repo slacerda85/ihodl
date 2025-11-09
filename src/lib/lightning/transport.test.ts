@@ -3,8 +3,7 @@
  * BOLT 8: Transport Layer Security
  */
 
-import { LightningTransport, NoiseHandshake, TransportState } from './transport'
-import { uint8ArrayToHex, uint8ArrayFromHex } from '../utils'
+import { LightningTransport, TransportState } from './transport'
 
 // Mock crypto functions for testing
 jest.mock('../crypto', () => ({
@@ -136,7 +135,7 @@ describe('Lightning Transport Layer', () => {
 
     test('should complete handshake successfully', async () => {
       // Simulate full handshake
-      const initiatorHandshake = await transport.initiateHandshake(mockSocket)
+      // const initiatorHandshake = await transport.initiateHandshake(mockSocket)
       expect(transport.getState()).toBe(TransportState.HANDSHAKE_INITIATED)
 
       // Simulate receiving response

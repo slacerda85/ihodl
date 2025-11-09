@@ -1,12 +1,10 @@
 import { useAuth } from '@/features/auth/AuthProvider'
 import { Modal } from 'react-native'
-import React, { useState, useRef } from 'react'
+import { useState, useRef } from 'react'
 import { Text, View, StyleSheet, Pressable, Animated } from 'react-native'
-import { Ionicons } from '@expo/vector-icons' // Assuming you have react-native-vector-icons installed
-import BitcoinLogo from '@/assets/bitcoin-logo'
+import { Ionicons } from '@expo/vector-icons'
 import colors from '@/ui/colors'
 import { useSettings } from '@/features/settings'
-import IHodlLogo from '@/assets/ihodl-logo'
 import IHodlLogoBorderLess from '@/assets/ihodl-logo-borderless'
 
 export default function AuthScreen() {

@@ -3,7 +3,7 @@
  * BOLT 8: Transport Layer Security
  */
 
-import { sha256, hmacSha256, createEntropy } from '../crypto'
+import { sha256 } from '../crypto'
 
 // Simplified HKDF implementation for testing
 async function hkdf(
@@ -80,8 +80,6 @@ export class LightningTransport {
   private remoteKey?: Uint8Array
   private handshake?: NoiseHandshake
   private keys?: EncryptionKeys
-
-  constructor() {}
 
   getState(): TransportState {
     return this.state

@@ -37,8 +37,7 @@ export default function WalletScreen() {
     router.push('/wallet/import')
   }
 
-  const { state: walletState } = useWallet()
-  const { activeWalletId, wallets } = walletState
+  const { activeWalletId, wallets } = useWallet()
 
   if (wallets === undefined || wallets?.length === 0) {
     // create link to wallet/manage

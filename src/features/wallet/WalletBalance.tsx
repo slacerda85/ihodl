@@ -15,8 +15,7 @@ export default function WalletBalance() {
   const [balance, setBalance] = useState(0)
   const { state: transactionsState } = useTransactions()
   const { cachedTransactions } = transactionsState
-  const { state: walletState, dispatch: walletDispatch } = useWallet()
-  const { loadingWalletState: loadingWallet, unit, activeWalletId } = walletState
+  const { loading: loadingWallet, unit, activeWalletId, dispatch: walletDispatch } = useWallet()
   const { loadingTxState: loadingTx } = transactionsState
   const loading = loadingWallet || loadingTx || false
 

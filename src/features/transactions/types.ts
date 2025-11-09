@@ -6,6 +6,7 @@ type Reducer<S, A> = (state: S, action: A) => S
 
 // Transactions State
 export type TransactionsState = {
+  /* refactored fields */
   cachedTransactions: CachedTransactions[]
   pendingTransactions: {
     txid: string
@@ -25,6 +26,13 @@ export type TransactionsState = {
       usedReceivingAddresses: UsedAddress[]
       usedChangeAddresses: UsedAddress[]
       lastUpdated: number
+    }
+  }
+  generatedAddresses: {
+    [walletId: string]: {
+      receiving: string[]
+      change: string[]
+      startIndex: number
     }
   }
 }
@@ -47,6 +55,13 @@ export type TransactionsAction =
   | { type: 'SET_MEMPOOL_TRANSACTIONS'; payload: Tx[] }
   | { type: 'SET_ADDRESS_CACHE'; payload: { walletId: string; cache: any } }
   | { type: 'CLEAR_ADDRESS_CACHE'; payload?: string }
+  | {
+      type: 'SET_GENERATED_ADDRESSES'
+      payload: {
+        walletId: string
+        addresses: { receiving: string[]; change: string[]; startIndex: number }
+      }
+    }
 
 // Initial state
 export const initialTransactionsState: TransactionsState = {
@@ -56,6 +71,7 @@ export const initialTransactionsState: TransactionsState = {
   loadingMempoolState: false,
   mempoolTransactions: [],
   addressCaches: {},
+  generatedAddresses: {},
 }
 
 // Reducer
@@ -131,17 +147,13 @@ export const transactionsReducer: Reducer<TransactionsState, TransactionsAction>
         },
       }
 
-    case 'CLEAR_ADDRESS_CACHE':
-      if (action.payload) {
-        const { [action.payload]: _, ...rest } = state.addressCaches
-        return {
-          ...state,
-          addressCaches: rest,
-        }
-      }
+    case 'SET_GENERATED_ADDRESSES':
       return {
         ...state,
-        addressCaches: {},
+        generatedAddresses: {
+          ...state.generatedAddresses,
+          [action.payload.walletId]: action.payload.addresses,
+        },
       }
 
     default:
@@ -194,6 +206,14 @@ export const transactionsActions = {
   clearAddressCache: (walletId?: string): TransactionsAction => ({
     type: 'CLEAR_ADDRESS_CACHE',
     payload: walletId,
+  }),
+
+  setGeneratedAddresses: (
+    walletId: string,
+    addresses: { receiving: string[]; change: string[]; startIndex: number },
+  ): TransactionsAction => ({
+    type: 'SET_GENERATED_ADDRESSES',
+    payload: { walletId, addresses },
   }),
 }
 

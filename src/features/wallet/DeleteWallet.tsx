@@ -7,12 +7,10 @@ import { useRouter } from 'expo-router'
 import { alpha } from '@/ui/utils'
 import { useWallet } from '@/features/wallet'
 import { useSettings } from '@/features/settings'
-import { walletActions } from './types'
 import Button from '@/ui/Button'
 
 export default function DeleteWallet() {
-  const { state, dispatch } = useWallet()
-  const { activeWalletId, wallets } = state
+  const { activeWalletId, wallets, unlinkWallet } = useWallet()
   const walletName = wallets.find(w => w.walletId === activeWalletId)?.walletName
 
   const router = useRouter()
@@ -21,18 +19,13 @@ export default function DeleteWallet() {
   const [submitting, setSubmitting] = useState<boolean>(false)
 
   const handleDeleteWallet = useCallback(async () => {
-    try {
-      setSubmitting(true)
-      if (activeWalletId) {
-        dispatch(walletActions.deleteWallet(activeWalletId))
-      }
-    } catch (error) {
-      console.error('Error deleting wallet:', error)
-    } finally {
-      setSubmitting(false)
-      setTimeout(() => router.dismiss(2), 0)
+    setSubmitting(true)
+    if (activeWalletId) {
+      await unlinkWallet(activeWalletId)
     }
-  }, [dispatch, router, activeWalletId])
+    setSubmitting(false)
+    setTimeout(() => router.dismiss(2), 0)
+  }, [unlinkWallet, router, activeWalletId])
 
   if (!activeWalletId) return null
 

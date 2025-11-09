@@ -11,7 +11,7 @@ import {
 import { useSettings } from '@/features/settings'
 import { clearPersistedState } from '@/features/storage/StorageProvider'
 import Picker from '@/ui/Picker/Picker'
-import { ColorMode } from '@/models/settings'
+import { ColorMode } from './state'
 import LightningSection from './LightningSection'
 
 export default function SettingsScreen() {

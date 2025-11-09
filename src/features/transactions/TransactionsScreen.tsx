@@ -34,9 +34,7 @@ export default function TransactionsScreen() {
   const { isDark } = useSettings()
   const router = useRouter()
 
-  const {
-    state: { activeWalletId, loadingWalletState: loadingWallet, unit },
-  } = useWallet()
+  const { activeWalletId, loadingWalletState: loadingWallet, unit } = useWallet()
   const {
     state: { cachedTransactions, loadingTxState },
   } = useTransactions()

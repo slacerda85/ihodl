@@ -52,7 +52,7 @@ interface LightningProviderProps {
 
 export function LightningProvider({ children }: LightningProviderProps) {
   const { state: lightningState, dispatch: lightningDispatch } = useLightningState()
-  const { state: walletState } = useWallet()
+  const { activeWalletId, wallets, unit } = useWallet()
   const { blockchainClient } = useBlockchain()
 
   // Shared refs across all hook instances
@@ -75,11 +75,11 @@ export function LightningProvider({ children }: LightningProviderProps) {
 
   // Get Lightning account from wallet
   const getLightningAccount = useCallback(() => {
-    const activeWallet = walletState.wallets.find(w => w.walletId === walletState.activeWalletId)
+    const activeWallet = wallets.find(w => w.walletId === activeWalletId)
     if (!activeWallet?.accounts) return null
 
     return activeWallet.accounts.find(acc => acc.purpose === 9735) || null
-  }, [walletState])
+  }, [activeWalletId, wallets])
 
   // Initialize Gossip Network
   const initializeGossipNetwork = useCallback(async () => {

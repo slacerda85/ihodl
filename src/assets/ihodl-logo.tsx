@@ -1,4 +1,4 @@
-import Svg, { Path, G, Rect } from 'react-native-svg'
+import Svg, { Rect } from 'react-native-svg'
 
 export default function IHodlLogo({
   width = 128,

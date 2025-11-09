@@ -44,8 +44,7 @@ export default function Send() {
 
   const router = useRouter()
 
-  const { state: walletState } = useWallet()
-  const { activeWalletId, wallets, unit } = walletState
+  const { activeWalletId, wallets, unit } = useWallet()
   const { state: transactionsState } = useTransactions()
   const { cachedTransactions } = transactionsState
   // Placeholder functions - need to be implemented

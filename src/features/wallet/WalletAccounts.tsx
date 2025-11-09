@@ -32,8 +32,7 @@ const isLightningPurpose = (purpose: number): boolean => purpose === 9735
 
 export default function WalletAccounts() {
   const { isDark } = useSettings()
-  const { state: walletState } = useWallet()
-  const { wallets, activeWalletId } = walletState
+  const { wallets, activeWalletId } = useWallet()
 
   if (!activeWalletId) {
     return (
@@ -126,8 +125,7 @@ interface AccountDetailsProps {
 function AccountDetails({ account }: AccountDetailsProps) {
   const { isDark } = useSettings()
 
-  const { state: walletState } = useWallet()
-  const { loadingWalletState: loadingWallet, unit } = walletState
+  const { loading: loadingWallet, unit, activeWalletId } = useWallet()
   const { state: transactionsState } = useTransactions()
   const { cachedTransactions, loadingTxState: loadingTransactions } = transactionsState
 
@@ -135,11 +133,9 @@ function AccountDetails({ account }: AccountDetailsProps) {
 
   // Calculate balance from transactions
   const calculateBalance = (): number => {
-    if (!walletState.activeWalletId) return 0
+    if (!activeWalletId) return 0
 
-    const walletCache = cachedTransactions.find(
-      cache => cache.walletId === walletState.activeWalletId,
-    )
+    const walletCache = cachedTransactions.find(cache => cache.walletId === activeWalletId)
     if (!walletCache) return 0
 
     // For now, all transactions are considered on-chain

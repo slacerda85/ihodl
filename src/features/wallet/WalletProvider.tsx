@@ -1,11 +1,11 @@
-import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react'
+import React, { createContext, useContext, useReducer, ReactNode, useEffect, Dispatch } from 'react'
 import {
   walletReducer,
   initialWalletState,
   WalletState,
   WalletAction,
   walletActions,
-} from './types'
+} from './state'
 import { MMKV } from 'react-native-mmkv'
 import { createWallet as createWalletLib, storeWalletSeed } from '@/lib/wallet/wallet'
 
@@ -23,7 +23,7 @@ const loadPersistedWalletState = (): WalletState => {
         ...initialWalletState,
         ...parsed,
         // Reset loading states on app start
-        loadingWalletState: false,
+        loading: false,
       }
     }
   } catch (error) {
@@ -33,9 +33,10 @@ const loadPersistedWalletState = (): WalletState => {
 }
 
 // Context
-type WalletContextType = {
-  state: WalletState
-  dispatch: React.Dispatch<WalletAction>
+type WalletContextType = WalletState & {
+  dispatch: Dispatch<WalletAction>
+  actions: typeof walletActions
+  // helper functions
   createWallet: (params: {
     walletName: string
     offline: boolean
@@ -48,6 +49,7 @@ type WalletContextType = {
     usePassword: boolean
     password: string
   }) => Promise<void>
+  unlinkWallet: (walletId: string) => Promise<void>
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined)
@@ -116,6 +118,10 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const unlinkWallet = async (walletId: string) => {
+    dispatch(walletActions.deleteWallet(walletId))
+  }
+
   // Persist state changes
   useEffect(() => {
     try {
@@ -133,7 +139,16 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
   }, [state])
 
   return (
-    <WalletContext.Provider value={{ state, dispatch, createWallet, importWallet }}>
+    <WalletContext.Provider
+      value={{
+        ...state,
+        actions: walletActions,
+        dispatch,
+        createWallet,
+        importWallet,
+        unlinkWallet,
+      }}
+    >
       {children}
     </WalletContext.Provider>
   )
