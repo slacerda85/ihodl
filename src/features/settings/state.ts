@@ -67,3 +67,10 @@ export const settingsActions = {
     payload: enabled,
   }),
 }
+
+// selectors
+export const selectors = {
+  selectColorMode: (state: SettingsState) => state.colorMode,
+  selectMaxBlockchainSize: (state: SettingsState) => state.maxBlockchainSizeGB,
+  selectTrampolineRoutingEnabled: (state: SettingsState) => state.trampolineRoutingEnabled,
+}

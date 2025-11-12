@@ -34,16 +34,14 @@ export default function TransactionsScreen() {
   const { isDark } = useSettings()
   const router = useRouter()
 
-  const { activeWalletId, loadingWalletState: loadingWallet, unit } = useWallet()
-  const {
-    state: { cachedTransactions, loadingTxState },
-  } = useTransactions()
+  const { activeWalletId, loading: loadingWallet, unit } = useWallet()
+  const { friendly: transactions, loading: loadingTxState } = useTransactions()
 
   const loading = loadingWallet || loadingTxState
 
   // Check if we have cached data for the active wallet
   const hasTransactionData = activeWalletId
-    ? cachedTransactions.some(cache => cache.walletId === activeWalletId)
+    ? transactions.some(cache => cache.walletId === activeWalletId)
     : false
 
   // Loading state - show this prominently
@@ -85,10 +83,6 @@ export default function TransactionsScreen() {
       </View>
     )
   }
-
-  // Now we know we have valid transaction data
-  const transactions: UIFriendlyTransaction[] =
-    cachedTransactions.find(c => c.walletId === activeWalletId)?.transactions || []
 
   // Agrupar transações por data usando o campo 'date' do UIFriendlyTransaction
   const grouped: Record<string, UIFriendlyTransaction[]> = {}

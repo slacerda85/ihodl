@@ -13,20 +13,17 @@ export default function WalletBalance() {
   const { isDark } = useSettings()
 
   const [balance, setBalance] = useState(0)
-  const { state: transactionsState } = useTransactions()
-  const { cachedTransactions } = transactionsState
+  const { friendly } = useTransactions()
   const { loading: loadingWallet, unit, activeWalletId, dispatch: walletDispatch } = useWallet()
-  const { loadingTxState: loadingTx } = transactionsState
-  const loading = loadingWallet || loadingTx || false
-
+  const loading = loadingWallet || false
   // Calculate balance from cached transactions
   const getBalance = useCallback(
     (walletId: string) => {
-      const walletCache = cachedTransactions.find(cache => cache.walletId === walletId)
+      const walletCache = friendly.find(cache => cache.walletId === walletId)
       if (!walletCache) return 0
 
       // Calculate balance from friendly transactions
-      return walletCache.transactions.reduce((total, tx) => {
+      return friendly.reduce((total, tx) => {
         if (tx.type === 'received') {
           return total + tx.amount
         } else if (tx.type === 'sent') {
@@ -35,7 +32,7 @@ export default function WalletBalance() {
         return total // for unknown types, don't change balance
       }, 0)
     },
-    [cachedTransactions],
+    [friendly],
   )
 
   // Set unit function
@@ -57,7 +54,7 @@ export default function WalletBalance() {
     } else {
       setBalance(0)
     }
-  }, [activeWalletId, cachedTransactions, getBalance])
+  }, [activeWalletId, getBalance])
 
   if (loading) {
     return (

@@ -66,6 +66,7 @@ export type TransactionType = 'received' | 'sent'
 export type TransactionStatus = 'pending' | 'processing' | 'confirmed' | 'unknown'
 
 export type WalletTransaction = {
+  walletId: string
   txid: string
   date: string
   type: TransactionType

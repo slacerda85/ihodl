@@ -126,21 +126,20 @@ function AccountDetails({ account }: AccountDetailsProps) {
   const { isDark } = useSettings()
 
   const { loading: loadingWallet, unit, activeWalletId } = useWallet()
-  const { state: transactionsState } = useTransactions()
-  const { cachedTransactions, loadingTxState: loadingTransactions } = transactionsState
+  const { friendly, loading: loadingTx } = useTransactions()
 
-  const loading = loadingWallet || loadingTransactions
+  const loading = loadingWallet || loadingTx
 
   // Calculate balance from transactions
   const calculateBalance = (): number => {
     if (!activeWalletId) return 0
 
-    const walletCache = cachedTransactions.find(cache => cache.walletId === activeWalletId)
+    const walletCache = friendly.find(cache => cache.walletId === activeWalletId)
     if (!walletCache) return 0
 
     // For now, all transactions are considered on-chain
     // TODO: Filter by account type when lightning is implemented
-    return walletCache.transactions.reduce((balance, tx) => {
+    return friendly.reduce((balance, tx) => {
       if (tx.type === 'received') {
         return balance + tx.amount
       } else if (tx.type === 'sent') {

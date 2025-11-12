@@ -23,29 +23,26 @@ import { IconButton } from '@/ui/Button'
 import { useWallet } from '@/features/wallet'
 import { useSettings } from '@/features/settings'
 
-import { UsedAddress } from '@/lib/address'
+import { AddressDetails } from '@/lib/address'
 import { useTransactions } from '@/features/transactions'
 
 // Address generation utilities - separated for better organization
 
 export default function Receive() {
   const { isDark } = useSettings()
-  const {
-    state: { addressCaches },
-  } = useTransactions()
+  const { history } = useTransactions()
 
-  const { state: walletState } = useWallet()
-  const { wallets, activeWalletId } = walletState
+  const { wallets, activeWalletId } = useWallet()
   const [selectedAddress, setSelectedAddress] = useState<string>('')
-  const [showUsedAddresses, setShowUsedAddresses] = useState(false)
+  const [showAddressDetailses, setShowAddressDetailses] = useState(false)
   const [activeTab, setActiveTab] = useState<'receiving' | 'change'>('receiving')
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState<string>('')
 
   // Address data state - separate from useMemo for better performance
   // const [_availableAddresses, setAvailableAddresses] = useState<string[]>(mockAddresses)
-  const [usedReceivingAddresses, setUsedReceivingAddresses] = useState<UsedAddress[]>([])
-  const [usedChangeAddresses, setUsedChangeAddresses] = useState<UsedAddress[]>([])
+  const [usedReceivingAddresses, setUsedReceivingAddresses] = useState<AddressDetails[]>([])
+  const [usedChangeAddresses, setUsedChangeAddresses] = useState<AddressDetails[]>([])
   const [nextUnusedAddress, setNextUnusedAddress] = useState<string>('')
 
   // Get active wallet
@@ -245,7 +242,7 @@ export default function Receive() {
                     color={colors.textSecondary[isDark ? 'dark' : 'light']}
                   />
                 }
-                onPress={() => setShowUsedAddresses(true)}
+                onPress={() => setShowAddressDetailses(true)}
               >
                 View Used Addresses ({usedReceivingAddresses.length + usedChangeAddresses.length})
               </Button>
@@ -271,10 +268,10 @@ export default function Receive() {
 
       {/* Used Addresses Modal */}
       <Modal
-        visible={showUsedAddresses}
+        visible={showAddressDetailses}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setShowUsedAddresses(false)}
+        onRequestClose={() => setShowAddressDetailses(false)}
       >
         <View style={[styles.modalContainer, isDark && styles.modalContainerDark]}>
           <View style={styles.modalHeader}>
@@ -291,7 +288,7 @@ export default function Receive() {
               }
               variant="solid"
               backgroundColor="transparent"
-              onPress={() => setShowUsedAddresses(false)}
+              onPress={() => setShowAddressDetailses(false)}
             />
           </View>
 

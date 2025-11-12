@@ -48,11 +48,12 @@ export interface TxStorage {
 }
 
 /** Used address information */
-export interface UsedAddress {
+export interface AddressDetails {
   address: string
   index: number
   type: 'receiving' | 'change'
-  transactions: Tx[]
+  used: boolean
+  transactions?: Tx[]
 }
 
 /**
@@ -280,9 +281,9 @@ export const generateAddressBatch = async (
   usedAddressSet: Set<string>,
   walletCache: WalletTransactionCache | undefined,
   type: 'receiving' | 'change',
-): Promise<{ addresses: string[]; usedAddresses: UsedAddress[]; nextUnused: string | null }> => {
+): Promise<{ addresses: string[]; usedAddresses: AddressDetails[]; nextUnused: string | null }> => {
   const addresses: string[] = []
-  const usedAddresses: UsedAddress[] = []
+  const usedAddresses: AddressDetails[] = []
   let nextUnused: string | null = null
 
   for (let i = startIndex; i < startIndex + count; i++) {
@@ -302,6 +303,7 @@ export const generateAddressBatch = async (
           address,
           index: i,
           type,
+          used: true,
           transactions:
             walletCache?.transactions.filter(tx =>
               tx.vout.some(vout => vout.scriptPubKey.address === address),
@@ -329,8 +331,8 @@ export const generateWalletAddressesAsync = async (
   tx: TxStorage,
 ): Promise<{
   availableAddresses: string[]
-  usedReceivingAddresses: UsedAddress[]
-  usedChangeAddresses: UsedAddress[]
+  usedReceivingAddresses: AddressDetails[]
+  usedChangeAddresses: AddressDetails[]
   nextUnusedAddress: string
 }> => {
   if (!wallet) {
@@ -370,8 +372,8 @@ export const generateWalletAddressesAsync = async (
     const totalAddresses = 20
 
     let allAddresses: string[] = []
-    let usedReceiving: UsedAddress[] = []
-    let usedChange: UsedAddress[] = []
+    let usedReceiving: AddressDetails[] = []
+    let usedChange: AddressDetails[] = []
     let nextUnused: string | null = null
 
     // Process receiving addresses in batches
@@ -449,8 +451,8 @@ function generateAddresses(
   changeExtendedKey?: Uint8Array,
   startIndex: number = 0,
   count: number = 20,
-): { address: string; changeAddress?: string; index: number }[] {
-  const addresses: { address: string; changeAddress?: string; index: number }[] = []
+): Pick<AddressDetails, 'address' | 'index' | 'type'>[] {
+  const addresses: Pick<AddressDetails, 'address' | 'index' | 'type'>[] = []
   for (let i = startIndex; i < startIndex + count; i++) {
     const addressIndexExtendedKey = deriveChildPrivateKey(extendedKey, i)
     const { privateKey } = splitRootExtendedKey(addressIndexExtendedKey)
@@ -465,7 +467,10 @@ function generateAddresses(
       changeAddress = createSegwitAddress(changeAddressIndexPublicKey)
     }
 
-    addresses.push({ address, changeAddress, index: i })
+    addresses.push({ address, index: i, type: 'receiving' })
+    if (changeAddress) {
+      addresses.push({ address: changeAddress, index: i, type: 'change' })
+    }
   }
   return addresses
 }

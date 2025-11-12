@@ -6,7 +6,7 @@ import {
   splitRootExtendedKey,
 } from '@/lib/key'
 import { connect, getTransactions, callElectrumMethod } from '../electrum'
-import { createSegwitAddress, fromBech32, generateAddresses, UsedAddress } from '../address'
+import { createSegwitAddress, fromBech32, generateAddresses, AddressDetails } from '../address'
 import secp256k1 from 'secp256k1'
 import { hash256, hash160, uint8ArrayToHex, hexToUint8Array } from '@/lib/crypto'
 import { UTXO } from './types'
@@ -80,29 +80,6 @@ function deriveExtendedKeys(
 }
 
 /**
- * Generates receiving addresses with their corresponding change addresses
- * @param receivingExtendedKey - The extended key for receiving addresses
- * @param changeExtendedKey - The extended key for change addresses
- * @param gapLimit - The gap limit for address generation
- * @param startIndex - The starting index for address generation
- * @returns Array of address objects with receiving and change addresses
- */
-function generateReceivingAddresses(
-  receivingExtendedKey: Uint8Array,
-  changeExtendedKey: Uint8Array,
-  gapLimit: number,
-  startIndex: number = 0,
-): { address: string; changeAddress: string; index: number }[] {
-  return generateAddresses(receivingExtendedKey, changeExtendedKey, startIndex, gapLimit * 2).map(
-    ({ address, changeAddress, index }) => ({
-      address,
-      changeAddress: changeAddress!,
-      index,
-    }),
-  )
-}
-
-/**
  * Generates change addresses
  * @param changeExtendedKey - The extended key for change addresses
  * @param gapLimit - The gap limit for address generation
@@ -145,7 +122,7 @@ async function getTxHistoryFromAddresses(
   receivingAddresses: string[],
   changeAddresses: string[],
   socket: any,
-  gapLimit: number,
+  gapLimit: number = 20,
 ): Promise<{ txHistory: TxHistory[]; hasUnusedAddresses: boolean }> {
   const txHistory: TxHistory[] = []
 
@@ -294,11 +271,7 @@ export async function getTxHistory({
 
     // Generate receiving addresses
     console.log('[transactions] Generating receiving addresses...')
-    const receivingAddresses = generateReceivingAddresses(
-      receivingExtendedKey,
-      changeExtendedKey,
-      gapLimit,
-    )
+    const receivingAddresses = generateAddresses(receivingExtendedKey, changeExtendedKey, gapLimit)
 
     // Fetch transactions for receiving addresses
     const receivingResults = await fetchTransactionsForAddresses(
@@ -346,7 +319,7 @@ export async function getTxHistory({
 
 export async function getFriendlyTransactions(
   txHistory: TxHistory[],
-  params: GetTxHistoryParams,
+  walletId: string,
 ): Promise<UIFriendlyTransaction[]> {
   const allTxs = new Map<string, Tx>()
   const ourAddresses = new Set<string>()
@@ -428,6 +401,7 @@ export async function getFriendlyTransactions(
     const date = new Date(tx.time * 1000).toISOString()
 
     friendlyTxs.push({
+      walletId,
       txid,
       date,
       type,
@@ -1702,22 +1676,24 @@ export function processTxHistory(txHistory: TxHistory[]) {
  * @returns Object with usedReceivingAddresses, usedChangeAddresses
  */
 export function calculateAddressCache(txHistory: TxHistory[]) {
-  const usedReceivingAddresses: UsedAddress[] = txHistory
+  const usedReceivingAddresses: AddressDetails[] = txHistory
     .filter(h => h.receivingAddress && h.txs.length > 0)
     .map(h => ({
       address: h.receivingAddress,
       index: h.index,
       type: 'receiving' as const,
       transactions: h.txs,
+      used: true,
     }))
 
-  const usedChangeAddresses: UsedAddress[] = txHistory
+  const usedChangeAddresses: AddressDetails[] = txHistory
     .filter(h => h.changeAddress && h.txs.length > 0)
     .map(h => ({
       address: h.changeAddress,
       index: h.index,
       type: 'change' as const,
       transactions: h.txs,
+      used: true,
     }))
 
   return {
@@ -1761,7 +1737,6 @@ export function findNextUnusedAddress(
 
 export {
   deriveExtendedKeys,
-  generateReceivingAddresses,
   generateChangeAddresses,
   fetchTransactionsForAddresses,
   processTransactionResults,
