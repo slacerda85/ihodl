@@ -91,7 +91,7 @@ export interface BuildTransactionParams {
   extendedKey: Uint8Array
   purpose?: number
   coinType?: number
-  accountIndex?: number
+  account?: number
 }
 
 export interface BuildTransactionResult {
@@ -121,7 +121,7 @@ export interface SignTransactionParams {
   extendedKey: Uint8Array
   purpose?: number
   coinType?: number
-  accountIndex?: number
+  account?: number
 }
 
 export interface SignTransactionResult {

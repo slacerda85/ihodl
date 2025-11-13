@@ -12,7 +12,7 @@ import {
   decodeBolt11Amount,
   getBolt11Prefix,
   generateInvoiceSignature,
-} from '../lib/lightning/utils'
+} from '../../lib/lightning/utils'
 
 describe('Lightning Utils', () => {
   describe('generatePaymentHash', () => {

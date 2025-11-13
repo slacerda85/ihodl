@@ -6,7 +6,7 @@ import {
   splitRootExtendedKey,
 } from '@/lib/key'
 import { connect, getTransactions, callElectrumMethod } from '../electrum'
-import { createSegwitAddress, fromBech32, generateAddresses, AddressDetails } from '../address'
+import { fromBech32, generateAddresses, AddressDetails, deriveAddress } from '../address'
 import secp256k1 from 'secp256k1'
 import { hash256, hash160, uint8ArrayToHex, hexToUint8Array } from '@/lib/crypto'
 import { UTXO } from './types'
@@ -54,7 +54,7 @@ function deriveExtendedKeys(
   extendedKey: Uint8Array,
   purpose: number = 84,
   coinType: number = 0,
-  accountStartIndex: number = 0,
+  accountIndex: number = 0,
 ): { receivingExtendedKey: Uint8Array; changeExtendedKey: Uint8Array } {
   // purpose
   const purposeIndex = createHardenedIndex(purpose)
@@ -64,9 +64,9 @@ function deriveExtendedKeys(
   const coinTypeIndex = createHardenedIndex(coinType)
   const coinTypeExtendedKey = deriveChildPrivateKey(purposeExtendedKey, coinTypeIndex)
 
-  // accountIndex
-  const accountIndex = createHardenedIndex(accountStartIndex)
-  const accountExtendedKey = deriveChildPrivateKey(coinTypeExtendedKey, accountIndex)
+  // account
+  const account = createHardenedIndex(accountIndex)
+  const accountExtendedKey = deriveChildPrivateKey(coinTypeExtendedKey, account)
 
   // receiving (change 0)
   const receivingIndex = 0
@@ -617,10 +617,6 @@ export async function buildTransaction({
   feeRate,
   utxos,
   changeAddress,
-  extendedKey,
-  purpose = 84,
-  coinType = 0,
-  accountIndex = 0,
 }: BuildTransactionParams): Promise<BuildTransactionResult> {
   try {
     // Validate input parameters
@@ -768,7 +764,7 @@ export async function signTransaction({
   extendedKey,
   purpose = 84,
   coinType = 0,
-  accountIndex = 0,
+  account = 0,
 }: SignTransactionParams): Promise<SignTransactionResult> {
   try {
     console.log(`Signing transaction with ${inputs.length} inputs`)
@@ -824,8 +820,8 @@ export async function signTransaction({
     const coinTypeIndex = createHardenedIndex(coinType)
     const coinTypeExtendedKey = deriveChildPrivateKey(purposeExtendedKey, coinTypeIndex)
 
-    const accountIndexHardened = createHardenedIndex(accountIndex)
-    const accountExtendedKey = deriveChildPrivateKey(coinTypeExtendedKey, accountIndexHardened)
+    const accountHardened = createHardenedIndex(account)
+    const accountExtendedKey = deriveChildPrivateKey(coinTypeExtendedKey, accountHardened)
 
     // Sign each input
     for (let i = 0; i < inputs.length; i++) {
@@ -1615,10 +1611,7 @@ async function findAddressIndex(
   const receivingExtendedKey = deriveChildPrivateKey(accountExtendedKey, 0)
 
   for (let i = 0; i < gapLimit * 2; i++) {
-    const addressExtendedKey = deriveChildPrivateKey(receivingExtendedKey, i)
-    const { privateKey } = splitRootExtendedKey(addressExtendedKey)
-    const publicKey = createPublicKey(privateKey)
-    const address = createSegwitAddress(publicKey)
+    const address = deriveAddress(receivingExtendedKey, i)
 
     if (address === targetAddress) {
       return { type: 'receiving', index: i }
@@ -1629,10 +1622,7 @@ async function findAddressIndex(
   const changeExtendedKey = deriveChildPrivateKey(accountExtendedKey, 1)
 
   for (let i = 0; i < gapLimit * 2; i++) {
-    const addressExtendedKey = deriveChildPrivateKey(changeExtendedKey, i)
-    const { privateKey } = splitRootExtendedKey(addressExtendedKey)
-    const publicKey = createPublicKey(privateKey)
-    const address = createSegwitAddress(publicKey)
+    const address = deriveAddress(changeExtendedKey, i)
 
     if (address === targetAddress) {
       return { type: 'change', index: i }
@@ -1716,17 +1706,15 @@ export function findNextUnusedAddress(
   const purposeExtendedKey = deriveChildPrivateKey(rootExtendedKey, purposeIndex)
   const coinTypeIndex = createHardenedIndex(0)
   const coinTypeExtendedKey = deriveChildPrivateKey(purposeExtendedKey, coinTypeIndex)
-  const accountIndex = createHardenedIndex(0)
-  const accountExtendedKey = deriveChildPrivateKey(coinTypeExtendedKey, accountIndex)
+  const account = createHardenedIndex(0)
+  const accountExtendedKey = deriveChildPrivateKey(coinTypeExtendedKey, account)
   const receivingExtendedKey = deriveChildPrivateKey(accountExtendedKey, 0)
 
   let index = 0
   const maxCheck = 100
   while (index < maxCheck) {
-    const addressIndexExtendedKey = deriveChildPrivateKey(receivingExtendedKey, index)
-    const { privateKey } = splitRootExtendedKey(addressIndexExtendedKey)
-    const publicKey = createPublicKey(privateKey)
-    const address = createSegwitAddress(publicKey)
+    const address = deriveAddress(receivingExtendedKey, index)
+
     if (!usedAddresses.has(address)) {
       return address
     }

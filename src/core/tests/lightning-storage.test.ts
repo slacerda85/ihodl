@@ -2,8 +2,8 @@
  * Tests for Lightning Secure Storage
  */
 
-import { LightningSecureStorage, lightningSecureStorage } from '../lib/lightning/storage'
-import { LightningNodeState } from '../lib/lightning/types'
+import { LightningSecureStorage, lightningSecureStorage } from '../../lib/lightning/storage'
+import { LightningNodeState } from '../../lib/lightning/types'
 
 describe('LightningSecureStorage', () => {
   let storage: LightningSecureStorage

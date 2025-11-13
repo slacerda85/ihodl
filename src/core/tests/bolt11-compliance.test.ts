@@ -1,4 +1,4 @@
-import { decodeBolt11Invoice } from '../lib/lightning/utils'
+import { decodeBolt11Invoice } from '../../lib/lightning/utils'
 import { BOLT11_TEST_VECTORS, BOLT11_FEATURE_TEST_VECTORS } from './bolt11-vectors'
 
 describe('BOLT 11 Compliance Tests', () => {

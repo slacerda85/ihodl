@@ -1,5 +1,5 @@
-import { createWallet } from '../lib/wallet'
-import { deriveLightningKeys } from '../lib/wallet/wallet'
+import { createWallet } from '../../lib/wallet'
+import { deriveLightningKeys } from '../../lib/wallet/wallet'
 
 describe('Wallet Creation with Lightning Key Derivation', () => {
   it('should derive Lightning keys correctly', () => {

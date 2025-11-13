@@ -1,5 +1,5 @@
 // Test script for Lightning Network routing functions
-import { estimateRoutingFee } from '../lib/lightning'
+import { estimateRoutingFee } from '../../lib/lightning'
 
 describe('Lightning Routing Functions', () => {
   test('estimateRoutingFee returns valid fee estimate', async () => {

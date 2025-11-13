@@ -3,9 +3,9 @@
  * Tests the integration of key derivation with secure storage
  */
 
-import { LightningKeyManager } from '../lib/lightning/keyManager'
-import { LightningSecureStorage } from '../lib/lightning/storage'
-import { generateMnemonic } from '../lib/bip39'
+import { LightningKeyManager } from '../../lib/lightning/keyManager'
+import { LightningSecureStorage } from '../../lib/lightning/storage'
+import { generateMnemonic } from '../../lib/bip39'
 
 describe('LightningKeyManager', () => {
   let keyManager: LightningKeyManager

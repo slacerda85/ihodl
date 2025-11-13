@@ -18,7 +18,7 @@ import {
   getAvailableBalance,
   getPendingOutgoingAmount,
   getPendingIncomingAmount,
-} from '../lib/lightning/channels'
+} from '../../lib/lightning/channels'
 
 describe('Channel State Management', () => {
   const mockChannel = createChannel(

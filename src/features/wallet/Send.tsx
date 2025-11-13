@@ -45,8 +45,8 @@ export default function Send() {
   const router = useRouter()
 
   const { activeWalletId, wallets, unit } = useWallet()
-  const { state: transactionsState } = useTransactions()
-  const { cachedTransactions } = transactionsState
+  const { friendly } = useTransactions()
+
   // Placeholder functions - need to be implemented
   const getBalance = (walletId: string) => 0
   const getUtxos = (walletId: string): any[] => [] // Return empty array for now
@@ -79,7 +79,7 @@ export default function Send() {
 
   // Check if we have cached data for the active wallet
   const hasTransactionData = activeWalletId
-    ? cachedTransactions.some(cache => cache.walletId === activeWalletId)
+    ? friendly.some(cache => cache.walletId === activeWalletId)
     : false
 
   // Usar o novo método para obter saldo com verificação de segurança
@@ -93,7 +93,7 @@ export default function Send() {
     extendedKey: Uint8Array,
     purpose: number,
     coinType: number,
-    accountIndex: number,
+    account: number,
     addressIndex: number = 0,
   ): string => {
     try {
@@ -106,8 +106,8 @@ export default function Send() {
       const coinTypeExtendedKey = deriveChildPrivateKey(purposeExtendedKey, coinTypeIndex)
 
       // Derive account (hardened)
-      const accountIndexHardened = createHardenedIndex(accountIndex)
-      const accountExtendedKey = deriveChildPrivateKey(coinTypeExtendedKey, accountIndexHardened)
+      const accountHardened = createHardenedIndex(account)
+      const accountExtendedKey = deriveChildPrivateKey(coinTypeExtendedKey, accountHardened)
 
       // Derive change (non-hardened, change = 1)
       const changeExtendedKey = deriveChildPrivateKey(accountExtendedKey, 1)
@@ -386,7 +386,7 @@ export default function Send() {
         extendedKey,
         account.purpose,
         account.coinType,
-        account.accountIndex,
+        account.account,
         0, // Use address index 0 for change
       )
 
@@ -407,7 +407,7 @@ export default function Send() {
         extendedKey,
         purpose: account.purpose,
         coinType: account.coinType,
-        accountIndex: account.accountIndex,
+        account: account.account,
       })
 
       console.log('Signing transaction...')
@@ -418,7 +418,7 @@ export default function Send() {
         extendedKey,
         purpose: account.purpose,
         coinType: account.coinType,
-        accountIndex: account.accountIndex,
+        account: account.account,
       })
 
       console.log('Sending transaction...')

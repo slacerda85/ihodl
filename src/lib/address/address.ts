@@ -242,10 +242,7 @@ export const generateNextUnusedAddressAsync = async (
       await new Promise(resolve => setTimeout(resolve, 0))
 
       try {
-        const addressIndexExtendedKey = deriveChildPrivateKey(receivingExtendedKey, index)
-        const { privateKey } = splitRootExtendedKey(addressIndexExtendedKey)
-        const publicKey = createPublicKey(privateKey)
-        const address = createSegwitAddress(publicKey)
+        const address = deriveAddress(receivingExtendedKey, index)
 
         if (!usedAddressSet.has(address)) {
           nextUnused = address
@@ -291,10 +288,7 @@ export const generateAddressBatch = async (
     await new Promise(resolve => setTimeout(resolve, 0))
 
     try {
-      const addressIndexExtendedKey = deriveChildPrivateKey(extendedKey, i)
-      const { privateKey } = splitRootExtendedKey(addressIndexExtendedKey)
-      const publicKey = createPublicKey(privateKey)
-      const address = createSegwitAddress(publicKey)
+      const address = deriveAddress(extendedKey, i)
 
       addresses.push(address)
 
@@ -439,6 +433,19 @@ export const generateWalletAddressesAsync = async (
 }
 
 /**
+ * Derives a SegWit address from an extended key and address index.
+ * @param extendedKey - The extended key to derive from.
+ * @param index - The address index.
+ * @returns The derived SegWit address.
+ */
+function deriveAddress(extendedKey: any, index: number): string {
+  const addressIndexExtendedKey = deriveChildPrivateKey(extendedKey, index)
+  const { privateKey } = splitRootExtendedKey(addressIndexExtendedKey)
+  const addressIndexPublicKey = createPublicKey(privateKey)
+  return createSegwitAddress(addressIndexPublicKey)
+}
+
+/**
  * Generates addresses for a wallet with optional change addresses
  * @param extendedKey - The extended key to derive addresses from
  * @param changeExtendedKey - The extended key to derive change addresses from (optional)
@@ -454,17 +461,11 @@ function generateAddresses(
 ): Pick<AddressDetails, 'address' | 'index' | 'type'>[] {
   const addresses: Pick<AddressDetails, 'address' | 'index' | 'type'>[] = []
   for (let i = startIndex; i < startIndex + count; i++) {
-    const addressIndexExtendedKey = deriveChildPrivateKey(extendedKey, i)
-    const { privateKey } = splitRootExtendedKey(addressIndexExtendedKey)
-    const addressIndexPublicKey = createPublicKey(privateKey)
-    const address = createSegwitAddress(addressIndexPublicKey)
+    const address = deriveAddress(extendedKey, i)
 
     let changeAddress: string | undefined
     if (changeExtendedKey) {
-      const changeAddressIndexExtendedKey = deriveChildPrivateKey(changeExtendedKey, i)
-      const { privateKey: changePrivateKey } = splitRootExtendedKey(changeAddressIndexExtendedKey)
-      const changeAddressIndexPublicKey = createPublicKey(changePrivateKey)
-      changeAddress = createSegwitAddress(changeAddressIndexPublicKey)
+      changeAddress = deriveAddress(changeExtendedKey, i)
     }
 
     addresses.push({ address, index: i, type: 'receiving' })
@@ -477,6 +478,7 @@ function generateAddresses(
 
 export {
   createSegwitAddress,
+  deriveAddress,
   fromBech32,
   toScriptHash,
   legacyToScriptHash,

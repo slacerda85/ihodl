@@ -1,3 +1,5 @@
+import { Tx } from '../transactions'
+
 // bitcoin only
 export type Purpose =
   | 44 // Legacy
@@ -7,6 +9,29 @@ export type Purpose =
   | 9735 // Lightning
 
 export type CoinType = 0 // Bitcoin
+
+export type Account = {
+  purpose: Purpose
+  coinType: CoinType
+  account: number
+  change: number
+  index: number
+  // lightning?: LightningAccountData
+}
+
+export type AccountDetails = Account & {
+  address: string
+  txs: Tx[]
+}
+
+export interface KeyVersion {
+  private: Uint8Array
+  public: Uint8Array
+}
+
+export type KeyVersionType = 'bip32' | 'bip49' | 'bip84'
+
+export type NetworkType = 'mainnet' | 'testnet' | 'regtest'
 
 export type LightningAccountType = 'node' | 'channel' | 'funding_wallet'
 
@@ -40,20 +65,3 @@ export type LightningAccountData = {
   lnVer?: number
   caseIndex?: number
 }
-
-export type Account = {
-  purpose: Purpose
-  coinType: CoinType
-  accountIndex: number
-  // Lightning-specific fields (optional, only used when purpose === 9735)
-  lightning?: LightningAccountData
-}
-
-export interface KeyVersion {
-  private: Uint8Array
-  public: Uint8Array
-}
-
-export type KeyVersionType = 'bip32' | 'bip49' | 'bip84'
-
-export type NetworkType = 'mainnet' | 'testnet' | 'regtest'
