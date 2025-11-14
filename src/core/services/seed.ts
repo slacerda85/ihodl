@@ -1,29 +1,47 @@
+import { entropyToMnemonic } from '../lib'
+import { createEntropy } from '../lib/crypto'
 import { SeedRepository } from '../repositories/seed'
 
 interface SeedServiceInterface {
-  getSeedByWalletId(walletId: string): Promise<string>
-  saveSeedForWalletId(walletId: string, seed: string): Promise<void>
-  deleteSeedByWalletId(walletId: string): Promise<void>
+  createSeed(): string
+  getSeedByWalletId(walletId: string): string
+  getSeedByWalletIdWithPassword(walletId: string, password: string): string
+  saveSeedForWalletId(walletId: string, seed: string): void
+  deleteSeedByWalletId(walletId: string): void
 }
 
 export class SeedService implements SeedServiceInterface {
-  async getSeedByWalletId(walletId: string): Promise<string> {
+  createSeed(): string {
+    const entropy = createEntropy(16) // 128 bits
+    const seed = entropyToMnemonic(entropy)
+    return seed
+  }
+
+  getSeedByWalletId(walletId: string): string {
     // Implementation to retrieve seed by wallet ID
     const seedRepository = new SeedRepository()
-    const seed = await seedRepository.findByWalletId(walletId)
+    const seed = seedRepository.findByWalletId(walletId)
     if (!seed) {
       throw new Error('Seed not found for the given wallet ID')
     }
     return seed
   }
-  async saveSeedForWalletId(walletId: string, seed: string, password?: string): Promise<void> {
+  getSeedByWalletIdWithPassword(walletId: string, password: string): string {
+    const seedRepository = new SeedRepository()
+    const seed = seedRepository.findByWalletId(walletId, password)
+    if (!seed) {
+      throw new Error('Seed not found for the given wallet ID')
+    }
+    return seed
+  }
+  saveSeedForWalletId(walletId: string, seed: string, password?: string): void {
     // Implementation to save seed for a wallet ID
     const seedRepository = new SeedRepository()
-    await seedRepository.save(walletId, seed, password)
+    seedRepository.save(walletId, seed, password)
   }
-  async deleteSeedByWalletId(walletId: string): Promise<void> {
+  deleteSeedByWalletId(walletId: string): void {
     // Implementation to delete seed by wallet ID
     const seedRepository = new SeedRepository()
-    await seedRepository.deleteByWalletId(walletId)
+    seedRepository.deleteByWalletId(walletId)
   }
 }

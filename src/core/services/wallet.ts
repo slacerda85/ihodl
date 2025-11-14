@@ -1,9 +1,9 @@
-import { randomUUID } from '../lib/crypto'
-import { createHardenedIndex } from '../lib/key'
-import { Account, CoinType, Purpose } from '../models/account'
-import { Wallet } from '../models/wallet'
+import { randomUUID } from '@/core/lib/crypto'
+import { createHardenedIndex } from '@/core/lib/key'
+import { Account, CoinType, Purpose } from '@/core/models/account'
+import { Wallet } from '@/core/models/wallet'
 import { SeedService } from './seed'
-import { WalletRepository } from '../repositories/wallet'
+import { WalletRepository } from '@/core/repositories/wallet'
 
 type CreateWalletParams = Omit<Wallet, 'id'> & {
   seed?: string
@@ -11,13 +11,15 @@ type CreateWalletParams = Omit<Wallet, 'id'> & {
 }
 
 interface WalletServiceInterface {
-  createWallet(params: CreateWalletParams): Promise<Wallet>
-  getWalletById(id: string): Promise<Wallet | null>
+  createWallet(params: CreateWalletParams): Wallet
+  getWalletById(id: string): Wallet | null
   getAllWallets(): Wallet[]
+  editWallet(walletId: string, updates: Partial<Omit<Wallet, 'id'>>): void
+  deleteWallet(walletId: string): void
 }
 
 export class WalletService implements WalletServiceInterface {
-  async createWallet(params: CreateWalletParams): Promise<Wallet> {
+  createWallet(params: CreateWalletParams): Wallet {
     const id = randomUUID()
     const { name, cold, accounts, seed, password } = params
 
@@ -31,11 +33,10 @@ export class WalletService implements WalletServiceInterface {
       accounts.push(defaultAccount)
     }
 
+    const seedService = new SeedService()
     // save seed phrase if provided
-    if (seed) {
-      const seedService = new SeedService()
-      await seedService.saveSeedForWalletId(id, seed, password)
-    }
+    const seedToStore = seed || seedService.createSeed()
+    seedService.saveSeedForWalletId(id, seedToStore, password)
 
     const newWallet: Wallet = {
       id,
@@ -46,14 +47,14 @@ export class WalletService implements WalletServiceInterface {
 
     // save wallet to storage
     const walletRepository = new WalletRepository()
-    await walletRepository.save(newWallet)
+    walletRepository.save(newWallet)
 
     return newWallet
   }
 
-  async getWalletById(id: string): Promise<Wallet | null> {
+  getWalletById(id: string): Wallet | null {
     const walletRepository = new WalletRepository()
-    const wallet = await walletRepository.findById(id)
+    const wallet = walletRepository.findById(id)
     return wallet
   }
 
@@ -61,5 +62,24 @@ export class WalletService implements WalletServiceInterface {
     const walletRepository = new WalletRepository()
     const wallets = walletRepository.findAll()
     return wallets
+  }
+
+  editWallet(walletId: string, updates: Partial<Omit<Wallet, 'id'>>): void {
+    const walletRepository = new WalletRepository()
+    const wallet = walletRepository.findById(walletId)
+    if (!wallet) {
+      throw new Error('Wallet not found')
+    }
+    const updatedWallet = { ...wallet, ...updates }
+    walletRepository.save(updatedWallet)
+  }
+
+  deleteWallet(walletId: string): void {
+    const walletRepository = new WalletRepository()
+    const wallet = walletRepository.findById(walletId)
+    if (!wallet) {
+      throw new Error('Wallet not found')
+    }
+    walletRepository.delete(walletId)
   }
 }

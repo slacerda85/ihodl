@@ -11,17 +11,17 @@ import Button from '@/ui/Button'
 
 export default function DeleteWallet() {
   const { activeWalletId, wallets, unlinkWallet } = useWallet()
-  const walletName = wallets.find(w => w.walletId === activeWalletId)?.walletName
+  const walletName = wallets.find(w => w.id === activeWalletId)?.name
 
   const router = useRouter()
   const { isDark } = useSettings()
 
   const [submitting, setSubmitting] = useState<boolean>(false)
 
-  const handleDeleteWallet = useCallback(async () => {
+  const handleDeleteWallet = useCallback(() => {
     setSubmitting(true)
     if (activeWalletId) {
-      await unlinkWallet(activeWalletId)
+      unlinkWallet(activeWalletId)
     }
     setSubmitting(false)
     setTimeout(() => router.dismiss(2), 0)

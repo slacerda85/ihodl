@@ -71,10 +71,11 @@ export default function ImportWallet() {
     setSubmitting(true)
     try {
       // Use the wallet hook to import wallet - it handles all the lib calls and state updates
-      await importWallet({
-        walletName,
-        seedPhrase: seedPhrase.trim(),
-        usePassword,
+      importWallet({
+        name: walletName.trim(),
+        seed: seedPhrase.trim(),
+        accounts: [],
+        cold: false,
         password,
       })
 

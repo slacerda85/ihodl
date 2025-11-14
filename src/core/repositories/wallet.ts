@@ -6,16 +6,16 @@ const walletStorage = new MMKV({
 })
 
 interface WalletRepositoryInterface {
-  save(wallet: Wallet): Promise<void>
-  findById(id: string): Promise<Wallet | null>
-  delete(id: string): Promise<void>
+  save(wallet: Wallet): void
+  findById(id: string): Wallet | null
+  delete(id: string): void
 }
 
 export class WalletRepository implements WalletRepositoryInterface {
-  async save(wallet: Wallet): Promise<void> {
+  save(wallet: Wallet): void {
     walletStorage.set(`wallet_${wallet.id}`, JSON.stringify(wallet))
   }
-  async findById(id: string): Promise<Wallet | null> {
+  findById(id: string): Wallet | null {
     const walletData = walletStorage.getString(`wallet_${id}`)
     if (!walletData) {
       return null
@@ -35,7 +35,7 @@ export class WalletRepository implements WalletRepositoryInterface {
     }
     return wallets
   }
-  async delete(id: string): Promise<void> {
+  delete(id: string): void {
     walletStorage.delete(`wallet_${id}`)
   }
 }

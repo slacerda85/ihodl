@@ -1,4 +1,4 @@
-import React, { Fragment } from 'react'
+import { Fragment } from 'react'
 import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator } from 'react-native'
 import colors from '@/ui/colors'
 import { useRouter } from 'expo-router'
@@ -8,8 +8,6 @@ import CreateWalletIcon from './CreateWalletIcon'
 import ImportWalletIcon from './ImportWalletIcon'
 import { useWallet } from './WalletProvider'
 import { useSettings } from '../settings/SettingsProvider'
-import { walletActions } from './state'
-// import { setActiveWalletId } from '@/lib/wallet'
 
 export default function ManageWallets() {
   const router = useRouter()
@@ -25,21 +23,10 @@ export default function ManageWallets() {
   }
 
   function handleSelectWallet(walletId: string) {
-    try {
-      toggleLoading(true)
-      toggleActiveWallet(walletId)
-      // dispatch(walletActions.setLoadingWallet(true))
-      // dispatch(walletActions.setActiveWallet(walletId))
-      router.dismiss()
-    } catch (error) {
-      console.error('Error selecting wallet:', error)
-      // Handle error if needed - you could add error state if required
-    } finally {
-      // Keep loading state active briefly to allow the UI to update
-      setTimeout(() => {
-        toggleLoading(false)
-      }, 500)
-    }
+    toggleLoading(true)
+    toggleActiveWallet(walletId)
+    router.dismiss()
+    toggleLoading(false)
   }
 
   return (

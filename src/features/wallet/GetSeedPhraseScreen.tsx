@@ -5,7 +5,7 @@ import { useSettings } from '../settings/SettingsProvider'
 import { alpha } from '@/ui/utils'
 import colors from '@/ui/colors'
 import Divider from '@/ui/Divider'
-import { getWalletSeedPhrase } from '@/lib/secureStorage'
+import { SeedService } from '@/core/services/seed'
 
 export default function GetSeedPhraseScreen() {
   const { isDark } = useSettings()
@@ -23,7 +23,8 @@ export default function GetSeedPhraseScreen() {
       try {
         // TODO: Get password from user or state
         const password = '' // Temporary: assume no password for now
-        const phrase = await getWalletSeedPhrase(activeWalletId, password)
+        const seedService = new SeedService()
+        const phrase = await seedService.getSeedByWalletIdWithPassword(activeWalletId, password)
         setSeedPhrase(phrase)
       } catch (error) {
         console.error('Error loading seed phrase:', error)

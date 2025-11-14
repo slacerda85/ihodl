@@ -141,7 +141,7 @@ export default function WalletLayout() {
         name="index"
         options={{
           headerLeft: () => (empty ? null : <ManageWallets colorMode={colorMode} />),
-          walletActions: () => (empty ? null : <WalletActions colorMode={colorMode} />),
+          headerRight: () => (empty ? null : <WalletActions colorMode={colorMode} />),
           headerTitleAlign: 'center',
           title: selectedWallet?.name || (empty ? 'No wallets' : 'Select wallet'),
         }}
