@@ -1,4 +1,60 @@
-import { createContext, useContext, useReducer, ReactNode, useEffect } from 'react'
+import { Account, AccountDetails } from '@/core/models/account'
+import { createContext, ReactNode, useState } from 'react'
+import { useWallet } from '../wallet'
+import { AccountService } from '@/core/services/account'
+
+type TransactionsContextType = {
+  history: (AccountDetails & { walletId: string })[]
+}
+
+export const TransactionsContext = createContext<TransactionsContextType | null>(null)
+
+type TransactionsProviderProps = {
+  children: ReactNode
+}
+
+export default function TransactionsProvider({ children }: TransactionsProviderProps) {
+  const { activeWalletId, wallets } = useWallet()
+  const wallet = wallets.find(w => w.id === activeWalletId)
+  const accounts = wallet?.accounts || []
+  const accountService = new AccountService()
+
+  const discoverAccounts = async (accounts: Account[], walletId: string) => {
+    const allDetails: (AccountDetails & { walletId: string })[] = []
+    for (const account of accounts) {
+      const details = await accountService.discover({ ...account, walletId })
+      const detailsWithWalletId = details.map(d => ({ ...d, walletId }))
+      allDetails.push(...detailsWithWalletId)
+    }
+    return allDetails
+  }
+
+  const [history, setHistory] = useState<(AccountDetails & { walletId: string })[]>(() => {
+    if (wallet && accounts.length > 0) {
+      let details: (AccountDetails & { walletId: string })[] = []
+      discoverAccounts(accounts, wallet.id)
+        .then(resolvedDetails => {
+          details = resolvedDetails
+          setHistory(details)
+        })
+        .catch(console.error)
+      return details
+    }
+    return []
+  })
+
+  return (
+    <TransactionsContext.Provider
+      value={{
+        history,
+      }}
+    >
+      {children}
+    </TransactionsContext.Provider>
+  )
+}
+
+/* import { createContext, useContext, useReducer, ReactNode, useEffect } from 'react'
 import { transactionsReducer, initialTransactionsState, TransactionsState, actions } from './state'
 import { MMKV } from 'react-native-mmkv'
 import { useElectrum } from '../electrum/ElectrumProvider'
@@ -135,3 +191,4 @@ export const useTransactions = (): TransactionsContextType => {
   }
   return context
 }
+ */

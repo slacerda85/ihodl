@@ -1,152 +1,92 @@
-import React, { createContext, useContext, useReducer, ReactNode, useEffect, Dispatch } from 'react'
-import {
-  walletReducer,
-  initialWalletState,
-  WalletState,
-  WalletAction,
-  walletActions,
-} from './state'
-import { MMKV } from 'react-native-mmkv'
-import { createWallet as createWalletLib, storeWalletSeed } from '@/lib/wallet/wallet'
+import { Wallet } from '@/core/models/wallet'
+import { WalletService } from '@/core/services/wallet'
+import { createContext, ReactNode, useContext, useState } from 'react'
 
-const storage = new MMKV()
-const WALLET_STORAGE_KEY = 'wallet-state'
-
-// Load initial state from storage
-const loadPersistedWalletState = (): WalletState => {
-  try {
-    const persistedState = storage.getString(WALLET_STORAGE_KEY)
-    if (persistedState) {
-      const parsed = JSON.parse(persistedState)
-      // Merge with initial state to handle new properties
-      return {
-        ...initialWalletState,
-        ...parsed,
-        // Reset loading states on app start
-        loading: false,
-      }
-    }
-  } catch (error) {
-    console.error('Error loading persisted wallet state:', error)
-  }
-  return initialWalletState
-}
-
-// Context
-type WalletContextType = WalletState & {
-  dispatch: Dispatch<WalletAction>
-  actions: typeof walletActions
+type WalletContextType = {
+  activeWalletId: string | undefined
+  loading: boolean
+  wallets: Wallet[]
   // helper functions
-  createWallet: (params: {
-    walletName: string
-    offline: boolean
-    usePassword: boolean
-    password: string
-  }) => Promise<void>
-  importWallet: (params: {
-    walletName: string
-    seedPhrase: string
-    usePassword: boolean
-    password: string
-  }) => Promise<void>
-  unlinkWallet: (walletId: string) => Promise<void>
+  createWallet: (
+    params: Pick<Wallet, 'name' | 'accounts' | 'cold'> & { password?: string },
+  ) => Promise<void>
+  importWallet: (
+    params: Pick<Wallet, 'name' | 'accounts' | 'cold'> & { seed: string; password?: string },
+  ) => Promise<void>
+  toggleActiveWallet: (walletId: string) => void
+  toggleLoading: (value: boolean) => void
 }
 
-const WalletContext = createContext<WalletContextType | undefined>(undefined)
+const WalletContext = createContext<WalletContextType | null>(null)
 
-// Provider
-export default function WalletProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(walletReducer, loadPersistedWalletState())
+interface WalletProviderProps {
+  children: ReactNode
+}
 
-  // Wallet creation function
-  const createWallet = async (params: {
-    walletName: string
-    offline: boolean
-    usePassword: boolean
-    password: string
-  }) => {
-    const passwordToUse = params.usePassword && params.password ? params.password : ''
+export default function WalletProvider({ children }: WalletProviderProps) {
+  const [loading, setLoading] = useState<boolean>(false)
+  const [wallets, setWallets] = useState<Wallet[]>(getInitialWallets)
+  const [activeWalletId, setActiveWalletId] = useState<string>(wallets[0]?.id)
 
-    try {
-      // Create wallet using the proper wallet library function
-      const result = createWalletLib({
-        walletName: params.walletName,
-        cold: params.offline,
-        // seedPhrase is optional - if not provided, a new one will be generated
-      })
-
-      // Store the seed phrase securely
-      await storeWalletSeed(result.wallet.walletId, result.seedPhrase, passwordToUse)
-
-      // Dispatch the action to add wallet to state
-      dispatch(walletActions.createWallet(result.wallet))
-
-      console.log('Wallet created successfully:', result.wallet.walletId)
-    } catch (error) {
-      console.error('Error creating wallet:', error)
-      throw error // Re-throw to let the component handle the error
-    }
+  function getInitialWallets(): Wallet[] {
+    const walletService = new WalletService()
+    return walletService.getAllWallets()
   }
 
-  // Wallet import function
-  const importWallet = async (params: {
-    walletName: string
-    seedPhrase: string
-    usePassword: boolean
-    password: string
-  }) => {
-    const passwordToUse = params.usePassword && params.password ? params.password : ''
-
-    try {
-      // Import wallet using the wallet library function with provided seed phrase
-      const result = createWalletLib({
-        walletName: params.walletName,
-        seedPhrase: params.seedPhrase,
-        cold: false, // Import wallets are typically not cold wallets
-      })
-
-      // Store the seed phrase securely
-      await storeWalletSeed(result.wallet.walletId, result.seedPhrase, passwordToUse)
-
-      // Dispatch the action to add wallet to state
-      dispatch(walletActions.createWallet(result.wallet))
-
-      console.log('Wallet imported successfully:', result.wallet.walletId)
-    } catch (error) {
-      console.error('Error importing wallet:', error)
-      throw error // Re-throw to let the component handle the error
-    }
+  async function createWallet(
+    params: Pick<Wallet, 'name' | 'accounts' | 'cold'> & { password?: string },
+  ) {
+    setLoading(true)
+    const { name, accounts, cold, password } = params
+    const walletService = new WalletService()
+    const newWallet = await walletService.createWallet({
+      name,
+      accounts,
+      cold,
+      password,
+    })
+    const updatedWallets = walletService.getAllWallets()
+    setWallets(updatedWallets)
+    setActiveWalletId(newWallet.id)
+    setLoading(false)
   }
 
-  const unlinkWallet = async (walletId: string) => {
-    dispatch(walletActions.deleteWallet(walletId))
+  async function importWallet(
+    params: Pick<Wallet, 'name' | 'accounts' | 'cold'> & { seed: string; password?: string },
+  ) {
+    setLoading(true)
+    const { name, accounts, cold, seed, password } = params
+    const walletService = new WalletService()
+    await walletService.createWallet({
+      name,
+      accounts,
+      cold,
+      seed,
+      password,
+    })
+    const updatedWallets = walletService.getAllWallets()
+    setWallets(updatedWallets)
+    setLoading(false)
   }
 
-  // Persist state changes
-  useEffect(() => {
-    try {
-      // Create partial state for persistence (exclude loading states)
-      const stateToPersist = {
-        wallets: state.wallets,
-        activeWalletId: state.activeWalletId,
-        unit: state.unit,
-      }
+  function toggleActiveWallet(walletId: string) {
+    setActiveWalletId(walletId)
+  }
 
-      storage.set(WALLET_STORAGE_KEY, JSON.stringify(stateToPersist))
-    } catch (error) {
-      console.error('Error persisting wallet state:', error)
-    }
-  }, [state])
+  function toggleLoading(value: boolean) {
+    setLoading(value)
+  }
 
   return (
     <WalletContext.Provider
       value={{
-        ...state,
-        actions: walletActions,
-        dispatch,
+        activeWalletId,
+        loading,
+        wallets,
+        toggleActiveWallet,
+        toggleLoading,
         createWallet,
         importWallet,
-        unlinkWallet,
       }}
     >
       {children}
@@ -154,7 +94,7 @@ export default function WalletProvider({ children }: { children: ReactNode }) {
   )
 }
 
-export const useWallet = (): WalletContextType => {
+export function useWallet() {
   const context = useContext(WalletContext)
   if (!context) {
     throw new Error('useWallet must be used within a WalletProvider')

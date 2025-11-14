@@ -13,7 +13,7 @@ export default function WalletBalance() {
   const { isDark } = useSettings()
 
   const [balance, setBalance] = useState(0)
-  const { friendly } = useTransactions()
+  /* const { friendly } = useTransactions()
   const { loading: loadingWallet, unit, activeWalletId, dispatch: walletDispatch } = useWallet()
   const loading = loadingWallet || false
   // Calculate balance from cached transactions
@@ -33,10 +33,10 @@ export default function WalletBalance() {
       }, 0)
     },
     [friendly],
-  )
+  ) */
 
   // Set unit function
-  const setUnit = (newUnit: 'BTC' | 'Sats') => {
+  /* const setUnit = (newUnit: 'BTC' | 'Sats') => {
     walletDispatch({ type: 'SET_UNIT', payload: newUnit })
   }
 
@@ -54,9 +54,9 @@ export default function WalletBalance() {
     } else {
       setBalance(0)
     }
-  }, [activeWalletId, getBalance])
+  }, [activeWalletId, getBalance]) */
 
-  if (loading) {
+  /* if (loading) {
     return (
       <View style={styles.balanceSection}>
         <View style={styles.loadingContainer}>
@@ -67,7 +67,7 @@ export default function WalletBalance() {
         </View>
       </View>
     )
-  }
+  } */
 
   return (
     <View style={styles.balanceSection}>
@@ -83,12 +83,12 @@ export default function WalletBalance() {
       >
         <View style={{ flex: 1, alignItems: 'center' }} />
         <Text style={[styles.balanceAmount, isDark && styles.balanceAmountDark]}>
-          {formatBalance(balance, unit)}
+          {formatBalance(balance, 'BTC')}
         </Text>
-        <Pressable onPress={() => setUnit(unit === 'BTC' ? 'Sats' : 'BTC')}>
+        <Pressable /* onPress={() => setUnit(unit === 'BTC' ? 'Sats' : 'BTC')} */>
           <GlassView isInteractive style={styles.unitButton}>
             <Text style={[styles.balanceCurrency, isDark && styles.balanceCurrencyDark]}>
-              {unit}
+              {'BTC'}
             </Text>
             <SwapIcon
               size={16}

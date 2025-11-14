@@ -20,7 +20,7 @@ export default function CreateWallet() {
   const { createWallet } = useWallet()
   const [submitting, setSubmitting] = useState<boolean>(false)
 
-  const [offline, setOffline] = useState<boolean>(false)
+  const [cold, setCold] = useState<boolean>(false)
   const [walletName, setWalletName] = useState<string>('')
   const [password, setPassword] = useState<string>('')
   const [usePassword, setUsePassword] = useState<boolean>(false)
@@ -34,9 +34,9 @@ export default function CreateWallet() {
     try {
       // Use the wallet hook to create wallet - it handles all the lib calls and state updates
       await createWallet({
-        walletName,
-        offline,
-        usePassword,
+        name: walletName.trim(),
+        cold,
+        accounts: [],
         password,
       })
 
@@ -46,10 +46,10 @@ export default function CreateWallet() {
     } catch (error) {
       console.error('Error creating wallet:', error)
     }
-  }, [walletName, offline, usePassword, password, createWallet, router])
+  }, [walletName, cold, password, createWallet, router])
 
-  function handleToggleOffline() {
-    setOffline(prev => !prev)
+  function handleToggleCold() {
+    setCold(prev => !prev)
   }
 
   return (
@@ -86,7 +86,7 @@ export default function CreateWallet() {
           <Text style={[styles.toggleText, isDark && styles.toggleTextDark]}>
             Offline mode (cold wallet)
           </Text>
-          <Switch onValueChange={handleToggleOffline} value={offline} />
+          <Switch onValueChange={handleToggleCold} value={cold} />
         </View>
         <GlassView
           style={styles.infoBox}
@@ -106,9 +106,9 @@ export default function CreateWallet() {
       </GlassView>
 
       <Button onPress={handleCreateWallet} tintColor={alpha(colors.primary, 0.8)}>
-        {submitting ? <ActivityIndicator color={offline ? colors.primary : colors.white} /> : null}
+        {submitting ? <ActivityIndicator color={cold ? colors.primary : colors.white} /> : null}
         <Text style={{ color: isDark ? colors.textSecondary.dark : colors.textSecondary.light }}>
-          {submitting ? 'Creating...' : offline ? 'Create cold wallet' : 'Create wallet'}
+          {submitting ? 'Creating...' : cold ? 'Create cold wallet' : 'Create wallet'}
         </Text>
       </Button>
     </View>

@@ -4,11 +4,11 @@ import colors from '@/ui/colors'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { useCallback, useEffect } from 'react'
-import { useWallet } from '@/features/wallet'
 import { useSettings } from '@/features/settings'
 import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
 import { ExtendedStackNavigationOptions } from 'expo-router/build/layouts/StackClient'
 import { alpha } from '@/ui/utils'
+import { useWallet } from '@/features/wallet'
 
 function WalletActions({ colorMode }: { colorMode: 'light' | 'dark' }) {
   return (
@@ -108,8 +108,10 @@ const CloseModalButton = ({ title }: { title?: string }) => {
 
 export default function WalletLayout() {
   const { activeWalletId, wallets } = useWallet()
-  const selectedWallet = wallets?.find(wallet => wallet.walletId === activeWalletId)
+  const selectedWallet = wallets?.find(wallet => wallet.id === activeWalletId)
   const empty = wallets === undefined || wallets?.length === 0
+  /* const
+   */
 
   const { isDark } = useSettings()
   const colorMode = isDark ? 'dark' : 'light'
@@ -141,7 +143,7 @@ export default function WalletLayout() {
           headerLeft: () => (empty ? null : <ManageWallets colorMode={colorMode} />),
           walletActions: () => (empty ? null : <WalletActions colorMode={colorMode} />),
           headerTitleAlign: 'center',
-          title: selectedWallet?.walletName || (empty ? 'No wallets' : 'Select wallet'),
+          title: selectedWallet?.name || (empty ? 'No wallets' : 'Select wallet'),
         }}
       />
       <Stack.Screen

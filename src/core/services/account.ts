@@ -1,4 +1,4 @@
-import { Account, AccountDetails } from '../models/account'
+import { Account, AccountDetails, Purpose } from '../models/account'
 import { AddressService } from './address'
 import { KeyService } from './key'
 import { SeedService } from './seed'
@@ -6,24 +6,18 @@ import { SeedService } from './seed'
 const GAP_LIMIT = 20
 
 interface AccountServiceInterface {
-  discover(
-    props: Account & {
-      walletId: string
-    },
-  ): Promise<AccountDetails[]>
+  discover(props: Account & { walletId: string }): Promise<AccountDetails[]>
 }
 
-class AccountService implements AccountServiceInterface {
-  async discover({
-    walletId,
-    purpose,
-    coinType,
-    accountIndex,
-  }: Account & { walletId: string }): Promise<AccountDetails[]> {
-    // get seed
+export class AccountService implements AccountServiceInterface {
+  private async discoverAddressesForAccount(
+    walletId: string,
+    purpose: Purpose,
+    coinType: number,
+    accountIndex: number,
+  ): Promise<AccountDetails[]> {
     const seedService = new SeedService()
     const seed = await seedService.getSeedByWalletId(walletId)
-    // derive account
     const keyService = new KeyService()
     const masterKey = await keyService.createMasterKey(seed)
     const { receivingAccountKey, changeAccountKey } = keyService.deriveAccountKeys({
@@ -33,73 +27,86 @@ class AccountService implements AccountServiceInterface {
       accountIndex,
     })
 
-    // derive addresses until GAP_LIMIT is reached (bip44 account discovery loop)
-    let startIndex = 0
+    // Discover receiving addresses
+    const receivingAddresses = await this.discoverChainAddresses(
+      receivingAccountKey,
+      purpose,
+      coinType,
+      accountIndex,
+      0, // change = 0 for receiving
+    )
+
+    // Discover change addresses
+    const changeAddresses = await this.discoverChainAddresses(
+      changeAccountKey,
+      purpose,
+      coinType,
+      accountIndex,
+      1, // change = 1 for change
+    )
+
+    return [...receivingAddresses, ...changeAddresses]
+  }
+
+  private async discoverChainAddresses(
+    accountKey: any,
+    purpose: number,
+    coinType: number,
+    accountIndex: number,
+    change: number,
+  ): Promise<AccountDetails[]> {
+    const addressService = new AddressService()
+    const keyService = new KeyService()
     const discovered: AccountDetails[] = []
+    let startIndex = 0
     let hasUsedInBatch = true
 
-    const addressService = new AddressService()
-
     while (hasUsedInBatch) {
-      const batchStart = discovered.length
+      const batch: AccountDetails[] = []
       for (let i = startIndex; i < startIndex + GAP_LIMIT; i++) {
-        // derive receiving address
-        const { addressIndexKey: receivingAddressKey } = keyService.deriveAddressIndexKeys(
-          receivingAccountKey,
-          i,
-        )
-        const receivingPublicKey = keyService.deriveAddressPublicKey(receivingAddressKey)
-        const receivingAddress = await addressService.createAddress(receivingPublicKey)
-        // derive change address
-        const { addressIndexKey: changeAddressKey } = keyService.deriveAddressIndexKeys(
-          changeAccountKey,
-          i,
-        )
-        const changePublicKey = keyService.deriveAddressPublicKey(changeAddressKey)
-        const changeAddress = await addressService.createAddress(changePublicKey)
-
-        // first, save both addresses as discovered, save in repository, with empty txs
-        discovered.push({
+        const { addressKey } = keyService.deriveAddressKeys(accountKey, i)
+        const publicKey = keyService.deriveAddressPublicKey(addressKey)
+        const address = await addressService.createAddress(publicKey)
+        const accountDetail: AccountDetails = {
           purpose,
           coinType,
           accountIndex,
-          change: 0,
+          change,
           addressIndex: i,
-          address: receivingAddress,
+          address,
           txs: [],
-        })
-        discovered.push({
-          purpose,
-          coinType,
-          accountIndex,
-          change: 1,
-          addressIndex: i,
-          address: changeAddress,
-          txs: [],
-        })
+        }
+        batch.push(accountDetail)
+        discovered.push(accountDetail)
       }
-      startIndex += GAP_LIMIT
 
-      // fetch history for the new batch only
-      const newBatch = discovered.slice(batchStart)
-      const addressHistory = await Promise.all(
-        newBatch.map(async accountDetail => {
-          const txs = await addressService.getAddressHistory(accountDetail.address)
-          return { address: accountDetail.address, txs }
+      // Fetch histories for batch
+      const histories = await Promise.all(
+        batch.map(async detail => {
+          const txs = await addressService.getAddressHistory(detail.address)
+          return { address: detail.address, txs }
         }),
       )
 
-      // check if any address in the new batch has transactions
-      hasUsedInBatch = addressHistory.some(history => history.txs.length > 0)
-
-      // update txs in discovered
-      for (const history of addressHistory) {
-        const accountDetail = discovered.find(ad => ad.address === history.address)
-        if (accountDetail) {
-          accountDetail.txs = history.txs
-        }
+      // Update txs in batch (which are already in discovered)
+      for (let i = 0; i < batch.length; i++) {
+        batch[i].txs = histories[i].txs
       }
+
+      // Check if batch has used addresses
+      hasUsedInBatch = histories.some(h => h.txs.length > 0)
+      startIndex += GAP_LIMIT
     }
+
     return discovered
+  }
+
+  async discover({
+    walletId,
+    purpose,
+    coinType,
+    accountIndex,
+  }: Account & { walletId: string }): Promise<AccountDetails[]> {
+    return this.discoverAddressesForAccount(walletId, purpose, coinType, accountIndex)
   }
 }

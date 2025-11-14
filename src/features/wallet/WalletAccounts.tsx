@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, FlatList, ActivityIndicator } from 'react-native'
-import { Account } from '@/lib/account'
+import { Account } from '@/core/models/account'
 import BitcoinLogo from '@/assets/bitcoin-logo'
 import LightningLogo from '@/assets/lightning-logo'
 import { ReactNode } from 'react'
@@ -44,7 +44,7 @@ export default function WalletAccounts() {
     )
   }
 
-  const accounts = wallets.find(wallet => wallet.walletId === activeWalletId)?.accounts || []
+  const accounts = wallets.find(wallet => wallet.id === activeWalletId)?.accounts || []
 
   if (accounts.length === 0) {
     return (
@@ -125,13 +125,13 @@ interface AccountDetailsProps {
 function AccountDetails({ account }: AccountDetailsProps) {
   const { isDark } = useSettings()
 
-  const { loading: loadingWallet, unit, activeWalletId } = useWallet()
-  const { friendly, loading: loadingTx } = useTransactions()
+  const { loading: loadingWallet, activeWalletId } = useWallet()
+  // const { friendly, loading: loadingTx } = useTransactions()
 
-  const loading = loadingWallet || loadingTx
+  const loading = loadingWallet // || loadingTx
 
   // Calculate balance from transactions
-  const calculateBalance = (): number => {
+  /* const calculateBalance = (): number => {
     if (!activeWalletId) return 0
 
     const walletCache = friendly.find(cache => cache.walletId === activeWalletId)
@@ -147,12 +147,9 @@ function AccountDetails({ account }: AccountDetailsProps) {
       }
       return balance
     }, 0)
-  }
+  } */
 
-  const balance = calculateBalance()
-
-  const isLightningAccount = account.purpose === 9735
-  const lightningBalance = 0 // Placeholder for lightning balance - TODO: implement when lightning is ready
+  const balance = 0 // calculateBalance()
 
   const accountIcon = getPurposeIcon(account.purpose)
 
@@ -181,9 +178,7 @@ function AccountDetails({ account }: AccountDetailsProps) {
             ) : (
               <>
                 <Text style={[styles.accountBalance, isDark && styles.accountBalanceDark]}>
-                  {isLightningAccount
-                    ? `${formatBalance(lightningBalance, unit)} ${unit}`
-                    : `${formatBalance(balance / 1e8, unit)} ${unit}`}
+                  {`${formatBalance(balance / 1e8, 'BTC')} BTC`}
                 </Text>
               </>
             )}

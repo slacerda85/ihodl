@@ -111,7 +111,7 @@ function randomUUID() {
   return expoRandomUUID()
 }
 
-function encryptSeedPhrase(password: string, seedPhrase: string): string {
+function encryptSeed(password: string, seed: string): string {
   try {
     const algorithm = 'aes-256-gcm'
 
@@ -127,8 +127,8 @@ function encryptSeedPhrase(password: string, seedPhrase: string): string {
     // Create the cipher with AES-256-GCM
     const cipher = QuickCrypto.createCipheriv(algorithm, key, nonce)
 
-    // Encrypt the seed phrase
-    const encryptedPart = new Uint8Array(cipher.update(seedPhrase, 'utf8'))
+    // Encrypt the seed
+    const encryptedPart = new Uint8Array(cipher.update(seed, 'utf8'))
     const finalPart = new Uint8Array(cipher.final())
 
     // Concatenate encrypted parts
@@ -155,12 +155,12 @@ function encryptSeedPhrase(password: string, seedPhrase: string): string {
   }
 }
 
-function decryptSeedPhrase(password: string = '', encryptedSeedPhrase: string): string {
+function decryptSeed(password: string = '', encryptedSeed: string): string {
   try {
     const algorithm = 'aes-256-gcm'
 
     // Split the input string into salt, nonce, encrypted data, and authTag
-    const [saltHex, nonceHex, encryptedHex, authTagHex] = encryptedSeedPhrase.split(':')
+    const [saltHex, nonceHex, encryptedHex, authTagHex] = encryptedSeed.split(':')
     const salt = hexToUint8Array(saltHex)
     const nonce = hexToUint8Array(nonceHex)
     const encrypted = hexToUint8Array(encryptedHex)
@@ -270,8 +270,8 @@ export {
   hexToUint8Array,
   uint8ArrayToHex,
   randomUUID,
-  encryptSeedPhrase,
-  decryptSeedPhrase,
+  encryptSeed,
+  decryptSeed,
   signMessage,
   verifyMessage,
   signMessageHex,

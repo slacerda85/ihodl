@@ -14,7 +14,7 @@ import { walletActions } from './state'
 export default function ManageWallets() {
   const router = useRouter()
   const { isDark } = useSettings()
-  const { wallets, activeWalletId, loading, dispatch } = useWallet()
+  const { wallets, activeWalletId, loading, toggleActiveWallet, toggleLoading } = useWallet()
 
   function handleCreateWallet() {
     router.push('/wallet/create')
@@ -26,8 +26,10 @@ export default function ManageWallets() {
 
   function handleSelectWallet(walletId: string) {
     try {
-      dispatch(walletActions.setLoadingWallet(true))
-      dispatch(walletActions.setActiveWallet(walletId))
+      toggleLoading(true)
+      toggleActiveWallet(walletId)
+      // dispatch(walletActions.setLoadingWallet(true))
+      // dispatch(walletActions.setActiveWallet(walletId))
       router.dismiss()
     } catch (error) {
       console.error('Error selecting wallet:', error)
@@ -35,7 +37,7 @@ export default function ManageWallets() {
     } finally {
       // Keep loading state active briefly to allow the UI to update
       setTimeout(() => {
-        dispatch(walletActions.setLoadingWallet(false))
+        toggleLoading(false)
       }, 500)
     }
   }
@@ -52,22 +54,21 @@ export default function ManageWallets() {
             </View>
           ) : wallets.length > 0 ? (
             wallets.map((wallet, index) => {
-              const isSelected =
-                wallet.walletId === activeWalletId /* && loadingWalletId === null */
+              const isSelected = wallet.id === activeWalletId /* && loadingWalletId === null */
               const first = index === 0
               const last = index === wallets.length - 1
 
               return (
                 <Fragment key={index}>
                   <Pressable
-                    key={wallet.walletId}
+                    key={wallet.id}
                     style={[
                       styles.walletBox,
                       first && styles.walletBoxFirst,
                       last && styles.walletBoxLast,
                       isDark && styles.walletBoxDark,
                     ]}
-                    onPress={() => handleSelectWallet(wallet.walletId)}
+                    onPress={() => handleSelectWallet(wallet.id)}
                     // disabled={loadingWalletId !== null} // Disable all selections during loading
                   >
                     <View style={{ flex: 1 }}>
@@ -94,7 +95,7 @@ export default function ManageWallets() {
                             isSelected && styles.walletNameSelected,
                           ]}
                         >
-                          {wallet.walletName}
+                          {wallet.name}
                         </Text>
                       </View>
                     </View>

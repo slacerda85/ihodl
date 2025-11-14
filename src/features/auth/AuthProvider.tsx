@@ -54,22 +54,20 @@ export default function AuthProvider({ children }: AuthProviderProps) {
   const [inactive, setInactive] = useState(false)
   const startTime = useRef(0)
   const appState = useRef(AppState.currentState)
-  /* const segments = useSegments()
-  const currentRoute = '/' + segments.join('/') */
 
   /**
    * Performs the actual biometric authentication
    */
   const performBiometricAuth = useCallback(async (): Promise<boolean> => {
-    try {
-      // Check if running on web platform - bypass authentication
-      // example Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36 Edg/133.0.0.0
-      if (typeof window !== 'undefined' && navigator?.userAgent?.includes('Chrome')) {
-        console.log('User agent', navigator.userAgent)
-        console.log('Running on web, bypassing biometric authentication')
-        return true
-      }
+    // Check if running on web platform - bypass authentication
+    // example Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36 Edg/133.0.0.0
+    if (typeof window !== 'undefined' && navigator?.userAgent?.includes('Chrome')) {
+      console.log('User agent', navigator.userAgent)
+      console.log('Running on web, bypassing biometric authentication')
+      return true
+    }
 
+    try {
       // Check if hardware supports biometric authentication
       const hardwareSupported = await checkHardware()
       console.log('Hardware supported:', hardwareSupported)

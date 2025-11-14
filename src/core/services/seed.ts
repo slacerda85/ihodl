@@ -16,10 +16,10 @@ export class SeedService implements SeedServiceInterface {
     }
     return seed
   }
-  async saveSeedForWalletId(walletId: string, seed: string): Promise<void> {
+  async saveSeedForWalletId(walletId: string, seed: string, password?: string): Promise<void> {
     // Implementation to save seed for a wallet ID
     const seedRepository = new SeedRepository()
-    await seedRepository.save(walletId, seed)
+    await seedRepository.save(walletId, seed, password)
   }
   async deleteSeedByWalletId(walletId: string): Promise<void> {
     // Implementation to delete seed by wallet ID
