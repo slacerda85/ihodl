@@ -10,7 +10,7 @@ import { get, set, getNumber, setNumber } from '../storage'
 import { STORAGE_KEYS } from '../storage'
 
 // Connect to an Electrum server and return the socket
-async function init() {
+function init() {
   try {
     const unsecure = new net.Socket()
     const socket = new TLSSocket(unsecure, { rejectUnauthorized: false })
@@ -40,7 +40,7 @@ async function connect(): Promise<TLSSocket> {
   for (const peer of randomPeers) {
     try {
       // Initialize the socket
-      const socket = await init()
+      const socket = init()
 
       // Connect to the peer
       await new Promise<void>((resolve, reject) => {

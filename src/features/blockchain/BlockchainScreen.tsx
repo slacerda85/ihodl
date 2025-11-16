@@ -1,7 +1,7 @@
 import { Text, View, StyleSheet, useColorScheme, ActivityIndicator } from 'react-native'
 
 import colors from '@/ui/colors'
-import { useBlockchain } from '@/features/blockchain'
+// import { useBlockchain } from '@/features/blockchain'
 import { useSettings } from '@/features/settings'
 import Button from '@/ui/Button'
 
@@ -20,27 +20,26 @@ export default function BlockchainScreen() {
   const effectiveColorMode = colorMode === 'auto' ? (colorScheme ?? 'light') : colorMode
   const isDark = effectiveColorMode === 'dark'
 
-  const { blockchainState, syncHeadersManually } = useBlockchain()
-  const { isSyncing, lastSyncedHeight, currentHeight, syncProgress } = blockchainState
+  // const { blockchainState, syncHeadersManually } = useBlockchain()
+  // const { isSyncing, lastSyncedHeight, currentHeight, syncProgress } = blockchainState
 
-  const progressPercentage = Math.round(syncProgress * 100)
+  /* const progressPercentage = Math.round(syncProgress * 100)
   const syncedBlocks = lastSyncedHeight || 0
   const totalBlocks = currentHeight || 0
 
   // Estimativa aproximada: 80 bytes por header
   const estimatedSizeBytes = syncedBlocks * 80
-  const estimatedSizeFormatted = formatBytes(estimatedSizeBytes)
+  const estimatedSizeFormatted = formatBytes(estimatedSizeBytes) */
 
   return (
     <View style={[styles.container, isDark && styles.containerDark]}>
-      <View style={styles.content}>
-        {/* Sync Status Card */}
+      {/* <View style={styles.content}>
+       
         <View style={[styles.card, isDark && styles.cardDark]}>
           <Text style={[styles.cardTitle, isDark && styles.cardTitleDark]}>
             Blockchain Sync Status
           </Text>
 
-          {/* Progress Indicator */}
           <View style={styles.progressContainer}>
             <View style={styles.progressBar}>
               <View
@@ -56,7 +55,6 @@ export default function BlockchainScreen() {
             </Text>
           </View>
 
-          {/* Sync Status */}
           <View style={styles.statusRow}>
             <Text style={[styles.statusLabel, isDark && styles.statusLabelDark]}>Status:</Text>
             <View style={styles.statusValue}>
@@ -73,7 +71,6 @@ export default function BlockchainScreen() {
             </View>
           </View>
 
-          {/* Block Heights */}
           <View style={styles.infoRow}>
             <Text style={[styles.infoLabel, isDark && styles.infoLabelDark]}>Latest Block:</Text>
             <Text style={[styles.infoValue, isDark && styles.infoValueDark]}>
@@ -88,7 +85,6 @@ export default function BlockchainScreen() {
             </Text>
           </View>
 
-          {/* Storage Size */}
           <View style={styles.infoRow}>
             <Text style={[styles.infoLabel, isDark && styles.infoLabelDark]}>Storage Used:</Text>
             <Text style={[styles.infoValue, isDark && styles.infoValueDark]}>
@@ -97,7 +93,6 @@ export default function BlockchainScreen() {
           </View>
         </View>
 
-        {/* Manual Sync Button */}
         <Button
           variant="solid"
           backgroundColor={isSyncing ? colors.background.light : colors.primary}
@@ -110,7 +105,6 @@ export default function BlockchainScreen() {
           </Text>
         </Button>
 
-        {/* Info Text */}
         <View style={styles.infoContainer}>
           <Text style={[styles.infoText, isDark && styles.infoTextDark]}>
             The blockchain headers are synchronized to verify transactions and maintain network
@@ -121,7 +115,7 @@ export default function BlockchainScreen() {
             fast synchronization while maintaining security through proof-of-work validation.
           </Text>
         </View>
-      </View>
+      </View> */}
     </View>
   )
 }

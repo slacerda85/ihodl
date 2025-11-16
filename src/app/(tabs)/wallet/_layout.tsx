@@ -40,34 +40,21 @@ function ManageWallets({ colorMode }: { colorMode: 'light' | 'dark' }) {
   }
 
   return (
-    <View
+    <Pressable
+      onPress={handleManageWallets}
       style={{
-        // backgroundColor: 'red',
         width: 36,
         height: 36,
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: '50%',
-        paddingBottom: 3,
       }}
     >
-      <Pressable
-        onPress={handleManageWallets}
-        style={{
-          // width: '100%',
-          // height: '100%',
-          alignItems: 'center',
-          justifyContent: 'center',
-          // backgroundColor: 'green',
-        }}
-      >
-        <IconSymbol
-          name="wallet.bifold"
-          size={28}
-          color={alpha(colors.textSecondary[colorMode], 0.85)}
-        />
-      </Pressable>
-    </View>
+      <IconSymbol
+        name="wallet.bifold"
+        // size={28}
+        color={alpha(colors.textSecondary[colorMode], 0.85)}
+      />
+    </Pressable>
   )
 }
 
@@ -108,7 +95,7 @@ const CloseModalButton = ({ title }: { title?: string }) => {
 
 export default function WalletLayout() {
   const { activeWalletId, wallets } = useWallet()
-  const selectedWallet = wallets?.find(wallet => wallet.id === activeWalletId)
+  const selectedWallet = wallets.find(wallet => wallet.id === activeWalletId)
   const empty = wallets === undefined || wallets?.length === 0
   /* const
    */

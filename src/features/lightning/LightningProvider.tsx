@@ -52,7 +52,7 @@ interface LightningProviderProps {
 
 export function LightningProvider({ children }: LightningProviderProps) {
   const { state: lightningState, dispatch: lightningDispatch } = useLightningState()
-  const { activeWalletId, wallets, unit } = useWallet()
+  const { activeWalletId, wallets } = useWallet()
   const { blockchainClient } = useBlockchain()
 
   // Shared refs across all hook instances

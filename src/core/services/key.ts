@@ -1,14 +1,14 @@
 import { mnemonicToSeedSync } from '@/core/lib/bip39'
 import { hmacSeed } from '@/core/lib/crypto'
 import { createPublicKey, deriveChildPrivateKey, splitRootExtendedKey } from '@/core/lib/key'
-import { Account, Change } from '@/core/models/account'
+import { Account, AccountIndex, Change, CoinType, Purpose } from '@/core/models/account'
 
-type DeriveAccountKeysParams = Account & {
+type DeriveAccountKeysParams = Partial<Account> & {
   masterKey: Uint8Array
 }
 
 interface KeyServiceInterface {
-  createMasterKey(seed: string): Promise<Uint8Array>
+  createMasterKey(seed: string): Uint8Array
 
   deriveAccountKeys(params: DeriveAccountKeysParams): {
     receivingAccountKey: Uint8Array // key for m/purpose'/coinType'/account'/0
@@ -23,14 +23,19 @@ interface KeyServiceInterface {
   deriveAddressPublicKey(addressKey: Uint8Array): Uint8Array
 }
 
-export class KeyService implements KeyServiceInterface {
-  async createMasterKey(seed: string): Promise<Uint8Array> {
+class KeyService implements KeyServiceInterface {
+  createMasterKey(seed: string): Uint8Array {
     const entropy = mnemonicToSeedSync(seed)
     const masterKey = hmacSeed(entropy)
     return masterKey
   }
 
-  deriveAccountKeys({ masterKey, purpose, coinType, accountIndex }: DeriveAccountKeysParams) {
+  deriveAccountKeys({
+    masterKey,
+    purpose = Purpose.BIP84,
+    coinType = CoinType.Bitcoin,
+    accountIndex = AccountIndex.Main,
+  }: DeriveAccountKeysParams) {
     const accountKey = [purpose, coinType, accountIndex]
       // .map(createHardenedIndex)
       .reduce(deriveChildPrivateKey, masterKey)
@@ -59,3 +64,7 @@ export class KeyService implements KeyServiceInterface {
     return addressPublicKey
   }
 }
+
+const keyService = new KeyService()
+
+export default keyService

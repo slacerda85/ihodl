@@ -1,5 +1,5 @@
 import { Fragment } from 'react'
-import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator } from 'react-native'
+import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native'
 import colors from '@/ui/colors'
 import { useRouter } from 'expo-router'
 import { alpha } from '@/ui/utils'
@@ -12,7 +12,8 @@ import { useSettings } from '../settings/SettingsProvider'
 export default function ManageWallets() {
   const router = useRouter()
   const { isDark } = useSettings()
-  const { wallets, activeWalletId, loading, toggleActiveWallet, toggleLoading } = useWallet()
+  // const { getAllWallets, getActiveWalletId, toggleActiveWallet } = useWallet()
+  const { wallets, activeWalletId, toggleActiveWallet } = useWallet()
 
   function handleCreateWallet() {
     router.push('/wallet/create')
@@ -23,10 +24,8 @@ export default function ManageWallets() {
   }
 
   function handleSelectWallet(walletId: string) {
-    toggleLoading(true)
     toggleActiveWallet(walletId)
     router.dismiss()
-    toggleLoading(false)
   }
 
   return (
@@ -60,9 +59,10 @@ export default function ManageWallets() {
                   >
                     <View style={{ flex: 1 }}>
                       <View style={styles.walletHeader}>
-                        {loading ? (
+                        {
+                          /* loading ? (
                           <ActivityIndicator size={20} color={colors.primary} />
-                        ) : (
+                        ) : ( */
                           <View style={styles.radioContainer}>
                             <View
                               style={[
@@ -74,7 +74,8 @@ export default function ManageWallets() {
                               {isSelected && <View style={styles.radioInner} />}
                             </View>
                           </View>
-                        )}
+                          /* ) */
+                        }
                         <Text
                           style={[
                             styles.walletName,

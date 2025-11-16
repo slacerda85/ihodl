@@ -11,6 +11,7 @@ import { useSettings } from '@/features/settings'
 import { formatBalance } from './utils'
 import { GlassView } from 'expo-glass-effect'
 import Divider from '@/ui/Divider'
+import { useAccount } from '../account/AccountProvider'
 
 const LAYER_LABELS: Record<number, string> = {
   1: 'On-Chain',
@@ -32,7 +33,8 @@ const isLightningPurpose = (purpose: number): boolean => purpose === 9735
 
 export default function WalletAccounts() {
   const { isDark } = useSettings()
-  const { wallets, activeWalletId } = useWallet()
+  const { activeWalletId } = useWallet()
+  const { accounts, loading } = useAccount()
 
   if (!activeWalletId) {
     return (
@@ -43,8 +45,6 @@ export default function WalletAccounts() {
       </View>
     )
   }
-
-  const accounts = wallets.find(wallet => wallet.id === activeWalletId)?.accounts || []
 
   if (accounts.length === 0) {
     return (
@@ -57,8 +57,12 @@ export default function WalletAccounts() {
   }
 
   // Separate accounts by type
-  const onChainAccounts = accounts.filter(account => isOnChainPurpose(account.purpose))
-  const lightningAccounts = accounts.filter(account => isLightningPurpose(account.purpose))
+  const onChainAccounts = accounts.filter(
+    account => account.walletId === activeWalletId && isOnChainPurpose(account.purpose),
+  )
+  const lightningAccounts = accounts.filter(
+    account => account.walletId === activeWalletId && isLightningPurpose(account.purpose),
+  )
 
   const sections = []
 
@@ -87,7 +91,7 @@ export default function WalletAccounts() {
         renderItem={({ item: section }) => (
           <View style={styles.section}>
             <View style={styles.sectionContent}>
-              {section.data.map((account, index) => (
+              {/* {section.data.map((account, index) => (
                 <View key={account.purpose.toString()}>
                   <AccountDetails account={account} />
                   {index < section.data.length - 1 && (
@@ -104,7 +108,7 @@ export default function WalletAccounts() {
                     </View>
                   )}
                 </View>
-              ))}
+              ))} */}
             </View>
           </View>
         )}
@@ -126,9 +130,10 @@ function AccountDetails({ account }: AccountDetailsProps) {
   const { isDark } = useSettings()
 
   const { loading: loadingWallet, activeWalletId } = useWallet()
+  const { accounts, loading: loadingAccount } = useAccount()
   // const { friendly, loading: loadingTx } = useTransactions()
 
-  const loading = loadingWallet // || loadingTx
+  const loading = loadingWallet || loadingAccount
 
   // Calculate balance from transactions
   /* const calculateBalance = (): number => {
@@ -186,36 +191,8 @@ function AccountDetails({ account }: AccountDetailsProps) {
         </View>
       </View>
 
-      <View style={styles.buttonsContainer}>
-        {/* {isLightningAccount && (
-          <View style={styles.connectionStatus}>
-            <View style={[styles.nodeStatus, nodeConnected && styles.nodeStatusConnected]}>
-              <Text
-                style={[styles.nodeStatusText, nodeConnected && styles.nodeStatusTextConnected]}
-              >
-                {nodeConnected ? '●' : '○'}
-              </Text>
-            </View>
-            <Text style={[styles.connectionStatusText, isDark && styles.connectionStatusTextDark]}>
-              {nodeConnected ? 'Conectado' : 'Desconectado'}
-            </Text>
-          </View>
-        )} */}
-
-        {/* <Button
-          style={{ flex: 1 }}
-          onPress={handleNavigateToTransactions}
-          startIcon={
-            <Ionicons name="list" size={16} color={isDark ? colors.text.dark : colors.text.light} />
-          }
-        >
-          <Text
-            style={[styles.transactionsButtonText, isDark && styles.transactionsButtonTextDark]}
-          >
-            Transações
-          </Text>
-        </Button> */}
-      </View>
+      {/* account addresses temp view */}
+      <View></View>
     </View>
   )
 }

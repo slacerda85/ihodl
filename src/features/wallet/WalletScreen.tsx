@@ -1,6 +1,6 @@
 // React and React Native
 import { Link, useRouter } from 'expo-router'
-import { StyleSheet, Text, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { useWallet } from '@/features/wallet'
@@ -8,11 +8,11 @@ import { useSettings } from '@/features/settings'
 
 // Components
 import WalletBalance from './WalletBalance'
-import WalletAccounts from './WalletAccounts'
 import CreateWalletIcon from './CreateWalletIcon'
 import ImportWalletIcon from './ImportWalletIcon'
 import ContentContainer from '@/ui/ContentContainer'
 import Button from '@/ui/Button'
+import { useAccount } from '../account/AccountProvider'
 // import { useHeaderHeight } from '@react-navigation/elements'
 
 export default function WalletScreen() {
@@ -37,6 +37,9 @@ export default function WalletScreen() {
     router.push('/wallet/import')
   }
 
+  // const { getActiveWalletId, getWallets } = useWallet()
+  // const wallets = getWallets()
+  // const activeWalletId = getActiveWalletId()
   const { activeWalletId, wallets } = useWallet()
 
   if (wallets === undefined || wallets?.length === 0) {
@@ -105,6 +108,57 @@ export default function WalletScreen() {
         </View>
       </View>
     </ContentContainer>
+  )
+}
+
+function WalletAccounts() {
+  const { isDark } = useSettings()
+  const { accounts } = useAccount()
+  const receivingAccounts = accounts.filter(acc => acc.change === 0)
+  const changeAccounts = accounts.filter(acc => acc.change === 1)
+
+  return (
+    <View>
+      <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
+        Receiving Accounts
+      </Text>
+      {receivingAccounts.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text style={[styles.emptyStateText, isDark && styles.emptyStateTextDark]}>
+            No receiving accounts found.
+          </Text>
+        </View>
+      ) : (
+        <ScrollView>
+          {receivingAccounts.map((account, index) => (
+            <View key={account.addressIndex}>
+              <Text style={[styles.offlineText]}>
+                Address {index}: {account.address}
+              </Text>
+            </View>
+          ))}
+        </ScrollView>
+      )}
+
+      <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark, { marginTop: 24 }]}>
+        Change Accounts
+      </Text>
+      {changeAccounts.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text style={[styles.emptyStateText, isDark && styles.emptyStateTextDark]}>
+            No change accounts found.
+          </Text>
+        </View>
+      ) : (
+        changeAccounts.map(account => (
+          <View key={account.addressIndex}>
+            <Text style={[styles.walletName, isDark && styles.walletNameDark]}>
+              Account {account.accountIndex}
+            </Text>
+          </View>
+        ))
+      )}
+    </View>
   )
 }
 

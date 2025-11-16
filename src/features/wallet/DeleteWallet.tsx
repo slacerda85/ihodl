@@ -24,7 +24,7 @@ export default function DeleteWallet() {
       unlinkWallet(activeWalletId)
     }
     setSubmitting(false)
-    setTimeout(() => router.dismiss(2), 0)
+    router.dismiss(2)
   }, [unlinkWallet, router, activeWalletId])
 
   if (!activeWalletId) return null

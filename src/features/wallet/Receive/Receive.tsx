@@ -24,15 +24,19 @@ import { useWallet } from '@/features/wallet'
 import { useSettings } from '@/features/settings'
 
 import { AddressDetails } from '@/lib/address'
-import { useTransactions } from '@/features/transactions'
+// import { useTransactions } from '@/features/transactions'
+import { useAccount } from '@/features/account/AccountProvider'
 
 // Address generation utilities - separated for better organization
 
 export default function Receive() {
   const { isDark } = useSettings()
-  const { history } = useTransactions()
+  const { accounts } = useAccount()
+  const walletAccounts = accounts.filter(acc => acc.walletId === activeWalletId)
 
-  const { wallets, activeWalletId } = useWallet()
+  // const { history } = useTransactions()
+
+  const { activeWalletId } = useWallet()
   const [selectedAddress, setSelectedAddress] = useState<string>('')
   const [showAddressDetailses, setShowAddressDetailses] = useState(false)
   const [activeTab, setActiveTab] = useState<'receiving' | 'change'>('receiving')
@@ -46,11 +50,11 @@ export default function Receive() {
   const [nextUnusedAddress, setNextUnusedAddress] = useState<string>('')
 
   // Get active wallet
-  const activeWallet = wallets.find(w => w.walletId === activeWalletId)
+  // const activeWallet = wallets.find(w => w.walletId === activeWalletId)
 
   // Generate addresses asynchronously when wallet changes
   useEffect(() => {
-    if (!activeWallet) {
+    if (!activeWalletId || walletAccounts.length === 0) {
       setUsedReceivingAddresses([])
       setUsedChangeAddresses([])
       setNextUnusedAddress('')
@@ -59,29 +63,23 @@ export default function Receive() {
       return
     }
 
-    // Check cache - should be pre-loaded by useTransactions
-    const cached = addressCaches[activeWallet.walletId]
-    if (cached) {
-      setUsedReceivingAddresses(cached.usedReceivingAddresses)
-      setUsedChangeAddresses(cached.usedChangeAddresses)
-      setNextUnusedAddress(cached.nextUnusedAddress)
-      setSelectedAddress(cached.nextUnusedAddress)
-      setIsLoadingAddresses(false)
-      setLoadingMessage('')
-    } else {
-      // Fallback: if no cache (shouldn't happen with pre-loading), show loading
+    const generateAddresses = async () => {
       setIsLoadingAddresses(true)
-      setLoadingMessage('Loading addresses...')
-      setSelectedAddress('')
+      setLoadingMessage('Generating addresses...')
+      try {
+        setNextUnusedAddress(walletAccounts[0].address)
+        setSelectedAddress(walletAccounts[0].address)
+        setIsLoadingAddresses(false)
+        setLoadingMessage('')
+      } catch (error) {
+        console.error('Error generating addresses:', error)
+        setIsLoadingAddresses(false)
+        setLoadingMessage('Failed to generate addresses')
+      }
     }
-  }, [activeWallet, activeWalletId, addressCaches])
 
-  // Set selected address to next unused address when it changes
-  useEffect(() => {
-    if (nextUnusedAddress && !selectedAddress) {
-      setSelectedAddress(nextUnusedAddress)
-    }
-  }, [nextUnusedAddress, selectedAddress])
+    generateAddresses()
+  }, [activeWalletId, walletAccounts.length])
 
   // Handle share address
   const handleShareAddress = async () => {
@@ -165,7 +163,7 @@ export default function Receive() {
           )}
 
           {/* Address Display with QR Code Section */}
-          {selectedAddress && activeWallet && !isLoadingAddresses && (
+          {selectedAddress && activeWalletId && !isLoadingAddresses && (
             <View style={[styles.sectionBox, isDark && styles.sectionBoxDark]}>
               <View style={styles.qrContainer}>
                 <QRCode

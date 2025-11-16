@@ -3,8 +3,9 @@
  * Provides shared blockchain client instance and sync state across the app
  */
 
-import React, { createContext, useContext, useEffect, useState, ReactNode, useReducer } from 'react'
-import { initializeBlockchainClient, IBlockchainClient } from '@/lib/blockchain'
+/* import React, { createContext, useContext, useEffect, useState, ReactNode, useReducer } from 'react'
+import { initializeBlockchainClient } from '@/core/lib/blockchain/client'
+import type { IBlockchainClient } from '@/lib/blockchain/types'
 import {
   blockchainReducer,
   initialBlockchainState,
@@ -179,3 +180,4 @@ export function useBlockchain(): BlockchainContextType {
   }
   return context
 }
+ */

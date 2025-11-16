@@ -8,8 +8,8 @@ const seedStorage = new MMKV({
 
 interface SeedRepositoryInterface {
   save(seed: string, walletId: string, password?: string): void
-  findByWalletId(walletId: string, password?: string): string | null
-  deleteByWalletId(walletId: string): void
+  find(walletId: string, password?: string): string | null
+  delete(walletId: string): void
 }
 
 export class SeedRepository implements SeedRepositoryInterface {
@@ -18,7 +18,7 @@ export class SeedRepository implements SeedRepositoryInterface {
     // Implementation to save seed
     seedStorage.set(`seed_${walletId}`, encryptedSeed)
   }
-  findByWalletId(walletId: string, password?: string): string | null {
+  find(walletId: string, password?: string): string | null {
     // Implementation to find seed by wallet ID
     const encryptedSeed = seedStorage.getString(`seed_${walletId}`) || null
     if (!encryptedSeed) {
@@ -27,7 +27,7 @@ export class SeedRepository implements SeedRepositoryInterface {
     const seed = password ? decryptSeed(password, encryptedSeed) : encryptedSeed
     return seed
   }
-  deleteByWalletId(walletId: string): void {
+  delete(walletId: string): void {
     // Implementation to delete seed by wallet ID
     seedStorage.delete(`seed_${walletId}`)
   }

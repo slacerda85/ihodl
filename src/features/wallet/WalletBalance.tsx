@@ -3,16 +3,18 @@ import { useState, useEffect, useCallback } from 'react'
 import colors from '@/ui/colors'
 import SwapIcon from './SwapIcon'
 import { useWallet } from '@/features/wallet'
-import { useTransactions } from '@/features/transactions'
 import { useSettings } from '@/features/settings'
 import { formatBalance } from './utils'
 import { alpha } from '@/ui/utils'
 import { GlassView } from 'expo-glass-effect'
+import { useAccount } from '../account/AccountProvider'
 
 export default function WalletBalance() {
   const { isDark } = useSettings()
-
   const [balance, setBalance] = useState(0)
+  const { activeWalletId } = useWallet()
+  const { accounts, loading } = useAccount()
+
   /* const { friendly } = useTransactions()
   const { loading: loadingWallet, unit, activeWalletId, dispatch: walletDispatch } = useWallet()
   const loading = loadingWallet || false
@@ -56,18 +58,19 @@ export default function WalletBalance() {
     }
   }, [activeWalletId, getBalance]) */
 
-  /* if (loading) {
+  if (loading) {
     return (
       <View style={styles.balanceSection}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, isDark && styles.loadingTextDark]}>
-            {loadingWallet ? 'Loading wallet...' : 'Loading transactions...'}
+            Loading balance...
           </Text>
+          <Text>{JSON.stringify(accounts)}</Text>
         </View>
       </View>
     )
-  } */
+  }
 
   return (
     <View style={styles.balanceSection}>

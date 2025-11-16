@@ -1,18 +1,13 @@
-import { Wallet } from '@/core/models/wallet'
-import { WalletService } from '@/core/services/wallet'
 import { createContext, ReactNode, useContext, useState } from 'react'
+import { Wallet } from '@/core/models/wallet'
+import walletService from '@/core/services/wallet'
 
 type WalletContextType = {
-  // state
-  activeWalletId: string | undefined
-  loading: boolean
+  activeWalletId: string
   wallets: Wallet[]
-  // helper functions
-  createWallet: (params: Omit<Wallet, 'id'> & { password?: string }) => void
-  importWallet: (params: Omit<Wallet, 'id'> & { seed: string; password?: string }) => void
-  unlinkWallet: (walletId: string) => void
-  toggleActiveWallet: (walletId: string) => void
-  toggleLoading: (value: boolean) => void
+  createWallet: typeof walletService.createWallet
+  unlinkWallet: typeof walletService.deleteWallet
+  toggleActiveWallet: typeof walletService.toggleActiveWallet
 }
 
 const WalletContext = createContext<WalletContextType | null>(null)
@@ -22,77 +17,47 @@ interface WalletProviderProps {
 }
 
 export default function WalletProvider({ children }: WalletProviderProps) {
-  const [loading, setLoading] = useState<boolean>(false)
-  const [wallets, setWallets] = useState<Wallet[]>(getInitialWallets)
-  const [activeWalletId, setActiveWalletId] = useState<string>(wallets[0]?.id)
+  const {
+    getAllWallets,
+    createWallet: create,
+    deleteWallet: unlink,
+    toggleActiveWallet: toggleActive,
+    getActiveWalletId,
+  } = walletService
 
-  function getInitialWallets(): Wallet[] {
-    const walletService = new WalletService()
-    return walletService.getAllWallets()
+  const [wallets, setWallets] = useState<Wallet[]>(getAllWallets)
+  const [activeWalletId, setActiveWalletId] = useState<string>(getActiveWalletId)
+
+  function createWallet(...args: Parameters<typeof create>) {
+    const newWallet = create(...args)
+    setWallets(getAllWallets())
+    setActiveWalletId(getActiveWalletId())
+    return newWallet
   }
 
-  function createWallet(params: Omit<Wallet, 'id'> & { password?: string }) {
-    setLoading(true)
-    const { name, accounts, cold, password } = params
-    const walletService = new WalletService()
-    const newWallet = walletService.createWallet({
-      name,
-      accounts,
-      cold,
-      password,
-    })
-    setWallets(prevWallets => [...prevWallets, newWallet])
-    setActiveWalletId(newWallet.id)
-    setLoading(false)
+  function toggleActiveWallet(...args: Parameters<typeof toggleActive>) {
+    toggleActive(...args)
+    setActiveWalletId(getActiveWalletId())
   }
 
-  function importWallet(params: Omit<Wallet, 'id'> & { seed: string; password?: string }) {
-    setLoading(true)
-    const { name, accounts, cold, seed, password } = params
-    const walletService = new WalletService()
-    const newWallet = walletService.createWallet({
-      name,
-      accounts,
-      cold,
-      seed,
-      password,
-    })
-    setWallets(prev => [...prev, newWallet])
-    setActiveWalletId(newWallet.id)
-    setLoading(false)
-  }
-
-  function unlinkWallet(walletId: string) {
-    setLoading(true)
-    const walletService = new WalletService()
-    walletService.deleteWallet(walletId)
-    const updatedWallets = walletService.getAllWallets()
-    setWallets(updatedWallets)
-  }
-
-  function toggleActiveWallet(walletId: string) {
-    setActiveWalletId(walletId)
-  }
-
-  function toggleLoading(value: boolean) {
-    setLoading(value)
+  function unlinkWallet(...args: Parameters<typeof unlink>) {
+    unlink(...args)
+    setWallets(getAllWallets())
+    setActiveWalletId(getActiveWalletId())
   }
 
   return (
-    <WalletContext.Provider
+    <WalletContext
       value={{
         activeWalletId,
-        loading,
         wallets,
         toggleActiveWallet,
-        toggleLoading,
         createWallet,
-        importWallet,
         unlinkWallet,
       }}
     >
       {children}
-    </WalletContext.Provider>
+    </WalletContext>
   )
 }
 

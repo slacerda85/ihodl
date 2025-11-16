@@ -9,6 +9,10 @@ interface WalletRepositoryInterface {
   save(wallet: Wallet): void
   findById(id: string): Wallet | null
   delete(id: string): void
+  setActiveWalletId(id: string): void
+  getActiveWalletId(): string
+  findAll(): Wallet[]
+  findAllIds(): string[]
 }
 
 export class WalletRepository implements WalletRepositoryInterface {
@@ -37,5 +41,15 @@ export class WalletRepository implements WalletRepositoryInterface {
   }
   delete(id: string): void {
     walletStorage.delete(`wallet_${id}`)
+  }
+  setActiveWalletId(id: string): void {
+    walletStorage.set('active_wallet_id', id)
+  }
+  getActiveWalletId(): string {
+    return walletStorage.getString('active_wallet_id') || ''
+  }
+  findAllIds(): string[] {
+    const wallets = this.findAll()
+    return wallets.map(wallet => wallet.id)
   }
 }

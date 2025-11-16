@@ -14,7 +14,7 @@ export default function GetSeedPhraseScreen() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const loadSeedPhrase = async () => {
+    const loadSeedPhrase = () => {
       if (!activeWalletId) {
         setLoading(false)
         return
@@ -24,7 +24,7 @@ export default function GetSeedPhraseScreen() {
         // TODO: Get password from user or state
         const password = '' // Temporary: assume no password for now
         const seedService = new SeedService()
-        const phrase = await seedService.getSeedByWalletIdWithPassword(activeWalletId, password)
+        const phrase = seedService.getSeed(activeWalletId, password)
         setSeedPhrase(phrase)
       } catch (error) {
         console.error('Error loading seed phrase:', error)

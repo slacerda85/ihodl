@@ -34,10 +34,10 @@ export default function TransactionsScreen() {
   const { isDark } = useSettings()
   const router = useRouter()
 
-  const { activeWalletId, loading: loadingWallet, unit } = useWallet()
+  const { activeWalletId /*  loading: loadingWallet, unit */ } = useWallet()
   const { friendly: transactions, loading: loadingTxState } = useTransactions()
 
-  const loading = loadingWallet || loadingTxState
+  // const loading = loadingWallet || loadingTxState
 
   // Check if we have cached data for the active wallet
   const hasTransactionData = activeWalletId

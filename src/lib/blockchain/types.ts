@@ -3,6 +3,8 @@
  * Core data structures for Bitcoin blockchain operations
  */
 
+import { TLSSocket } from 'tls'
+
 /**
  * Block header structure as defined in Bitcoin protocol
  */
@@ -130,5 +132,5 @@ export interface BlockchainClientConfig {
   /** Whether to use persistent connections */
   persistentConnection?: boolean
   /** Optional function to get Electrum connection */
-  getConnectionFn?: () => Promise<any>
+  getConnectionFn?: () => Promise<TLSSocket>
 }

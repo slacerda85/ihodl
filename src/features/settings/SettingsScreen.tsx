@@ -11,12 +11,12 @@ import {
 import { useSettings } from '@/features/settings'
 import { clearPersistedState } from '@/features/storage/StorageProvider'
 import Picker from '@/ui/Picker/Picker'
-import { ColorMode } from './state'
-import LightningSection from './LightningSection'
+// import { ColorMode } from './state'
+// import LightningSection from './LightningSection'
 
 export default function SettingsScreen() {
   const colorScheme = useColorScheme()
-  const { colorMode, setColorMode, maxBlockchainSizeGB, setMaxBlockchainSize } = useSettings()
+  const { colorMode, maxBlockchainSizeGB } = useSettings()
 
   const effectiveColorMode = colorMode === 'auto' ? (colorScheme ?? 'light') : colorMode
   const isDarkEffective = effectiveColorMode === 'dark'
@@ -70,9 +70,9 @@ export default function SettingsScreen() {
           <Picker
             options={['Claro', 'Escuro', 'Automático']}
             selectedIndex={selectedThemeIndex}
-            onOptionSelected={({ nativeEvent: { index } }) => {
+            /* onOptionSelected={({ nativeEvent: { index } }) => {
               setColorMode(themeOptions[index].value as ColorMode)
-            }}
+            }} */
             variant="segmented"
           />
         </View>
@@ -86,17 +86,15 @@ export default function SettingsScreen() {
           <Picker
             options={['0.5 GB', '1 GB', '2 GB', '5 GB']}
             selectedIndex={selectedSizeIndex}
-            onOptionSelected={({ nativeEvent: { index } }) => {
+            /* onOptionSelected={({ nativeEvent: { index } }) => {
               setMaxBlockchainSize(blockchainSizeOptions[index].value)
-            }}
+            }} */
             variant="segmented"
           />
         </View>
       </View>
 
-      <View style={styles.section}>
-        <LightningSection isDark={isDarkEffective} />
-      </View>
+      <View style={styles.section}>{/* <LightningSection isDark={isDarkEffective} /> */}</View>
 
       <View style={styles.section}>
         <Text style={[styles.subtitle, isDarkEffective && styles.subtitleDark]}>

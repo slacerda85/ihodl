@@ -18,6 +18,8 @@ import {
 } from '../electrum'
 import { Tx } from '../transactions/types'
 import { TLSSocket } from 'tls'
+
+import net from 'net'
 import type { IBlockchainClient, BlockchainClientConfig } from './types'
 import { getCurrentBlockHeight } from './sync'
 
@@ -29,16 +31,17 @@ export class ElectrumBlockchainClient implements IBlockchainClient {
   private socket: TLSSocket | null = null
   private subscriptions: Map<string, (data: any) => void> = new Map()
   private isConnected = false
-  private getConnectionFn?: () => Promise<TLSSocket>
 
-  constructor(config: BlockchainClientConfig = {}, getConnectionFn?: () => Promise<TLSSocket>) {
+  constructor(config: BlockchainClientConfig = {}) {
     this.config = {
       network: config.network || 'mainnet',
       timeout: config.timeout || 30000,
       minConfirmations: config.minConfirmations || 1,
       persistentConnection: config.persistentConnection ?? true,
+      getConnectionFn:
+        config.getConnectionFn ??
+        (() => Promise.resolve(new TLSSocket(new net.Socket(), { rejectUnauthorized: false }))),
     }
-    this.getConnectionFn = getConnectionFn
   }
 
   /**
@@ -46,8 +49,8 @@ export class ElectrumBlockchainClient implements IBlockchainClient {
    */
   private async ensureConnection(): Promise<TLSSocket> {
     // If we have a connection function, use it
-    if (this.getConnectionFn) {
-      return await this.getConnectionFn()
+    if (this.config.getConnectionFn) {
+      return await this.config.getConnectionFn()
     }
 
     // Otherwise, manage our own connection
@@ -385,7 +388,7 @@ export class ElectrumBlockchainClient implements IBlockchainClient {
    */
   async close(): Promise<void> {
     // Only close our own connection if we don't have a shared connection function
-    if (!this.getConnectionFn && this.socket) {
+    if (!this.config.getConnectionFn && this.socket) {
       try {
         close(this.socket)
         this.socket = null
@@ -407,9 +410,8 @@ export const blockchainClient = new ElectrumBlockchainClient()
 // Utility functions
 export async function initializeBlockchainClient(
   config?: BlockchainClientConfig,
-  getConnectionFn?: () => Promise<TLSSocket>,
 ): Promise<IBlockchainClient> {
-  const client = new ElectrumBlockchainClient(config, getConnectionFn)
+  const client = new ElectrumBlockchainClient(config)
   // Test connection
   await client.getBlockHeight()
   return client

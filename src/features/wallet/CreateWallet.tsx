@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react'
-
 import { ActivityIndicator, StyleSheet, Switch, Text, TextInput, View } from 'react-native'
 
 import { GlassView } from 'expo-glass-effect'
@@ -18,7 +17,6 @@ export default function CreateWallet() {
 
   const router = useRouter()
   const { createWallet } = useWallet()
-  const [submitting, setSubmitting] = useState<boolean>(false)
 
   const [cold, setCold] = useState<boolean>(false)
   const [walletName, setWalletName] = useState<string>('')
@@ -26,26 +24,15 @@ export default function CreateWallet() {
   const [usePassword, setUsePassword] = useState<boolean>(false)
 
   const handleCreateWallet = useCallback(async () => {
-    setSubmitting(true)
-    if (walletName.trim().length === 0) {
-      setSubmitting(false)
-      return
-    }
-    try {
-      // Use the wallet hook to create wallet - it handles all the lib calls and state updates
-      await createWallet({
-        name: walletName.trim(),
-        cold,
-        accounts: [],
-        password,
-      })
+    if (walletName.trim().length === 0) return
 
-      console.log('Wallet created successfully')
-      setSubmitting(false)
-      router.dismiss(2)
-    } catch (error) {
-      console.error('Error creating wallet:', error)
-    }
+    createWallet({
+      name: walletName.trim(),
+      password,
+      cold,
+      // accounts: [], // TODO: escolher outras criptos no futuro
+    })
+    router.dismiss(2)
   }, [walletName, cold, password, createWallet, router])
 
   function handleToggleCold() {
@@ -106,9 +93,11 @@ export default function CreateWallet() {
       </GlassView>
 
       <Button onPress={handleCreateWallet} tintColor={alpha(colors.primary, 0.8)}>
-        {submitting ? <ActivityIndicator color={cold ? colors.primary : colors.white} /> : null}
+        {/* submitting ? <ActivityIndicator
+            color={cold ? colors.primary : colors.white}
+          />  : null */}
         <Text style={{ color: isDark ? colors.textSecondary.dark : colors.textSecondary.light }}>
-          {submitting ? 'Creating...' : cold ? 'Create cold wallet' : 'Create wallet'}
+          {/* submitting ? 'Creating...' :  */ cold ? 'Create cold wallet' : 'Create wallet'}
         </Text>
       </Button>
     </View>
