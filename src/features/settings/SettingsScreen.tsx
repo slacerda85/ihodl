@@ -9,8 +9,11 @@ import {
   TouchableOpacity,
 } from 'react-native'
 import { useSettings } from '@/features/settings'
-import { clearPersistedState } from '@/features/storage/StorageProvider'
+// import { clearPersistedState } from '@/features/storage/StorageProvider'
 import Picker from '@/ui/Picker/Picker'
+import AccountRepository from '@/core/repositories/account'
+import SeedRepository from '@/core/repositories/seed'
+import walletRepository from '@/core/repositories/wallet'
 // import { ColorMode } from './state'
 // import LightningSection from './LightningSection'
 
@@ -21,27 +24,52 @@ export default function SettingsScreen() {
   const effectiveColorMode = colorMode === 'auto' ? (colorScheme ?? 'light') : colorMode
   const isDarkEffective = effectiveColorMode === 'dark'
 
-  const handleClearData = () => {
+  const handleClearWallets = () => {
     Alert.alert(
-      'Limpar Dados',
-      'Isso irá limpar os dados persistidos da aplicação (MMKV). O estado atual será mantido até o próximo reinício do app. Deseja continuar?',
+      'Limpar Carteiras',
+      'Isso irá limpar todas as carteiras salvas. Deseja continuar?',
       [
         { text: 'Cancelar', style: 'cancel' },
         {
           text: 'Limpar',
           style: 'destructive',
           onPress: () => {
-            // Clear persisted state from MMKV
-            clearPersistedState()
-
-            Alert.alert(
-              'Dados Limpos',
-              'Os dados persistidos foram limpos. Reinicie o aplicativo para ver as mudanças.',
-            )
+            walletRepository.clear()
+            Alert.alert('Carteiras Limpas', 'Todas as carteiras foram removidas.')
           },
         },
       ],
     )
+  }
+
+  const handleClearSeeds = () => {
+    Alert.alert('Limpar Seeds', 'Isso irá limpar todas as seeds salvas. Deseja continuar?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Limpar',
+        style: 'destructive',
+        onPress: () => {
+          const seedRepository = new SeedRepository()
+          seedRepository.clear()
+          Alert.alert('Seeds Limpas', 'Todas as seeds foram removidas.')
+        },
+      },
+    ])
+  }
+
+  const handleClearAccounts = () => {
+    Alert.alert('Limpar Contas', 'Isso irá limpar todas as contas salvas. Deseja continuar?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Limpar',
+        style: 'destructive',
+        onPress: () => {
+          const accountRepository = new AccountRepository()
+          accountRepository.clear()
+          Alert.alert('Contas Limpas', 'Todas as contas foram removidas.')
+        },
+      },
+    ])
   }
 
   const themeOptions = [
@@ -102,14 +130,30 @@ export default function SettingsScreen() {
         </Text>
         <TouchableOpacity
           style={[styles.clearButton, isDarkEffective && styles.clearButtonDark]}
-          onPress={handleClearData}
+          onPress={handleClearWallets}
         >
           <Text style={[styles.clearButtonText, isDarkEffective && styles.clearButtonTextDark]}>
-            Limpar Dados Persistidos
+            Limpar Carteiras
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.clearButton, isDarkEffective && styles.clearButtonDark]}
+          onPress={handleClearSeeds}
+        >
+          <Text style={[styles.clearButtonText, isDarkEffective && styles.clearButtonTextDark]}>
+            Limpar Seeds
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.clearButton, isDarkEffective && styles.clearButtonDark]}
+          onPress={handleClearAccounts}
+        >
+          <Text style={[styles.clearButtonText, isDarkEffective && styles.clearButtonTextDark]}>
+            Limpar Contas
           </Text>
         </TouchableOpacity>
         <Text style={[styles.description, isDarkEffective && styles.descriptionDark]}>
-          Remove todos os dados salvos localmente (carteiras, configurações, etc.)
+          Use os botões acima para limpar dados específicos salvos localmente.
         </Text>
       </View>
     </ScrollView>

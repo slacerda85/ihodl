@@ -10,9 +10,10 @@ interface SeedRepositoryInterface {
   save(seed: string, walletId: string, password?: string): void
   find(walletId: string, password?: string): string | null
   delete(walletId: string): void
+  clear(): void
 }
 
-export class SeedRepository implements SeedRepositoryInterface {
+export default class SeedRepository implements SeedRepositoryInterface {
   save(walletId: string, seed: string, password?: string): void {
     const encryptedSeed = password ? encryptSeed(password, seed) : seed
     // Implementation to save seed
@@ -30,5 +31,8 @@ export class SeedRepository implements SeedRepositoryInterface {
   delete(walletId: string): void {
     // Implementation to delete seed by wallet ID
     seedStorage.delete(`seed_${walletId}`)
+  }
+  clear(): void {
+    seedStorage.clearAll()
   }
 }

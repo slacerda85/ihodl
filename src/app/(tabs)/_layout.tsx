@@ -8,14 +8,15 @@ export default function TabsLayout() {
         <Icon sf="wallet.bifold.fill" />
         <Label>Wallet</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="transactions">
+        <Icon sf="arrow.left.arrow.right" />
+        <Label>Transactions</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings">
         <Icon sf="gearshape.fill" />
         <Label>Settings</Label>
       </NativeTabs.Trigger>
-      {/* <NativeTabs.Trigger name="transactions">
-        <Icon sf="arrow.left.arrow.right" />
-        <Label>Transactions</Label>
-      </NativeTabs.Trigger> */}
+      {/*  */}
       {/* <NativeTabs.Trigger name="blockchain">
         <Icon sf="cube.box.fill" />
         <Label>Blockchain</Label>

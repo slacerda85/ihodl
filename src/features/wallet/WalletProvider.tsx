@@ -1,13 +1,13 @@
 import { createContext, ReactNode, useContext, useState } from 'react'
 import { Wallet } from '@/core/models/wallet'
-import walletService from '@/core/services/wallet'
+import WalletService from '@/core/services/wallet'
 
 type WalletContextType = {
   activeWalletId: string
   wallets: Wallet[]
-  createWallet: typeof walletService.createWallet
-  unlinkWallet: typeof walletService.deleteWallet
-  toggleActiveWallet: typeof walletService.toggleActiveWallet
+  createWallet: typeof WalletService.prototype.createWallet
+  unlinkWallet: typeof WalletService.prototype.deleteWallet
+  toggleActiveWallet: typeof WalletService.prototype.toggleActiveWallet
 }
 
 const WalletContext = createContext<WalletContextType | null>(null)
@@ -17,6 +17,7 @@ interface WalletProviderProps {
 }
 
 export default function WalletProvider({ children }: WalletProviderProps) {
+  const walletService = new WalletService()
   const {
     getAllWallets,
     createWallet: create,

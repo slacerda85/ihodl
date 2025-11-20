@@ -41,3 +41,20 @@ export type ScriptPubKey = {
   address: string
   addresses?: string[]
 }
+
+// UI friendly tx
+export type FriendlyTx = {
+  walletId: string
+  txid: string
+  date: string
+  type: FriendlyTxType
+  fromAddress: string
+  toAddress: string
+  amount: number
+  status: FriendlyTxStatus
+  fee: number | null
+  confirmations: number
+}
+
+export type FriendlyTxType = 'received' | 'sent'
+export type FriendlyTxStatus = 'pending' | 'processing' | 'confirmed' | 'unknown'

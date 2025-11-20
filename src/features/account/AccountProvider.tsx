@@ -1,12 +1,17 @@
 import { WalletAccount } from '@/core/models/account'
-import accountService from '@/core/services/account'
-import { createContext, ReactNode, useContext, useEffect, useState } from 'react'
+import { AccountService } from '@/core/services/account'
+import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react'
 import { useWallet } from '../wallet'
 import { useNetwork } from '../network/NetworkProvider'
+import { FriendlyTx } from '@/core/models/tx'
 
 type AccountContextType = {
   accounts: WalletAccount[]
   loading: boolean
+  getAccounts(): Promise<WalletAccount[]>
+  getBalance(): number
+  getFriendlyTxs(): FriendlyTx[]
+  getFriendlyTx(txid: string): FriendlyTx | null
 }
 
 export const AccountContext = createContext<AccountContextType | null>(null)
@@ -18,33 +23,86 @@ interface AccountProviderProps {
 }
 
 export function AccountProvider({ children }: AccountProviderProps) {
+  // hooks
   const { activeWalletId } = useWallet()
   const { getConnection } = useNetwork()
+
+  // state
   const [accounts, setAccounts] = useState<WalletAccount[]>([])
   const [loading, setLoading] = useState<boolean>(false)
   const [lastUpdated, setLastUpdated] = useState<number>(0)
 
-  useEffect(() => {
-    async function getAccounts(walletId: string): Promise<void> {
+  function getBalance() {
+    if (activeWalletId) {
+      const accountService = new AccountService()
+      const { getBalance } = accountService
+      return getBalance(activeWalletId)
+    } else {
+      return 0
+    }
+  }
+
+  function getFriendlyTxs(): FriendlyTx[] {
+    if (activeWalletId) {
+      const accountService = new AccountService()
+      const friendlyTxs = accountService.getFriendlyTxs(activeWalletId!)
+      return friendlyTxs
+    }
+    return []
+  }
+
+  function getFriendlyTx(txid: string): FriendlyTx | null {
+    if (activeWalletId) {
+      const accountService = new AccountService()
+      const friendlyTx = accountService.getFriendlyTx(txid)
+      return friendlyTx
+    }
+    return null
+  }
+
+  const fetchAccounts = useCallback(
+    async (walletId: string) => {
       setLoading(true)
-      const connection = await getConnection()
-      const accounts = await accountService.getAccounts(walletId, connection)
+      try {
+        const connection = await getConnection()
+        const accountService = new AccountService()
+        const walletAccounts = await accountService.getAccounts(walletId, connection)
+        setAccounts(walletAccounts)
+        setLastUpdated(Date.now())
+        setLoading(false)
+      } catch (error) {
+        // Handle error appropriately, e.g., log or set error state
+        console.error('Failed to fetch accounts:', error)
+        setLoading(false)
+      }
+    },
+    [getConnection],
+  )
 
-      setAccounts(accounts)
-      setLoading(false)
+  const getAccounts = useCallback(async () => {
+    if (!activeWalletId) return []
+    if (Date.now() - lastUpdated < updateInterval && accounts.length > 0) {
+      return accounts
     }
+    await fetchAccounts(activeWalletId)
+    return accounts
+  }, [activeWalletId, lastUpdated, accounts, fetchAccounts])
 
-    if (activeWalletId && (!lastUpdated || lastUpdated < Date.now() - updateInterval)) {
-      getAccounts(activeWalletId)
-      setLastUpdated(Date.now())
+  useEffect(() => {
+    if (activeWalletId) {
+      fetchAccounts(activeWalletId)
     }
-  }, [activeWalletId, getConnection, lastUpdated])
+  }, [activeWalletId, fetchAccounts])
 
   return (
     <AccountContext
       value={{
         accounts,
         loading,
+        getBalance,
+        getFriendlyTxs,
+        getFriendlyTx,
+        getAccounts,
       }}
     >
       {children}

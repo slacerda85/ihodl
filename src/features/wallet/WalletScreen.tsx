@@ -114,51 +114,56 @@ export default function WalletScreen() {
 function WalletAccounts() {
   const { isDark } = useSettings()
   const { accounts } = useAccount()
-  const receivingAccounts = accounts.filter(acc => acc.change === 0)
-  const changeAccounts = accounts.filter(acc => acc.change === 1)
 
   return (
-    <View>
-      <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
-        Receiving Accounts
-      </Text>
-      {receivingAccounts.length === 0 ? (
+    <ScrollView style={{ maxHeight: 400 }} contentContainerStyle={styles.section}>
+      <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>Accounts</Text>
+      {accounts.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={[styles.emptyStateText, isDark && styles.emptyStateTextDark]}>
-            No receiving accounts found.
+            No accounts found.
           </Text>
         </View>
       ) : (
-        <ScrollView>
-          {receivingAccounts.map((account, index) => (
-            <View key={account.addressIndex}>
-              <Text style={[styles.offlineText]}>
-                Address {index}: {account.address}
-              </Text>
-            </View>
-          ))}
-        </ScrollView>
-      )}
-
-      <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark, { marginTop: 24 }]}>
-        Change Accounts
-      </Text>
-      {changeAccounts.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={[styles.emptyStateText, isDark && styles.emptyStateTextDark]}>
-            No change accounts found.
-          </Text>
+        <View>
+          {accounts
+            .sort((a, b) => a.addressIndex - b.addressIndex)
+            // .sort((a, b) => a.change - b.change)
+            // .sort((a, b) => a.addressIndex - b.addressIndex)
+            .map(account => (
+              <View
+                key={account.address}
+                style={[styles.accountCard, isDark && styles.accountCardDark]}
+              >
+                <Text style={[styles.accountTitle, isDark && styles.accountTitleDark]}>
+                  Address {account.addressIndex}
+                </Text>
+                <Text style={[styles.accountAddress, isDark && styles.accountAddressDark]}>
+                  {account.address}
+                </Text>
+                <Text style={[styles.accountDetail, isDark && styles.accountDetailDark]}>
+                  Purpose: {account.purpose}
+                </Text>
+                <Text style={[styles.accountDetail, isDark && styles.accountDetailDark]}>
+                  CoinType: {account.coinType}
+                </Text>
+                <Text style={[styles.accountDetail, isDark && styles.accountDetailDark]}>
+                  Account: {account.accountIndex}
+                </Text>
+                <Text style={[styles.accountDetail, isDark && styles.accountDetailDark]}>
+                  Change: {account.change}
+                </Text>
+                <Text style={[styles.accountTxs]}>Transactions: {account.txs.length}</Text>
+                {account.txs.map((tx, txIndex) => (
+                  <Text key={txIndex} style={[styles.txItem, isDark && styles.txItemDark]}>
+                    TX {txIndex + 1}: {tx.txid} ({tx.confirmations || 0} conf)
+                  </Text>
+                ))}
+              </View>
+            ))}
         </View>
-      ) : (
-        changeAccounts.map(account => (
-          <View key={account.addressIndex}>
-            <Text style={[styles.walletName, isDark && styles.walletNameDark]}>
-              Account {account.accountIndex}
-            </Text>
-          </View>
-        ))
       )}
-    </View>
+    </ScrollView>
   )
 }
 
@@ -319,5 +324,57 @@ const styles = StyleSheet.create({
   },
   neutralButtonLoading: {
     opacity: 0.5,
+  },
+  accountCard: {
+    backgroundColor: colors.background.light,
+    padding: 16,
+    marginVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+  },
+  accountCardDark: {
+    backgroundColor: colors.background.dark,
+    borderColor: colors.border.dark,
+  },
+  accountTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text.light,
+    marginBottom: 4,
+  },
+  accountTitleDark: {
+    color: colors.text.dark,
+  },
+  accountAddress: {
+    fontSize: 14,
+    color: colors.textSecondary.light,
+    marginBottom: 4,
+  },
+  accountAddressDark: {
+    color: colors.textSecondary.dark,
+  },
+  accountDetail: {
+    fontSize: 12,
+    color: colors.textSecondary.light,
+    marginBottom: 4,
+  },
+  accountDetailDark: {
+    color: colors.textSecondary.dark,
+  },
+  accountTxs: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.primary,
+    marginBottom: 4,
+  },
+  txItem: {
+    fontSize: 12,
+    color: colors.text.light,
+    marginLeft: 16,
+    marginBottom: 2,
+  },
+  txItemDark: {
+    color: colors.text.dark,
   },
 })

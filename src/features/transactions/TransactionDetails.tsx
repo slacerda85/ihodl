@@ -5,28 +5,21 @@ import * as Clipboard from 'expo-clipboard'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
-import { useTransactions } from '@/features/transactions'
 import { useSettings } from '@/features/settings'
 import QRCode from '@/ui/QRCode'
 import ContentContainer from '@/ui/ContentContainer'
 import Button from '@/ui/Button'
+import { useAccount } from '../account/AccountProvider'
 
 export default function TransactionDetails() {
   const { txid } = useLocalSearchParams<{ txid: string }>()
   const { isDark } = useSettings()
+  const { getFriendlyTx, getFriendlyTxs } = useAccount()
+  const tx = getFriendlyTx(txid)
 
-  const { state: transactionsState } = useTransactions()
-  const { cachedTransactions } = transactionsState
-
-  // Find the transaction in caches
-  const transaction = cachedTransactions
-    .flatMap(cache => cache.transactions.map(tx => ({ tx, walletId: cache.walletId })))
-    .find(item => item.tx.txid === txid)
-
-  if (!transaction) {
-    const availableTxids = cachedTransactions
-      .flatMap(cache => cache.transactions.map(tx => tx.txid))
-      .join(', ')
+  if (!tx) {
+    const availableTxs = getFriendlyTxs()
+    const availableTxids = availableTxs.map(tx => tx.txid).join(', ')
     return (
       <ContentContainer>
         <View style={styles.container}>
@@ -42,8 +35,6 @@ export default function TransactionDetails() {
     )
   }
 
-  const { tx } = transaction
-
   // Calculate basic info using UIFriendlyTransaction fields
   const amount = tx.amount
 
@@ -52,14 +43,21 @@ export default function TransactionDetails() {
 
   // Status and confirmations from UIFriendlyTransaction
   const confirmations = tx.confirmations || 0
-  const status =
+
+  const statusLabel: Record<typeof tx.status, string> = {
+    confirmed: 'Confirmed',
+    pending: 'Pending',
+    processing: 'Processing',
+    unknown: 'Unknown',
+  }
+  /* const status =
     tx.status === 'confirmed'
       ? 'Confirmed'
       : tx.status === 'pending'
         ? 'Pending'
         : tx.status === 'processing'
           ? 'Processing'
-          : 'Unknown'
+          : 'Unknown' */
 
   const handleCopyTxid = async () => {
     try {
@@ -100,7 +98,7 @@ export default function TransactionDetails() {
                       : styles.pending,
                 ]}
               >
-                {status}
+                {statusLabel[tx.status]}
               </Text>
             </View>
 

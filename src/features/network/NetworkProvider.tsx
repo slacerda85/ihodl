@@ -1,5 +1,5 @@
 import { Connection } from '@/core/models/network'
-import { createContext, ReactNode, useContext, useState } from 'react'
+import { createContext, ReactNode, useContext, useRef } from 'react'
 import networkService from '@/core/services/network'
 
 type NetworkContextType = {
@@ -12,16 +12,13 @@ interface NetworkProviderProps {
 }
 
 export default function NetworkProvider({ children }: NetworkProviderProps) {
-  const { connect } = networkService
-  const [connection, setConnection] = useState<Connection>(null)
+  const connectionRef = useRef<Promise<Connection> | null>(null)
 
   async function getConnection() {
-    if (!connection) {
-      const newConnection = await connect()
-      setConnection(newConnection)
-      return newConnection
+    if (!connectionRef.current) {
+      connectionRef.current = networkService.connect()
     }
-    return connection
+    return connectionRef.current
   }
 
   // no .Provider necessary anymore in React 19

@@ -25,6 +25,8 @@ export const enum Change {
   Change = 1,
 }
 
+export const ACCOUNT_DISCOVERY_GAP_LIMIT = 20
+
 // Tipos atualizados
 export type Account = {
   purpose: Purpose

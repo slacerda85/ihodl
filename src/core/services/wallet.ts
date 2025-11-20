@@ -1,6 +1,6 @@
 import { randomUUID } from '@/core/lib/crypto'
 import { Wallet } from '@/core/models/wallet'
-import { SeedService } from './seed'
+import SeedService from './seed'
 import { WalletRepository } from '@/core/repositories/wallet'
 
 export type CreateWalletParams = Omit<Wallet, 'id'> & {
@@ -8,7 +8,7 @@ export type CreateWalletParams = Omit<Wallet, 'id'> & {
   password?: string
 }
 
-interface WalletService {
+interface WalletServiceInterface {
   createWallet(params: CreateWalletParams): Wallet
   getAllWallets(): Wallet[]
   getWalletIds(): string[]
@@ -18,8 +18,8 @@ interface WalletService {
   toggleActiveWallet(walletId: string): void
 }
 
-const walletService: WalletService = {
-  createWallet({ name, cold, seed, password }) {
+export default class WalletService implements WalletServiceInterface {
+  createWallet({ name, cold, seed, password }: CreateWalletParams): Wallet {
     // create seed
     const seedService = new SeedService()
     const seedToStore = seed ?? seedService.createSeed()
@@ -37,13 +37,13 @@ const walletService: WalletService = {
     // set as active wallet
     walletRepository.setActiveWalletId(id)
     return newWallet
-  },
+  }
 
   getWalletIds(): string[] {
     const walletRepository = new WalletRepository()
     const wallets = walletRepository.findAll()
     return wallets.map(wallet => wallet.id)
-  },
+  }
 
   editWallet(walletId: string, updates: Partial<Omit<Wallet, 'id'>>): void {
     const walletRepository = new WalletRepository()
@@ -53,17 +53,17 @@ const walletService: WalletService = {
     }
     const updatedWallet = { ...wallet, ...updates }
     walletRepository.save(updatedWallet)
-  },
+  }
 
   getActiveWalletId(): string {
     const walletRepository = new WalletRepository()
     return walletRepository.getActiveWalletId()
-  },
+  }
 
   toggleActiveWallet(walletId: string): void {
     const walletRepository = new WalletRepository()
     walletRepository.setActiveWalletId(walletId)
-  },
+  }
 
   deleteWallet(walletId: string): void {
     const walletRepository = new WalletRepository()
@@ -78,12 +78,10 @@ const walletService: WalletService = {
         walletRepository.setActiveWalletId('')
       }
     }
-  },
+  }
 
   getAllWallets(): Wallet[] {
     const walletRepository = new WalletRepository()
     return walletRepository.findAll()
-  },
+  }
 }
-
-export default walletService

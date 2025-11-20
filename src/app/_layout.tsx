@@ -37,13 +37,11 @@ export default function RootLayout() {
   }
 
   return (
-    <StrictMode>
-      <AppProviders>
-        <AppContent />
-        <InactivityOverlay />
-        <AuthScreen />
-        <StatusBar style="auto" />
-      </AppProviders>
-    </StrictMode>
+    <AppProviders>
+      <AppContent />
+      <InactivityOverlay />
+      <AuthScreen />
+      <StatusBar style="auto" />
+    </AppProviders>
   )
 }

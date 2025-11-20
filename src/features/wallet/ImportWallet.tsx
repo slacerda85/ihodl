@@ -11,7 +11,7 @@ import { GlassView } from 'expo-glass-effect'
 
 export default function ImportWallet() {
   const router = useRouter()
-  const { importWallet } = useWallet()
+  const { createWallet } = useWallet()
   const [walletName, setWalletName] = useState<string>('')
   const [seedPhrase, setSeedPhrase] = useState<string>('')
   const [currentWord, setCurrentWord] = useState<string>('')
@@ -71,10 +71,9 @@ export default function ImportWallet() {
     setSubmitting(true)
     try {
       // Use the wallet hook to import wallet - it handles all the lib calls and state updates
-      importWallet({
+      createWallet({
         name: walletName.trim(),
         seed: seedPhrase.trim(),
-        accounts: [],
         cold: false,
         password,
       })

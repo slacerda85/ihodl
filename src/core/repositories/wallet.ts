@@ -13,6 +13,7 @@ interface WalletRepositoryInterface {
   getActiveWalletId(): string
   findAll(): Wallet[]
   findAllIds(): string[]
+  clear(): void
 }
 
 export class WalletRepository implements WalletRepositoryInterface {
@@ -52,4 +53,11 @@ export class WalletRepository implements WalletRepositoryInterface {
     const wallets = this.findAll()
     return wallets.map(wallet => wallet.id)
   }
+  clear(): void {
+    walletStorage.clearAll()
+  }
 }
+
+const walletRepository = new WalletRepository()
+
+export default walletRepository

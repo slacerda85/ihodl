@@ -9,8 +9,8 @@ import { alpha } from '@/ui/utils'
 import { useHeaderHeight } from '@react-navigation/elements'
 import { GlassView } from 'expo-glass-effect'
 import { useSettings } from '../settings'
-import { useTransactions } from './TransactionsProvider'
 import { useWallet } from '../wallet'
+import { useAccount } from '../account/AccountProvider'
 // import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
 
 // Define types for our transaction list items
@@ -30,46 +30,14 @@ type TransactionItem = {
 type ListItem = DateHeader | TransactionItem
 
 export default function TransactionsScreen() {
+  const router = useRouter()
   const headerHeight = useHeaderHeight()
   const { isDark } = useSettings()
-  const router = useRouter()
-
-  const { activeWalletId /*  loading: loadingWallet, unit */ } = useWallet()
-  const { friendly: transactions, loading: loadingTxState } = useTransactions()
-
-  // const loading = loadingWallet || loadingTxState
-
-  // Check if we have cached data for the active wallet
-  const hasTransactionData = activeWalletId
-    ? transactions.some(cache => cache.walletId === activeWalletId)
-    : false
-
-  // Loading state - show this prominently
-  if (loading) {
-    return (
-      <View style={[styles.loadingContainer, { paddingTop: headerHeight + 16 }]}>
-        <View style={[styles.loadingBox, isDark && styles.loadingBoxDark]}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      </View>
-    )
-  }
-
-  // No wallet selected
-  if (!activeWalletId) {
-    return (
-      <View style={[styles.emptyContainer, { paddingTop: headerHeight + 16 }]}>
-        <View style={[styles.empty, isDark && styles.emptyDark]}>
-          <Text style={[styles.emptyText, isDark && styles.emptyTextDark]}>
-            Select a wallet to view transactions
-          </Text>
-        </View>
-      </View>
-    )
-  }
+  const { getFriendlyTxs } = useAccount()
+  const transactions = getFriendlyTxs()
 
   // No transaction data available yet - show loading
-  if (!hasTransactionData) {
+  if (transactions.length === 0) {
     return (
       <View style={[styles.emptyContainer, { paddingTop: headerHeight + 16 }]}>
         <View style={[styles.empty, isDark && styles.emptyDark]}>
@@ -175,7 +143,7 @@ export default function TransactionsScreen() {
                 isPositive ? styles.balancePositive : styles.balanceNegative,
               ]}
             >
-              {`${prefix}${formatBalance(item.amount, unit)} ${unit}`}
+              {`${prefix}${formatBalance(item.amount, 'BTC')} ${'BTC'}`}
             </Text>
           </GlassView>
         </Pressable>

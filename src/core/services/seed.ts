@@ -1,6 +1,6 @@
 import { entropyToMnemonic } from '../lib'
 import { createEntropy } from '../lib/crypto'
-import { SeedRepository } from '../repositories/seed'
+import SeedRepository from '../repositories/seed'
 
 interface SeedServiceInterface {
   createSeed(): string
@@ -9,7 +9,7 @@ interface SeedServiceInterface {
   deleteSeed(walletId: string): void
 }
 
-class SeedService implements SeedServiceInterface {
+export default class SeedService implements SeedServiceInterface {
   createSeed(): string {
     const entropy = createEntropy(16) // 128 bits
     const seed = entropyToMnemonic(entropy)
@@ -35,7 +35,3 @@ class SeedService implements SeedServiceInterface {
     seedRepository.delete(walletId)
   }
 }
-
-const seedService = new SeedService()
-
-export default seedService

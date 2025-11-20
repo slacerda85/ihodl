@@ -6,13 +6,14 @@ const accountStorage = new MMKV({
 })
 
 interface AccountRepositoryInterface {
+  all(): WalletAccount[]
   save(walletAccount: WalletAccount): void
   read(walletId: string): WalletAccount[]
   delete(walletId: string): void
   clear(): void
 }
 
-class AccountRepository implements AccountRepositoryInterface {
+export default class AccountRepository implements AccountRepositoryInterface {
   save(walletAccount: WalletAccount): void {
     const { walletId, purpose, coinType, accountIndex, change, addressIndex } = walletAccount
     const key = `account_${walletId}_${purpose}_${coinType}_${accountIndex}_${change}_${addressIndex}`
@@ -44,8 +45,18 @@ class AccountRepository implements AccountRepositoryInterface {
   clear(): void {
     accountStorage.clearAll()
   }
+
+  all(): WalletAccount[] {
+    const accounts: WalletAccount[] = []
+    const keys = accountStorage.getAllKeys()
+    for (const key of keys) {
+      if (key.startsWith(`account_`)) {
+        const accountData = accountStorage.getString(key)
+        if (accountData) {
+          accounts.push(JSON.parse(accountData) as WalletAccount)
+        }
+      }
+    }
+    return accounts
+  }
 }
-
-const accountRepository = new AccountRepository()
-
-export default accountRepository

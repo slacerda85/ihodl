@@ -1,9 +1,5 @@
 import TransactionsScreen from '@/features/transactions/TransactionsScreen'
 
 export default function TransactionsRoute() {
-  return <Nothing /> // <TransactionsScreen />
-}
-
-function Nothing() {
-  return null
+  return <TransactionsScreen />
 }

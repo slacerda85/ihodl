@@ -2,7 +2,6 @@ import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-nati
 import { useState, useEffect, useCallback } from 'react'
 import colors from '@/ui/colors'
 import SwapIcon from './SwapIcon'
-import { useWallet } from '@/features/wallet'
 import { useSettings } from '@/features/settings'
 import { formatBalance } from './utils'
 import { alpha } from '@/ui/utils'
@@ -11,52 +10,9 @@ import { useAccount } from '../account/AccountProvider'
 
 export default function WalletBalance() {
   const { isDark } = useSettings()
-  const [balance, setBalance] = useState(0)
-  const { activeWalletId } = useWallet()
-  const { accounts, loading } = useAccount()
+  const { loading, getBalance } = useAccount()
 
-  /* const { friendly } = useTransactions()
-  const { loading: loadingWallet, unit, activeWalletId, dispatch: walletDispatch } = useWallet()
-  const loading = loadingWallet || false
-  // Calculate balance from cached transactions
-  const getBalance = useCallback(
-    (walletId: string) => {
-      const walletCache = friendly.find(cache => cache.walletId === walletId)
-      if (!walletCache) return 0
-
-      // Calculate balance from friendly transactions
-      return friendly.reduce((total, tx) => {
-        if (tx.type === 'received') {
-          return total + tx.amount
-        } else if (tx.type === 'sent') {
-          return total - tx.amount
-        }
-        return total // for unknown types, don't change balance
-      }, 0)
-    },
-    [friendly],
-  ) */
-
-  // Set unit function
-  /* const setUnit = (newUnit: 'BTC' | 'Sats') => {
-    walletDispatch({ type: 'SET_UNIT', payload: newUnit })
-  }
-
-  // Update balance when dependencies change
-  useEffect(() => {
-    if (activeWalletId) {
-      try {
-        // Use the getBalance selector from useTransactions
-        const newBalance = getBalance(activeWalletId)
-        setBalance(newBalance)
-      } catch (error) {
-        console.error('Error fetching balance:', error)
-        setBalance(0)
-      }
-    } else {
-      setBalance(0)
-    }
-  }, [activeWalletId, getBalance]) */
+  const balance = getBalance()
 
   if (loading) {
     return (
@@ -66,7 +22,6 @@ export default function WalletBalance() {
           <Text style={[styles.loadingText, isDark && styles.loadingTextDark]}>
             Loading balance...
           </Text>
-          <Text>{JSON.stringify(accounts)}</Text>
         </View>
       </View>
     )
