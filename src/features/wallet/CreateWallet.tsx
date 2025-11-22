@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { ActivityIndicator, StyleSheet, Switch, Text, TextInput, View } from 'react-native'
+import { StyleSheet, Switch, Text, TextInput, View } from 'react-native'
 
 import { GlassView } from 'expo-glass-effect'
 import { useRouter } from 'expo-router'

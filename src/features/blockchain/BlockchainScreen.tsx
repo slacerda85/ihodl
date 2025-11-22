@@ -1,18 +1,8 @@
-import { Text, View, StyleSheet, useColorScheme, ActivityIndicator } from 'react-native'
+import { View, StyleSheet, useColorScheme } from 'react-native'
 
 import colors from '@/ui/colors'
 // import { useBlockchain } from '@/features/blockchain'
 import { useSettings } from '@/features/settings'
-import Button from '@/ui/Button'
-
-// Helper function to format bytes
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
-}
 
 export default function BlockchainScreen() {
   const colorScheme = useColorScheme()
@@ -20,104 +10,7 @@ export default function BlockchainScreen() {
   const effectiveColorMode = colorMode === 'auto' ? (colorScheme ?? 'light') : colorMode
   const isDark = effectiveColorMode === 'dark'
 
-  // const { blockchainState, syncHeadersManually } = useBlockchain()
-  // const { isSyncing, lastSyncedHeight, currentHeight, syncProgress } = blockchainState
-
-  /* const progressPercentage = Math.round(syncProgress * 100)
-  const syncedBlocks = lastSyncedHeight || 0
-  const totalBlocks = currentHeight || 0
-
-  // Estimativa aproximada: 80 bytes por header
-  const estimatedSizeBytes = syncedBlocks * 80
-  const estimatedSizeFormatted = formatBytes(estimatedSizeBytes) */
-
-  return (
-    <View style={[styles.container, isDark && styles.containerDark]}>
-      {/* <View style={styles.content}>
-       
-        <View style={[styles.card, isDark && styles.cardDark]}>
-          <Text style={[styles.cardTitle, isDark && styles.cardTitleDark]}>
-            Blockchain Sync Status
-          </Text>
-
-          <View style={styles.progressContainer}>
-            <View style={styles.progressBar}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${progressPercentage}%` },
-                  isSyncing && styles.progressFillActive,
-                ]}
-              />
-            </View>
-            <Text style={[styles.progressText, isDark && styles.progressTextDark]}>
-              {progressPercentage}%
-            </Text>
-          </View>
-
-          <View style={styles.statusRow}>
-            <Text style={[styles.statusLabel, isDark && styles.statusLabelDark]}>Status:</Text>
-            <View style={styles.statusValue}>
-              {isSyncing ? (
-                <>
-                  <ActivityIndicator size="small" color={colors.primary} />
-                  <Text style={[styles.statusText, styles.statusTextSyncing]}>
-                    Synchronizing...
-                  </Text>
-                </>
-              ) : (
-                <Text style={[styles.statusText, styles.statusTextSynced]}>Synced</Text>
-              )}
-            </View>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, isDark && styles.infoLabelDark]}>Latest Block:</Text>
-            <Text style={[styles.infoValue, isDark && styles.infoValueDark]}>
-              {totalBlocks.toLocaleString()}
-            </Text>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, isDark && styles.infoLabelDark]}>Synced Block:</Text>
-            <Text style={[styles.infoValue, isDark && styles.infoValueDark]}>
-              {syncedBlocks.toLocaleString()}
-            </Text>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, isDark && styles.infoLabelDark]}>Storage Used:</Text>
-            <Text style={[styles.infoValue, isDark && styles.infoValueDark]}>
-              {estimatedSizeFormatted}
-            </Text>
-          </View>
-        </View>
-
-        <Button
-          variant="solid"
-          backgroundColor={isSyncing ? colors.background.light : colors.primary}
-          glassStyle={styles.button}
-          disabled={isSyncing}
-          onPress={syncHeadersManually}
-        >
-          <Text style={[styles.buttonText, isSyncing && styles.buttonTextDisabled]}>
-            {isSyncing ? 'Synchronizing...' : 'Sync Now'}
-          </Text>
-        </Button>
-
-        <View style={styles.infoContainer}>
-          <Text style={[styles.infoText, isDark && styles.infoTextDark]}>
-            The blockchain headers are synchronized to verify transactions and maintain network
-            security. This process runs automatically in the background.
-          </Text>
-          <Text style={[styles.spvText, isDark && styles.spvTextDark]}>
-            SPV (Simplified Payment Verification) mode: Only block headers are downloaded, providing
-            fast synchronization while maintaining security through proof-of-work validation.
-          </Text>
-        </View>
-      </View> */}
-    </View>
-  )
+  return <View style={[styles.container, isDark && styles.containerDark]}></View>
 }
 
 const styles = StyleSheet.create({

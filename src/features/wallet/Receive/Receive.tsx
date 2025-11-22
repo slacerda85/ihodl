@@ -79,7 +79,7 @@ export default function Receive() {
     }
 
     generateAddresses()
-  }, [activeWalletId, walletAccounts.length])
+  }, [activeWalletId, walletAccounts, walletAccounts.length])
 
   // Handle share address
   const handleShareAddress = async () => {

@@ -1,3 +1,3 @@
 import { TLSSocket } from 'tls'
 
-export type Connection = TLSSocket | null
+export type Connection = TLSSocket

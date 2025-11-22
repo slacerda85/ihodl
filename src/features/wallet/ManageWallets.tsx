@@ -24,8 +24,8 @@ export default function ManageWallets() {
   }
 
   function handleSelectWallet(walletId: string) {
-    toggleActiveWallet(walletId)
     router.dismiss()
+    setTimeout(() => toggleActiveWallet(walletId), 100) // Delay para permitir animação do modal
   }
 
   return (

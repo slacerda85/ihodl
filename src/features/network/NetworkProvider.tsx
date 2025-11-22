@@ -12,11 +12,12 @@ interface NetworkProviderProps {
 }
 
 export default function NetworkProvider({ children }: NetworkProviderProps) {
-  const connectionRef = useRef<Promise<Connection> | null>(null)
+  const connectionRef = useRef<Connection | null>(null)
 
   async function getConnection() {
     if (!connectionRef.current) {
-      connectionRef.current = networkService.connect()
+      const connection = await networkService.connect()
+      connectionRef.current = connection
     }
     return connectionRef.current
   }

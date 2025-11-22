@@ -2,6 +2,7 @@ import { randomUUID } from '@/core/lib/crypto'
 import { Wallet } from '@/core/models/wallet'
 import SeedService from './seed'
 import { WalletRepository } from '@/core/repositories/wallet'
+import { AccountService } from './account'
 
 export type CreateWalletParams = Omit<Wallet, 'id'> & {
   seed?: string
@@ -68,6 +69,13 @@ export default class WalletService implements WalletServiceInterface {
   deleteWallet(walletId: string): void {
     const walletRepository = new WalletRepository()
     walletRepository.delete(walletId)
+    // is required to delete associated accounts, seeds, etc.
+    const seedService = new SeedService()
+    seedService.deleteSeed(walletId)
+
+    const accountService = new AccountService()
+    accountService.deleteAccountsByWalletId(walletId)
+
     // check active id
     const activeWalletId = walletRepository.getActiveWalletId()
     if (activeWalletId === walletId) {

@@ -7,10 +7,9 @@ import BitcoinLogo from '@/assets/bitcoin-logo'
 import { formatBalance } from '../wallet/utils'
 import { alpha } from '@/ui/utils'
 import { useHeaderHeight } from '@react-navigation/elements'
-import { GlassView } from 'expo-glass-effect'
 import { useSettings } from '../settings'
-import { useWallet } from '../wallet'
 import { useAccount } from '../account/AccountProvider'
+import { iosTabBarHeight } from '@/ui/tokens'
 // import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
 
 // Define types for our transaction list items
@@ -22,7 +21,7 @@ type DateHeader = {
 type TransactionItem = {
   isDate: false
   tx: UIFriendlyTransaction
-  type: 'received' | 'sent' | 'self'
+  type: 'received' | 'sent'
   amount: number
   address: string
 }
@@ -33,8 +32,19 @@ export default function TransactionsScreen() {
   const router = useRouter()
   const headerHeight = useHeaderHeight()
   const { isDark } = useSettings()
-  const { getFriendlyTxs } = useAccount()
+  const { loading, getFriendlyTxs } = useAccount()
   const transactions = getFriendlyTxs()
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingSubText, isDark && styles.loadingSubTextDark]}>
+          Fetching your transactions
+        </Text>
+      </View>
+    )
+  }
 
   // No transaction data available yet - show loading
   if (transactions.length === 0) {
@@ -109,7 +119,11 @@ export default function TransactionsScreen() {
 
   const renderItem = ({ item, index }: { item: ListItem; index: number }) => {
     if (item.isDate) {
-      return <Text style={[styles.date, isDark && styles.dateDark]}>{item.date}</Text>
+      return (
+        <View style={[styles.dateContainer, isDark && styles.dateContainerDark]}>
+          <Text style={[styles.date, isDark && styles.dateDark]}>{item.date}</Text>
+        </View>
+      )
     } else {
       // Determinar estilo do tipo de transação
       const typeLabel =
@@ -125,7 +139,7 @@ export default function TransactionsScreen() {
             router.push(`/transactions/${item.tx.txid}` as any)
           }}
         >
-          <GlassView isInteractive style={styles.transactionPressable}>
+          <View style={[styles.transactionPressable, isDark && styles.transactionsPressableDark]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <BitcoinLogo width={32} height={32} />
               <View>
@@ -145,21 +159,54 @@ export default function TransactionsScreen() {
             >
               {`${prefix}${formatBalance(item.amount, 'BTC')} ${'BTC'}`}
             </Text>
-          </GlassView>
+          </View>
         </Pressable>
       )
     }
   }
 
+  const title = () => (
+    <View style={{ backgroundColor: colors.background.light }}>
+      <Text
+        style={{
+          fontSize: 18,
+          fontWeight: '600',
+          color: isDark ? colors.text.dark : colors.text.light,
+        }}
+      >
+        Transactions
+      </Text>
+    </View>
+  )
+
+  const dateIndices: number[] = []
+  data.forEach((item, index) => {
+    if (item.isDate) {
+      dateIndices.push(index)
+    }
+  })
+
   return (
     <FlatList
       contentContainerStyle={{
-        // paddingTop: headerHeight + 16,
-        padding: 20,
+        // backgroundColor: 'blue',
+        paddingBottom: iosTabBarHeight,
         gap: 4,
       }}
+      stickyHeaderIndices={dateIndices}
+      ItemSeparatorComponent={() => (
+        // divider
+        <View
+          style={{
+            borderBottomWidth: 1,
+            borderBottomColor: alpha(colors.textSecondary.light, 0.2),
+          }}
+        />
+      )}
       data={data}
-      keyExtractor={item => (item.isDate ? item.date : item.tx.txid)}
+      keyExtractor={(item, index) =>
+        item.isDate ? item.date : `${index}-${item.tx.txid}-${item.address}-${item.amount}`
+      }
       renderItem={renderItem}
       showsVerticalScrollIndicator={false}
     />
@@ -172,14 +219,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 16,
-  },
-  loadingBox: {
-    backgroundColor: colors.white,
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    gap: 12,
-    minWidth: 200,
   },
   loadingBoxDark: {
     backgroundColor: alpha(colors.background.light, 0.05),
@@ -241,6 +280,13 @@ const styles = StyleSheet.create({
   statsTextDark: {
     color: alpha(colors.textSecondary.dark, 0.7),
   },
+  dateContainer: {
+    backgroundColor: alpha(colors.background.light, 0.9),
+    paddingVertical: 8,
+  },
+  dateContainerDark: {
+    backgroundColor: alpha(colors.background.dark, 0.9),
+  },
   date: {
     paddingLeft: 16,
     paddingTop: 16,
@@ -268,6 +314,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary.dark,
   },
   transactionPressable: {
+    // backgroundColor: alpha(colors.white, 0.9),
     paddingTop: 12,
     paddingBottom: 12,
     paddingLeft: 12,
@@ -275,10 +322,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderRadius: 32,
+    // borderRadius: 32,
   },
   transactionsPressableDark: {
-    // backgroundColor: alpha(colors.white, 0.1),
+    backgroundColor: alpha(colors.white, 0.1),
   },
   first: {
     borderTopLeftRadius: 32,

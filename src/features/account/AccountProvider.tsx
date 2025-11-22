@@ -1,15 +1,24 @@
 import { WalletAccount } from '@/core/models/account'
 import { AccountService } from '@/core/services/account'
-import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react'
+import {
+  createContext,
+  ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
 import { useWallet } from '../wallet'
 import { useNetwork } from '../network/NetworkProvider'
 import { FriendlyTx } from '@/core/models/tx'
+import { UTXO } from '@/lib/transactions'
 
 type AccountContextType = {
   accounts: WalletAccount[]
   loading: boolean
-  getAccounts(): Promise<WalletAccount[]>
-  getBalance(): number
+  // getAccounts(): Promise<WalletAccount[]>
+  getBalance(): { balance: number; utxos: UTXO[] }
   getFriendlyTxs(): FriendlyTx[]
   getFriendlyTx(txid: string): FriendlyTx | null
 }
@@ -30,15 +39,17 @@ export function AccountProvider({ children }: AccountProviderProps) {
   // state
   const [accounts, setAccounts] = useState<WalletAccount[]>([])
   const [loading, setLoading] = useState<boolean>(false)
-  const [lastUpdated, setLastUpdated] = useState<number>(0)
+
+  const intervalRef = useRef<number | null>(null)
 
   function getBalance() {
     if (activeWalletId) {
       const accountService = new AccountService()
       const { getBalance } = accountService
-      return getBalance(activeWalletId)
+      const { balance, utxos } = getBalance(activeWalletId)
+      return { balance, utxos }
     } else {
-      return 0
+      return { balance: 0, utxos: [] }
     }
   }
 
@@ -68,7 +79,6 @@ export function AccountProvider({ children }: AccountProviderProps) {
         const accountService = new AccountService()
         const walletAccounts = await accountService.getAccounts(walletId, connection)
         setAccounts(walletAccounts)
-        setLastUpdated(Date.now())
         setLoading(false)
       } catch (error) {
         // Handle error appropriately, e.g., log or set error state
@@ -79,18 +89,33 @@ export function AccountProvider({ children }: AccountProviderProps) {
     [getConnection],
   )
 
-  const getAccounts = useCallback(async () => {
-    if (!activeWalletId) return []
-    if (Date.now() - lastUpdated < updateInterval && accounts.length > 0) {
-      return accounts
-    }
-    await fetchAccounts(activeWalletId)
-    return accounts
-  }, [activeWalletId, lastUpdated, accounts, fetchAccounts])
-
   useEffect(() => {
+    // Clear any existing interval
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
+    // If activeWalletId exists, fetch immediately and set up interval
     if (activeWalletId) {
-      fetchAccounts(activeWalletId)
+      console.log('AccountProvider: updating accounts')
+      fetchAccounts(activeWalletId).then(() => {
+        // accounts updated
+        console.log('AccountProvider: accounts updated')
+      })
+      // Set up interval to fetch every 10 minutes
+      intervalRef.current = setInterval(() => {
+        console.log('AccountProvider: periodic update')
+        fetchAccounts(activeWalletId).then(() => {
+          console.log('AccountProvider: accounts updated')
+        })
+      }, updateInterval)
+    }
+    // Cleanup on unmount or when activeWalletId changes
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
     }
   }, [activeWalletId, fetchAccounts])
 
@@ -102,7 +127,7 @@ export function AccountProvider({ children }: AccountProviderProps) {
         getBalance,
         getFriendlyTxs,
         getFriendlyTx,
-        getAccounts,
+        // getAccounts,
       }}
     >
       {children}

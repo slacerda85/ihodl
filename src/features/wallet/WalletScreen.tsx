@@ -1,6 +1,6 @@
 // React and React Native
 import { Link, useRouter } from 'expo-router'
-import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { useWallet } from '@/features/wallet'
@@ -12,13 +12,14 @@ import CreateWalletIcon from './CreateWalletIcon'
 import ImportWalletIcon from './ImportWalletIcon'
 import ContentContainer from '@/ui/ContentContainer'
 import Button from '@/ui/Button'
-import { useAccount } from '../account/AccountProvider'
-// import { useHeaderHeight } from '@react-navigation/elements'
+import TransactionsScreen from '../transactions/TransactionsScreen'
+import DebugUtxos from '../utxo/DebugUtxos'
 
 export default function WalletScreen() {
   const router = useRouter()
   // theme
   const { isDark } = useSettings()
+  const { activeWalletId, wallets } = useWallet()
 
   function handleSend() {
     // Navigate to send screen
@@ -36,11 +37,6 @@ export default function WalletScreen() {
   function handleImportWallet() {
     router.push('/wallet/import')
   }
-
-  // const { getActiveWalletId, getWallets } = useWallet()
-  // const wallets = getWallets()
-  // const activeWalletId = getActiveWalletId()
-  const { activeWalletId, wallets } = useWallet()
 
   if (wallets === undefined || wallets?.length === 0) {
     // create link to wallet/manage
@@ -87,7 +83,7 @@ export default function WalletScreen() {
 
   return (
     <ContentContainer>
-      <View style={{ gap: 32 }}>
+      <View style={{ height: '100%', gap: 32 }}>
         <WalletBalance />
         <View style={styles.actionsSection}>
           <Button onPress={handleSend} style={{ flex: 1 }} tintColor={alpha(colors.primary, 0.9)}>
@@ -100,70 +96,10 @@ export default function WalletScreen() {
             </Text>
           </Button>
         </View>
-
-        <View style={styles.accountsSection}>
-          <Text style={[styles.accountsHeader, isDark && styles.accountsHeaderDark]}>Accounts</Text>
-
-          <WalletAccounts />
-        </View>
+        <DebugUtxos />
+        <TransactionsScreen />
       </View>
     </ContentContainer>
-  )
-}
-
-function WalletAccounts() {
-  const { isDark } = useSettings()
-  const { accounts } = useAccount()
-
-  return (
-    <ScrollView style={{ maxHeight: 400 }} contentContainerStyle={styles.section}>
-      <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>Accounts</Text>
-      {accounts.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={[styles.emptyStateText, isDark && styles.emptyStateTextDark]}>
-            No accounts found.
-          </Text>
-        </View>
-      ) : (
-        <View>
-          {accounts
-            .sort((a, b) => a.addressIndex - b.addressIndex)
-            // .sort((a, b) => a.change - b.change)
-            // .sort((a, b) => a.addressIndex - b.addressIndex)
-            .map(account => (
-              <View
-                key={account.address}
-                style={[styles.accountCard, isDark && styles.accountCardDark]}
-              >
-                <Text style={[styles.accountTitle, isDark && styles.accountTitleDark]}>
-                  Address {account.addressIndex}
-                </Text>
-                <Text style={[styles.accountAddress, isDark && styles.accountAddressDark]}>
-                  {account.address}
-                </Text>
-                <Text style={[styles.accountDetail, isDark && styles.accountDetailDark]}>
-                  Purpose: {account.purpose}
-                </Text>
-                <Text style={[styles.accountDetail, isDark && styles.accountDetailDark]}>
-                  CoinType: {account.coinType}
-                </Text>
-                <Text style={[styles.accountDetail, isDark && styles.accountDetailDark]}>
-                  Account: {account.accountIndex}
-                </Text>
-                <Text style={[styles.accountDetail, isDark && styles.accountDetailDark]}>
-                  Change: {account.change}
-                </Text>
-                <Text style={[styles.accountTxs]}>Transactions: {account.txs.length}</Text>
-                {account.txs.map((tx, txIndex) => (
-                  <Text key={txIndex} style={[styles.txItem, isDark && styles.txItemDark]}>
-                    TX {txIndex + 1}: {tx.txid} ({tx.confirmations || 0} conf)
-                  </Text>
-                ))}
-              </View>
-            ))}
-        </View>
-      )}
-    </ScrollView>
   )
 }
 
@@ -179,6 +115,10 @@ const styles = StyleSheet.create({
   },
   walletNameDark: {
     color: colors.text.dark,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    gap: 12,
   },
   offlineIndicator: {
     flexDirection: 'row',
@@ -368,6 +308,15 @@ const styles = StyleSheet.create({
     color: colors.primary,
     marginBottom: 4,
   },
+  accountUtxos: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.secondary,
+    marginBottom: 4,
+  },
+  accountUtxosDark: {
+    color: alpha(colors.secondary, 0.8),
+  },
   txItem: {
     fontSize: 12,
     color: colors.text.light,
@@ -376,5 +325,32 @@ const styles = StyleSheet.create({
   },
   txItemDark: {
     color: colors.text.dark,
+  },
+  utxoItem: {
+    fontSize: 12,
+    color: colors.textSecondary.light,
+    marginLeft: 16,
+    marginBottom: 2,
+    flex: 1,
+  },
+  utxoItemDark: {
+    color: alpha(colors.textSecondary.dark, 0.8),
+  },
+  utxoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 16,
+    marginBottom: 2,
+  },
+  copyButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: alpha(colors.primary, 0.1),
+    borderRadius: 4,
+    marginLeft: 8,
+  },
+  copyButtonText: {
+    fontSize: 12,
+    color: colors.primary,
   },
 })

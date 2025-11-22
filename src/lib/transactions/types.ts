@@ -4,7 +4,7 @@ export interface UTXO {
   txid: string
   vout: number
   address: string
-  value: number
+  amount: number
   blocktime: number
   confirmations: number
   isSpent: boolean

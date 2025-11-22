@@ -1,5 +1,4 @@
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native'
-import { useState, useEffect, useCallback } from 'react'
 import colors from '@/ui/colors'
 import SwapIcon from './SwapIcon'
 import { useSettings } from '@/features/settings'
@@ -7,21 +6,19 @@ import { formatBalance } from './utils'
 import { alpha } from '@/ui/utils'
 import { GlassView } from 'expo-glass-effect'
 import { useAccount } from '../account/AccountProvider'
+import Utxos from '../utxo/Utxos'
 
 export default function WalletBalance() {
   const { isDark } = useSettings()
   const { loading, getBalance } = useAccount()
 
-  const balance = getBalance()
+  const { balance, utxos } = getBalance()
 
   if (loading) {
     return (
       <View style={styles.balanceSection}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, isDark && styles.loadingTextDark]}>
-            Loading balance...
-          </Text>
         </View>
       </View>
     )
@@ -42,12 +39,14 @@ export default function WalletBalance() {
         <View style={{ flex: 1, alignItems: 'center' }} />
         <Text style={[styles.balanceAmount, isDark && styles.balanceAmountDark]}>
           {formatBalance(balance, 'BTC')}
+          <Text style={[styles.balanceCurrency, isDark && styles.balanceCurrencyDark]}>
+            {' '}
+            {'BTC'}
+          </Text>
         </Text>
+
         <Pressable /* onPress={() => setUnit(unit === 'BTC' ? 'Sats' : 'BTC')} */>
           <GlassView isInteractive style={styles.unitButton}>
-            <Text style={[styles.balanceCurrency, isDark && styles.balanceCurrencyDark]}>
-              {'BTC'}
-            </Text>
             <SwapIcon
               size={16}
               color={alpha(colors.textSecondary[isDark ? 'dark' : 'light'], 0.7)}
@@ -55,6 +54,7 @@ export default function WalletBalance() {
           </GlassView>
         </Pressable>
       </View>
+      <Utxos utxos={utxos} />
     </View>
   )
 }
@@ -84,7 +84,8 @@ const styles = StyleSheet.create({
   },
   balanceAmount: {
     flex: 2,
-    fontSize: 36,
+    fontSize: 24,
+    // fontFamily: 'JetBrains Mono',
     fontWeight: '700',
     color: colors.textSecondary.light,
     textShadowColor: alpha(colors.text.light, 0.2),
@@ -99,13 +100,14 @@ const styles = StyleSheet.create({
     textShadowRadius: 8,
   },
   balanceCurrency: {
-    fontSize: 16,
+    // padding: 16,
+    fontSize: 24,
     fontWeight: '700',
     // color: colors.primary,
-    color: colors.textSecondary.light,
-    /* textShadowColor: '#FF8C00',
+    color: colors.primary,
+    textShadowColor: alpha(colors.primary, 0.6),
     textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8, */
+    textShadowRadius: 4,
   },
   balanceCurrencyDark: {
     // color: colors.primary,
@@ -126,11 +128,8 @@ const styles = StyleSheet.create({
   },
   unitButton: {
     borderRadius: 32,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    padding: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 8,
   },
 })

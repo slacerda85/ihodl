@@ -35,22 +35,17 @@ export default function DeleteWallet() {
         {`Unlink wallet "${walletName}" from this app?`}
       </Text>
       <Button
+        variant="solid"
         onPress={handleDeleteWallet}
         disabled={activeWalletId == null || submitting}
-        style={{
-          backgroundColor: colors.error,
-          padding: 16,
-          borderRadius: 8,
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexDirection: 'row',
-          gap: 12,
-        }}
+        backgroundColor={colors.error}
+
+        // style={[styles.button, isDark && styles.buttonDark]}
       >
         {submitting ? <ActivityIndicator color={colors.white} /> : null}
         <Text
           style={{
-            color: colors.white,
+            // color: colors.white,
             fontSize: 16,
             textAlign: 'center',
           }}
@@ -86,8 +81,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   button: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.error,
     padding: 16,
+
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

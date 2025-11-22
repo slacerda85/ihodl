@@ -10,10 +10,10 @@ export function calculateWalletBalance(
 ): {
   balance: number
   utxos: UTXO[]
-  spentUtxos: UTXO[]
+  // spentUtxos: UTXO[]
 } {
   const utxoMap = new Map<string, UTXO>()
-  const spentUtxoKeys = new Set<string>()
+  // const spentUtxoKeys = new Set<string>()
 
   // Primeiro, identificar todos os UTXOs criados para endereços da carteira
   for (const tx of allTransactions) {
@@ -47,7 +47,7 @@ export function calculateWalletBalance(
     for (const vin of tx.vin) {
       const utxoKey = `${vin.txid}:${vin.vout}`
       if (utxoMap.has(utxoKey)) {
-        spentUtxoKeys.add(utxoKey)
+        // spentUtxoKeys.add(utxoKey)
         const utxo = utxoMap.get(utxoKey)!
         utxo.isSpent = true
       }
@@ -56,11 +56,11 @@ export function calculateWalletBalance(
 
   // Separar UTXOs gastos e não gastos
   const unspentUtxos: UTXO[] = []
-  const spentUtxos: UTXO[] = []
+  // const spentUtxos: UTXO[] = []
 
   for (const utxo of utxoMap.values()) {
     if (utxo.isSpent) {
-      spentUtxos.push(utxo)
+      // spentUtxos.push(utxo)
     } else {
       unspentUtxos.push(utxo)
     }
@@ -72,7 +72,7 @@ export function calculateWalletBalance(
   return {
     balance,
     utxos: unspentUtxos,
-    spentUtxos,
+    // spentUtxos,
   }
 }
 
@@ -185,7 +185,7 @@ export function analyzeTransaction(
  */
 export function processWalletTransactions(allTransactions: Tx[], walletAddresses: Set<string>) {
   // Calcular saldo e UTXOs
-  const { balance, utxos, spentUtxos } = calculateWalletBalance(allTransactions, walletAddresses)
+  const { balance, utxos } = calculateWalletBalance(allTransactions, walletAddresses)
 
   // Analisar cada transação
   const processedTransactions = allTransactions.map(tx => {
@@ -213,7 +213,6 @@ export function processWalletTransactions(allTransactions: Tx[], walletAddresses
   return {
     balance,
     utxos,
-    spentUtxos,
     transactions: processedTransactions,
     stats,
   }

@@ -10,6 +10,7 @@ import QRCode from '@/ui/QRCode'
 import ContentContainer from '@/ui/ContentContainer'
 import Button from '@/ui/Button'
 import { useAccount } from '../account/AccountProvider'
+import { formatBalance } from '../wallet/utils'
 
 export default function TransactionDetails() {
   const { txid } = useLocalSearchParams<{ txid: string }>()
@@ -165,7 +166,15 @@ export default function TransactionDetails() {
                 ]}
               >
                 {tx.type === 'received' ? '+' : '-'}
-                {amount.toFixed(8)} BTC
+                {formatBalance(amount, 'BTC')} BTC
+              </Text>
+            </View>
+
+            {/* fees */}
+            <View style={styles.item}>
+              <Text style={[styles.label, isDark && styles.labelDark]}>Fee</Text>
+              <Text style={[styles.value, isDark && styles.valueDark]}>
+                {tx.fee?.toFixed(8)} BTC
               </Text>
             </View>
 
@@ -205,9 +214,7 @@ export default function TransactionDetails() {
             {tx.fee && tx.fee > 0 && (
               <View style={styles.item}>
                 <Text style={[styles.label, isDark && styles.labelDark]}>Fee</Text>
-                <Text style={[styles.value, isDark && styles.valueDark]}>
-                  {(tx.fee / 1e8).toFixed(8)} BTC
-                </Text>
+                <Text style={[styles.value, isDark && styles.valueDark]}>{tx.fee} BTC</Text>
               </View>
             )}
 

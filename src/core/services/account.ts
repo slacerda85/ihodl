@@ -1,4 +1,5 @@
-import { calculateWalletBalance, getBalance, getFriendlyTxs } from '../lib/tx/tx'
+import { UTXO } from '@/lib/transactions/types'
+import { getFriendlyTransactions, getFriendlyTxs, getWalletAccountsBalance } from '../lib/tx/tx'
 import {
   ACCOUNT_DISCOVERY_GAP_LIMIT,
   AccountDetails,
@@ -20,6 +21,7 @@ interface AccountServiceInterface {
   getBalance(walletId: string): void
   getFriendlyTxs(walletId: string): FriendlyTx[]
   getFriendlyTx(txid: string): FriendlyTx | null
+  deleteAccountsByWalletId(walletId: string): void
 }
 
 export class AccountService implements AccountServiceInterface {
@@ -30,13 +32,16 @@ export class AccountService implements AccountServiceInterface {
     let accounts: WalletAccount[] = []
     const storedAccounts = accountRepository.read(walletId)
     if (storedAccounts.length > 0) {
+      console.log(`Found ${storedAccounts.length} stored accounts for wallet ${walletId}`)
       accounts.push(...storedAccounts)
     }
+    console.log()
     const lastAddressIndex = storedAccounts.reduce((max, account) => {
       return account.addressIndex > max ? account.addressIndex : max
     }, 0)
+    console.log(`Last address index for stored accounts: ${lastAddressIndex}`)
 
-    const startIndex = lastAddressIndex + 1
+    const startIndex = lastAddressIndex
 
     const discoveredAccounts = await new AccountService().discover({
       walletId,
@@ -92,17 +97,16 @@ export class AccountService implements AccountServiceInterface {
 
     while (unusedCount < ACCOUNT_DISCOVERY_GAP_LIMIT) {
       const address = new AccountService().deriveAddress(receivingAccountKey, addressIndex)
-      console.log('fetching receiving address: ', address)
+      console.log('fetching rcv addr: ', `... ${address.slice(-6)}`)
       const txs = await new AccountService().fetchTransactions(address, connection)
       if (txs.length === 0) {
         unusedCount++
       } else {
+        unusedCount = 0
         // fetch change addresses as well to include in account details
         const changeAddress = new AccountService().deriveAddress(changeAccountKey, addressIndex)
-        console.log('fetching change address: ', changeAddress)
+        console.log('fetching chg addr: ', `... ${changeAddress.slice(-6)}`)
         const changeTxs = await new AccountService().fetchTransactions(changeAddress, connection)
-
-        unusedCount = 0
         accounts.push({
           purpose: Purpose.BIP84,
           coinType: CoinType.Bitcoin,
@@ -110,6 +114,89 @@ export class AccountService implements AccountServiceInterface {
           change: Change.Receiving,
           addressIndex,
           address,
+          txs,
+        })
+        accounts.push({
+          purpose: Purpose.BIP84,
+          coinType: CoinType.Bitcoin,
+          accountIndex: AccountIndex.Main,
+          change: Change.Change,
+          addressIndex,
+          address: changeAddress,
+          txs: changeTxs,
+        })
+      }
+      addressIndex++
+    }
+
+    return accounts
+  }
+
+  async fetchAccountsParallel(
+    receivingAccountKey: Uint8Array,
+    changeAccountKey: Uint8Array,
+    connection: Connection | Connection[],
+    startIndex: number = 0,
+  ): Promise<AccountDetails[]> {
+    const connections = Array.isArray(connection) ? connection : [connection]
+    const accounts: AccountDetails[] = []
+    let unusedCount = 0
+    let addressIndex = startIndex
+
+    // To parallelize, we'll collect all potential addresses up to a reasonable limit
+    const maxAddressesToCheck = startIndex + ACCOUNT_DISCOVERY_GAP_LIMIT * 5
+    const addressesToFetch: { address: string; isChange: boolean; index: number }[] = []
+
+    for (let i = 0; i < maxAddressesToCheck; i++) {
+      const receivingAddress = new AccountService().deriveAddress(receivingAccountKey, addressIndex)
+      addressesToFetch.push({ address: receivingAddress, isChange: false, index: addressIndex })
+
+      const changeAddress = new AccountService().deriveAddress(changeAccountKey, addressIndex)
+      addressesToFetch.push({ address: changeAddress, isChange: true, index: addressIndex })
+
+      addressIndex++
+    }
+
+    // Fetch all transactions in parallel, distributing across connections
+    const txPromises = addressesToFetch.map(({ address }, idx) => {
+      const conn = connections[idx % connections.length]
+      return new AccountService().fetchTransactions(address, conn)
+    })
+    const txResults = await Promise.all(txPromises)
+
+    // Process results in order
+    const resultsMap = new Map<string, any[]>()
+    addressesToFetch.forEach(({ address }, idx) => {
+      resultsMap.set(address, txResults[idx])
+    })
+
+    addressIndex = startIndex
+    unusedCount = 0
+
+    while (
+      unusedCount < ACCOUNT_DISCOVERY_GAP_LIMIT &&
+      addressIndex < startIndex + maxAddressesToCheck
+    ) {
+      const receivingAddress = new AccountService().deriveAddress(receivingAccountKey, addressIndex)
+      console.log('fetching receiving address: ', receivingAddress)
+      const txs = resultsMap.get(receivingAddress) || []
+
+      if (txs.length === 0) {
+        unusedCount++
+      } else {
+        unusedCount = 0
+        // fetch change addresses as well to include in account details
+        const changeAddress = new AccountService().deriveAddress(changeAccountKey, addressIndex)
+        console.log('fetching change address: ', changeAddress)
+        const changeTxs = resultsMap.get(changeAddress) || []
+
+        accounts.push({
+          purpose: Purpose.BIP84,
+          coinType: CoinType.Bitcoin,
+          accountIndex: AccountIndex.Main,
+          change: Change.Receiving,
+          addressIndex,
+          address: receivingAddress,
           txs,
         })
         accounts.push({
@@ -151,11 +238,11 @@ export class AccountService implements AccountServiceInterface {
     return txs
   }
 
-  getBalance(walletId: string): number {
+  getBalance(walletId: string): { balance: number; utxos: UTXO[] } {
     const accountRepository = new AccountRepository()
     const accounts = accountRepository.read(walletId)
-    const { balance } = calculateWalletBalance(accounts)
-    return balance
+    const { balance, utxos } = getWalletAccountsBalance(accounts)
+    return { balance, utxos }
   }
 
   getFriendlyTxs(walletId: string): FriendlyTx[] {
@@ -163,7 +250,7 @@ export class AccountService implements AccountServiceInterface {
     const accounts = accountRepository.read(walletId)
     const addresses = accounts.map(account => account.address)
     const txs = accounts.flatMap(account => account.txs)
-    const friendlyTxs = getFriendlyTxs(addresses, txs, walletId)
+    const friendlyTxs = getFriendlyTransactions(addresses, txs, walletId)
     return friendlyTxs
   }
 
@@ -174,12 +261,17 @@ export class AccountService implements AccountServiceInterface {
     for (const account of allAccounts) {
       const addresses = [account.address]
       const txs = account.txs
-      const friendlyTxs = getFriendlyTxs(addresses, txs, account.walletId)
+      const friendlyTxs = getFriendlyTransactions(addresses, txs, account.walletId)
       const foundTx = friendlyTxs.find(tx => tx.txid === txid)
       if (foundTx) {
         return foundTx
       }
     }
     return null
+  }
+
+  deleteAccountsByWalletId(walletId: string): void {
+    const accountRepository = new AccountRepository()
+    accountRepository.delete(walletId)
   }
 }

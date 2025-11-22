@@ -15,6 +15,11 @@ function init() {
     const unsecure = new net.Socket()
     const socket = new TLSSocket(unsecure, { rejectUnauthorized: false })
 
+    // Add a default error listener to prevent "no listeners" warnings
+    socket.on('error', err => {
+      console.warn('[electrum] Socket error:', err.message)
+    })
+
     return socket
   } catch (error) {
     console.error('Error initializing ElectrumService:', error)
