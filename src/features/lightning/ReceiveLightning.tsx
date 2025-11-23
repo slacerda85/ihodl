@@ -13,10 +13,10 @@ import {
 import * as Clipboard from 'expo-clipboard'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
-import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
+import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 import { useSettings } from '@/features/settings'
-import QRCode from '@/ui/QRCode'
-import Button from '@/ui/Button'
+import QRCode from '@/ui/components/QRCode'
+import Button from '@/ui/components/Button'
 import { useLightningNetwork } from './useLightningNetwork'
 
 export default function ReceiveLightning() {

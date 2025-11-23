@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router'
 import wordlist from 'bip39/src/wordlists/english.json'
 import { useWallet } from './WalletProvider'
 import { useSettings } from '../settings/SettingsProvider'
-import Button from '@/ui/Button'
+import Button from '@/ui/components/Button'
 import { GlassView } from 'expo-glass-effect'
 
 export default function ImportWallet() {

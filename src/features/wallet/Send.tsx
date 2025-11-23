@@ -14,7 +14,7 @@ import { useRouter } from 'expo-router'
 
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
-import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
+import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 
 import { useWallet } from '../wallet'
 import { useTransactions } from '../transactions'

@@ -10,7 +10,7 @@ import {
 } from 'react-native'
 import { useSettings } from '@/features/settings'
 // import { clearPersistedState } from '@/features/storage/StorageProvider'
-import Picker from '@/ui/Picker/Picker'
+import Picker from '@/ui/components/Picker/Picker'
 import AccountRepository from '@/core/repositories/account'
 import SeedRepository from '@/core/repositories/seed'
 import walletRepository from '@/core/repositories/wallet'

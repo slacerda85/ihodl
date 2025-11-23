@@ -5,9 +5,9 @@ import { GlassView } from 'expo-glass-effect'
 import { useRouter } from 'expo-router'
 
 import { alpha } from '@/ui/utils'
-import Button from '@/ui/Button'
+import Button from '@/ui/components/Button'
 import colors from '@/ui/colors'
-import { IconSymbol } from '@/ui/IconSymbol/IconSymbol'
+import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 
 import { useSettings } from '@/features/settings'
 import { useWallet } from '@/features/wallet'

@@ -4,7 +4,7 @@ import { useWallet } from './WalletProvider'
 import { useSettings } from '../settings/SettingsProvider'
 import { alpha } from '@/ui/utils'
 import colors from '@/ui/colors'
-import Divider from '@/ui/Divider'
+import Divider from '@/ui/components/Divider'
 import SeedService from '@/core/services/seed'
 
 export default function GetSeedPhraseScreen() {

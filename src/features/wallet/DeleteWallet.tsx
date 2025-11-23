@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router'
 import { alpha } from '@/ui/utils'
 import { useWallet } from '@/features/wallet'
 import { useSettings } from '@/features/settings'
-import Button from '@/ui/Button'
+import Button from '@/ui/components/Button'
 
 export default function DeleteWallet() {
   const { activeWalletId, wallets, unlinkWallet } = useWallet()

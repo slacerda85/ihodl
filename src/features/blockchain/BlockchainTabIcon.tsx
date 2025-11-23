@@ -1,4 +1,4 @@
-// import IconSymbol from '@/ui/IconSymbol'
+// import IconSymbol from '@/ui/components/IconSymbol'
 import Ionicons from '@expo/vector-icons/Ionicons'
 
 export default function BlockchainTabIcon({
