@@ -1,4 +1,4 @@
-import BlockchainScreen from '@/features/blockchain/BlockchainScreen'
+import BlockchainScreen from '@/ui/features/blockchain/BlockchainScreen'
 
 export default function BlockchainRoute() {
   return <BlockchainScreen />

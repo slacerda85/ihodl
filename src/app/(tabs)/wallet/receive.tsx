@@ -1,4 +1,4 @@
-import ReceiveScreen from '@/features/wallet/Receive'
+import ReceiveScreen from '@/ui/features/wallet/Receive'
 
 export default function ReceiveRoute() {
   return <ReceiveScreen />

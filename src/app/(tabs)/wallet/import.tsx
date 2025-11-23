@@ -1,4 +1,4 @@
-import ImportWallet from '@/features/wallet/ImportWallet'
+import ImportWallet from '@/ui/features/wallet/ImportWallet'
 
 export default function ImportWalletRoute() {
   return <ImportWallet />

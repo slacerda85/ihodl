@@ -23,7 +23,7 @@ interface KeyServiceInterface {
   deriveAddressPublicKey(addressKey: Uint8Array): Uint8Array
 }
 
-class KeyService implements KeyServiceInterface {
+export default class KeyService implements KeyServiceInterface {
   createMasterKey(seed: string): Uint8Array {
     const entropy = mnemonicToSeedSync(seed)
     const masterKey = hmacSeed(entropy)
@@ -64,7 +64,3 @@ class KeyService implements KeyServiceInterface {
     return addressPublicKey
   }
 }
-
-const keyService = new KeyService()
-
-export default keyService

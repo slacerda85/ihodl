@@ -2,13 +2,13 @@ import { Link, Stack, useRouter } from 'expo-router'
 import { Text, Pressable, Platform } from 'react-native'
 import colors from '@/ui/colors'
 import { Ionicons } from '@expo/vector-icons'
-import { useAuth } from '@/features/auth/AuthProvider'
+import { useAuth } from '@/ui/features/auth/AuthProvider'
 import { useCallback, useEffect } from 'react'
-import { useSettings } from '@/features/settings'
+import { useSettings } from '@/ui/features/settings'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 import { ExtendedStackNavigationOptions } from 'expo-router/build/layouts/StackClient'
 import { alpha } from '@/ui/utils'
-import { useWallet } from '@/features/wallet'
+import { useWallet } from '@/ui/features/wallet'
 
 function WalletActions({ colorMode }: { colorMode: 'light' | 'dark' }) {
   return (

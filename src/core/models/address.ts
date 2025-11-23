@@ -1,6 +1,3 @@
-import { Tx } from './tx'
-// bitcoin specific types and constants
-
 export const enum Purpose {
   BIP44 = 0x8000002c, // Legacy (P2PKH)
   BIP49 = 0x80000031, // Nested SegWit (P2SH-P2WPKH)
@@ -24,27 +21,25 @@ export const enum Change {
   Change = 1,
 }
 
-export const ACCOUNT_DISCOVERY_GAP_LIMIT = 20
+export const GAP_LIMIT = 20
 
-// Tipos atualizados
-export type Account = {
+type DerivationPath = {
   purpose: Purpose
   coinType: CoinType
   accountIndex: AccountIndex
-}
-
-export type AccountPath = Account & {
   change: Change
   addressIndex: number
 }
-
-export type AccountDetails = Account & {
-  change: Change
-  addressIndex: number
-  address: string
-  txs: Tx[]
-}
-
-export type WalletAccount = AccountDetails & {
+export type AddressCollection = {
   walletId: string
+  addresses: AddressDetails[]
+  nextReceiveIndex: number // Próximo índice disponível para change=0
+  nextChangeIndex: number // Próximo índice disponível para change=1
+  gapLimit: number // Limite de gap para scanning (ex: 20)
+}
+
+export type AddressDetails = {
+  derivationPath: DerivationPath
+  address: string
+  txs: any[]
 }

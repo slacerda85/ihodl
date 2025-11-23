@@ -1,4 +1,4 @@
-import WalletActions from '@/features/wallet/WalletActions'
+import WalletActions from '@/ui/features/wallet/WalletActions'
 
 export default function WalletActionsRoute() {
   return <WalletActions />

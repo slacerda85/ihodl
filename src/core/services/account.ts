@@ -12,9 +12,11 @@ import {
 import { Connection } from '../models/network'
 import { FriendlyTx } from '../models/tx'
 import AccountRepository from '../repositories/account'
-import addressService from './address'
+// import addressService from './address'
 import keyService from './key'
 import SeedService from './seed'
+import AddressService from './address'
+import KeyService from './key'
 
 interface AccountServiceInterface {
   getAccounts(walletId: string, connection: Connection): Promise<WalletAccount[]>
@@ -220,6 +222,7 @@ export class AccountService implements AccountServiceInterface {
     changeAccountKey: Uint8Array
   } {
     const seed = new SeedService().getSeed(walletId)
+    const keyService = new KeyService()
     const masterKey = keyService.createMasterKey(seed)
     const { receivingAccountKey, changeAccountKey } = keyService.deriveAccountKeys({
       masterKey,
@@ -228,13 +231,14 @@ export class AccountService implements AccountServiceInterface {
   }
 
   private deriveAddress(accountKey: Uint8Array, addressIndex: number): string {
+    const keyService = new KeyService()
     const { addressKey } = keyService.deriveAddressKeys(accountKey, addressIndex)
     const addressPublicKey = keyService.deriveAddressPublicKey(addressKey)
-    const address = addressService.createAddress(addressPublicKey)
+    const address = new AddressService().createAddress(addressPublicKey)
     return address
   }
   private async fetchTransactions(address: string, connection: Connection): Promise<any[]> {
-    const txs = await addressService.getAddressHistory(address, connection)
+    const txs = await new AddressService().getAddressHistory(address, connection)
     return txs
   }
 

@@ -2,9 +2,9 @@ import { useEffect, useState, StrictMode } from 'react'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as SplashScreen from 'expo-splash-screen'
-import { AppProviders } from '@/features/app/AppProviders'
-import InactivityOverlay from '@/features/auth/InactivityOverlay'
-import AuthScreen from '@/features/auth/AuthScreen'
+import { AppProviders } from '@/ui/features/app/AppProviders'
+import InactivityOverlay from '@/ui/features/auth/InactivityOverlay'
+import AuthScreen from '@/ui/features/auth/AuthScreen'
 
 SplashScreen.preventAutoHideAsync()
 

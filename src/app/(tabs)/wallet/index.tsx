@@ -1,4 +1,4 @@
-import WalletScreen from '@/features/wallet/WalletScreen'
+import WalletScreen from '@/ui/features/wallet/WalletScreen'
 
 export default function WalletHomeRoute() {
   return <WalletScreen />
