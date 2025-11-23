@@ -5,7 +5,7 @@ import { Text, View, StyleSheet, Pressable, Animated } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import colors from '@/ui/colors'
 import { useSettings } from '@/features/settings'
-import IHodlLogoBorderLess from '@/assets/ihodl-logo-borderless'
+import IHodlLogoBorderLess from '@/ui/assets/ihodl-logo-borderless'
 
 export default function AuthScreen() {
   const { auth, authenticated } = useAuth()
