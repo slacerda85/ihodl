@@ -51,7 +51,7 @@ export default function TransactionsScreen() {
       </View>
       {/* Fake date header */}
       <View style={[styles.dateContainer, isDark && styles.dateContainerDark]}>
-        <Skeleton width={100} height={20} style={{ marginLeft: 16, marginTop: 16 }} />
+        <Skeleton width={100} height={20} style={{ marginLeft: 8 }} />
       </View>
       {/* Fake transactions */}
       {Array.from({ length: 5 }).map((_, i) => (
@@ -126,7 +126,6 @@ export default function TransactionsScreen() {
     data.push({ isDate: true, date: displayDate })
 
     for (const txData of grouped[date]) {
-      console.log('TX DATA:', txData)
       // Determinar endereço de exibição baseado no tipo de transação
       let displayAddress = 'Unknown'
       if (txData.type === 'received') {
@@ -337,7 +336,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.dark,
   },
   date: {
-    paddingLeft: 16,
+    paddingLeft: 8,
     fontSize: 14,
     fontWeight: '600',
     color: alpha(colors.textSecondary.light, 0.5),

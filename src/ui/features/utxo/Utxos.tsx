@@ -26,7 +26,7 @@ export default function Utxos({ utxos }: UtxosProps) {
           alignItems: 'center',
         }}
       >
-        <Text>{`UTXOS: ${totalUtxos}`}</Text>
+        <Text>{`${totalUtxos} utxos`}</Text>
       </Button>
 
       <Modal
