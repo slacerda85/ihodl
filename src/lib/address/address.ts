@@ -10,7 +10,7 @@ import {
   splitRootExtendedKey,
   createPublicKey,
 } from '@/lib/key'
-import { Tx } from '@/lib/transactions/types'
+import { Tx } from '@/core/models/tx'
 
 /** bech32 decode result */
 export interface Bech32Result {

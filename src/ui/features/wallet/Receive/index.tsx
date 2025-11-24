@@ -5,7 +5,8 @@ import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { useSettings } from '../../settings/SettingsProvider'
 
-// import Receive from './Receive'
+import Receive from './Receive'
+import { GlassView } from 'expo-glass-effect'
 // import ReceiveLightning from '../../lightning/ReceiveLightning'
 
 type ReceiveMode = 'onchain' | 'lightning'
@@ -57,9 +58,10 @@ export default function ReceiveScreen() {
       </View>
 
       {/* Content */}
-      {/* <GlassView style={{ borderRadius: 32 }}> */}
 
-      {/* </GlassView> */}
+      <GlassView style={{ borderRadius: 32 }}>
+        <Receive />
+      </GlassView>
     </View>
   )
 }

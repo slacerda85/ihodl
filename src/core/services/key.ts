@@ -9,7 +9,7 @@ type DeriveAccountKeysParams = Partial<Account> & {
 
 interface KeyServiceInterface {
   createMasterKey(seed: string): Uint8Array
-
+  deriveAccountKey(seed: string): Uint8Array
   deriveAccountKeys(params: DeriveAccountKeysParams): {
     receivingAccountKey: Uint8Array // key for m/purpose'/coinType'/account'/0
     changeAccountKey: Uint8Array // key for m/purpose'/coinType'/account'/1
@@ -28,6 +28,14 @@ export default class KeyService implements KeyServiceInterface {
     const entropy = mnemonicToSeedSync(seed)
     const masterKey = hmacSeed(entropy)
     return masterKey
+  }
+
+  deriveAccountKey(seed: string): Uint8Array {
+    const masterKey = this.createMasterKey(seed)
+    return [Purpose.BIP84, CoinType.Bitcoin, AccountIndex.Main].reduce(
+      deriveChildPrivateKey,
+      masterKey,
+    )
   }
 
   deriveAccountKeys({

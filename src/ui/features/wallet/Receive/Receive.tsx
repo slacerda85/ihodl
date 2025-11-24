@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   View,
   Text,
@@ -23,75 +23,39 @@ import { IconButton } from '@/ui/components/Button'
 import { useWallet } from '@/ui/features/wallet'
 import { useSettings } from '@/ui/features/settings'
 
-import { AddressDetails } from '@/lib/address'
+// import { AddressDetails } from '@/lib/address'
+import { useAddress } from '../../address/AddressProvider'
+import AddressService from '@/core/services/address'
 // import { useTransactions } from '@/ui/features/transactions'
-import { useAccount } from '@/ui/features/account/AccountProvider'
+// import { useAccount } from '@/ui/features/account/AccountProvider'
 
 // Address generation utilities - separated for better organization
 
 export default function Receive() {
   const { isDark } = useSettings()
-  const { accounts } = useAccount()
-  const walletAccounts = accounts.filter(acc => acc.walletId === activeWalletId)
+  // const { activeWalletId } = useWallet()
+  const nextUnusedAddress = new AddressService().getNextUnusedAddress()
 
-  // const { history } = useTransactions()
+  const usedReceivingAddresses = new AddressService().getUsedAddresses('receiving')
 
-  const { activeWalletId } = useWallet()
-  const [selectedAddress, setSelectedAddress] = useState<string>('')
-  const [showAddressDetailses, setShowAddressDetailses] = useState(false)
+  const usedChangeAddresses = new AddressService().getUsedAddresses('change')
+
+  const { loading, nextReceiveAddress } = useAddress()
+
+  const [showAddressDetails, setShowAddressDetails] = useState(false)
   const [activeTab, setActiveTab] = useState<'receiving' | 'change'>('receiving')
-  const [isLoadingAddresses, setIsLoadingAddresses] = useState(false)
-  const [loadingMessage, setLoadingMessage] = useState<string>('')
-
-  // Address data state - separate from useMemo for better performance
-  // const [_availableAddresses, setAvailableAddresses] = useState<string[]>(mockAddresses)
-  const [usedReceivingAddresses, setUsedReceivingAddresses] = useState<AddressDetails[]>([])
-  const [usedChangeAddresses, setUsedChangeAddresses] = useState<AddressDetails[]>([])
-  const [nextUnusedAddress, setNextUnusedAddress] = useState<string>('')
-
-  // Get active wallet
-  // const activeWallet = wallets.find(w => w.walletId === activeWalletId)
-
-  // Generate addresses asynchronously when wallet changes
-  useEffect(() => {
-    if (!activeWalletId || walletAccounts.length === 0) {
-      setUsedReceivingAddresses([])
-      setUsedChangeAddresses([])
-      setNextUnusedAddress('')
-      setSelectedAddress('')
-      setIsLoadingAddresses(false)
-      return
-    }
-
-    const generateAddresses = async () => {
-      setIsLoadingAddresses(true)
-      setLoadingMessage('Generating addresses...')
-      try {
-        setNextUnusedAddress(walletAccounts[0].address)
-        setSelectedAddress(walletAccounts[0].address)
-        setIsLoadingAddresses(false)
-        setLoadingMessage('')
-      } catch (error) {
-        console.error('Error generating addresses:', error)
-        setIsLoadingAddresses(false)
-        setLoadingMessage('Failed to generate addresses')
-      }
-    }
-
-    generateAddresses()
-  }, [activeWalletId, walletAccounts, walletAccounts.length])
 
   // Handle share address
   const handleShareAddress = async () => {
-    if (!selectedAddress) {
+    if (!nextReceiveAddress) {
       Alert.alert('Error', 'Please select an address first')
       return
     }
 
     try {
       await Share.share({
-        message: `My Bitcoin address: ${selectedAddress}`,
-        url: `bitcoin:${selectedAddress}`,
+        message: `My Bitcoin address: ${nextReceiveAddress}`,
+        url: `bitcoin:${nextReceiveAddress}`,
       })
     } catch (error) {
       console.error('Error sharing address:', error)
@@ -100,13 +64,13 @@ export default function Receive() {
 
   // Handle copy address
   const handleCopyAddress = async () => {
-    if (!selectedAddress) {
+    if (!nextReceiveAddress) {
       Alert.alert('Error', 'Please select an address first')
       return
     }
 
     try {
-      await Clipboard.setStringAsync(selectedAddress)
+      await Clipboard.setStringAsync(nextReceiveAddress)
       Alert.alert('Copied!', 'Address copied to clipboard')
     } catch (error) {
       console.error('Error copying to clipboard:', error)
@@ -138,36 +102,34 @@ export default function Receive() {
   }
 
   useEffect(() => {
-    console.log(nextUnusedAddress)
-  }, [nextUnusedAddress])
+    // console.log('usedReceivingAddresses', usedReceivingAddresses)
+    // console.log('usedChangeAddresses', usedChangeAddresses)
+  }, [nextUnusedAddress, usedChangeAddresses, usedReceivingAddresses])
 
   return (
-    <>
+    <View>
       <ScrollView style={[styles.scrollView, isDark && styles.scrollViewDark]}>
         <View style={[styles.contentWrapper, isDark && styles.contentWrapperDark]}>
           {/* Loading State */}
-          {isLoadingAddresses && (
+          {loading ? (
             <View style={[styles.sectionBox, isDark && styles.sectionBoxDark]}>
               <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
                 Loading Addresses
               </Text>
               <View style={styles.qrContainer}>
                 <ActivityIndicator size="large" color={colors.primary} />
-                {loadingMessage && (
+                {loading && (
                   <Text style={[styles.subtitle, isDark && styles.subtitleDark, { marginTop: 16 }]}>
-                    {loadingMessage}
+                    {loading}
                   </Text>
                 )}
               </View>
             </View>
-          )}
-
-          {/* Address Display with QR Code Section */}
-          {selectedAddress && activeWalletId && !isLoadingAddresses && (
+          ) : (
             <View style={[styles.sectionBox, isDark && styles.sectionBoxDark]}>
               <View style={styles.qrContainer}>
                 <QRCode
-                  value={`${selectedAddress}`}
+                  value={`${nextReceiveAddress}`}
                   size={
                     // calculate screen width minus padding
                     calcScreenWidth() < 300 ? calcScreenWidth() : 300
@@ -178,10 +140,10 @@ export default function Receive() {
               </View>
               {/* Exibição do endereço */}
               <Text
-              // style={[styles.addressText, isDark && styles.addressTextDark]}
-              // numberOfLines={10}
+                style={[styles.addressText, isDark && styles.addressTextDark]}
+                numberOfLines={10}
               >
-                {selectedAddress}
+                {nextReceiveAddress}
               </Text>
               <View
                 style={{
@@ -240,7 +202,7 @@ export default function Receive() {
                     color={colors.textSecondary[isDark ? 'dark' : 'light']}
                   />
                 }
-                onPress={() => setShowAddressDetailses(true)}
+                onPress={() => setShowAddressDetails(true)}
               >
                 View Used Addresses ({usedReceivingAddresses.length + usedChangeAddresses.length})
               </Button>
@@ -266,10 +228,10 @@ export default function Receive() {
 
       {/* Used Addresses Modal */}
       <Modal
-        visible={showAddressDetailses}
+        visible={showAddressDetails}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setShowAddressDetailses(false)}
+        onRequestClose={() => setShowAddressDetails(false)}
       >
         <View style={[styles.modalContainer, isDark && styles.modalContainerDark]}>
           <View style={styles.modalHeader}>
@@ -286,7 +248,7 @@ export default function Receive() {
               }
               variant="solid"
               backgroundColor="transparent"
-              onPress={() => setShowAddressDetailses(false)}
+              onPress={() => setShowAddressDetails(false)}
             />
           </View>
 
@@ -332,24 +294,24 @@ export default function Receive() {
 
           <FlatList
             key={activeTab}
-            data={(activeTab === 'receiving' ? usedReceivingAddresses : usedChangeAddresses) as any}
+            data={activeTab === 'receiving' ? usedReceivingAddresses : usedChangeAddresses}
             keyExtractor={(item, index) => item.address + index}
             renderItem={({ item }) => (
               <View style={[styles.usedAddressItem, isDark && styles.usedAddressItemDark]}>
                 <View style={styles.usedAddressHeader}>
                   <Text style={[styles.usedAddressIndex, isDark && styles.usedAddressIndexDark]}>
-                    Address {item.index + 1}
+                    Address {item.derivationPath.addressIndex + 1}
                   </Text>
                   <Text style={[styles.transactionCount, isDark && styles.transactionCountDark]}>
-                    {item.transactions.length} transaction
-                    {item.transactions.length !== 1 ? 's' : ''}
+                    {item.txs.length} transaction
+                    {item.txs.length !== 1 ? 's' : ''}
                   </Text>
                 </View>
                 <Text style={[styles.usedAddressText, isDark && styles.usedAddressTextDark]}>
                   {item.address}
                 </Text>
                 <View style={styles.transactionList}>
-                  {item.transactions.slice(0, 3).map((tx: any, txIndex: number) => (
+                  {item.txs.slice(0, 3).map((tx: any, txIndex: number) => (
                     <Text
                       key={tx.txid}
                       style={[styles.transactionId, isDark && styles.transactionIdDark]}
@@ -357,9 +319,9 @@ export default function Receive() {
                       {tx.txid} ({tx.confirmations} conf.)
                     </Text>
                   ))}
-                  {item.transactions.length > 3 && (
+                  {item.txs.length > 3 && (
                     <Text style={[styles.moreTransactions, isDark && styles.moreTransactionsDark]}>
-                      +{item.transactions.length - 3} more transactions
+                      +{item.txs.length - 3} more transactions
                     </Text>
                   )}
                 </View>
@@ -370,7 +332,7 @@ export default function Receive() {
           />
         </View>
       </Modal>
-    </>
+    </View>
   )
 }
 

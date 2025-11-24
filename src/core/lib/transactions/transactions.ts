@@ -1,15 +1,10 @@
-import { CoinType, Purpose } from '@/lib/account'
-import {
-  createHardenedIndex,
-  createPublicKey,
-  deriveChildPrivateKey,
-  splitRootExtendedKey,
-} from '@/lib/key'
+import { Purpose, CoinType, AccountIndex, GAP_LIMIT } from '@/core/models/address'
+import { createPublicKey, deriveChildPrivateKey, splitRootExtendedKey } from '@/lib/key'
 import { connect, getTransactions, callElectrumMethod } from '../electrum'
 import { fromBech32, generateAddresses, AddressDetails, deriveAddress } from '../address'
 import secp256k1 from 'secp256k1'
 import { hash256, hash160, uint8ArrayToHex, hexToUint8Array } from '@/lib/crypto'
-import { UTXO } from './types'
+// import { UTXO } from './types'
 import {
   MINIMUN_CONFIRMATIONS,
   TxHistory,
@@ -27,6 +22,7 @@ import {
   SendTransactionResult,
 } from './types'
 import { ElectrumPeer } from '@/lib/electrum'
+import { Utxo } from '@/core/models/tx'
 
 interface GetTxHistoryParams {
   extendedKey: Uint8Array
@@ -52,29 +48,29 @@ interface GetTxHistoryResponse {
  */
 function deriveExtendedKeys(
   extendedKey: Uint8Array,
-  purpose: number = 84,
-  coinType: number = 0,
-  accountIndex: number = 0,
+  purpose: Purpose = Purpose.BIP84,
+  coinType: CoinType = CoinType.Bitcoin,
+  accountIndex: AccountIndex = AccountIndex.Main,
 ): { receivingExtendedKey: Uint8Array; changeExtendedKey: Uint8Array } {
   // purpose
-  const purposeIndex = createHardenedIndex(purpose)
-  const purposeExtendedKey = deriveChildPrivateKey(extendedKey, purposeIndex)
+  // const purposeIndex = Purpose.BIP84
+  const purposeExtendedKey = deriveChildPrivateKey(extendedKey, purpose)
 
   // coin type
-  const coinTypeIndex = createHardenedIndex(coinType)
-  const coinTypeExtendedKey = deriveChildPrivateKey(purposeExtendedKey, coinTypeIndex)
+  // const coinTypeIndex = createHardenedIndex(coinType)
+  const coinTypeExtendedKey = deriveChildPrivateKey(purposeExtendedKey, coinType)
 
   // account
-  const account = createHardenedIndex(accountIndex)
-  const accountExtendedKey = deriveChildPrivateKey(coinTypeExtendedKey, account)
+  // const account = createHardenedIndex(accountIndex)
+  const accountKey = deriveChildPrivateKey(coinTypeExtendedKey, accountIndex)
 
   // receiving (change 0)
   const receivingIndex = 0
-  const receivingExtendedKey = deriveChildPrivateKey(accountExtendedKey, receivingIndex)
+  const receivingExtendedKey = deriveChildPrivateKey(accountKey, receivingIndex)
 
   // change (change 1)
   const changeIndex = 1
-  const changeExtendedKey = deriveChildPrivateKey(accountExtendedKey, changeIndex)
+  const changeExtendedKey = deriveChildPrivateKey(accountKey, changeIndex)
 
   return { receivingExtendedKey, changeExtendedKey }
 }
@@ -239,10 +235,10 @@ function processTransactionResults(
  */
 export async function getTxHistory({
   extendedKey,
-  purpose = 84,
-  coinType = 0,
-  accountStartIndex = 0,
-  gapLimit = 20,
+  purpose = Purpose.BIP84,
+  coinType = CoinType.Bitcoin,
+  accountStartIndex = AccountIndex.Main,
+  gapLimit = GAP_LIMIT,
   trustedPeers,
   getConnectionFn,
 }: GetTxHistoryParams): Promise<GetTxHistoryResponse> {
@@ -643,7 +639,7 @@ export async function buildTransaction({
     console.log(`Selecting UTXOs for target amount: ${targetAmountBtc} BTC`)
     const selectedUtxos = selectUtxos(confirmedUtxos, targetAmountBtc) // Convert amount to BTC for UTXO selection
     console.log(`Selected ${selectedUtxos.length} UTXOs`)
-    const totalInputAmountBtc = selectedUtxos.reduce((sum, utxo) => sum + utxo.value, 0)
+    const totalInputAmountBtc = selectedUtxos.reduce((sum, utxo) => sum + utxo.amount, 0)
     const totalInputAmountSat = Math.round(totalInputAmountBtc * 1e8)
 
     if (totalInputAmountSat < amount) {
@@ -678,7 +674,7 @@ export async function buildTransaction({
     const inputs = []
     console.log(`Building transaction with ${selectedUtxos.length} selected UTXOs`)
     for (const utxo of selectedUtxos) {
-      console.log(`Adding input: ${utxo.txid}:${utxo.vout} with amount ${utxo.value} BTC`)
+      console.log(`Adding input: ${utxo.txid}:${utxo.vout} with amount ${utxo.amount} BTC`)
       tx.inputs.push({
         txid: utxo.txid,
         vout: utxo.vout,
@@ -691,7 +687,7 @@ export async function buildTransaction({
       inputs.push({
         txid: utxo.txid,
         vout: utxo.vout,
-        amount: Math.round(utxo.value * 100000000), // Convert BTC to satoshis
+        amount: Math.round(utxo.amount * 100000000), // Convert BTC to satoshis
         address: utxo.address,
       })
     }
@@ -761,10 +757,7 @@ export async function buildTransaction({
 export async function signTransaction({
   transaction,
   inputs,
-  extendedKey,
-  purpose = 84,
-  coinType = 0,
-  account = 0,
+  accountKey,
 }: SignTransactionParams): Promise<SignTransactionResult> {
   try {
     console.log(`Signing transaction with ${inputs.length} inputs`)
@@ -813,22 +806,13 @@ export async function signTransaction({
     if (!Number.isInteger(transaction.locktime)) {
       throw new Error(`Transaction locktime must be an integer, got: ${transaction.locktime}`)
     }
-    // Derive the account extended key
-    const purposeIndex = createHardenedIndex(purpose)
-    const purposeExtendedKey = deriveChildPrivateKey(extendedKey, purposeIndex)
-
-    const coinTypeIndex = createHardenedIndex(coinType)
-    const coinTypeExtendedKey = deriveChildPrivateKey(purposeExtendedKey, coinTypeIndex)
-
-    const accountHardened = createHardenedIndex(account)
-    const accountExtendedKey = deriveChildPrivateKey(coinTypeExtendedKey, accountHardened)
 
     // Sign each input
     for (let i = 0; i < inputs.length; i++) {
       const input = inputs[i]
 
       // Find the derivation path for this address
-      const addressInfo = await findAddressIndex(accountExtendedKey, input.address)
+      const addressInfo = await findAddressIndex(accountKey, input.address)
 
       if (addressInfo === null) {
         throw new Error(`Could not find derivation path for address ${input.address}`)
@@ -836,7 +820,7 @@ export async function signTransaction({
 
       // Derive the private key for this address based on type (receiving or change)
       const chainIndex = addressInfo.type === 'receiving' ? 0 : 1
-      const chainExtendedKey = deriveChildPrivateKey(accountExtendedKey, chainIndex)
+      const chainExtendedKey = deriveChildPrivateKey(accountKey, chainIndex)
       const addressExtendedKey = deriveChildPrivateKey(chainExtendedKey, addressInfo.index)
       const { privateKey } = splitRootExtendedKey(addressExtendedKey)
 
@@ -1527,20 +1511,20 @@ export async function sendTransaction({
  * @param targetAmount - Target amount in satoshis
  * @returns Selected UTXOs
  */
-function selectUtxos(utxos: UTXO[], targetAmount: number): UTXO[] {
+function selectUtxos(utxos: Utxo[], targetAmount: number): Utxo[] {
   console.log(`Selecting UTXOs for target amount: ${targetAmount} BTC`)
   console.log(`Available UTXOs: ${utxos.length}`)
 
   // Sort UTXOs by amount descending
-  const sortedUtxos = [...utxos].sort((a, b) => b.value - a.value)
+  const sortedUtxos = [...utxos].sort((a, b) => b.amount - a.amount)
 
   const selected = []
   let total = 0
 
   for (const utxo of sortedUtxos) {
-    console.log(`Considering UTXO: ${utxo.txid}:${utxo.vout} with ${utxo.value} BTC`)
+    console.log(`Considering UTXO: ${utxo.txid}:${utxo.vout} with ${utxo.amount} BTC`)
     selected.push(utxo)
-    total += utxo.value
+    total += utxo.amount
     console.log(`Total so far: ${total} BTC, target: ${targetAmount} BTC`)
     if (total >= targetAmount) {
       console.log(`Target reached with ${selected.length} UTXOs`)
@@ -1597,18 +1581,18 @@ function estimateTransactionSize(inputCount: number, outputCount: number): numbe
 
 /**
  * Finds the address index for a given address by scanning through possible derivation paths
- * @param accountExtendedKey - Account extended key
+ * @param accountKey - Account extended key
  * @param targetAddress - Target address to find
  * @param gapLimit - Maximum gap of unused addresses to scan (default 20)
  * @returns Object with address type and index, or null if not found
  */
 async function findAddressIndex(
-  accountExtendedKey: Uint8Array,
+  accountKey: Uint8Array,
   targetAddress: string,
   gapLimit: number = 20,
 ): Promise<{ type: 'receiving' | 'change'; index: number } | null> {
   // Check receiving addresses (external chain, index 0)
-  const receivingExtendedKey = deriveChildPrivateKey(accountExtendedKey, 0)
+  const receivingExtendedKey = deriveChildPrivateKey(accountKey, 0)
 
   for (let i = 0; i < gapLimit * 2; i++) {
     const address = deriveAddress(receivingExtendedKey, i)
@@ -1619,7 +1603,7 @@ async function findAddressIndex(
   }
 
   // Check change addresses (internal chain, index 1)
-  const changeExtendedKey = deriveChildPrivateKey(accountExtendedKey, 1)
+  const changeExtendedKey = deriveChildPrivateKey(accountKey, 1)
 
   for (let i = 0; i < gapLimit * 2; i++) {
     const address = deriveAddress(changeExtendedKey, i)
@@ -1702,13 +1686,13 @@ export function findNextUnusedAddress(
   rootExtendedKey: Uint8Array,
   usedAddresses: Set<string>,
 ): string {
-  const purposeIndex = createHardenedIndex(84)
+  const purposeIndex = Purpose.BIP84
   const purposeExtendedKey = deriveChildPrivateKey(rootExtendedKey, purposeIndex)
-  const coinTypeIndex = createHardenedIndex(0)
+  const coinTypeIndex = CoinType.Bitcoin
   const coinTypeExtendedKey = deriveChildPrivateKey(purposeExtendedKey, coinTypeIndex)
-  const account = createHardenedIndex(0)
-  const accountExtendedKey = deriveChildPrivateKey(coinTypeExtendedKey, account)
-  const receivingExtendedKey = deriveChildPrivateKey(accountExtendedKey, 0)
+  const account = AccountIndex.Main
+  const accountKey = deriveChildPrivateKey(coinTypeExtendedKey, account)
+  const receivingExtendedKey = deriveChildPrivateKey(accountKey, 0)
 
   let index = 0
   const maxCheck = 100

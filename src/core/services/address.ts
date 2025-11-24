@@ -1,27 +1,31 @@
-import { createAddress } from '../lib/address'
+import { createAddress, fromBase58check, fromBech32 } from '../lib/address'
 import { Connection } from '../models/network'
 import {
-  AddressDetails,
-  GAP_LIMIT,
-  Change,
-  Purpose,
-  CoinType,
   AccountIndex,
   AddressCollection,
+  AddressDetails,
+  Change,
+  CoinType,
+  GAP_LIMIT,
+  Purpose,
 } from '../models/address'
-import AddressRepository from '../repositories/address'
-import SeedService from './seed'
-import KeyService from './key'
-import TransactionService from './transaction'
 import { Tx, Utxo } from '../models/tx'
+import AddressRepository from '../repositories/address'
+import KeyService from './key'
+import SeedService from './seed'
+import TransactionService from './transaction'
+import WalletService from './wallet'
 
 interface AddressServiceInterface {
   getBalance(addresses: AddressDetails[]): { balance: number; utxos: Utxo[] }
-  discover(walletId: string, connection: Connection): Promise<AddressCollection>
-  getNextUnusedAddress(walletId: string): string
-  getNextChangeAddress(walletId: string): string
+  discover(connection: Connection): Promise<AddressCollection>
+  getUsedAddresses(type: 'receiving' | 'change'): AddressDetails[]
+  getNextUnusedAddress(): string
+  getNextChangeAddress(): string
   createAddress(publicKey: Uint8Array): string
   createManyAddresses(publicKeys: Uint8Array[]): string[]
+  clearAddresses(): void
+  validateAddress(address: string): boolean
 }
 
 export default class AddressService implements AddressServiceInterface {
@@ -36,10 +40,12 @@ export default class AddressService implements AddressServiceInterface {
     return publicKeys.map(publicKey => createAddress(publicKey))
   }
 
-  private getAccountKeys(walletId: string): {
+  getAccountKeys(): {
     receivingAccountKey: Uint8Array
     changeAccountKey: Uint8Array
   } {
+    const walletService = new WalletService()
+    const walletId = walletService.getActiveWalletId()
     const seed = new SeedService().getSeed(walletId)
     const keyService = new KeyService()
     const masterKey = keyService.createMasterKey(seed)
@@ -74,7 +80,9 @@ export default class AddressService implements AddressServiceInterface {
     return { balance, utxos }
   }
 
-  async discover(walletId: string, connection: Connection): Promise<AddressCollection> {
+  async discover(connection: Connection): Promise<AddressCollection> {
+    const walletService = new WalletService()
+    const walletId = walletService.getActiveWalletId()
     const repository = new AddressRepository()
     let collection = repository.read(walletId)
     if (!collection) {
@@ -87,7 +95,7 @@ export default class AddressService implements AddressServiceInterface {
       }
     }
 
-    const { receivingAccountKey, changeAccountKey } = this.getAccountKeys(walletId)
+    const { receivingAccountKey, changeAccountKey } = this.getAccountKeys()
     const startIndex = collection.nextReceiveIndex
 
     const discoveredAddresses = await this.fetchAddresses(
@@ -169,7 +177,23 @@ export default class AddressService implements AddressServiceInterface {
     return addresses
   }
 
-  getNextUnusedAddress(walletId: string): string {
+  getUsedAddresses(type: 'receiving' | 'change'): AddressDetails[] {
+    const walletService = new WalletService()
+    const walletId = walletService.getActiveWalletId()
+    const repository = new AddressRepository()
+    const collection = repository.read(walletId)
+    if (!collection) {
+      return []
+    }
+    const changeType = type === 'receiving' ? Change.Receiving : Change.Change
+    return collection.addresses.filter(
+      addr => addr.derivationPath.change === changeType && addr.txs.length > 0,
+    )
+  }
+
+  getNextUnusedAddress(): string {
+    const walletService = new WalletService()
+    const walletId = walletService.getActiveWalletId()
     const repository = new AddressRepository()
     let collection = repository.read(walletId)
     if (!collection) {
@@ -181,14 +205,15 @@ export default class AddressService implements AddressServiceInterface {
         gapLimit: GAP_LIMIT,
       }
     }
-    const { receivingAccountKey } = this.getAccountKeys(walletId)
+    const { receivingAccountKey } = this.getAccountKeys()
     const address = this.deriveAddress(receivingAccountKey, collection.nextReceiveIndex)
-    collection.nextReceiveIndex++
-    repository.save(collection)
+    // don't save the address yet (only address with txs are saved)
     return address
   }
 
-  getNextChangeAddress(walletId: string): string {
+  getNextChangeAddress(): string {
+    const walletService = new WalletService()
+    const walletId = walletService.getActiveWalletId()
     const repository = new AddressRepository()
     let collection = repository.read(walletId)
     if (!collection) {
@@ -200,10 +225,46 @@ export default class AddressService implements AddressServiceInterface {
         gapLimit: GAP_LIMIT,
       }
     }
-    const { changeAccountKey } = this.getAccountKeys(walletId)
+    const { changeAccountKey } = this.getAccountKeys()
     const address = this.deriveAddress(changeAccountKey, collection.nextChangeIndex)
-    collection.nextChangeIndex++
-    repository.save(collection)
+    // don't save the address yet (only address with txs are saved)
     return address
+  }
+
+  clearAddresses(): void {
+    const walletService = new WalletService()
+    const walletId = walletService.getActiveWalletId()
+    const repository = new AddressRepository()
+    repository.deleteByWalletId(walletId)
+  }
+
+  validateAddress(address: string): boolean {
+    if (!address || address.trim().length === 0) {
+      return false
+    }
+
+    const trimmedAddress = address.trim()
+
+    // Check if it's a Bech32 address (starts with bc1)
+    if (trimmedAddress.startsWith('bc1')) {
+      try {
+        fromBech32(trimmedAddress)
+        return true
+      } catch {
+        return false
+      }
+    }
+
+    // Check if it's a Base58 address (starts with 1 or 3)
+    if (trimmedAddress.startsWith('1') || trimmedAddress.startsWith('3')) {
+      try {
+        fromBase58check(trimmedAddress)
+        return true
+      } catch {
+        return false
+      }
+    }
+
+    return false
   }
 }

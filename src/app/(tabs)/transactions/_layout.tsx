@@ -2,6 +2,7 @@ import { Stack } from 'expo-router'
 import colors from '@/ui/colors'
 import { useSettings } from '@/ui/features/settings'
 import { Platform } from 'react-native'
+import { HeaderTitle } from '@react-navigation/elements'
 
 export default function TransactionsLayout() {
   const { isDark } = useSettings()
@@ -22,7 +23,7 @@ export default function TransactionsLayout() {
         name="index"
         options={{
           headerTitleAlign: 'center',
-          title: `Transactions`,
+          title: 'Transactions',
           contentStyle: {
             paddingTop: Platform.OS === 'ios' ? 64 : 0,
           },

@@ -1,5 +1,5 @@
 import { Text, View, Pressable, FlatList, StyleSheet } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useRouter, useSegments } from 'expo-router'
 import colors from '@/ui/colors'
 import { truncateAddress } from './utils'
 import BitcoinLogo from '@/ui/assets/bitcoin-logo'
@@ -33,10 +33,13 @@ type TransactionItem = {
 type ListItem = DateHeader | TransactionItem
 
 export default function TransactionsScreen() {
-  const router = useRouter()
   const headerHeight = useHeaderHeight()
+  const router = useRouter()
+  const segments = useSegments()
+  const isTransactionsRoute = segments[segments.length - 1] === 'transactions'
+
   const { isDark } = useSettings()
-  const { loading, addressCollection } = useAddress()
+  const { loading, addresses } = useAddress()
   // const loading = true
   const transactionService = new TransactionService()
 
@@ -46,7 +49,7 @@ export default function TransactionsScreen() {
         <Text
           style={{ fontSize: 20, fontWeight: '600', color: alpha(colors.textSecondary.light, 0.7) }}
         >
-          Transactions
+          {isTransactionsRoute ? ' ' : 'Transactions'}
         </Text>
       </View>
       {/* Fake date header */}
@@ -92,7 +95,7 @@ export default function TransactionsScreen() {
     </View>
   )
 
-  const transactions = transactionService.getFriendlyTxs(addressCollection?.addresses || [])
+  const transactions = transactionService.getFriendlyTxs(addresses || [])
 
   // Agrupar transações por data usando o campo 'date' do UIFriendlyTransaction
   const grouped: Record<string, FriendlyTx[]> = {}

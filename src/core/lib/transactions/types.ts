@@ -1,15 +1,6 @@
-export const MINIMUN_CONFIRMATIONS = 6
+import { Utxo } from '@/core/models/tx'
 
-export interface UTXO {
-  txid: string
-  vout: number
-  address: string
-  amount: number
-  blocktime: number
-  confirmations: number
-  isSpent: boolean
-  scriptPubKey: ScriptPubKey
-}
+export const MINIMUN_CONFIRMATIONS = 6
 
 export type TxHistory = {
   receivingAddress: string
@@ -86,12 +77,12 @@ export interface BuildTransactionParams {
   recipientAddress: string
   amount: number // in satoshis
   feeRate: number // sat/vB
-  utxos: UTXO[]
+  utxos: Utxo[]
   changeAddress: string
-  extendedKey: Uint8Array
-  purpose?: number
-  coinType?: number
-  account?: number
+  // extendedKey: Uint8Array
+  // purpose?: number
+  // coinType?: number
+  // account?: number
 }
 
 export interface BuildTransactionResult {
@@ -118,10 +109,7 @@ export interface SignTransactionParams {
     amount: number
     address: string
   }[]
-  extendedKey: Uint8Array
-  purpose?: number
-  coinType?: number
-  account?: number
+  accountKey: Uint8Array
 }
 
 export interface SignTransactionResult {

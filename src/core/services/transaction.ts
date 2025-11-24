@@ -1,14 +1,43 @@
 import { Connection } from '../models/network'
 import { FriendlyTx, MerkleProof, Tx, Utxo } from '../models/tx'
-import { getTransactions, getBlockHash, getMerkleProof } from '@/core/lib/electrum'
+import {
+  getTransactions,
+  getBlockHash,
+  getMerkleProof,
+  getRecommendedFeeRates,
+} from '@/core/lib/electrum'
 import { sha256 } from '@noble/hashes/sha2'
 import { uint8ArrayFromHex, uint8ArrayToHex, concatUint8Arrays } from '../lib/utils'
-import { AddressCollection, AddressDetails, Change } from '../models/address'
+import { AddressDetails, Change } from '../models/address'
+import { buildTransaction, signTransaction, sendTransaction } from '../lib/transactions'
+import SeedService from './seed'
+import KeyService from './key'
+import WalletService from './wallet'
+import TransactionRepository from '../repositories/transactions'
 
 interface TransactionServiceInterface {
   deduplicateTxs(txs: Tx[]): Tx[]
   getTransactions(address: string, connection: Connection): Promise<Tx[]>
   getUtxos(addresses: string[], txs: Tx[]): Utxo[]
+  buildTransaction({
+    recipientAddress,
+    amount,
+    feeRate,
+    changeAddress,
+    utxos,
+  }: {
+    recipientAddress: string
+    amount: number
+    feeRate: number
+    changeAddress: string
+    utxos: Utxo[]
+  }): Promise<{
+    transaction: any
+    inputs: any
+    outputs: any
+    fee: number
+    changeAmount: number
+  }>
   verifyTransaction(
     tx: Tx,
     connection: Connection,
@@ -18,6 +47,22 @@ interface TransactionServiceInterface {
   }>
   getFriendlyTxs(addresses: AddressDetails[]): FriendlyTx[]
   calculateBalance(addresses: AddressDetails[]): { balance: number; utxos: Utxo[] }
+  getFeeRates(connection: Connection): Promise<{
+    slow: number
+    normal: number
+    fast: number
+    urgent: number
+  }>
+  savePendingTransaction(params: {
+    txid: string
+    walletId: string
+    recipientAddress: string
+    amount: number
+    fee: number
+    txHex: string
+  }): Promise<void>
+  readPendingTransactions(): Tx[]
+  deletePendingTransaction(txid: string): void
 }
 
 export default class TransactionService implements TransactionServiceInterface {
@@ -84,6 +129,36 @@ export default class TransactionService implements TransactionServiceInterface {
     })
 
     return unspentUtxos
+  }
+
+  async buildTransaction({
+    recipientAddress,
+    amount,
+    feeRate,
+    utxos,
+    changeAddress,
+  }: {
+    recipientAddress: string
+    amount: number
+    feeRate: number
+    utxos: Utxo[]
+    changeAddress: string
+  }): Promise<{
+    transaction: any
+    inputs: any
+    outputs: any
+    fee: number
+    changeAmount: number
+  }> {
+    const transaction = await buildTransaction({
+      recipientAddress,
+      amount,
+      feeRate,
+      utxos,
+      changeAddress,
+    })
+
+    return transaction
   }
 
   async verifyTransaction(
@@ -304,5 +379,115 @@ export default class TransactionService implements TransactionServiceInterface {
       fee,
       confirmations: tx.confirmations || 0,
     }
+  }
+
+  async signTransaction({ transaction, inputs }: { transaction: any; inputs: any }): Promise<{
+    signedTransaction: any
+    txHex: string
+  }> {
+    const walletService = new WalletService()
+    const walletId = walletService.getActiveWalletId()
+    const seedService = new SeedService()
+    const seed = seedService.getSeed(walletId)
+    const keyService = new KeyService()
+    const accountKey = keyService.deriveAccountKey(seed)
+
+    return await signTransaction({
+      transaction,
+      inputs,
+      accountKey,
+    })
+  }
+
+  async sendTransaction({
+    signedTransaction,
+    txHex,
+  }: {
+    signedTransaction: any
+    txHex: string
+  }): Promise<{
+    success: boolean
+    txid?: string
+    error?: string
+  }> {
+    return await sendTransaction({
+      signedTransaction,
+      txHex,
+    })
+  }
+
+  async savePendingTransaction({
+    txid,
+
+    recipientAddress,
+    amount,
+    fee,
+    txHex,
+  }: {
+    txid: string
+
+    recipientAddress: string
+    amount: number
+    fee: number
+    txHex: string
+  }): Promise<void> {
+    const pendingTx: Tx = {
+      txid,
+      hash: txid,
+      hex: txHex,
+      confirmations: 0,
+      height: 0,
+      time: Math.floor(Date.now() / 1000),
+      in_active_chain: false,
+      size: txHex.length / 2,
+      vsize: txHex.length / 2,
+      weight: (txHex.length / 2) * 4,
+      version: 2,
+      locktime: 0,
+      blockhash: '',
+      blocktime: 0,
+      vin: [], // Não temos inputs detalhados aqui
+      vout: [
+        {
+          n: 0,
+          value: amount,
+          scriptPubKey: {
+            asm: '',
+            hex: '',
+            reqSigs: 1,
+            type: 'scripthash',
+            address: recipientAddress,
+          },
+        },
+      ],
+    }
+    const walletService = new WalletService()
+    const walletId = walletService.getActiveWalletId()
+    const transactionRepository = new TransactionRepository()
+    transactionRepository.savePendingTransaction(walletId, pendingTx)
+  }
+
+  readPendingTransactions(): Tx[] {
+    const walletService = new WalletService()
+    const walletId = walletService.getActiveWalletId()
+    const transactionRepository = new TransactionRepository()
+    return transactionRepository.readPendingTransactions(walletId)
+  }
+
+  deletePendingTransaction(txid: string): void {
+    const walletService = new WalletService()
+    const walletId = walletService.getActiveWalletId()
+    const transactionRepository = new TransactionRepository()
+    transactionRepository.deletePendingTransaction(walletId, txid)
+  }
+
+  async getFeeRates(connection: Connection): Promise<{
+    slow: number
+    normal: number
+    fast: number
+    urgent: number
+  }> {
+    const feeRate = await getRecommendedFeeRates(connection)
+    return feeRate
   }
 }

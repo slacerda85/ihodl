@@ -11,52 +11,27 @@ import {
   Switch,
 } from 'react-native'
 import { useRouter } from 'expo-router'
-
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
-
 import { useWallet } from '../wallet'
-import { useTransactions } from '../transactions'
 import { useSettings } from '../settings'
-import { useElectrum } from '../electrum'
-
 import { formatBalance } from './utils'
-// import SendLightning from '../lightning/SendLightning'
-
-import { fromBech32, fromBase58check, createSegwitAddress } from '@/lib/address'
-import { UTXO } from '@/lib/transactions/types'
-import {
-  fromMnemonic,
-  createRootExtendedKey,
-  deriveChildPrivateKey,
-  createPublicKey,
-  createHardenedIndex,
-  splitRootExtendedKey,
-} from '@/lib/key'
-import { buildTransaction, signTransaction, sendTransaction } from '@/lib/transactions'
-import { getWalletSeedPhrase } from '@/lib/secureStorage'
+import { useAddress } from '../address/AddressProvider'
+import { useNetwork } from '../network/NetworkProvider'
+import AddressService from '@/core/services/address'
+import TransactionService from '@/core/services/transaction'
 
 type SendMode = 'onchain' | 'lightning'
 
 export default function Send() {
-  const { isDark } = useSettings()
-
   const router = useRouter()
-
-  const { activeWalletId, wallets } = useWallet()
-  const { friendly } = useTransactions()
-
-  // Placeholder functions - need to be implemented
-  const getBalance = (walletId: string) => 0
-  const getUtxos = (walletId: string): any[] => [] // Return empty array for now
-  const addPendingTransaction = (tx: any) => {}
-  const { electrum } = useElectrum()
+  const { isDark } = useSettings()
+  const { getConnection } = useNetwork()
+  const { utxos, balance } = useAddress()
 
   const [mode, setMode] = useState<SendMode>('onchain')
-
   const [submitting, setSubmitting] = useState<boolean>(false)
-
   const [recipientAddress, setRecipientAddress] = useState<string>('')
   const [amountInput, setAmountInput] = useState<string>('')
   const [amount, setAmount] = useState<number>(0)
@@ -77,98 +52,18 @@ export default function Send() {
     'normal',
   )
 
-  // Check if we have cached data for the active wallet
-  const hasTransactionData = activeWalletId
-    ? friendly.some(cache => cache.walletId === activeWalletId)
-    : false
-
-  // Usar o novo método para obter saldo com verificação de segurança
-  const availableBalance =
-    activeWalletId && getBalance && typeof getBalance === 'function' && hasTransactionData
-      ? getBalance(activeWalletId)
-      : 0
-
-  // Function to derive change address
-  const deriveChangeAddress = (
-    extendedKey: Uint8Array,
-    purpose: number,
-    coinType: number,
-    account: number,
-    addressIndex: number = 0,
-  ): string => {
-    try {
-      // Derive purpose (hardened)
-      const purposeIndex = createHardenedIndex(purpose)
-      const purposeExtendedKey = deriveChildPrivateKey(extendedKey, purposeIndex)
-
-      // Derive coin type (hardened)
-      const coinTypeIndex = createHardenedIndex(coinType)
-      const coinTypeExtendedKey = deriveChildPrivateKey(purposeExtendedKey, coinTypeIndex)
-
-      // Derive account (hardened)
-      const accountHardened = createHardenedIndex(account)
-      const accountExtendedKey = deriveChildPrivateKey(coinTypeExtendedKey, accountHardened)
-
-      // Derive change (non-hardened, change = 1)
-      const changeExtendedKey = deriveChildPrivateKey(accountExtendedKey, 1)
-
-      // Derive address index (non-hardened)
-      const addressIndexExtendedKey = deriveChildPrivateKey(changeExtendedKey, addressIndex)
-
-      // Get private key and create public key
-      const { privateKey } = splitRootExtendedKey(addressIndexExtendedKey)
-      const publicKey = createPublicKey(privateKey)
-
-      // Create SegWit address
-      return createSegwitAddress(publicKey)
-    } catch (error) {
-      console.error('Error deriving change address:', error)
-      throw new Error('Failed to derive change address')
-    }
-  }
-
-  // Bitcoin address validation function
-  const validateBitcoinAddress = (address: string): boolean => {
-    if (!address || address.trim().length === 0) {
-      return false
-    }
-
-    const trimmedAddress = address.trim()
-
-    // Check if it's a Bech32 address (starts with bc1)
-    if (trimmedAddress.startsWith('bc1')) {
-      try {
-        fromBech32(trimmedAddress)
-        return true
-      } catch {
-        return false
-      }
-    }
-
-    // Check if it's a Base58 address (starts with 1 or 3)
-    if (trimmedAddress.startsWith('1') || trimmedAddress.startsWith('3')) {
-      try {
-        fromBase58check(trimmedAddress)
-        return true
-      } catch {
-        return false
-      }
-    }
-
-    return false
-  }
-
   // Effect to validate address when it changes
   useEffect(() => {
     if (recipientAddress.trim()) {
-      const isValid = validateBitcoinAddress(recipientAddress)
+      const addressService = new AddressService()
+      const isValid = addressService.validateAddress(recipientAddress)
       setAddressValid(isValid)
     } else {
       setAddressValid(null)
     }
   }, [recipientAddress])
 
-  // Effect to validate amount when feeRate, availableBalance, or amount changes
+  // Effect to validate amount when feeRate, balance, or amount changes
   useEffect(() => {
     if (amount > 0) {
       // Convert all values to satoshis for accurate comparison
@@ -182,9 +77,9 @@ export default function Send() {
           : 250 // Fixed estimate for manual adjustment
 
       const estimatedFeeInSatoshis = Math.round(feeRateInteger * estimatedTxSize)
-      const availableBalanceInSatoshis = Math.round(availableBalance * 100000000)
+      const balanceInSatoshis = Math.round(balance * 100000000)
 
-      if (amountInSatoshis + estimatedFeeInSatoshis > availableBalanceInSatoshis) {
+      if (amountInSatoshis + estimatedFeeInSatoshis > balanceInSatoshis) {
         setAmountValid(false)
       } else {
         setAmountValid(true)
@@ -192,7 +87,7 @@ export default function Send() {
     } else {
       setAmountValid(null)
     }
-  }, [feeRate, availableBalance, amount, autoFeeAdjustment, feeRates])
+  }, [feeRate, amount, autoFeeAdjustment, feeRates, balance])
 
   useEffect(() => {
     const num = parseFloat(feeRateInput)
@@ -206,7 +101,9 @@ export default function Send() {
     setLoadingFeeRates(true)
     try {
       console.log('[Send] Fetching recommended fee rates from network...')
-      const rates = await electrum.getRecommendedFeeRates()
+      const transactionService = new TransactionService()
+      const connection = await getConnection()
+      const rates = await transactionService.getFeeRates(connection)
       setFeeRates(rates)
 
       // Auto-select "normal" fee rate for auto-adjustment
@@ -232,7 +129,7 @@ export default function Send() {
     } finally {
       setLoadingFeeRates(false)
     }
-  }, [autoFeeAdjustment, feeRates, electrum])
+  }, [autoFeeAdjustment, feeRates, getConnection])
 
   // Effect to fetch fee rates when auto-adjustment is enabled
   useEffect(() => {
@@ -307,18 +204,18 @@ export default function Send() {
       return
     }
 
-    if (!activeWalletId) {
+    /* if (!activeWalletId) {
       Alert.alert('Error', 'No active wallet found')
       setSubmitting(false)
       return
-    }
+    } */
 
-    const activeWallet = wallets.find(wallet => wallet.walletId === activeWalletId)
+    /* const activeWallet = wallets.find(wallet => wallet.id === activeWalletId)
     if (!activeWallet) {
       Alert.alert('Error', 'Active wallet not found')
       setSubmitting(false)
       return
-    }
+    } */
 
     console.log('Starting transaction assembly...')
 
@@ -326,104 +223,49 @@ export default function Send() {
       console.log('Retrieving wallet data...')
       // Get wallet seed phrase
       // TODO: Get password from user or state
-      const password = '' // Temporary: assume no password for now
-      const seedPhrase = await getWalletSeedPhrase(activeWalletId!, password)
+
+      const transactionService = new TransactionService()
+
+      // Filter for confirmed UTXOs (6+ confirmations)
+      const confirmedUtxos = utxos.filter(utxo => utxo.confirmations >= 2)
+
+      if (confirmedUtxos.length === 0) {
+        throw new Error('No confirmed UTXOs available for transaction')
+      }
+
+      // console.log(`deriving change addr index ${addressCollection?.nextChangeIndex}...`)
+      const addressService = new AddressService()
+      const changeAddress = addressService.getNextChangeAddress()
+
+      const feeRateInteger = Math.round(feeRate)
+      console.log('feeRate (sat/vB)', feeRateInteger)
+      /* 
+      const seedPhrase = await getWalletSeedPhrase(activeWalletId!, '')
       if (!seedPhrase) {
         throw new Error('Unable to retrieve wallet seed phrase')
       }
 
       const entropy = fromMnemonic(seedPhrase)
       const extendedKey = createRootExtendedKey(entropy)
-
-      console.log('Retrieving UTXOs...')
-      // Get UTXOs and convert to UTXO format
-      const allUtxos = getUtxos ? getUtxos(activeWalletId) : []
-      console.log(`Total UTXOs from storage: ${allUtxos.length}`)
-      console.log(
-        'UTXO details:',
-        allUtxos.map(utxo => ({
-          txid: utxo.txid,
-          vout: utxo.vout,
-          value: utxo.value,
-          isSpent: utxo.isSpent,
-          confirmations: utxo.confirmations,
-        })),
-      )
-
-      const utxos = allUtxos.filter((utxo: UTXO) => !utxo.isSpent)
-      console.log(`UTXOs after filtering spent: ${utxos.length}`)
-      console.log(
-        'Filtered UTXO details:',
-        utxos.map(utxo => ({
-          txid: utxo.txid,
-          vout: utxo.vout,
-          value: utxo.value,
-          confirmations: utxo.confirmations,
-        })),
-      )
-
-      // Filter for confirmed UTXOs (6+ confirmations)
-      const confirmedUtxos = utxos.filter((utxo: UTXO) => utxo.confirmations >= 2)
-      console.log(`Confirmed UTXOs (6+ confirmations): ${confirmedUtxos.length}`)
-      console.log(
-        'Confirmed UTXO details:',
-        confirmedUtxos.map(utxo => ({
-          txid: utxo.txid,
-          vout: utxo.vout,
-          value: utxo.value,
-          confirmations: utxo.confirmations,
-        })),
-      )
-
-      if (confirmedUtxos.length === 0) {
-        throw new Error('No confirmed UTXOs available for transaction')
-      }
-
-      console.log('Deriving change address...')
-      // Get change address using proper derivation
-      const account = activeWallet.accounts[0]
-      const changeAddress = deriveChangeAddress(
-        extendedKey,
-        account.purpose,
-        account.coinType,
-        account.account,
-        0, // Use address index 0 for change
-      )
-
-      console.log('Building transaction...')
-      console.log('amount (BTC)', amount)
-      console.log('amountInSatoshis', amountInSatoshis)
-      // Convert amount from BTC to satoshis and ensure feeRate is integer
-      const feeRateInteger = Math.round(feeRate)
-      console.log('feeRate (sat/vB)', feeRateInteger)
-
-      // Build transaction
-      const buildResult = await buildTransaction({
+ */
+      const buildResult = await transactionService.buildTransaction({
         recipientAddress,
         amount: amountInSatoshis,
         feeRate: feeRateInteger,
         utxos: confirmedUtxos,
         changeAddress,
-        extendedKey,
-        purpose: account.purpose,
-        coinType: account.coinType,
-        account: account.account,
       })
 
       console.log('Signing transaction...')
       // Sign transaction
-      const signResult = await signTransaction({
+      const signResult = await transactionService.signTransaction({
         transaction: buildResult.transaction,
         inputs: buildResult.inputs,
-        extendedKey,
-        purpose: account.purpose,
-        coinType: account.coinType,
-        account: account.account,
       })
 
       console.log('Sending transaction...')
       // Send transaction
-      const sendResult = await sendTransaction({
+      const sendResult = await transactionService.sendTransaction({
         signedTransaction: signResult.signedTransaction,
         txHex: signResult.txHex,
       })
@@ -432,17 +274,14 @@ export default function Send() {
         console.log('Transaction sent successfully...')
 
         // Salvar transação pendente no storage
-        if (addPendingTransaction) {
-          addPendingTransaction({
-            txid: sendResult.txid,
-            walletId: activeWalletId,
-            recipientAddress,
-            amount: amountInSatoshis,
-            fee: buildResult.fee,
-            txHex: signResult.txHex,
-          })
-          console.log('Pending transaction saved to storage')
-        }
+        await transactionService.savePendingTransaction({
+          txid: sendResult.txid!,
+          recipientAddress,
+          amount: amountInSatoshis,
+          fee: buildResult.fee,
+          txHex: signResult.txHex,
+        })
+        console.log('Pending transaction saved to storage')
 
         setSubmitting(false)
         Alert.alert(
@@ -513,233 +352,219 @@ export default function Send() {
 
       {/* Content */}
       {/* <GlassView style={{ borderRadius: 32 }}> */}
-      {mode === 'onchain' ? (
-        <ScrollView style={[styles.scrollView, isDark && styles.scrollViewDark]}>
-          <View style={[styles.contentContainer, isDark && styles.contentContainerDark]}>
-            <View style={styles.section}>
-              <Text style={[styles.label, isDark && styles.labelDark]}>Recipient Address</Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  isDark && styles.inputDark,
-                  addressValid === false && styles.inputError,
-                  addressValid === true && styles.inputValid,
-                ]}
-                placeholder="Enter Bitcoin address (bc1...)"
-                placeholderTextColor={
-                  isDark ? colors.textSecondary.dark : colors.textSecondary.light
-                }
-                value={recipientAddress}
-                onChangeText={setRecipientAddress}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              {addressValid === false && (
-                <Text style={styles.errorText}>Invalid Bitcoin address</Text>
-              )}
-              {addressValid === true && (
-                <Text style={styles.validText}>✓ Valid Bitcoin address</Text>
-              )}
-            </View>
 
-            <View style={styles.section}>
-              <Text style={[styles.label, isDark && styles.labelDark]}>Amount (BTC)</Text>
+      <ScrollView style={[styles.scrollView, isDark && styles.scrollViewDark]}>
+        <View style={[styles.contentContainer, isDark && styles.contentContainerDark]}>
+          <View style={styles.section}>
+            <Text style={[styles.label, isDark && styles.labelDark]}>Recipient Address</Text>
+            <TextInput
+              style={[
+                styles.input,
+                isDark && styles.inputDark,
+                addressValid === false && styles.inputError,
+                addressValid === true && styles.inputValid,
+              ]}
+              placeholder="Enter Bitcoin address (bc1...)"
+              placeholderTextColor={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
+              value={recipientAddress}
+              onChangeText={setRecipientAddress}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {addressValid === false && (
+              <Text style={styles.errorText}>Invalid Bitcoin address</Text>
+            )}
+            {addressValid === true && <Text style={styles.validText}>✓ Valid Bitcoin address</Text>}
+          </View>
+
+          <View style={styles.section}>
+            <Text style={[styles.label, isDark && styles.labelDark]}>Amount (BTC)</Text>
+            <TextInput
+              style={[
+                styles.input,
+                isDark && styles.inputDark,
+                amountValid === false && styles.inputError,
+                amountValid === true && styles.inputValid,
+              ]}
+              placeholder="0.00000000"
+              placeholderTextColor={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
+              value={amountInput}
+              onChangeText={handleAmountChange}
+              keyboardType="decimal-pad"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {amountValid === false && amount <= 0 && (
+              <Text style={styles.errorText}>Amount must be greater than 0</Text>
+            )}
+            {amountValid === false && amount > 0 && (
+              <Text style={styles.errorText}>
+                Insufficient balance including estimated fees. Remaining:{' '}
+                {formatBalance(
+                  Math.max(0, balance - amount - (Math.round(feeRate) * 250) / 100000000),
+                  'BTC',
+                )}{' '}
+                {'BTC'}
+              </Text>
+            )}
+            {amountValid === true && <Text style={styles.validText}>✓ Sufficient balance</Text>}
+            <View style={styles.balanceContainer}>
+              <Text style={[styles.balanceText, isDark && styles.balanceTextDark]}>
+                Available: {formatBalance(balance, 'BTC')} {'BTC'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <View style={styles.feeHeader}>
+              <Text style={[styles.label, isDark && styles.labelDark]}>Fee Rate (sat/vB)</Text>
+              <View style={styles.autoFeeContainer}>
+                <Text style={[styles.autoFeeLabel, isDark && styles.autoFeeLabelDark]}>
+                  Auto-adjust
+                </Text>
+                <Switch
+                  value={autoFeeAdjustment}
+                  onValueChange={setAutoFeeAdjustment}
+                  trackColor={{ false: '#767577', true: colors.primary }}
+                  thumbColor={autoFeeAdjustment ? colors.white : '#f4f3f4'}
+                />
+              </View>
+            </View>
+            {autoFeeAdjustment ? null : (
               <TextInput
-                style={[
-                  styles.input,
-                  isDark && styles.inputDark,
-                  amountValid === false && styles.inputError,
-                  amountValid === true && styles.inputValid,
-                ]}
-                placeholder="0.00000000"
+                style={[styles.input, isDark && styles.inputDark]}
+                placeholder="1"
                 placeholderTextColor={
                   isDark ? colors.textSecondary.dark : colors.textSecondary.light
                 }
-                value={amountInput}
-                onChangeText={handleAmountChange}
+                value={feeRateInput}
+                onChangeText={handleChangeFeeRate}
                 keyboardType="decimal-pad"
                 autoCapitalize="none"
                 autoCorrect={false}
               />
-              {amountValid === false && amount <= 0 && (
-                <Text style={styles.errorText}>Amount must be greater than 0</Text>
-              )}
-              {amountValid === false && amount > 0 && (
-                <Text style={styles.errorText}>
-                  Insufficient balance including estimated fees. Remaining:{' '}
-                  {formatBalance(
-                    Math.max(
-                      0,
-                      availableBalance - amount - (Math.round(feeRate) * 250) / 100000000,
-                    ),
-                    unit,
-                  )}{' '}
-                  {unit}
-                </Text>
-              )}
-              {amountValid === true && <Text style={styles.validText}>✓ Sufficient balance</Text>}
-              <View style={styles.balanceContainer}>
-                <Text style={[styles.balanceText, isDark && styles.balanceTextDark]}>
-                  Available: {formatBalance(availableBalance, unit)} {unit}
+            )}
+            {loadingFeeRates && (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={[styles.loadingText, isDark && styles.loadingTextDark]}>
+                  Fetching network fee rates...
                 </Text>
               </View>
-            </View>
-
-            <View style={styles.section}>
-              <View style={styles.feeHeader}>
-                <Text style={[styles.label, isDark && styles.labelDark]}>Fee Rate (sat/vB)</Text>
-                <View style={styles.autoFeeContainer}>
-                  <Text style={[styles.autoFeeLabel, isDark && styles.autoFeeLabelDark]}>
-                    Auto-adjust
-                  </Text>
-                  <Switch
-                    value={autoFeeAdjustment}
-                    onValueChange={setAutoFeeAdjustment}
-                    trackColor={{ false: '#767577', true: colors.primary }}
-                    thumbColor={autoFeeAdjustment ? colors.white : '#f4f3f4'}
-                  />
-                </View>
-              </View>
-              {autoFeeAdjustment ? null : (
-                <TextInput
-                  style={[styles.input, isDark && styles.inputDark]}
-                  placeholder="1"
-                  placeholderTextColor={
-                    isDark ? colors.textSecondary.dark : colors.textSecondary.light
-                  }
-                  value={feeRateInput}
-                  onChangeText={handleChangeFeeRate}
-                  keyboardType="decimal-pad"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              )}
-              {loadingFeeRates && (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="small" color={colors.primary} />
-                  <Text style={[styles.loadingText, isDark && styles.loadingTextDark]}>
-                    Fetching network fee rates...
-                  </Text>
-                </View>
-              )}
-              {feeRates && (
-                <View style={[styles.feeRatesSelector, isDark && styles.feeRatesSelectorDark]}>
-                  <Text style={[styles.feeRatesTitle, isDark && styles.feeRatesTitleDark]}>
-                    {autoFeeAdjustment ? 'Network Fee Rates:' : 'Select Fee Rate:'}
-                  </Text>
-                  <View style={styles.feeRatesGrid}>
-                    <Pressable
-                      style={[
-                        styles.feeRateOption,
-                        selectedFeeRate === 'slow' && styles.feeRateOptionSelected,
-                        isDark && styles.feeRateOptionDark,
-                      ]}
-                      onPress={() => !autoFeeAdjustment && setSelectedFeeRate('slow')}
-                      disabled={autoFeeAdjustment}
-                    >
-                      <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
-                        Slow
-                      </Text>
-                      <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
-                        {feeRates.slow} sat/vB
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      style={[
-                        styles.feeRateOption,
-                        selectedFeeRate === 'normal' && styles.feeRateOptionSelected,
-                        isDark && styles.feeRateOptionDark,
-                      ]}
-                      onPress={() => !autoFeeAdjustment && setSelectedFeeRate('normal')}
-                      disabled={autoFeeAdjustment}
-                    >
-                      <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
-                        Normal
-                      </Text>
-                      <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
-                        {feeRates.normal} sat/vB
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      style={[
-                        styles.feeRateOption,
-                        selectedFeeRate === 'fast' && styles.feeRateOptionSelected,
-                        isDark && styles.feeRateOptionDark,
-                      ]}
-                      onPress={() => !autoFeeAdjustment && setSelectedFeeRate('fast')}
-                      disabled={autoFeeAdjustment}
-                    >
-                      <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
-                        Fast
-                      </Text>
-                      <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
-                        {feeRates.fast} sat/vB
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      style={[
-                        styles.feeRateOption,
-                        selectedFeeRate === 'urgent' && styles.feeRateOptionSelected,
-                        isDark && styles.feeRateOptionDark,
-                      ]}
-                      onPress={() => !autoFeeAdjustment && setSelectedFeeRate('urgent')}
-                      disabled={autoFeeAdjustment}
-                    >
-                      <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
-                        Urgent
-                      </Text>
-                      <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
-                        {feeRates.urgent} sat/vB
-                      </Text>
-                    </Pressable>
-                  </View>
-                </View>
-              )}
-              <View style={styles.infoBox}>
-                <IconSymbol
-                  name="info.circle.fill"
-                  size={16}
-                  style={styles.infoIcon}
-                  color={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
-                />
-                <Text style={[styles.infoText, isDark && styles.infoTextDark]}>
-                  {autoFeeAdjustment
-                    ? loadingFeeRates
-                      ? 'Loading current network conditions...'
-                      : 'Fee rate is automatically adjusted based on network conditions.'
-                    : 'Higher fee rates result in faster confirmation times.'}
+            )}
+            {feeRates && (
+              <View style={[styles.feeRatesSelector, isDark && styles.feeRatesSelectorDark]}>
+                <Text style={[styles.feeRatesTitle, isDark && styles.feeRatesTitleDark]}>
+                  {autoFeeAdjustment ? 'Network Fee Rates:' : 'Select Fee Rate:'}
                 </Text>
+                <View style={styles.feeRatesGrid}>
+                  <Pressable
+                    style={[
+                      styles.feeRateOption,
+                      selectedFeeRate === 'slow' && styles.feeRateOptionSelected,
+                      isDark && styles.feeRateOptionDark,
+                    ]}
+                    onPress={() => !autoFeeAdjustment && setSelectedFeeRate('slow')}
+                    disabled={autoFeeAdjustment}
+                  >
+                    <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
+                      Slow
+                    </Text>
+                    <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
+                      {feeRates.slow} sat/vB
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={[
+                      styles.feeRateOption,
+                      selectedFeeRate === 'normal' && styles.feeRateOptionSelected,
+                      isDark && styles.feeRateOptionDark,
+                    ]}
+                    onPress={() => !autoFeeAdjustment && setSelectedFeeRate('normal')}
+                    disabled={autoFeeAdjustment}
+                  >
+                    <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
+                      Normal
+                    </Text>
+                    <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
+                      {feeRates.normal} sat/vB
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={[
+                      styles.feeRateOption,
+                      selectedFeeRate === 'fast' && styles.feeRateOptionSelected,
+                      isDark && styles.feeRateOptionDark,
+                    ]}
+                    onPress={() => !autoFeeAdjustment && setSelectedFeeRate('fast')}
+                    disabled={autoFeeAdjustment}
+                  >
+                    <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
+                      Fast
+                    </Text>
+                    <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
+                      {feeRates.fast} sat/vB
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={[
+                      styles.feeRateOption,
+                      selectedFeeRate === 'urgent' && styles.feeRateOptionSelected,
+                      isDark && styles.feeRateOptionDark,
+                    ]}
+                    onPress={() => !autoFeeAdjustment && setSelectedFeeRate('urgent')}
+                    disabled={autoFeeAdjustment}
+                  >
+                    <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
+                      Urgent
+                    </Text>
+                    <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
+                      {feeRates.urgent} sat/vB
+                    </Text>
+                  </Pressable>
+                </View>
               </View>
-            </View>
-
-            <View style={styles.section}>
-              <Text style={[styles.label, isDark && styles.labelDark]}>Memo (Optional)</Text>
-              <TextInput
-                style={[styles.input, isDark && styles.inputDark]}
-                placeholder="Add a note for this transaction"
-                placeholderTextColor={
-                  isDark ? colors.textSecondary.dark : colors.textSecondary.light
-                }
-                value={memo}
-                onChangeText={setMemo}
-                multiline
-                numberOfLines={3}
+            )}
+            <View style={styles.infoBox}>
+              <IconSymbol
+                name="info.circle.fill"
+                size={16}
+                style={styles.infoIcon}
+                color={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
               />
+              <Text style={[styles.infoText, isDark && styles.infoTextDark]}>
+                {autoFeeAdjustment
+                  ? loadingFeeRates
+                    ? 'Loading current network conditions...'
+                    : 'Fee rate is automatically adjusted based on network conditions.'
+                  : 'Higher fee rates result in faster confirmation times.'}
+              </Text>
             </View>
-
-            <Pressable
-              onPress={handleSend}
-              disabled={submitting || amountValid === false}
-              style={[styles.button, styles.primaryButton, submitting && styles.disabledButton]}
-            >
-              {submitting ? <ActivityIndicator color={colors.white} /> : null}
-              <Text style={styles.buttonText}>{submitting ? 'Sending...' : 'Send Bitcoin'}</Text>
-            </Pressable>
           </View>
-        </ScrollView>
-      ) : (
-        <SendLightning />
-      )}
+
+          <View style={styles.section}>
+            <Text style={[styles.label, isDark && styles.labelDark]}>Memo (Optional)</Text>
+            <TextInput
+              style={[styles.input, isDark && styles.inputDark]}
+              placeholder="Add a note for this transaction"
+              placeholderTextColor={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
+              value={memo}
+              onChangeText={setMemo}
+              multiline
+              numberOfLines={3}
+            />
+          </View>
+
+          <Pressable
+            onPress={handleSend}
+            disabled={submitting || amountValid === false}
+            style={[styles.button, styles.primaryButton, submitting && styles.disabledButton]}
+          >
+            {submitting ? <ActivityIndicator color={colors.white} /> : null}
+            <Text style={styles.buttonText}>{submitting ? 'Sending...' : 'Send Bitcoin'}</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
       {/* </GlassView> */}
     </View>
   )
