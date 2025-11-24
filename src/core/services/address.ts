@@ -1,6 +1,4 @@
 import { createAddress } from '../lib/address'
-import { getTransactions } from '../lib/electrum'
-import { Tx } from '../models/tx'
 import { Connection } from '../models/network'
 import {
   AddressDetails,
@@ -14,14 +12,16 @@ import {
 import AddressRepository from '../repositories/address'
 import SeedService from './seed'
 import KeyService from './key'
+import TransactionService from './transaction'
+import { Tx, Utxo } from '../models/tx'
 
 interface AddressServiceInterface {
+  getBalance(addresses: AddressDetails[]): { balance: number; utxos: Utxo[] }
   discover(walletId: string, connection: Connection): Promise<AddressCollection>
   getNextUnusedAddress(walletId: string): string
   getNextChangeAddress(walletId: string): string
   createAddress(publicKey: Uint8Array): string
   createManyAddresses(publicKeys: Uint8Array[]): string[]
-  getAddressHistory(address: string, connection: Connection): Promise<Tx[]>
 }
 
 export default class AddressService implements AddressServiceInterface {
@@ -34,11 +34,6 @@ export default class AddressService implements AddressServiceInterface {
   createManyAddresses(publicKeys: Uint8Array[]): string[] {
     // Implementation to create multiple addresses
     return publicKeys.map(publicKey => createAddress(publicKey))
-  }
-
-  async getAddressHistory(address: string, connection: Connection): Promise<Tx[]> {
-    const history = await getTransactions(address, connection)
-    return history
   }
 
   private getAccountKeys(walletId: string): {
@@ -60,6 +55,23 @@ export default class AddressService implements AddressServiceInterface {
     const addressPublicKey = keyService.deriveAddressPublicKey(addressKey)
     const address = this.createAddress(addressPublicKey)
     return address
+  }
+
+  getBalance(addresses: AddressDetails[]): { balance: number; utxos: Utxo[] } {
+    const transactionService = new TransactionService()
+    const allTxs: Tx[] = []
+    const allAddresses: string[] = []
+
+    // aggregate all txs and addresses
+    for (const addrDetail of addresses) {
+      allAddresses.push(addrDetail.address)
+      allTxs.push(...addrDetail.txs)
+    }
+
+    const utxos = transactionService.getUtxos(allAddresses, allTxs)
+    const balance = utxos.reduce((sum, utxo) => sum + utxo.amount, 0)
+
+    return { balance, utxos }
   }
 
   async discover(walletId: string, connection: Connection): Promise<AddressCollection> {
@@ -117,18 +129,17 @@ export default class AddressService implements AddressServiceInterface {
     let unusedCount = 0
     let addressIndex = startIndex
 
+    const transactionsService = new TransactionService()
     while (unusedCount < GAP_LIMIT) {
       const receivingAddress = this.deriveAddress(receivingAccountKey, addressIndex)
-      console.log('fetching rcv addr: ', `... ${receivingAddress.slice(-6)}`)
-      const txs = await this.getAddressHistory(receivingAddress, connection)
+      const txs = await transactionsService.getTransactions(receivingAddress, connection)
       if (txs.length === 0) {
         unusedCount++
       } else {
         unusedCount = 0
         // fetch change addresses as well to include in address details
         const changeAddress = this.deriveAddress(changeAccountKey, addressIndex)
-        console.log('fetching chg addr: ', `... ${changeAddress.slice(-6)}`)
-        const changeTxs = await this.getAddressHistory(changeAddress, connection)
+        const changeTxs = await transactionsService.getTransactions(changeAddress, connection)
         addresses.push({
           derivationPath: {
             purpose: Purpose.BIP84,

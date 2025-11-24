@@ -99,7 +99,6 @@ export class AccountService implements AccountServiceInterface {
 
     while (unusedCount < ACCOUNT_DISCOVERY_GAP_LIMIT) {
       const address = new AccountService().deriveAddress(receivingAccountKey, addressIndex)
-      console.log('fetching rcv addr: ', `... ${address.slice(-6)}`)
       const txs = await new AccountService().fetchTransactions(address, connection)
       if (txs.length === 0) {
         unusedCount++
@@ -107,7 +106,6 @@ export class AccountService implements AccountServiceInterface {
         unusedCount = 0
         // fetch change addresses as well to include in account details
         const changeAddress = new AccountService().deriveAddress(changeAccountKey, addressIndex)
-        console.log('fetching chg addr: ', `... ${changeAddress.slice(-6)}`)
         const changeTxs = await new AccountService().fetchTransactions(changeAddress, connection)
         accounts.push({
           purpose: Purpose.BIP84,

@@ -8,6 +8,7 @@ import { WalletProvider } from '@/ui/features/wallet'
 import AuthProvider from '@/ui/features/auth/AuthProvider'
 import { AccountProvider } from '../account/AccountProvider'
 import NetworkProvider from '../network/NetworkProvider'
+import AddressProvider from '../address/AddressProvider'
 
 interface AppProvidersProps {
   children: ReactNode
@@ -19,21 +20,7 @@ export function AppProviders({ children }: AppProvidersProps) {
       <AuthProvider>
         <WalletProvider>
           <NetworkProvider>
-            {/* <AccountProvider> */}
-            {/* 
-          <ElectrumProvider>
-            <BlockchainProvider>
-              <TransactionsProvider>
-                <LightningStateProvider>
-                  <LightningProvider> */}
-            {children}
-            {/* </LightningProvider>
-                </LightningStateProvider>
-              </TransactionsProvider>
-            </BlockchainProvider>
-          </ElectrumProvider>
-         */}
-            {/* </AccountProvider> */}
+            <AddressProvider>{children}</AddressProvider>
           </NetworkProvider>
         </WalletProvider>
       </AuthProvider>

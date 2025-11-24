@@ -1,6 +1,12 @@
 import { TLSSocket, ConnectionOptions } from 'tls'
 import net from 'net'
-import { ElectrumMethod, ElectrumResponse, GetHistoryResult, ElectrumPeer } from './types'
+import {
+  ElectrumMethod,
+  ElectrumResponse,
+  GetHistoryResult,
+  ElectrumPeer,
+  GetMerkleResult,
+} from './types'
 import { JsonRpcRequest } from '../rpc'
 import { randomUUID } from 'expo-crypto'
 import { Tx } from '@/core/models/tx'
@@ -8,6 +14,7 @@ import { fromBech32, toScriptHash, legacyToScriptHash } from '@/lib/address'
 import { initialPeers } from './constants'
 import { get, set, getNumber, setNumber } from '../storage'
 import { STORAGE_KEYS } from '../storage'
+import { Peer } from '@/core/models/network'
 
 // Connect to an Electrum server and return the socket
 function init() {
@@ -42,35 +49,62 @@ async function connect(): Promise<TLSSocket> {
   const randomPeers = peers.sort(() => Math.random() - 0.5) // Shuffle the peers array
 
   // Try each server in the peers list
+  let attempt = 0
   for (const peer of randomPeers) {
     try {
-      // Initialize the socket
+      // Initialize
       const socket = init()
+      // default timeout
+      socket.setTimeout(10000)
 
-      // Connect to the peer
+      // Connect peer
       await new Promise<void>((resolve, reject) => {
+        // error handler
         const errorHandler = (e: Error) => {
           console.warn(`[electrum] Connection error to ${peer.host}:${peer.port}:`, e)
+          socket.destroy()
           reject(e)
         }
 
-        const { host, port } = peer as { host: string; port: number }
+        const timeoutHandler = () => {
+          console.warn(`[electrum] Connection timeout to ${peer.host}:${peer.port}`)
+          socket.destroy()
+          reject(new Error('Connection timeout'))
+        }
+
+        const { host, port } = peer as Peer
 
         socket.connect({ host, port }, () => {
           socket.removeListener('error', errorHandler)
+          socket.removeListener('timeout', timeoutHandler)
           console.log(`[electrum] connected to ${peer.host}:${peer.port}`)
           resolve()
         })
 
         socket.on('error', errorHandler)
+        socket.on('timeout', timeoutHandler)
+
+        socket.on('close', () => {
+          console.log(`[electrum] Connection closed to ${peer.host}:${peer.port}`)
+          // Aqui você pode disparar reconexão em outro lugar
+        })
       })
 
       // If we reach here, connection was successful
       return socket
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
+      attempt++
       console.warn(`[electrum] Failed to connect to ${peer.host}:${peer.port}`)
-      // Continue to the next peer
+      // backoff before next attempt with exponential backoff, max delay, and jitter
+      if (attempt < randomPeers.length) {
+        const baseDelay = 1000 // 1 second base
+        const maxDelay = 30000 // 30 seconds max
+        const exponentialDelay = Math.pow(2, attempt) * baseDelay
+        const delay = Math.min(exponentialDelay, maxDelay)
+        const jitter = Math.random() * 0.1 * delay // 10% jitter to avoid thundering herd
+        await new Promise(resolve => setTimeout(resolve, delay + jitter))
+      }
     }
   }
 
@@ -516,6 +550,34 @@ async function getBlockHash(height: number, socket?: TLSSocket): Promise<Electru
     throw error
   }
 }
+
+async function getBlockHeader(height: number, socket?: TLSSocket): Promise<ElectrumResponse<any>> {
+  try {
+    const data = await callElectrumMethod<any>('blockchain.block.header', [height], socket)
+    return data
+  } catch (error) {
+    console.error('Erro ao buscar header do bloco:', error)
+    throw error
+  }
+}
+
+async function getMerkleProof(
+  txid: string,
+  height: number,
+  socket?: TLSSocket,
+): Promise<ElectrumResponse<GetMerkleResult>> {
+  try {
+    const data = await callElectrumMethod<GetMerkleResult>(
+      'blockchain.transaction.get_merkle',
+      [txid, height],
+      socket,
+    )
+    return data
+  } catch (error) {
+    console.error('Erro ao buscar prova de Merkle:', error)
+    throw error
+  }
+}
 /**
  * Get all transactions for an address with minimum confirmations
  * Uses parallel processing with controlled batch sizes for efficiency
@@ -539,8 +601,8 @@ async function getTransactions(
 
   try {
     usedSocket = socket || (await connect())
-    // Get transaction history for address
 
+    // fetch tx history
     const historyResponse = await getAddressTxHistory(address, usedSocket)
     const history = historyResponse.result || []
 
@@ -548,8 +610,6 @@ async function getTransactions(
       // console.log(`[electrum] No txs found for address: ${address}`)
       return []
     }
-
-    // console.log(`[electrum] Found ${history.length} txs, retrieving details...`)
 
     // Process transactions in batches to avoid overwhelming the connection
     const transactions: Tx[] = []
@@ -559,17 +619,27 @@ async function getTransactions(
     for (let i = 0; i < history.length; i += batchSize) {
       // const batchStartTime = Date.now()
       const batch = history.slice(i, i + batchSize)
-      /* console.log(
-        `[electrum] Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(history.length / batchSize)} (${batch.length} transactions)`,
-      ) */
 
       const results = await Promise.allSettled(
-        batch.map(({ tx_hash }) =>
-          getTransaction(tx_hash, true, usedSocket!).then(response => ({
-            hash: tx_hash,
-            data: response.result,
-          })),
-        ),
+        batch.map(async ({ tx_hash, height }) => {
+          try {
+            const { result: tx } = await getTransaction(tx_hash, true, usedSocket!)
+            if (!tx) {
+              throw new Error('No transaction data received')
+            }
+            return {
+              hash: tx_hash,
+              data: {
+                ...tx,
+                height,
+              },
+            }
+          } catch (err) {
+            const errorMsg = err instanceof Error ? err.message : String(err)
+            console.warn(`[electrum] Failed to fetch transaction ${tx_hash}: ${errorMsg}`)
+            throw err // Re-throw to mark as rejected in allSettled
+          }
+        }),
       )
 
       // Process results from this batch
@@ -592,28 +662,7 @@ async function getTransactions(
           errors.push({ txHash, error: result.reason })
         }
       })
-
-      // console.log(`[electrum] Batch processed in ${Date.now() - batchStartTime}ms`)
     }
-
-    /* const successRate = history.length
-      ? ((history.length - errors.length) / history.length) * 100
-      : 100
-    console.log(
-      `[electrum] Processed ${history.length} transactions with ${errors.length} errors ` +
-        `(${successRate.toFixed(2)}% success rate)`,
-    )
-    console.log(`[electrum] Returning ${transactions.length} confirmed transactions`)
-
-    if (errors.length > 0) {
-      console.warn(
-        `[electrum] ${errors.length} transactions failed to fetch:`,
-        errors.map(e => e.txHash).join(', '),
-      )
-    }
-
-    const totalTime = Date.now() - startTime
-    console.log(`[electrum] getTransactions completed in ${totalTime}ms`) */
 
     return transactions
   } catch (error) {
@@ -935,6 +984,8 @@ export {
   getAddressTxHistory,
   getTransaction,
   getBlockHash,
+  getBlockHeader,
+  getMerkleProof,
   getTransactions,
   getTransactionsMultipleAddresses,
   getBalance,

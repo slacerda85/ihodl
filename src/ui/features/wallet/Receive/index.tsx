@@ -5,7 +5,7 @@ import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { useSettings } from '../../settings/SettingsProvider'
 
-import Receive from './Receive'
+// import Receive from './Receive'
 // import ReceiveLightning from '../../lightning/ReceiveLightning'
 
 type ReceiveMode = 'onchain' | 'lightning'
@@ -58,7 +58,7 @@ export default function ReceiveScreen() {
 
       {/* Content */}
       {/* <GlassView style={{ borderRadius: 32 }}> */}
-      {mode === 'onchain' ? <Receive /> : null}
+
       {/* </GlassView> */}
     </View>
   )

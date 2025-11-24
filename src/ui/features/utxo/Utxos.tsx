@@ -1,21 +1,22 @@
-import { UTXO } from '@/lib/transactions'
-import { View, TouchableOpacity, Text, Modal, Button, Alert } from 'react-native'
+import { View, TouchableOpacity, Text, Modal, Alert } from 'react-native'
 import { useState } from 'react'
 import * as Clipboard from 'expo-clipboard'
+import { Utxo } from '@/core/models/tx'
+import Button from '@/ui/components/Button'
+import { formatBalance } from '../wallet/utils'
 
 interface UtxosProps {
-  utxos: UTXO[]
+  utxos: Utxo[]
 }
 
 export default function Utxos({ utxos }: UtxosProps) {
   const [modalVisible, setModalVisible] = useState(false)
 
   const totalUtxos = utxos.length
-  const totalBalance = utxos.reduce((sum, utxo) => sum + utxo.amount, 0)
 
   return (
     <>
-      <TouchableOpacity
+      <Button
         onPress={() => setModalVisible(true)}
         style={{
           padding: 16,
@@ -25,30 +26,28 @@ export default function Utxos({ utxos }: UtxosProps) {
           alignItems: 'center',
         }}
       >
-        <Text style={{ fontSize: 18, fontWeight: 'bold' }}>UTXOs Summary</Text>
-        <Text>Total UTXOs: {totalUtxos}</Text>
-        <Text>Balance: {totalBalance} sats</Text>
-      </TouchableOpacity>
+        <Text>{`UTXOS: ${totalUtxos}`}</Text>
+      </Button>
 
       <Modal
         visible={modalVisible}
         animationType="slide"
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={{ flex: 1, padding: 16 }}>
+        <View style={{ flex: 1, paddingTop: 32, padding: 16 }}>
           <Text style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 16 }}>UTXOs Details</Text>
           {utxos.map(utxo => (
-            <Utxo key={`${utxo.txid}:${utxo.vout}`} utxo={utxo} />
+            <UTXO key={`${utxo.txid}:${utxo.vout}`} utxo={utxo} />
           ))}
-          <Button title="Close" onPress={() => setModalVisible(false)} />
+          <Button onPress={() => setModalVisible(false)}>Close</Button>
         </View>
       </Modal>
     </>
   )
 }
 
-function Utxo({ utxo }: { utxo: UTXO }) {
-  const { address, txid, vout, amount, confirmations, isSpent } = utxo
+function UTXO({ utxo }: { utxo: Utxo }) {
+  const { address, txid, vout, amount, confirmations } = utxo
 
   const copyTxId = () => {
     Clipboard.setString(txid)
@@ -75,7 +74,6 @@ function Utxo({ utxo }: { utxo: UTXO }) {
       <Text>Vout: {vout}</Text>
       <Text>Value: {amount} sats</Text>
       <Text>Confirmations: {confirmations}</Text>
-      <Text>Spent: {isSpent ? 'Yes' : 'No'}</Text>
     </View>
   )
 }

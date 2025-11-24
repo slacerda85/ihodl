@@ -1,3 +1,5 @@
+import { Tx } from './tx'
+
 export const enum Purpose {
   BIP44 = 0x8000002c, // Legacy (P2PKH)
   BIP49 = 0x80000031, // Nested SegWit (P2SH-P2WPKH)
@@ -41,5 +43,5 @@ export type AddressCollection = {
 export type AddressDetails = {
   derivationPath: DerivationPath
   address: string
-  txs: any[]
+  txs: Tx[]
 }

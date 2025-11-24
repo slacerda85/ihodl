@@ -14,6 +14,14 @@ export type Tx = {
   confirmations?: number
   blocktime: number
   time: number
+  // SPV merkle proof to validate inclusion in a block
+  height?: number
+  proof?: MerkleProof
+}
+
+export type MerkleProof = {
+  merkle: string[] // Array of sibling hashes from tx to root
+  pos: number // Position of tx in Merkle tree
 }
 
 export type Vin = {
@@ -42,9 +50,17 @@ export type ScriptPubKey = {
   addresses?: string[]
 }
 
+export type Utxo = {
+  txid: string
+  vout: number
+  address: string
+  scriptPubKey: ScriptPubKey['hex']
+  amount: number
+  confirmations: number
+}
+
 // UI friendly tx
 export type FriendlyTx = {
-  walletId: string
   txid: string
   date: string
   type: FriendlyTxType
@@ -56,5 +72,5 @@ export type FriendlyTx = {
   confirmations: number
 }
 
-export type FriendlyTxType = 'received' | 'sent'
+export type FriendlyTxType = 'received' | 'sent' | 'self'
 export type FriendlyTxStatus = 'pending' | 'processing' | 'confirmed' | 'unknown'

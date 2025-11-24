@@ -1,5 +1,4 @@
-import { UIFriendlyTransaction } from '@/lib/transactions/types'
-import { Text, View, Pressable, FlatList, StyleSheet, ActivityIndicator } from 'react-native'
+import { Text, View, Pressable, FlatList, StyleSheet } from 'react-native'
 import { useRouter } from 'expo-router'
 import colors from '@/ui/colors'
 import { truncateAddress } from './utils'
@@ -10,6 +9,10 @@ import { useHeaderHeight } from '@react-navigation/elements'
 import { useSettings } from '../settings'
 // import { useAccount } from '../account/AccountProvider'
 import { iosTabBarHeight } from '@/ui/tokens'
+import { useAddress } from '../address/AddressProvider'
+import { FriendlyTx } from '@/core/models/tx'
+import TransactionService from '@/core/services/transaction'
+import Skeleton from '@/ui/components/Skeleton'
 // import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
 
 // Define types for our transaction list items
@@ -20,10 +23,11 @@ type DateHeader = {
 
 type TransactionItem = {
   isDate: false
-  tx: UIFriendlyTransaction
-  type: 'received' | 'sent'
-  amount: number
+  tx: FriendlyTx
+  type: 'received' | 'sent' | 'self'
+  amount: number // in satoshis
   address: string
+  fee: number
 }
 
 type ListItem = DateHeader | TransactionItem
@@ -32,39 +36,66 @@ export default function TransactionsScreen() {
   const router = useRouter()
   const headerHeight = useHeaderHeight()
   const { isDark } = useSettings()
-  const loading = true
-  // const { loading, getFriendlyTxs } = useAccount()
-  const transactions = [] // getFriendlyTxs()
+  const { loading, addressCollection } = useAddress()
+  // const loading = true
+  const transactionService = new TransactionService()
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingSubText, isDark && styles.loadingSubTextDark]}>
-          Fetching your transactions
+  const LoadingTransactions = () => (
+    <View>
+      <View style={{ paddingBottom: 8 }}>
+        <Text
+          style={{ fontSize: 20, fontWeight: '600', color: alpha(colors.textSecondary.light, 0.7) }}
+        >
+          Transactions
         </Text>
       </View>
-    )
-  }
-
-  // No transaction data available yet - show loading
-  if (transactions.length === 0) {
-    return (
-      <View style={[styles.emptyContainer, { paddingTop: headerHeight + 16 }]}>
-        <View style={[styles.empty, isDark && styles.emptyDark]}>
-          <Text style={[styles.emptyText, isDark && styles.emptyTextDark]}>
-            No transactions found
-          </Text>
-          <Text style={[styles.emptySubText, isDark && styles.emptySubTextDark]}>
-            Transactions will appear here when you receive or send Bitcoin
-          </Text>
-        </View>
+      {/* Fake date header */}
+      <View style={[styles.dateContainer, isDark && styles.dateContainerDark]}>
+        <Skeleton width={100} height={20} style={{ marginLeft: 16, marginTop: 16 }} />
       </View>
-    )
-  }
-  /* 
+      {/* Fake transactions */}
+      {Array.from({ length: 5 }).map((_, i) => (
+        <View
+          key={i}
+          style={[styles.transactionPressable, isDark && styles.transactionsPressableDark]}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Skeleton width={32} height={32} borderRadius={16} />
+            <View>
+              <Skeleton width={80} height={16} />
+              <Skeleton width={120} height={14} style={{ marginTop: 4 }} />
+            </View>
+          </View>
+          <Skeleton width={60} height={16} />
+        </View>
+      ))}
+      {/* Another date header */}
+      <View style={[styles.dateContainer, isDark && styles.dateContainerDark]}>
+        <Skeleton width={100} height={20} style={{ marginLeft: 16, marginTop: 16 }} />
+      </View>
+      {/* More fake transactions */}
+      {Array.from({ length: 3 }).map((_, i) => (
+        <View
+          key={`more-${i}`}
+          style={[styles.transactionPressable, isDark && styles.transactionsPressableDark]}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Skeleton width={32} height={32} borderRadius={16} />
+            <View>
+              <Skeleton width={80} height={16} />
+              <Skeleton width={120} height={14} style={{ marginTop: 4 }} />
+            </View>
+          </View>
+          <Skeleton width={60} height={16} />
+        </View>
+      ))}
+    </View>
+  )
+
+  const transactions = transactionService.getFriendlyTxs(addressCollection?.addresses || [])
+
   // Agrupar transações por data usando o campo 'date' do UIFriendlyTransaction
-  const grouped: Record<string, UIFriendlyTransaction[]> = {}
+  const grouped: Record<string, FriendlyTx[]> = {}
   for (const txData of transactions) {
     // Usar o campo 'date' diretamente (já vem formatado como string)
     const date = txData.date.split('T')[0] // Extrair apenas a parte da data (YYYY-MM-DD)
@@ -95,6 +126,7 @@ export default function TransactionsScreen() {
     data.push({ isDate: true, date: displayDate })
 
     for (const txData of grouped[date]) {
+      console.log('TX DATA:', txData)
       // Determinar endereço de exibição baseado no tipo de transação
       let displayAddress = 'Unknown'
       if (txData.type === 'received') {
@@ -112,8 +144,9 @@ export default function TransactionsScreen() {
         isDate: false,
         tx: txData,
         type: txData.type,
-        amount: txData.amount, // Já vem em satoshis
+        amount: txData.amount,
         address: displayAddress,
+        fee: txData.fee || 0,
       })
     }
   }
@@ -147,7 +180,7 @@ export default function TransactionsScreen() {
                 <Text style={[styles.type, isDark && styles.typeDark]}>{typeLabel}</Text>
                 <Text style={[styles.address, isDark && styles.addressDark]}>
                   {item.type === 'received' ? 'From' : item.type === 'sent' ? 'To' : ''}{' '}
-                  {truncateAddress(item.address, 6)}
+                  {truncateAddress(item.address, 4)}
                 </Text>
               </View>
             </View>
@@ -166,20 +199,6 @@ export default function TransactionsScreen() {
     }
   }
 
-  const title = () => (
-    <View style={{ backgroundColor: colors.background.light }}>
-      <Text
-        style={{
-          fontSize: 18,
-          fontWeight: '600',
-          color: isDark ? colors.text.dark : colors.text.light,
-        }}
-      >
-        Transactions
-      </Text>
-    </View>
-  )
-
   const dateIndices: number[] = []
   data.forEach((item, index) => {
     if (item.isDate) {
@@ -187,31 +206,59 @@ export default function TransactionsScreen() {
     }
   })
 
+  if (loading) {
+    return <LoadingTransactions />
+  }
+
+  // No transaction data available yet - show loading
+  if (transactions.length === 0) {
+    return (
+      <View style={[styles.emptyContainer, { paddingTop: headerHeight + 16 }]}>
+        <View style={[styles.empty, isDark && styles.emptyDark]}>
+          <Text style={[styles.emptyText, isDark && styles.emptyTextDark]}>
+            No transactions found
+          </Text>
+          <Text style={[styles.emptySubText, isDark && styles.emptySubTextDark]}>
+            Transactions will appear here when you receive or send Bitcoin
+          </Text>
+        </View>
+      </View>
+    )
+  }
+
   return (
-    <FlatList
-      contentContainerStyle={{
-        // backgroundColor: 'blue',
-        paddingBottom: iosTabBarHeight,
-        gap: 4,
-      }}
-      stickyHeaderIndices={dateIndices}
-      ItemSeparatorComponent={() => (
-        // divider
-        <View
-          style={{
-            borderBottomWidth: 1,
-            borderBottomColor: alpha(colors.textSecondary.light, 0.2),
-          }}
-        />
-      )}
-      data={data}
-      keyExtractor={(item, index) =>
-        item.isDate ? item.date : `${index}-${item.tx.txid}-${item.address}-${item.amount}`
-      }
-      renderItem={renderItem}
-      showsVerticalScrollIndicator={false}
-    />
-  ) */
+    <View>
+      <View style={{ paddingBottom: 8 }}>
+        <Text
+          style={{ fontSize: 20, fontWeight: '600', color: alpha(colors.textSecondary.light, 0.7) }}
+        >
+          Transactions
+        </Text>
+      </View>
+      <FlatList
+        contentContainerStyle={{
+          paddingBottom: iosTabBarHeight,
+          // gap: 4,
+        }}
+        stickyHeaderIndices={dateIndices}
+        ItemSeparatorComponent={() => (
+          // divider
+          <View
+            style={{
+              borderBottomWidth: 1,
+              borderBottomColor: alpha(colors.textSecondary.light, 0.1),
+            }}
+          />
+        )}
+        data={data}
+        keyExtractor={(item, index) =>
+          item.isDate ? item.date : `${index}-${item.tx.txid}-${item.address}-${item.amount}`
+        }
+        renderItem={renderItem}
+        showsVerticalScrollIndicator={false}
+      />
+    </View>
+  )
 }
 
 const styles = StyleSheet.create({
@@ -282,16 +329,15 @@ const styles = StyleSheet.create({
     color: alpha(colors.textSecondary.dark, 0.7),
   },
   dateContainer: {
-    backgroundColor: alpha(colors.background.light, 0.9),
+    // backgroundColor: 'red',
+    backgroundColor: colors.background.light,
     paddingVertical: 8,
   },
   dateContainerDark: {
-    backgroundColor: alpha(colors.background.dark, 0.9),
+    backgroundColor: colors.background.dark,
   },
   date: {
     paddingLeft: 16,
-    paddingTop: 16,
-    // paddingBottom: 8,
     fontSize: 14,
     fontWeight: '600',
     color: alpha(colors.textSecondary.light, 0.5),
@@ -315,11 +361,12 @@ const styles = StyleSheet.create({
     color: colors.textSecondary.dark,
   },
   transactionPressable: {
-    // backgroundColor: alpha(colors.white, 0.9),
-    paddingTop: 12,
-    paddingBottom: 12,
-    paddingLeft: 12,
-    paddingRight: 16,
+    // backgroundColor: 'blue',
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    // paddingBottom: 8,
+    // paddingLeft: 8,
+    // paddingRight: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',

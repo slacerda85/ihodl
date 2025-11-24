@@ -104,3 +104,9 @@ export interface GetTransactionResult {
   valueIn?: number
   valueOut?: number
 }
+
+export type GetMerkleResult = {
+  block_height: number
+  merkle: string[]
+  pos: number
+}

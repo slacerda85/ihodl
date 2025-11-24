@@ -1,23 +1,18 @@
 // React and React Native
 import { Link, useRouter } from 'expo-router'
-import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { useWallet } from '@/ui/features/wallet'
 import { useSettings } from '@/ui/features/settings'
-
 // Components
-// import WalletBalance from './WalletBalance'
+import WalletBalance from './WalletBalance'
 import CreateWalletIcon from './CreateWalletIcon'
 import ImportWalletIcon from './ImportWalletIcon'
 import ContentContainer from '@/ui/components/ContentContainer'
 import Button from '@/ui/components/Button'
-import AddressService from '@/core/services/address'
-import { useNetwork } from '../network/NetworkProvider'
-import { useCallback, useEffect, useState } from 'react'
-import { address } from '@/lib'
-import { Purpose } from '@/core/models/address'
-// import TransactionsScreen from '../transactions/TransactionsScreen'
+import { useAddress } from '../address/AddressProvider'
+import TransactionsScreen from '../transactions/TransactionsScreen'
 // import DebugUtxos from '../utxo/DebugUtxos'
 
 export default function WalletScreen() {
@@ -25,16 +20,13 @@ export default function WalletScreen() {
   // theme
   const { isDark } = useSettings()
   const { activeWalletId, wallets } = useWallet()
-  const { getConnection } = useNetwork()
-  const [addressCollection, setAddressCollection] = useState<any>(null)
 
   function handleSend() {
-    // Navigate to send screen
-    router.push('/wallet/send' as any)
+    router.push('/wallet/send')
   }
 
   function handleReceive() {
-    router.push('/wallet/receive' as any)
+    router.push('/wallet/receive')
   }
 
   function handleCreateWallet() {
@@ -44,20 +36,6 @@ export default function WalletScreen() {
   function handleImportWallet() {
     router.push('/wallet/import')
   }
-
-  const loadAddressCollection = useCallback(async () => {
-    if (!activeWalletId) return
-    const addressService = new AddressService()
-    const connection = await getConnection()
-    addressService.discover(activeWalletId, connection).then(addressCollection => {
-      console.log('Discovered address collection:', addressCollection)
-      setAddressCollection(addressCollection)
-    })
-  }, [activeWalletId, getConnection])
-
-  useEffect(() => {
-    loadAddressCollection()
-  }, [loadAddressCollection])
 
   if (wallets === undefined || wallets?.length === 0) {
     // create link to wallet/manage
@@ -104,8 +82,8 @@ export default function WalletScreen() {
 
   return (
     <ContentContainer>
-      <View style={{ height: '100%', gap: 32 }}>
-        {/* <WalletBalance /> */}
+      <View style={{ /* backgroundColor: 'yellow', */ height: '100%', gap: 32 }}>
+        <WalletBalance />
         <View style={styles.actionsSection}>
           <Button onPress={handleSend} style={{ flex: 1 }} tintColor={alpha(colors.primary, 0.9)}>
             <Text style={[styles.buttonText]}>Send</Text>
@@ -117,38 +95,7 @@ export default function WalletScreen() {
             </Text>
           </Button>
         </View>
-        {/* address collection debug */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
-            Address Collection (Debug)
-          </Text>
-          <View>
-            {addressCollection ? (
-              <ScrollView>
-                {addressCollection.addresses.map((addr: any, index: number) => (
-                  <View key={index} style={{ marginBottom: 8 }}>
-                    <Text style={[styles.accountAddress, isDark && styles.accountAddressDark]}>
-                      {addr.address}
-                    </Text>
-                    <Text style={[styles.accountDetail, isDark && styles.accountDetailDark]}>
-                      Derivation Path: m/{addr.derivationPath.purpose - Purpose.BIP84}'/
-                      {addr.derivationPath.coinType - 0x80000000}/
-                      {addr.derivationPath.accountIndex - 0x80000000}/{addr.derivationPath.change}/
-                      {addr.derivationPath.addressIndex}
-                    </Text>
-                    <Text style={[styles.accountDetail, isDark && styles.accountDetailDark]}>
-                      Transactions: {addr.txs.length}
-                    </Text>
-                  </View>
-                ))}
-              </ScrollView>
-            ) : (
-              <Text style={[styles.accountDetail, isDark && styles.accountDetailDark]}>
-                Loading address collection...
-              </Text>
-            )}
-          </View>
-        </View>
+        <TransactionsScreen />
       </View>
     </ContentContainer>
   )
