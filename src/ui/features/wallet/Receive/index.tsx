@@ -44,12 +44,14 @@ export default function ReceiveScreen() {
             mode === 'lightning' && isDark && styles.selectorButtonActiveDark,
           ]}
           onPress={() => setMode('lightning')}
+          disabled
         >
           <Text
             style={[
               styles.selectorText,
               isDark && styles.selectorTextDark,
               mode === 'lightning' && styles.selectorTextActive,
+              styles.selectorTextInactive,
             ]}
           >
             Lightning
@@ -111,5 +113,8 @@ const styles = StyleSheet.create({
   selectorTextActive: {
     color: colors.primary,
     fontWeight: '600',
+  },
+  selectorTextInactive: {
+    color: alpha(colors.textSecondary.light, 0.5),
   },
 })

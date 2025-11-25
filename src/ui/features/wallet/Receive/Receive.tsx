@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, Suspense, useMemo, useCallback } from 'react'
 import {
   View,
   Text,
@@ -19,28 +19,11 @@ import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 import QRCode from '@/ui/components/QRCode'
 import Button from '@/ui/components/Button'
 import { IconButton } from '@/ui/components/Button'
-
-import { useWallet } from '@/ui/features/wallet'
 import { useSettings } from '@/ui/features/settings'
-
-// import { AddressDetails } from '@/lib/address'
 import { useAddress } from '../../address/AddressProvider'
-import AddressService from '@/core/services/address'
-// import { useTransactions } from '@/ui/features/transactions'
-// import { useAccount } from '@/ui/features/account/AccountProvider'
-
-// Address generation utilities - separated for better organization
-
 export default function Receive() {
   const { isDark } = useSettings()
-  // const { activeWalletId } = useWallet()
-  const nextUnusedAddress = new AddressService().getNextUnusedAddress()
-
-  const usedReceivingAddresses = new AddressService().getUsedAddresses('receiving')
-
-  const usedChangeAddresses = new AddressService().getUsedAddresses('change')
-
-  const { loading, nextReceiveAddress } = useAddress()
+  const { loading, usedChangeAddresses, usedReceivingAddresses, nextReceiveAddress } = useAddress()
 
   const [showAddressDetails, setShowAddressDetails] = useState(false)
   const [activeTab, setActiveTab] = useState<'receiving' | 'change'>('receiving')
@@ -78,34 +61,6 @@ export default function Receive() {
     }
   }
 
-  // Generate new address (placeholder)
-  const handleGenerateNewAddress = () => {
-    Alert.alert(
-      'Generate New Address',
-      'This would generate a new receiving address for your wallet.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Generate',
-          onPress: () => {
-            // In a real implementation, this would call wallet.generateAddress()
-            Alert.alert('Success', 'New address generated (placeholder)')
-          },
-        },
-      ],
-    )
-  }
-
-  const calcScreenWidth = () => {
-    const screenWidth = window.innerWidth
-    return screenWidth - 32 // subtract padding
-  }
-
-  useEffect(() => {
-    // console.log('usedReceivingAddresses', usedReceivingAddresses)
-    // console.log('usedChangeAddresses', usedChangeAddresses)
-  }, [nextUnusedAddress, usedChangeAddresses, usedReceivingAddresses])
-
   return (
     <View>
       <ScrollView style={[styles.scrollView, isDark && styles.scrollViewDark]}>
@@ -130,19 +85,13 @@ export default function Receive() {
               <View style={styles.qrContainer}>
                 <QRCode
                   value={`${nextReceiveAddress}`}
-                  size={
-                    // calculate screen width minus padding
-                    calcScreenWidth() < 300 ? calcScreenWidth() : 300
-                  }
+                  size={320}
                   color={isDark ? colors.text.dark : colors.text.light}
                   backgroundColor="transparent"
                 />
               </View>
               {/* Exibição do endereço */}
-              <Text
-                style={[styles.addressText, isDark && styles.addressTextDark]}
-                numberOfLines={10}
-              >
+              <Text style={[styles.addressText, isDark && styles.addressTextDark]}>
                 {nextReceiveAddress}
               </Text>
               <View
@@ -206,21 +155,6 @@ export default function Receive() {
               >
                 View Used Addresses ({usedReceivingAddresses.length + usedChangeAddresses.length})
               </Button>
-              <Button
-                // variant="solid"
-                // backgroundColor={alpha(colors.primary, 0.7)}
-                color={colors.textSecondary[isDark ? 'dark' : 'light']}
-                startIcon={
-                  <IconSymbol
-                    name="plus"
-                    size={20}
-                    color={colors.textSecondary[isDark ? 'dark' : 'light']}
-                  />
-                }
-                onPress={handleGenerateNewAddress}
-              >
-                Generate New Address
-              </Button>
             </View>
           )}
         </View>
@@ -238,7 +172,7 @@ export default function Receive() {
             <Text style={[styles.modalTitle, isDark && styles.modalTitleDark]}>
               Used Addresses ({usedReceivingAddresses.length + usedChangeAddresses.length})
             </Text>
-            <IconButton
+            {/* <IconButton
               icon={
                 <IconSymbol
                   name="xmark"
@@ -249,7 +183,7 @@ export default function Receive() {
               variant="solid"
               backgroundColor="transparent"
               onPress={() => setShowAddressDetails(false)}
-            />
+            /> */}
           </View>
 
           {/* Tabs */}
@@ -298,33 +232,15 @@ export default function Receive() {
             keyExtractor={(item, index) => item.address + index}
             renderItem={({ item }) => (
               <View style={[styles.usedAddressItem, isDark && styles.usedAddressItemDark]}>
-                <View style={styles.usedAddressHeader}>
-                  <Text style={[styles.usedAddressIndex, isDark && styles.usedAddressIndexDark]}>
-                    Address {item.derivationPath.addressIndex + 1}
-                  </Text>
-                  <Text style={[styles.transactionCount, isDark && styles.transactionCountDark]}>
-                    {item.txs.length} transaction
-                    {item.txs.length !== 1 ? 's' : ''}
-                  </Text>
-                </View>
+                <Text style={[styles.usedAddressIndex, isDark && styles.usedAddressIndexDark]}>
+                  {item.derivationPath.addressIndex + 1}
+                </Text>
+
                 <Text style={[styles.usedAddressText, isDark && styles.usedAddressTextDark]}>
                   {item.address}
                 </Text>
-                <View style={styles.transactionList}>
-                  {item.txs.slice(0, 3).map((tx: any, txIndex: number) => (
-                    <Text
-                      key={tx.txid}
-                      style={[styles.transactionId, isDark && styles.transactionIdDark]}
-                    >
-                      {tx.txid} ({tx.confirmations} conf.)
-                    </Text>
-                  ))}
-                  {item.txs.length > 3 && (
-                    <Text style={[styles.moreTransactions, isDark && styles.moreTransactionsDark]}>
-                      +{item.txs.length - 3} more transactions
-                    </Text>
-                  )}
-                </View>
+
+                <Text>{`${item.txs.length} txs`}</Text>
               </View>
             )}
             contentContainerStyle={styles.modalContent}
@@ -377,18 +293,19 @@ const styles = StyleSheet.create({
   // Address
   addressText: {
     paddingHorizontal: 12,
-    fontSize: 16,
-    fontFamily: 'monospace',
-    color: colors.text.light,
+    fontSize: 20,
+    fontWeight: '400',
+    fontFamily: 'ui-monospace',
+    color: colors.textSecondary.light,
     textAlign: 'center',
   },
   addressTextDark: {
-    color: colors.text.dark,
+    color: colors.textSecondary.dark,
   },
 
   // Modal
   modalContainer: {
-    flex: 1,
+    // flex: 1,
     backgroundColor: colors.white,
   },
   modalContainerDark: {
@@ -396,19 +313,19 @@ const styles = StyleSheet.create({
   },
   modalHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: alpha(colors.black, 0.1),
+    paddingHorizontal: 24,
+    paddingTop: 32,
+    paddingBottom: 8,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: 'bold',
-    color: colors.text.light,
+    color: alpha(colors.textSecondary.light, 0.9),
   },
   modalTitleDark: {
-    color: colors.text.dark,
+    color: alpha(colors.textSecondary.dark, 0.9),
   },
   modalContent: {
     padding: 16,
@@ -417,18 +334,17 @@ const styles = StyleSheet.create({
 
   // Used addresses
   usedAddressItem: {
-    padding: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
     borderRadius: 32,
     backgroundColor: alpha(colors.black, 0.03),
+    flexDirection: 'row',
+    // justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 24,
   },
   usedAddressItemDark: {
     backgroundColor: alpha(colors.white, 0.05),
-  },
-  usedAddressHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
   },
   usedAddressIndex: {
     fontSize: 16,
@@ -446,10 +362,10 @@ const styles = StyleSheet.create({
     color: colors.textSecondary.dark,
   },
   usedAddressText: {
+    flex: 1,
     fontSize: 14,
-    fontFamily: 'monospace',
+    fontFamily: 'ui-monospace',
     color: colors.text.light,
-    marginBottom: 12,
   },
   usedAddressTextDark: {
     color: colors.text.dark,
@@ -477,26 +393,33 @@ const styles = StyleSheet.create({
   // Tabs
   tabContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: alpha(colors.black, 0.1),
+    marginHorizontal: 24,
+    marginTop: 24,
+    marginBottom: 16,
+    backgroundColor: alpha(colors.black, 0.05),
+    borderRadius: 32,
+    padding: 4,
   },
   tab: {
     flex: 1,
     paddingVertical: 12,
-    alignItems: 'center',
+    paddingHorizontal: 16,
     borderRadius: 32,
-    marginHorizontal: 4,
+    alignItems: 'center',
   },
   tabActive: {
-    backgroundColor: colors.primary,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    backgroundColor: colors.white,
   },
   tabActiveDark: {
-    backgroundColor: colors.primary,
+    backgroundColor: alpha(colors.background.light, 0.1),
   },
   tabText: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '500',
     color: colors.textSecondary.light,
   },
@@ -504,6 +427,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary.dark,
   },
   tabTextActive: {
-    color: colors.white,
+    color: colors.primary,
+    fontWeight: '600',
   },
 })

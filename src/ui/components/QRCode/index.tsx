@@ -20,39 +20,41 @@ export default function QRCode({ value, size, color, backgroundColor }: QRCodePr
       if (qrSize <= 0) return
 
       setIsLoading(true)
+      let qr: any
       try {
-        const qr = qrcode(0, 'L') // Type 0, error correction L
+        qr = qrcode(0, 'L') // Type 0, error correction L
         qr.addData(value)
         qr.make()
-
-        const moduleCount = qr.getModuleCount()
-        const moduleSize = qrSize / moduleCount
-
-        const elements = []
-
-        for (let row = 0; row < moduleCount; row++) {
-          for (let col = 0; col < moduleCount; col++) {
-            if (qr.isDark(row, col)) {
-              elements.push(
-                <Rect
-                  key={`${row}-${col}`}
-                  x={col * moduleSize}
-                  y={row * moduleSize}
-                  width={moduleSize}
-                  height={moduleSize}
-                  fill={color}
-                />,
-              )
-            }
-          }
-        }
-
-        setQrElements(elements)
-        setIsLoading(false)
       } catch (error) {
         console.error('Error generating QR code:', error)
         setIsLoading(false)
+        return
       }
+
+      const moduleCount = qr.getModuleCount()
+      const moduleSize = qrSize / moduleCount
+
+      const elements = []
+
+      for (let row = 0; row < moduleCount; row++) {
+        for (let col = 0; col < moduleCount; col++) {
+          if (qr.isDark(row, col)) {
+            elements.push(
+              <Rect
+                key={`${row}-${col}`}
+                x={col * moduleSize}
+                y={row * moduleSize}
+                width={moduleSize}
+                height={moduleSize}
+                fill={color}
+              />,
+            )
+          }
+        }
+      }
+
+      setQrElements(elements)
+      setIsLoading(false)
     },
     [value, color],
   )
@@ -60,7 +62,7 @@ export default function QRCode({ value, size, color, backgroundColor }: QRCodePr
   useEffect(() => {
     const qrSize = size === 'auto' ? containerSize : size
     if (qrSize > 0) {
-      generateQR(qrSize)
+      setTimeout(() => generateQR(qrSize), 100)
     }
   }, [generateQR, size, containerSize])
 

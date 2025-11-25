@@ -13,6 +13,8 @@ type AddressContextType = {
   nextChangeAddress: string
   balance: number
   utxos: Utxo[]
+  usedReceivingAddresses: AddressDetails[]
+  usedChangeAddresses: AddressDetails[]
 }
 
 const AddressContext = createContext<AddressContextType | null>(null)
@@ -26,6 +28,8 @@ export default function AddressProvider({ children }: AddressProviderProps) {
   const { getConnection } = useNetwork()
   const [loading, setLoading] = useState<boolean>(true)
   const [addresses, setAddresses] = useState<AddressDetails[]>([])
+  const [usedReceivingAddresses, setUsedReceivingAddresses] = useState<AddressDetails[]>([])
+  const [usedChangeAddresses, setUsedChangeAddresses] = useState<AddressDetails[]>([])
   const [nextReceiveAddress, setNextReceiveAddress] = useState<string>('')
   const [nextChangeAddress, setNextChangeAddress] = useState<string>('')
   const [balance, setBalance] = useState<number>(0)
@@ -38,31 +42,28 @@ export default function AddressProvider({ children }: AddressProviderProps) {
 
     setLoading(true)
     const addressService = new AddressService()
-    let nextReceiveAddr: AddressDetails | undefined
-    let nextChangeAddr: AddressDetails | undefined
+    let nextReceiveAddr: string = ''
+    let nextChangeAddr: string = ''
     try {
       const connection = await getConnection()
       const addressCollection = await addressService.discover(connection)
       setAddresses(addressCollection.addresses)
-      nextReceiveAddr = addressCollection.addresses.find(
-        addr =>
-          addr.derivationPath.addressIndex === addressCollection.nextReceiveIndex &&
-          addr.derivationPath.change === 0,
+      const usedReceiving = addressCollection.addresses.filter(
+        addr => addr.derivationPath.change === 0 && addr.txs.length > 0,
       )
-      nextChangeAddr = addressCollection.addresses.find(
-        addr =>
-          addr.derivationPath.addressIndex === addressCollection.nextChangeIndex &&
-          addr.derivationPath.change === 1,
+      const usedChange = addressCollection.addresses.filter(
+        addr => addr.derivationPath.change === 1 && addr.txs.length > 0,
       )
-      // setNextUnusedAddressIndex(addressCollection.nextReceiveIndex)
-      // setAddressCollection(addressCollection)
+      setUsedReceivingAddresses(usedReceiving)
+      setUsedChangeAddresses(usedChange)
+
+      nextReceiveAddr = addressService.getNextUnusedAddress()
+      nextChangeAddr = addressService.getNextChangeAddress()
     } catch (error) {
       console.error('Error loading address collection:', error)
     }
-    const nextReceiveAddressValue = nextReceiveAddr?.address || ''
-    const nextChangeAddressValue = nextChangeAddr?.address || ''
-    setNextReceiveAddress(nextReceiveAddressValue)
-    setNextChangeAddress(nextChangeAddressValue)
+    setNextReceiveAddress(nextReceiveAddr)
+    setNextChangeAddress(nextChangeAddr)
     setLoading(false)
   }, [activeWalletId, getConnection])
 
@@ -81,7 +82,16 @@ export default function AddressProvider({ children }: AddressProviderProps) {
 
   return (
     <AddressContext
-      value={{ loading, addresses, nextReceiveAddress, nextChangeAddress, balance, utxos }}
+      value={{
+        loading,
+        addresses,
+        usedReceivingAddresses,
+        usedChangeAddresses,
+        nextReceiveAddress,
+        nextChangeAddress,
+        balance,
+        utxos,
+      }}
     >
       {children}
     </AddressContext>

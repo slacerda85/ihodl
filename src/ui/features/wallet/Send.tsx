@@ -14,7 +14,6 @@ import { useRouter } from 'expo-router'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
-import { useWallet } from '../wallet'
 import { useSettings } from '../settings'
 import { formatBalance } from './utils'
 import { useAddress } from '../address/AddressProvider'
@@ -35,7 +34,6 @@ export default function Send() {
   const [recipientAddress, setRecipientAddress] = useState<string>('')
   const [amountInput, setAmountInput] = useState<string>('')
   const [amount, setAmount] = useState<number>(0)
-  const [feeRateInput, setFeeRateInput] = useState<string>('1')
   const [feeRate, setFeeRate] = useState<number>(1) // Default fee rate in sat/vB
   const [memo, setMemo] = useState<string>('')
   const [autoFeeAdjustment, setAutoFeeAdjustment] = useState<boolean>(true)
@@ -47,6 +45,7 @@ export default function Send() {
     fast: number
     urgent: number
   } | null>(null)
+
   const [loadingFeeRates, setLoadingFeeRates] = useState<boolean>(false)
   const [selectedFeeRate, setSelectedFeeRate] = useState<'slow' | 'normal' | 'fast' | 'urgent'>(
     'normal',
@@ -89,11 +88,6 @@ export default function Send() {
     }
   }, [feeRate, amount, autoFeeAdjustment, feeRates, balance])
 
-  useEffect(() => {
-    const num = parseFloat(feeRateInput)
-    setFeeRate(isNaN(num) ? 1 : num)
-  }, [feeRateInput])
-
   // Function to fetch recommended fee rates from network
   const fetchRecommendedFeeRates = useCallback(async () => {
     if (!autoFeeAdjustment) return
@@ -109,11 +103,11 @@ export default function Send() {
       // Auto-select "normal" fee rate for auto-adjustment
       if (autoFeeAdjustment) {
         setFeeRate(rates.normal)
-        setFeeRateInput(rates.normal.toString())
         setSelectedFeeRate('normal')
       }
 
       console.log('[Send] Fee rates updated:', rates)
+      setLoadingFeeRates(false)
     } catch (error) {
       console.error('[Send] Failed to fetch fee rates:', error)
       // Keep existing rates or use fallback
@@ -122,11 +116,9 @@ export default function Send() {
         setFeeRates(fallbackRates)
         if (autoFeeAdjustment) {
           setFeeRate(fallbackRates.normal)
-          setFeeRateInput(fallbackRates.normal.toString())
           setSelectedFeeRate('normal')
         }
       }
-    } finally {
       setLoadingFeeRates(false)
     }
   }, [autoFeeAdjustment, feeRates, getConnection])
@@ -142,7 +134,6 @@ export default function Send() {
   useEffect(() => {
     if (feeRates && !autoFeeAdjustment) {
       setFeeRate(feeRates[selectedFeeRate])
-      setFeeRateInput(feeRates[selectedFeeRate].toString())
     }
   }, [selectedFeeRate, feeRates, autoFeeAdjustment])
 
@@ -159,14 +150,6 @@ export default function Send() {
     setAmountInput(normalizedText)
     const num = parseFloat(normalizedText)
     setAmount(isNaN(num) ? 0 : num)
-  }
-
-  const handleChangeFeeRate = (text: string) => {
-    // Normalize the input and update state
-    const normalizedText = normalizeAmount(text)
-    setFeeRateInput(normalizedText)
-    const num = parseFloat(normalizedText)
-    setFeeRate(isNaN(num) ? 1 : num)
   }
 
   async function handleSend() {
@@ -204,20 +187,16 @@ export default function Send() {
       return
     }
 
-    /* if (!activeWalletId) {
-      Alert.alert('Error', 'No active wallet found')
-      setSubmitting(false)
-      return
-    } */
-
-    /* const activeWallet = wallets.find(wallet => wallet.id === activeWalletId)
-    if (!activeWallet) {
-      Alert.alert('Error', 'Active wallet not found')
-      setSubmitting(false)
-      return
-    } */
-
     console.log('Starting transaction assembly...')
+
+    // Filter for confirmed UTXOs (6+ confirmations)
+    const confirmedUtxos = utxos.filter(utxo => utxo.confirmations >= 2)
+
+    if (confirmedUtxos.length === 0) {
+      Alert.alert('Error', 'No confirmed UTXOs available for transaction')
+      setSubmitting(false)
+      return
+    }
 
     try {
       console.log('Retrieving wallet data...')
@@ -225,13 +204,6 @@ export default function Send() {
       // TODO: Get password from user or state
 
       const transactionService = new TransactionService()
-
-      // Filter for confirmed UTXOs (6+ confirmations)
-      const confirmedUtxos = utxos.filter(utxo => utxo.confirmations >= 2)
-
-      if (confirmedUtxos.length === 0) {
-        throw new Error('No confirmed UTXOs available for transaction')
-      }
 
       // console.log(`deriving change addr index ${addressCollection?.nextChangeIndex}...`)
       const addressService = new AddressService()
@@ -416,121 +388,121 @@ export default function Send() {
           </View>
 
           <View style={styles.section}>
+            <Text style={[styles.label, isDark && styles.labelDark]}>Fee Rate (sat/vB)</Text>
             <View style={styles.feeHeader}>
-              <Text style={[styles.label, isDark && styles.labelDark]}>Fee Rate (sat/vB)</Text>
-              <View style={styles.autoFeeContainer}>
-                <Text style={[styles.autoFeeLabel, isDark && styles.autoFeeLabelDark]}>
-                  Auto-adjust
-                </Text>
-                <Switch
-                  value={autoFeeAdjustment}
-                  onValueChange={setAutoFeeAdjustment}
-                  trackColor={{ false: '#767577', true: colors.primary }}
-                  thumbColor={autoFeeAdjustment ? colors.white : '#f4f3f4'}
-                />
-              </View>
-            </View>
-            {autoFeeAdjustment ? null : (
-              <TextInput
-                style={[styles.input, isDark && styles.inputDark]}
-                placeholder="1"
-                placeholderTextColor={
-                  isDark ? colors.textSecondary.dark : colors.textSecondary.light
-                }
-                value={feeRateInput}
-                onChangeText={handleChangeFeeRate}
-                keyboardType="decimal-pad"
-                autoCapitalize="none"
-                autoCorrect={false}
+              <Text style={[styles.autoFeeLabel, isDark && styles.autoFeeLabelDark]}>
+                Auto-adjust
+              </Text>
+              <Switch
+                value={autoFeeAdjustment}
+                onValueChange={setAutoFeeAdjustment}
+                trackColor={{ false: '#767577', true: colors.primary }}
+                thumbColor={autoFeeAdjustment ? colors.white : '#f4f3f4'}
               />
-            )}
-            {loadingFeeRates && (
+            </View>
+            {loadingFeeRates ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="small" color={colors.primary} />
                 <Text style={[styles.loadingText, isDark && styles.loadingTextDark]}>
                   Fetching network fee rates...
                 </Text>
               </View>
-            )}
-            {feeRates && (
+            ) : (
               <View style={[styles.feeRatesSelector, isDark && styles.feeRatesSelectorDark]}>
-                <Text style={[styles.feeRatesTitle, isDark && styles.feeRatesTitleDark]}>
-                  {autoFeeAdjustment ? 'Network Fee Rates:' : 'Select Fee Rate:'}
-                </Text>
-                <View style={styles.feeRatesGrid}>
-                  <Pressable
-                    style={[
-                      styles.feeRateOption,
-                      selectedFeeRate === 'slow' && styles.feeRateOptionSelected,
-                      isDark && styles.feeRateOptionDark,
-                    ]}
-                    onPress={() => !autoFeeAdjustment && setSelectedFeeRate('slow')}
-                    disabled={autoFeeAdjustment}
-                  >
-                    <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
-                      Slow
-                    </Text>
-                    <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
-                      {feeRates.slow} sat/vB
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    style={[
-                      styles.feeRateOption,
-                      selectedFeeRate === 'normal' && styles.feeRateOptionSelected,
-                      isDark && styles.feeRateOptionDark,
-                    ]}
-                    onPress={() => !autoFeeAdjustment && setSelectedFeeRate('normal')}
-                    disabled={autoFeeAdjustment}
-                  >
-                    <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
-                      Normal
-                    </Text>
-                    <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
-                      {feeRates.normal} sat/vB
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    style={[
-                      styles.feeRateOption,
-                      selectedFeeRate === 'fast' && styles.feeRateOptionSelected,
-                      isDark && styles.feeRateOptionDark,
-                    ]}
-                    onPress={() => !autoFeeAdjustment && setSelectedFeeRate('fast')}
-                    disabled={autoFeeAdjustment}
-                  >
-                    <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
-                      Fast
-                    </Text>
-                    <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
-                      {feeRates.fast} sat/vB
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    style={[
-                      styles.feeRateOption,
-                      selectedFeeRate === 'urgent' && styles.feeRateOptionSelected,
-                      isDark && styles.feeRateOptionDark,
-                    ]}
-                    onPress={() => !autoFeeAdjustment && setSelectedFeeRate('urgent')}
-                    disabled={autoFeeAdjustment}
-                  >
-                    <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
-                      Urgent
-                    </Text>
-                    <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
-                      {feeRates.urgent} sat/vB
-                    </Text>
-                  </Pressable>
-                </View>
+                {autoFeeAdjustment ? (
+                  <View style={styles.feeRatesGrid}>
+                    <View
+                      style={[
+                        styles.feeRateOption,
+                        styles.feeRateOptionSelected,
+                        isDark && styles.feeRateOptionDark,
+                      ]}
+                    >
+                      <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
+                        Normal
+                      </Text>
+                      <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
+                        {feeRates?.normal} sat/vB
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.feeRatesGrid}>
+                    <Pressable
+                      style={[
+                        styles.feeRateOption,
+                        selectedFeeRate === 'slow' && styles.feeRateOptionSelected,
+                        isDark && styles.feeRateOptionDark,
+                      ]}
+                      onPress={() => setSelectedFeeRate('slow')}
+                    >
+                      <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
+                        Slow
+                      </Text>
+                      <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
+                        {feeRates?.slow} sat/vB
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={[
+                        styles.feeRateOption,
+                        selectedFeeRate === 'normal' && styles.feeRateOptionSelected,
+                        isDark && styles.feeRateOptionDark,
+                      ]}
+                      onPress={() => setSelectedFeeRate('normal')}
+                    >
+                      <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
+                        Normal
+                      </Text>
+                      <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
+                        {feeRates?.normal} sat/vB
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={[
+                        styles.feeRateOption,
+                        selectedFeeRate === 'fast' && styles.feeRateOptionSelected,
+                        isDark && styles.feeRateOptionDark,
+                      ]}
+                      onPress={() => setSelectedFeeRate('fast')}
+                    >
+                      <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
+                        Fast
+                      </Text>
+                      <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
+                        {feeRates?.fast} sat/vB
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={[
+                        styles.feeRateOption,
+                        selectedFeeRate === 'urgent' && styles.feeRateOptionSelected,
+                        isDark && styles.feeRateOptionDark,
+                      ]}
+                      onPress={() => setSelectedFeeRate('urgent')}
+                    >
+                      <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
+                        Urgent
+                      </Text>
+                      <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
+                        {feeRates?.urgent} sat/vB
+                      </Text>
+                    </Pressable>
+                  </View>
+                )}
               </View>
             )}
+
             <View style={styles.infoBox}>
               <IconSymbol
                 name="info.circle.fill"
                 size={16}
                 style={styles.infoIcon}
-                color={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
+                color={
+                  isDark
+                    ? alpha(colors.textSecondary.dark, 0.7)
+                    : alpha(colors.textSecondary.light, 0.7)
+                }
               />
               <Text style={[styles.infoText, isDark && styles.infoTextDark]}>
                 {autoFeeAdjustment
@@ -573,7 +545,7 @@ export default function Send() {
 const styles = StyleSheet.create({
   // Container and selector
   container: {
-    padding: 24,
+    paddingHorizontal: 24,
   },
   selectorContainer: {
     flexDirection: 'row',
@@ -674,25 +646,30 @@ const styles = StyleSheet.create({
 
   // Fee
   feeHeader: {
+    // backgroundColor: 'blue',
+    // width: '100%',
+    paddingVertical: 8,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    // marginBottom: 8,
   },
-  autoFeeContainer: {
+  /* autoFeeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 8,
-  },
+  }, */
   autoFeeLabel: {
-    fontSize: 14,
+    paddingVertical: 8,
+    fontSize: 16,
     color: colors.textSecondary.light,
   },
   autoFeeLabelDark: {
     color: colors.textSecondary.dark,
   },
   infoBox: {
-    marginTop: 8,
+    paddingTop: 16,
     flexDirection: 'row',
     alignItems: 'flex-start',
   },
@@ -703,10 +680,10 @@ const styles = StyleSheet.create({
   infoText: {
     flex: 1,
     fontSize: 14,
-    color: colors.textSecondary.light,
+    color: alpha(colors.textSecondary.light, 0.7),
   },
   infoTextDark: {
-    color: colors.textSecondary.dark,
+    color: alpha(colors.textSecondary.dark, 0.7),
   },
 
   // Button
@@ -751,7 +728,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 8,
+    padding: 16,
     gap: 8,
   },
   loadingText: {
@@ -788,22 +765,22 @@ const styles = StyleSheet.create({
   },
   feeRateOption: {
     flex: 1,
-    minWidth: '45%',
+    // minWidth: '45%',
     alignItems: 'center',
     padding: 8,
     backgroundColor: alpha(colors.white, 0.1),
-    borderRadius: 32,
+    borderRadius: 24,
   },
   feeRateOptionDark: {
     backgroundColor: alpha(colors.black, 0.1),
   },
   feeRateOptionSelected: {
     backgroundColor: alpha(colors.primary, 0.2),
-    borderWidth: 1,
+    // borderWidth: 1,
     borderColor: colors.primary,
   },
   feeRateLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: colors.textSecondary.light,
     marginBottom: 2,
   },
@@ -811,7 +788,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary.dark,
   },
   feeRateValue: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
     color: colors.text.light,
   },
