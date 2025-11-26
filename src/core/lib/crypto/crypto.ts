@@ -6,9 +6,9 @@ import { sha512 } from '@noble/hashes/sha2'
 import { sha256 as nobleSha256 } from '@noble/hashes/sha2'
 import { ripemd160 } from '@noble/hashes/legacy'
 import { randomUUID as expoRandomUUID } from 'expo-crypto'
-// import QuickCrypto from 'react-native-quick-crypto'
-import secp256k1 from 'secp256k1'
 import QuickCrypto from 'react-native-quick-crypto'
+import secp256k1 from 'secp256k1'
+import { createHash } from './hash'
 
 // hash functions
 function createEntropy(size: number): Uint8Array {
@@ -247,11 +247,6 @@ function verifyMessageHex(messageHex: string, signatureHex: string, publicKeyHex
   const signature = hexToUint8Array(signatureHex)
   const publicKey = hexToUint8Array(publicKeyHex)
   return verifyMessage(message, signature, publicKey)
-}
-
-function createHash(algorithm: string) {
-  return QuickCrypto.createHash(algorithm)
-  // return new Hash()
 }
 
 export {

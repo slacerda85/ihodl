@@ -72,8 +72,8 @@ jest.mock('@noble/hashes/utils', () => ({
   }),
 }))
 
-// Mock para src/lib/crypto.ts
-jest.mock('./src/lib/crypto', () => ({
+// Mock para src/core/lib/crypto/crypto.ts
+jest.mock('./src/core/lib/crypto/crypto', () => ({
   sha256: jest.fn(data => {
     // Simple mock implementation - return a Uint8Array of 32 bytes
     const result = new Uint8Array(32)
@@ -95,14 +95,7 @@ jest.mock('./src/lib/crypto', () => ({
     }
     return array
   }),
-  createHash: jest.fn(() => ({
-    update: jest.fn(() => ({
-      digest: jest.fn(encoding => {
-        if (encoding === 'hex') return 'mockhash'
-        return new Uint8Array(32)
-      }),
-    })),
-  })),
+  // Removed createHash mock to test real implementation
   hmacSeed: jest.fn(entropy => {
     // Simple mock - return entropy extended to 64 bytes
     const result = new Uint8Array(64)
