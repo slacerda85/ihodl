@@ -3,10 +3,11 @@ import { FriendlyTx, MerkleProof, Tx, Utxo } from '../models/transaction'
 import {
   getTransactions,
   getBlockHash,
+  getBlockHeader,
   getMerkleProof,
   getRecommendedFeeRates,
 } from '@/core/lib/electrum'
-import { sha256 } from '@noble/hashes/sha2'
+import { sha256 } from '@noble/hashes/sha2.js'
 import { uint8ArrayFromHex, uint8ArrayToHex, concatUint8Arrays } from '../lib/utils'
 import { AddressDetails, Change } from '../models/address'
 import { buildTransaction, signTransaction, sendTransaction } from '../lib/transactions'
@@ -168,18 +169,32 @@ export default class TransactionService implements TransactionServiceInterface {
     valid: boolean
     proof?: MerkleProof
   }> {
-    try {
-      const height = tx.height
-      if (!height || height <= 0) {
-        console.log('Transaction not confirmed')
-        return { valid: false }
-      }
+    const height = tx.height
+    if (!height || height <= 0) {
+      console.log('Transaction not confirmed')
+      return { valid: false }
+    }
 
+    try {
       // Get the block header hex
-      const headerResponse = await getBlockHash(height, connection)
+      const headerResponse = await getBlockHeader(height, connection)
       const headerHex = headerResponse.result
       if (!headerHex || headerHex.length !== 160) {
         console.log('Block header not found or invalid')
+        return { valid: false }
+      }
+
+      // Get the block hash
+      const blockHashResponse = await getBlockHash(height, connection)
+      const blockHash = blockHashResponse.result
+
+      // Compute the block hash from the header
+      const headerBytes = uint8ArrayFromHex(headerHex)
+      const computedBlockHash = uint8ArrayToHex(sha256(sha256(headerBytes)))
+
+      // Verify the header is correct
+      if (computedBlockHash !== blockHash) {
+        console.log('Block header hash mismatch')
         return { valid: false }
       }
 

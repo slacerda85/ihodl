@@ -1,4 +1,4 @@
-import { createAddress, fromBase58check, fromBech32 } from '../lib/address'
+import { createAddress, /* fromBase58check */ fromBech32 } from '../lib/address'
 import { Connection } from '../models/network'
 import {
   AccountIndex,
@@ -255,7 +255,7 @@ export default class AddressService implements AddressServiceInterface {
       }
     }
 
-    // Check if it's a Base58 address (starts with 1 or 3)
+    /* // Check if it's a Base58 address (starts with 1 or 3)
     if (trimmedAddress.startsWith('1') || trimmedAddress.startsWith('3')) {
       try {
         fromBase58check(trimmedAddress)
@@ -263,7 +263,7 @@ export default class AddressService implements AddressServiceInterface {
       } catch {
         return false
       }
-    }
+    } */
 
     return false
   }

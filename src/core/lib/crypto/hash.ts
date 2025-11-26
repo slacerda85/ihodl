@@ -1,7 +1,5 @@
-import { sha256 as nobleSha256 } from '@noble/hashes/sha2'
-import { sha512 as nobleSha512 } from '@noble/hashes/sha2'
-import { sha384 } from '@noble/hashes/sha2'
-import { ripemd160 } from '@noble/hashes/legacy'
+import { sha256 as nobleSha256, sha384, sha512 as nobleSha512 } from '@noble/hashes/sha2.js'
+import { ripemd160 } from '@noble/hashes/legacy.js'
 
 // Type definitions
 type Encoding = 'hex' | 'base64' | 'latin1' | 'buffer' | 'utf8'

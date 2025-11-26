@@ -19,7 +19,7 @@ import walletRepository from '@/core/repositories/wallet'
 
 export default function SettingsScreen() {
   const colorScheme = useColorScheme()
-  const { colorMode, maxBlockchainSizeGB } = useSettings()
+  const { colorMode } = useSettings()
 
   const effectiveColorMode = colorMode === 'auto' ? (colorScheme ?? 'light') : colorMode
   const isDarkEffective = effectiveColorMode === 'dark'
@@ -71,24 +71,6 @@ export default function SettingsScreen() {
       },
     ])
   }
-
-  const themeOptions = [
-    { label: 'Claro', value: 'light' },
-    { label: 'Escuro', value: 'dark' },
-    { label: 'Automático', value: 'auto' },
-  ]
-
-  const blockchainSizeOptions = [
-    { label: '0.5 GB', value: 0.5 },
-    { label: '1 GB', value: 1 },
-    { label: '2 GB', value: 2 },
-    { label: '5 GB', value: 5 },
-  ]
-
-  const selectedThemeIndex = themeOptions.findIndex(option => option.value === colorMode)
-  const selectedSizeIndex = blockchainSizeOptions.findIndex(
-    option => option.value === maxBlockchainSizeGB,
-  )
 
   return (
     <ScrollView style={[styles.container, isDarkEffective && styles.containerDark]}>

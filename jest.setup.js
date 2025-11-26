@@ -54,23 +54,23 @@ jest.mock('@noble/hashes/hmac', () => ({
 }))
 
 // Mock para @noble/hashes/pbkdf2
-jest.mock('@noble/hashes/pbkdf2', () => ({
-  pbkdf2: jest.fn(() => new Uint8Array(64)),
-  pbkdf2Async: jest.fn(() => Promise.resolve(new Uint8Array(64))),
-}))
+// jest.mock('@noble/hashes/pbkdf2', () => ({
+//   pbkdf2: jest.fn(() => new Uint8Array(64)),
+//   pbkdf2Async: jest.fn(() => Promise.resolve(new Uint8Array(64))),
+// }))
 
 // Mock para @noble/hashes/utils
-jest.mock('@noble/hashes/utils', () => ({
-  randomBytes: jest.fn(size => new Uint8Array(size)),
-  hmacSeed: jest.fn(entropy => {
-    // Simple mock - return entropy extended to 64 bytes
-    const result = new Uint8Array(64)
-    for (let i = 0; i < 64; i++) {
-      result[i] = entropy[i % entropy.length] || 0
-    }
-    return result
-  }),
-}))
+// jest.mock('@noble/hashes/utils', () => ({
+//   randomBytes: jest.fn(size => new Uint8Array(size)),
+//   hmacSeed: jest.fn(entropy => {
+//     // Simple mock - return entropy extended to 64 bytes
+//     const result = new Uint8Array(64)
+//     for (let i = 0; i < 64; i++) {
+//       result[i] = entropy[i % entropy.length] || 0
+//     }
+//     return result
+//   }),
+// }))
 
 // Mock para src/core/lib/crypto/crypto.ts
 jest.mock('./src/core/lib/crypto/crypto', () => ({

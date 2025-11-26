@@ -10,11 +10,13 @@ import {
 import { JsonRpcRequest } from '../rpc'
 import { randomUUID } from 'expo-crypto'
 import { Tx } from '@/core/models/transaction'
-import { fromBech32, toScriptHash, legacyToScriptHash } from '@/core/lib/address'
+import { fromBech32, toScriptHash /* legacyToScriptHash */ } from '@/core/lib/address'
 import { initialPeers } from './constants'
 import { get, set, getNumber, setNumber } from '../storage'
 import { STORAGE_KEYS } from '../storage'
 import { Peer } from '@/core/models/network'
+import { sha256 } from '@noble/hashes/sha2.js'
+import { uint8ArrayFromHex, uint8ArrayToHex } from '../utils'
 
 // Connect to an Electrum server and return the socket
 function init() {
@@ -543,8 +545,14 @@ async function getTransaction(
 
 async function getBlockHash(height: number, socket?: TLSSocket): Promise<ElectrumResponse<string>> {
   try {
-    const data = await callElectrumMethod<string>('blockchain.block.get_header', [height], socket)
-    return data
+    const data = await callElectrumMethod<string>('blockchain.block.header', [height], socket)
+    const headerHex = data.result
+    if (!headerHex || headerHex.length !== 160) {
+      throw new Error('Invalid header')
+    }
+    const headerBytes = uint8ArrayFromHex(headerHex)
+    const blockHash = uint8ArrayToHex(sha256(sha256(headerBytes)))
+    return { ...data, result: blockHash }
   } catch (error) {
     console.error('Erro ao buscar hash do bloco:', error)
     throw error
@@ -888,7 +896,7 @@ async function getMempoolTransactions(addresses: string[], socket?: TLSSocket): 
       try {
         console.log(`[electrum] Checking mempool for address: ${address}`)
 
-        let scripthash: string
+        let scripthash: string = ''
 
         try {
           // Try toScriptHash first (works with Bech32 addresses)
@@ -896,7 +904,7 @@ async function getMempoolTransactions(addresses: string[], socket?: TLSSocket): 
         } catch (bech32Error) {
           try {
             // Fallback to legacyToScriptHash (for legacy P2PKH addresses)
-            scripthash = legacyToScriptHash(address)
+            // scripthash = legacyToScriptHash(address)
           } catch (legacyError) {
             console.warn(
               `[electrum] Failed to convert address ${address} to scripthash:`,

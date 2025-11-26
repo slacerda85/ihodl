@@ -4,11 +4,6 @@
   "main": "expo-router/entry",
   "scripts": {
     "test": "jest",
-    "test:e2e": "C:\\maestro\\maestro\\bin\\maestro.bat test maestro/",
-    "test:e2e:receive": "C:\\maestro\\maestro\\bin\\maestro.bat test maestro/receive_lightning_flow.yaml",
-    "test:e2e:send": "C:\\maestro\\maestro\\bin\\maestro.bat test maestro/send_lightning_flow.yaml",
-    "test:e2e:full": "C:\\maestro\\maestro\\bin\\maestro.bat test maestro/lightning_full_flow.yaml",
-    "test:e2e:errors": "C:\\maestro\\maestro\\bin\\maestro.bat test maestro/lightning_error_scenarios.yaml",
     "dev": "cross-env APP_VARIANT=development npx expo start",
     "start": "expo start",
     "prebuild:dev": "expo prebuild --platform android",
@@ -20,7 +15,6 @@
     "lint": "eslint ./src/**/*.ts ./src/**/*.tsx"
   },
   "dependencies": {
-    "@breeztech/breez-sdk-spark": "^0.3.2",
     "@expo/metro-runtime": "~6.1.2",
     "@expo/ui": "~0.2.0-beta.7",
     "@expo/vector-icons": "^15.0.2",
@@ -32,13 +26,11 @@
     "@react-navigation/bottom-tabs": "^7.2.0",
     "@react-navigation/elements": "^2.3.8",
     "@react-navigation/native": "^7.0.14",
-    "axios": "^1.8.4",
     "bech32": "^2.0.0",
     "bip39": "^3.1.0",
     "bs58": "^6.0.0",
     "bs58check": "^4.0.0",
     "buffer": "^6.0.3",
-    "ecpair": "^3.0.0",
     "expo": "~54.0.25",
     "expo-background-fetch": "~14.0.8",
     "expo-background-task": "~1.0.9",
@@ -61,7 +53,6 @@
     "expo-system-ui": "~6.0.8",
     "expo-task-manager": "~14.0.8",
     "expo-updates": "~29.0.13",
-    "light-bolt11-decoder": "^3.2.0",
     "qrcode-generator": "^2.0.4",
     "react": "19.1.0",
     "react-dom": "19.1.0",
@@ -69,15 +60,13 @@
     "react-native-keyboard-accessory": "^0.1.16",
     "react-native-mmkv": "^3.2.0",
     "react-native-qrcode-svg": "^6.3.15",
-    "react-native-quick-crypto": "^0.7.17",
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",
     "react-native-svg": "15.12.1",
     "react-native-tcp-socket": "^6.2.0",
     "react-native-web": "^0.21.1",
     "secp256k1": "^5.0.1",
-    "swr": "^2.3.3",
-    "zustand": "^5.0.3"
+    "swr": "^2.3.3"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
@@ -88,7 +77,6 @@
     "@types/react": "~19.1.10",
     "@types/secp256k1": "^4.0.6",
     "cross-env": "^10.1.0",
-    "detox": "^20.45.1",
     "eslint": "^8.57.0",
     "eslint-config-expo": "~10.0.0",
     "eslint-config-prettier": "^10.1.2",
@@ -97,6 +85,7 @@
     "jest": "~29.7.0",
     "jest-expo": "~54.0.13",
     "prettier": "^3.5.3",
+    "react-native-quick-crypto": "^0.7.17",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
   },
@@ -128,7 +117,8 @@
           "eslint-config-expo",
           "secp256k1",
           "swr",
-          "tls"
+          "tls",
+          "react-native-tcp-socket"
         ]
       }
     }

@@ -1,7 +1,7 @@
 import { publicKeyVerify } from 'secp256k1'
 import { hash160, sha256 } from './crypto'
 import { bech32, bech32m } from 'bech32'
-import bs58check from 'bs58check'
+// import bs58check from 'bs58check'
 import { Tx } from '../models/transaction'
 import { createPublicKey, deriveChildKey, splitMasterKey } from './key'
 // import { AddressDetails } from '../models/address'
@@ -82,26 +82,26 @@ function toBech32(publicKeyHash: Uint8Array, version: number = 0, prefix: string
  * @param {Uint8Array} publicKeyHash - The public key hash to convert.
  * @returns {string} - The Base58Check address.
  */
-function toBase58check(publicKeyHash: Uint8Array): string {
+/* function toBase58check(publicKeyHash: Uint8Array): string {
   try {
     return bs58check.encode(publicKeyHash)
   } catch (error) {
     throw new Error(`Invalid public key hash: ${(error as Error).message}`)
   }
-}
+} */
 
 /**
  * Converts a Base58Check address to a public key hash.
  * @param {string} base58Address - The Base58Check address to convert.
  * @returns {Uint8Array} - The public key hash.
  */
-function fromBase58check(base58Address: string): Uint8Array {
+/* function fromBase58check(base58Address: string): Uint8Array {
   try {
     return bs58check.decode(base58Address)
   } catch (error) {
     throw new Error(`Invalid Base58 address: ${(error as Error).message}`)
   }
-}
+} */
 
 function toScriptHash(address: string): string {
   // Assuming fromBech32 returns { version, data }
@@ -140,7 +140,7 @@ function toScriptHash(address: string): string {
  * @param {string} address - The legacy Bitcoin address (starting with '1').
  * @returns {string} - The scripthash as a hex string.
  */
-function legacyToScriptHash(address: string): string {
+/* function legacyToScriptHash(address: string): string {
   // Decode Base58Check address to get the public key hash (hash160)
   const hash160 = fromBase58check(address)
 
@@ -168,7 +168,7 @@ function legacyToScriptHash(address: string): string {
   return Array.from(reversedHash)
     .map(b => b.toString(16).padStart(2, '0'))
     .join('')
-}
+} */
 
 /**
  * Derives a SegWit address from an extended key and address index.
@@ -218,10 +218,10 @@ export {
   createAddress,
   fromBech32,
   toBech32,
-  toBase58check,
-  fromBase58check,
+  // toBase58check,
+  // fromBase58check,
   toScriptHash,
-  legacyToScriptHash,
+  // legacyToScriptHash,
   deriveAddress,
   generateAddresses,
 }

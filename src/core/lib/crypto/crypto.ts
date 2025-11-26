@@ -1,21 +1,27 @@
 import base58 from 'bs58'
 import { bech32, bech32m } from 'bech32'
 import * as Crypto from 'expo-crypto'
-import { hmac } from '@noble/hashes/hmac'
-import { sha512 } from '@noble/hashes/sha2'
-import { sha256 as nobleSha256 } from '@noble/hashes/sha2'
-import { ripemd160 } from '@noble/hashes/legacy'
+import { hmac } from '@noble/hashes/hmac.js'
+import { sha512 } from '@noble/hashes/sha2.js'
+import { sha256 as nobleSha256 } from '@noble/hashes/sha2.js'
+import { ripemd160 } from '@noble/hashes/legacy.js'
 import { randomUUID as expoRandomUUID } from 'expo-crypto'
-import QuickCrypto from 'react-native-quick-crypto'
 import secp256k1 from 'secp256k1'
-import { createHash } from './hash'
+import { pbkdf2 } from '@noble/hashes/pbkdf2.js'
+import { gcm } from '@noble/ciphers/aes.js'
+import { toBytes } from '../utils'
 
 // hash functions
 function createEntropy(size: number): Uint8Array {
   return Crypto.getRandomValues(new Uint8Array(size))
 }
+
+function randomBytes(size: number): Uint8Array {
+  return Crypto.getRandomValues(new Uint8Array(size))
+}
+
 function hmacSeed(seed: Uint8Array): Uint8Array {
-  const extendedSeed = hmac.create(sha512, 'Bitcoin seed').update(seed).digest()
+  const extendedSeed = hmac.create(sha512, toBytes('Bitcoin seed')).update(seed).digest()
   return extendedSeed
 }
 
@@ -112,33 +118,39 @@ function randomUUID() {
   return expoRandomUUID()
 }
 
+/** Cryptographically secure PRNG. Uses internal OS-level `crypto.getRandomValues`. */
+/* export function randomBytes(bytesLength = 32): Uint8Array {
+  if (crypto && typeof crypto.getRandomValues === 'function') {
+    return crypto.getRandomValues(new Uint8Array(bytesLength))
+  }
+  // Legacy Node.js compatibility
+  if (crypto && 'randomBytes' in crypto && typeof crypto.randomBytes === 'function') {
+    return crypto.randomBytes(bytesLength)
+  }
+  throw new Error('crypto.getRandomValues must be defined')
+} */
+
 function encryptSeed(password: string, seed: string): string {
   try {
-    const algorithm = 'aes-256-gcm'
-
     // Generate a random 16-byte salt for key derivation
-    const salt = new Uint8Array(QuickCrypto.randomBytes(16))
+    const salt = randomBytes(16)
 
     // Derive a 32-byte key from the password using PBKDF2
-    const key = new Uint8Array(QuickCrypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256'))
+    const key = pbkdf2(nobleSha256, password, salt, { c: 100000, dkLen: 32 })
 
     // Generate a random 12-byte nonce (IV)
-    const nonce = new Uint8Array(QuickCrypto.randomBytes(12))
+    const nonce = randomBytes(12)
 
     // Create the cipher with AES-256-GCM
-    const cipher = QuickCrypto.createCipheriv(algorithm, key, nonce)
+    const aes = gcm(key, nonce)
 
     // Encrypt the seed
-    const encryptedPart = new Uint8Array(cipher.update(seed, 'utf8'))
-    const finalPart = new Uint8Array(cipher.final())
+    const data = new TextEncoder().encode(seed)
+    const fullCiphertext = aes.encrypt(data)
 
-    // Concatenate encrypted parts
-    const encrypted = new Uint8Array(encryptedPart.length + finalPart.length)
-    encrypted.set(encryptedPart)
-    encrypted.set(finalPart, encryptedPart.length)
-
-    // Get the authentication tag (16 bytes)
-    const authTag = new Uint8Array(cipher.getAuthTag())
+    // Split into encrypted data and auth tag
+    const encrypted = fullCiphertext.subarray(0, fullCiphertext.length - 16)
+    const authTag = fullCiphertext.subarray(fullCiphertext.length - 16)
 
     // Combine salt, nonce, encrypted data, and authTag into a single string
     return (
@@ -158,8 +170,6 @@ function encryptSeed(password: string, seed: string): string {
 
 function decryptSeed(password: string = '', encryptedSeed: string): string {
   try {
-    const algorithm = 'aes-256-gcm'
-
     // Split the input string into salt, nonce, encrypted data, and authTag
     const [saltHex, nonceHex, encryptedHex, authTagHex] = encryptedSeed.split(':')
     const salt = hexToUint8Array(saltHex)
@@ -168,22 +178,18 @@ function decryptSeed(password: string = '', encryptedSeed: string): string {
     const authTag = hexToUint8Array(authTagHex)
 
     // Derive the same 32-byte key from the password and salt
-    const key = new Uint8Array(QuickCrypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256'))
+    const key = pbkdf2(nobleSha256, password, salt, { c: 100000, dkLen: 32 })
 
     // Create the decipher with AES-256-GCM
-    const decipher = QuickCrypto.createDecipheriv(algorithm, key, nonce)
+    const aes = gcm(key, nonce)
 
-    // Set the authentication tag for verification
-    decipher.setAuthTag(authTag)
+    // Combine encrypted data and auth tag
+    const fullCiphertext = new Uint8Array(encrypted.length + authTag.length)
+    fullCiphertext.set(encrypted)
+    fullCiphertext.set(authTag, encrypted.length)
 
     // Decrypt the data
-    const decryptedPart = new Uint8Array(decipher.update(encrypted))
-    const finalPart = new Uint8Array(decipher.final())
-
-    // Concatenate decrypted parts
-    const decrypted = new Uint8Array(decryptedPart.length + finalPart.length)
-    decrypted.set(decryptedPart)
-    decrypted.set(finalPart, decryptedPart.length)
+    const decrypted = aes.decrypt(fullCiphertext)
 
     return new TextDecoder().decode(decrypted)
   } catch (error) {
@@ -247,6 +253,11 @@ function verifyMessageHex(messageHex: string, signatureHex: string, publicKeyHex
   const signature = hexToUint8Array(signatureHex)
   const publicKey = hexToUint8Array(publicKeyHex)
   return verifyMessage(message, signature, publicKey)
+}
+
+function createHash(algorithm: string) {
+  if (algorithm === 'sha256') return nobleSha256
+  throw new Error(`Unsupported hash algorithm: ${algorithm}`)
 }
 
 export {

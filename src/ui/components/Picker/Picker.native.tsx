@@ -1,3 +1,3 @@
-import { Picker, PickerProps } from '@expo/ui/jetpack-compose'
+import { Picker } from '@expo/ui/jetpack-compose'
 
 export default Picker

@@ -102,3 +102,66 @@ export function writeBigUint64BE(data: Uint8Array, offset: number, value: bigint
     value >>= 8n
   }
 }
+
+/**
+ * Convert JS string to byte array.
+ * @example utf8ToBytes('abc') // new Uint8Array([97, 98, 99])
+ */
+export function utf8ToBytes(str: string): Uint8Array {
+  if (typeof str !== 'string') throw new Error('utf8ToBytes expected string, got ' + typeof str)
+  return new Uint8Array(new TextEncoder().encode(str)) // https://bugzil.la/1681809
+}
+
+/** Accepted input of hash functions. Strings are converted to byte arrays. */
+export type Input = Uint8Array | string
+/**
+ * Normalizes (non-hex) string or Uint8Array to Uint8Array.
+ * Warning: when Uint8Array is passed, it would NOT get copied.
+ * Keep in mind for future mutable operations.
+ */
+export function toBytes(data: Input): Uint8Array {
+  if (typeof data === 'string') data = utf8ToBytes(data)
+  abytes(data)
+  return data
+}
+
+/**
+ * Copies several Uint8Arrays into one.
+ */
+export function concatBytes(...arrays: Uint8Array[]): Uint8Array {
+  let sum = 0
+  for (let i = 0; i < arrays.length; i++) {
+    const a = arrays[i]
+    abytes(a)
+    sum += a.length
+  }
+  const res = new Uint8Array(sum)
+  for (let i = 0, pad = 0; i < arrays.length; i++) {
+    const a = arrays[i]
+    res.set(a, pad)
+    pad += a.length
+  }
+  return res
+}
+
+/**
+ * Internal assertion helpers.
+ * @module
+ */
+
+/** Asserts something is positive integer. */
+export function anumber(n: number): void {
+  if (!Number.isSafeInteger(n) || n < 0) throw new Error('positive integer expected, got ' + n)
+}
+
+/** Is number an Uint8Array? Copied from utils for perf. */
+function isBytes(a: unknown): a is Uint8Array {
+  return a instanceof Uint8Array || (ArrayBuffer.isView(a) && a.constructor.name === 'Uint8Array')
+}
+
+/** Asserts something is Uint8Array. */
+function abytes(b: Uint8Array | undefined, ...lengths: number[]): void {
+  if (!isBytes(b)) throw new Error('Uint8Array expected')
+  if (lengths.length > 0 && !lengths.includes(b.length))
+    throw new Error('Uint8Array expected of length ' + lengths + ', got length=' + b.length)
+}

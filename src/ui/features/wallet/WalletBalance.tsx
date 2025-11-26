@@ -4,9 +4,6 @@ import { useSettings } from '@/ui/features/settings'
 import { formatBalance } from './utils'
 import { useAddress } from '../address/AddressProvider'
 import Skeleton from '@/ui/components/Skeleton'
-import { alpha } from '@/ui/utils'
-// import TransactionService from '@/core/services/transaction'
-// import { transactions } from '@/lib'
 
 export default function WalletBalance() {
   const { isDark } = useSettings()

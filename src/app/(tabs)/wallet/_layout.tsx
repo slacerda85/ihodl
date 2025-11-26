@@ -3,10 +3,10 @@ import { Pressable, Platform } from 'react-native'
 import colors from '@/ui/colors'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@/ui/features/auth/AuthProvider'
-import { useCallback, useEffect } from 'react'
+import { ComponentProps, useCallback, useEffect } from 'react'
 import { useSettings } from '@/ui/features/settings'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
-import { ExtendedStackNavigationOptions } from 'expo-router/build/layouts/StackClient'
+import {} from 'expo-router'
 import { alpha } from '@/ui/utils'
 import { useWallet } from '@/ui/features/wallet'
 
@@ -87,6 +87,8 @@ const CloseModalButton = ({ colorMode }: { colorMode: 'light' | 'dark' }) => {
   )
 }
 
+type StackScreenOptions = ComponentProps<typeof Stack.Screen>['options']
+
 export default function WalletLayout() {
   const { activeWalletId, wallets } = useWallet()
   const selectedWallet = wallets.find(wallet => wallet.id === activeWalletId)
@@ -97,11 +99,8 @@ export default function WalletLayout() {
   const { isDark } = useSettings()
   const colorMode = isDark ? 'dark' : 'light'
 
-  const modalOptions: ExtendedStackNavigationOptions = {
-    presentation: Platform.select({
-      ios: 'modal',
-      default: 'transparentModal',
-    }),
+  const modalOptions: StackScreenOptions = {
+    presentation: 'modal',
     contentStyle: {
       paddingTop: Platform.OS === 'ios' ? 64 : 0,
     },
