@@ -1,6 +1,6 @@
 import secp256k1 from 'secp256k1'
 import { hash256, hash160, uint8ArrayToHex, hexToUint8Array } from '@/core/lib/crypto'
-import { createPublicKey, deriveChildPrivateKey, splitMasterKey } from '@/core/lib/key'
+import { createPublicKey, deriveChildKey, splitMasterKey } from '@/core/lib/key'
 import { Utxo } from '@/core/models/transaction'
 import { fromBech32, deriveAddress } from '../address'
 import { connect, callElectrumMethod } from '../electrum'
@@ -752,7 +752,7 @@ async function findAddressIndex(
   gapLimit: number = 20,
 ): Promise<{ type: 'receiving' | 'change'; index: number } | null> {
   // Check receiving addresses (external chain, index 0)
-  const receivingExtendedKey = deriveChildPrivateKey(accountKey, 0)
+  const receivingExtendedKey = deriveChildKey(accountKey, 0)
 
   for (let i = 0; i < gapLimit * 2; i++) {
     const address = deriveAddress(receivingExtendedKey, i)
@@ -763,7 +763,7 @@ async function findAddressIndex(
   }
 
   // Check change addresses (internal chain, index 1)
-  const changeExtendedKey = deriveChildPrivateKey(accountKey, 1)
+  const changeExtendedKey = deriveChildKey(accountKey, 1)
 
   for (let i = 0; i < gapLimit * 2; i++) {
     const address = deriveAddress(changeExtendedKey, i)
@@ -1065,8 +1065,8 @@ async function signTransaction({
 
       // Derive the private key for this address based on type (receiving or change)
       const chainIndex = addressInfo.type === 'receiving' ? 0 : 1
-      const chainExtendedKey = deriveChildPrivateKey(accountKey, chainIndex)
-      const addressExtendedKey = deriveChildPrivateKey(chainExtendedKey, addressInfo.index)
+      const chainExtendedKey = deriveChildKey(accountKey, chainIndex)
+      const addressExtendedKey = deriveChildKey(chainExtendedKey, addressInfo.index)
       const { privateKey } = splitMasterKey(addressExtendedKey)
 
       // Create signature for SegWit input

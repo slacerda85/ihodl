@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
     color: colors.text.dark,
   },
   balancePositive: {
-    color: '#FFA500',
+    color: colors.success,
 
     fontWeight: '600',
   },

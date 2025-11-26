@@ -4,6 +4,7 @@ import { useSettings } from '@/ui/features/settings'
 import { formatBalance } from './utils'
 import { useAddress } from '../address/AddressProvider'
 import Skeleton from '@/ui/components/Skeleton'
+import { alpha } from '@/ui/utils'
 // import TransactionService from '@/core/services/transaction'
 // import { transactions } from '@/lib'
 
@@ -83,33 +84,23 @@ const styles = StyleSheet.create({
   balanceAmount: {
     flex: 2,
     fontSize: 24,
-    // fontFamily: 'JetBrains Mono',
-    fontWeight: '700',
+    fontFamily: 'ui-monospace',
+    fontWeight: '600',
     color: colors.textSecondary.light,
-    // textShadowColor: alpha(colors.text.light, 0.2),
-    // textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 1,
     textAlign: 'center',
   },
   balanceAmountDark: {
-    color: colors.textSecondary.dark, // '#FFA500',
-    // textShadowColor: alpha(colors.text.dark, 0.2),
-    // textShadowOffset: { width: 1, height: 1 },
-    // textShadowRadius: 1,
+    color: colors.textSecondary.dark,
   },
   balanceCurrency: {
-    // padding: 16,
     fontSize: 24,
-    fontWeight: '700',
-    // color: colors.primary,
-    color: colors.primary,
-    // textShadowColor: alpha(colors.primary, 0.6),
-    // textShadowOffset: { width: 0, height: 0 },
-    // textShadowRadius: 1,
+    fontWeight: '600',
+    color: colors.textSecondary.light,
   },
   balanceCurrencyDark: {
     // color: colors.primary,
-    // color: alpha(colors.textSecondary.dark, 0.85),
+    color: colors.textSecondary.dark,
   },
   unitToggle: {
     paddingHorizontal: 5,

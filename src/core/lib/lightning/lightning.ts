@@ -45,7 +45,7 @@ export type Utf8 = string // UTF-8 string
  *
  * https://github.com/lightning/bolts/blob/master/01-messaging.md#lightning-message-format
  */
-export enum MessageType {
+export enum LightningMessageType {
   // setup and control
   WARNING = 1,
   PEER_STORAGE = 7,
@@ -68,7 +68,7 @@ export enum MessageType {
  * https://github.com/lightning/bolts/blob/master/01-messaging.md#lightning-message-format
  */
 export interface LightningMessage {
-  type: MessageType
+  type: LightningMessageType
   payload: Uint8Array
   extension?: TlvStream
 }
@@ -102,7 +102,7 @@ export type InitTlvs = (InitTlvNetworks | InitTlvRemoteAddr)[]
 
 // Init Message
 export interface InitMessage {
-  type: MessageType.INIT
+  type: LightningMessageType.INIT
   gflen: U16
   globalfeatures: Uint8Array
   flen: U16
@@ -112,7 +112,7 @@ export interface InitMessage {
 
 // Error Message
 export interface ErrorMessage {
-  type: MessageType.ERROR
+  type: LightningMessageType.ERROR
   channelId: ChannelId
   len: U16
   data: Uint8Array
@@ -120,7 +120,7 @@ export interface ErrorMessage {
 
 // Warning Message
 export interface WarningMessage {
-  type: MessageType.WARNING
+  type: LightningMessageType.WARNING
   channelId: ChannelId
   len: U16
   data: Uint8Array
@@ -128,7 +128,7 @@ export interface WarningMessage {
 
 // Ping Message
 export interface PingMessage {
-  type: MessageType.PING
+  type: LightningMessageType.PING
   numPongBytes: U16
   byteslen: U16
   ignored: Uint8Array
@@ -136,21 +136,21 @@ export interface PingMessage {
 
 // Pong Message
 export interface PongMessage {
-  type: MessageType.PONG
+  type: LightningMessageType.PONG
   byteslen: U16
   ignored: Uint8Array
 }
 
 // Peer Storage Message
 export interface PeerStorageMessage {
-  type: MessageType.PEER_STORAGE
+  type: LightningMessageType.PEER_STORAGE
   length: U16
   blob: Uint8Array
 }
 
 // Peer Storage Retrieval Message
 export interface PeerStorageRetrievalMessage {
-  type: MessageType.PEER_STORAGE_RETRIEVAL
+  type: LightningMessageType.PEER_STORAGE_RETRIEVAL
   length: U16
   blob: Uint8Array
 }

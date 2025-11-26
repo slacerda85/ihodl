@@ -10,7 +10,7 @@ import {
 } from 'react-native'
 import { useSettings } from '@/ui/features/settings'
 // import { clearPersistedState } from '@/ui/features/storage/StorageProvider'
-import Picker from '@/ui/components/Picker/Picker'
+// import Picker from '@/ui/components/Picker/Picker'
 import AccountRepository from '@/core/repositories/account'
 import SeedRepository from '@/core/repositories/seed'
 import walletRepository from '@/core/repositories/wallet'
@@ -95,14 +95,12 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <Text style={[styles.subtitle, isDarkEffective && styles.subtitleDark]}>Tema</Text>
         <View style={styles.settingRow}>
-          <Picker
+          {/* <Picker
             options={['Claro', 'Escuro', 'Automático']}
             selectedIndex={selectedThemeIndex}
-            /* onOptionSelected={({ nativeEvent: { index } }) => {
-              setColorMode(themeOptions[index].value as ColorMode)
-            }} */
+            
             variant="segmented"
-          />
+          /> */}
         </View>
       </View>
 
@@ -111,14 +109,12 @@ export default function SettingsScreen() {
           Tamanho máximo da Blockchain
         </Text>
         <View style={styles.settingRow}>
-          <Picker
+          {/* <Picker
             options={['0.5 GB', '1 GB', '2 GB', '5 GB']}
             selectedIndex={selectedSizeIndex}
-            /* onOptionSelected={({ nativeEvent: { index } }) => {
-              setMaxBlockchainSize(blockchainSizeOptions[index].value)
-            }} */
+            
             variant="segmented"
-          />
+          /> */}
         </View>
       </View>
 

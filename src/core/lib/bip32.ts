@@ -54,10 +54,7 @@ export function deriveMasterKey(seed: Uint8Array): ExtendedPrivateKey {
  * @param index - Child index (0x80000000 for hardened)
  * @returns Child extended private key
  */
-export function deriveChildPrivateKey(
-  parentKey: ExtendedPrivateKey,
-  index: number,
-): ExtendedPrivateKey {
+export function deriveChildKey(parentKey: ExtendedPrivateKey, index: number): ExtendedPrivateKey {
   const isHardened = index >= 0x80000000
   const indexBytes = new Uint8Array(4)
   new DataView(indexBytes.buffer).setUint32(0, index, false) // big-endian
@@ -118,7 +115,7 @@ export function derivePath(seed: Uint8Array, path: number[]): ExtendedPrivateKey
   let key = deriveMasterKey(seed)
 
   for (const index of path) {
-    key = deriveChildPrivateKey(key, index)
+    key = deriveChildKey(key, index)
   }
 
   return key
