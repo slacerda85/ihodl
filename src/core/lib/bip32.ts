@@ -1,4 +1,4 @@
-import { hmacSHA512, uint8ArrayToHex, sha256 } from './crypto'
+import { hmacSHA512, uint8ArrayToHex, sha256 } from '@/core/lib/crypto'
 import { ripemd160 } from '@noble/hashes/legacy'
 import secp256k1 from 'secp256k1'
 

@@ -1,5 +1,5 @@
 import { Link, Stack, useRouter } from 'expo-router'
-import { Text, Pressable, Platform } from 'react-native'
+import { Pressable, Platform } from 'react-native'
 import colors from '@/ui/colors'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@/ui/features/auth/AuthProvider'
@@ -58,10 +58,10 @@ function ManageWallets({ colorMode }: { colorMode: 'light' | 'dark' }) {
   )
 }
 
-const CloseModalButton = ({ title }: { title?: string }) => {
+const CloseModalButton = ({ colorMode }: { colorMode: 'light' | 'dark' }) => {
   const router = useRouter()
   const { inactive } = useAuth()
-  const { isDark } = useSettings()
+  // const { isDark } = useSettings()
 
   const handleClose = useCallback(() => {
     router.back()
@@ -74,21 +74,15 @@ const CloseModalButton = ({ title }: { title?: string }) => {
   }, [inactive, handleClose])
   return (
     <Pressable
-      style={{ paddingVertical: 8, paddingLeft: 12, paddingRight: 12 }}
       onPress={handleClose}
+      style={{
+        width: 36,
+        height: 36,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
     >
-      <Text
-        style={{
-          fontSize: 16,
-          // fontWeight: 'bold',
-          color: isDark
-            ? alpha(colors.textSecondary.dark, 0.85)
-            : alpha(colors.textSecondary.light, 0.85),
-          // padding: 8,
-        }}
-      >
-        {title || 'Close'}
-      </Text>
+      <IconSymbol name="xmark" color={alpha(colors.textSecondary[colorMode], 0.8)} />
     </Pressable>
   )
 }
@@ -139,8 +133,7 @@ export default function WalletLayout() {
           ...modalOptions,
           animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
           title: 'Wallet actions',
-          walletActions:
-            Platform.OS === 'ios' ? () => <CloseModalButton title="Done" /> : undefined,
+          headerRight: () => <CloseModalButton colorMode={colorMode} />,
         }}
       />
       <Stack.Screen
@@ -149,8 +142,7 @@ export default function WalletLayout() {
           ...modalOptions,
           animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
           title: 'Create wallet',
-          walletActions:
-            Platform.OS === 'ios' ? () => <CloseModalButton title="Cancel" /> : undefined,
+          headerRight: () => <CloseModalButton colorMode={colorMode} />,
         }}
       />
       <Stack.Screen
@@ -158,7 +150,7 @@ export default function WalletLayout() {
         options={{
           ...modalOptions,
           title: 'Import wallet',
-          walletActions: () => <CloseModalButton title="Cancel" />,
+          headerRight: () => <CloseModalButton colorMode={colorMode} />,
         }}
       />
       <Stack.Screen
@@ -168,8 +160,7 @@ export default function WalletLayout() {
 
           animation: Platform.OS === 'android' ? 'slide_from_left' : undefined,
           title: 'Manage wallets',
-          walletActions:
-            Platform.OS === 'ios' ? () => <CloseModalButton title="Done" /> : undefined,
+          headerRight: () => <CloseModalButton colorMode={colorMode} />,
         }}
       />
       <Stack.Screen
@@ -178,8 +169,7 @@ export default function WalletLayout() {
           ...modalOptions,
           animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
           title: 'Wallet seed',
-          walletActions:
-            Platform.OS === 'ios' ? () => <CloseModalButton title="Done" /> : undefined,
+          headerRight: () => <CloseModalButton colorMode={colorMode} />,
         }}
       />
       <Stack.Screen
@@ -188,7 +178,7 @@ export default function WalletLayout() {
           ...modalOptions,
           animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
           title: 'Delete wallet',
-          walletActions: Platform.OS === 'ios' ? () => <CloseModalButton /> : undefined,
+          headerRight: () => <CloseModalButton colorMode={colorMode} />,
         }}
       />
       <Stack.Screen
@@ -197,8 +187,7 @@ export default function WalletLayout() {
           ...modalOptions,
           animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
           title: 'Send Bitcoin',
-          walletActions:
-            Platform.OS === 'ios' ? () => <CloseModalButton title="Cancel" /> : undefined,
+          headerRight: () => <CloseModalButton colorMode={colorMode} />,
         }}
       />
       <Stack.Screen
@@ -207,8 +196,7 @@ export default function WalletLayout() {
           ...modalOptions,
           animation: Platform.OS === 'android' ? 'slide_from_right' : undefined,
           title: 'Receive Bitcoin',
-          walletActions:
-            Platform.OS === 'ios' ? () => <CloseModalButton title="Cancel" /> : undefined,
+          headerRight: () => <CloseModalButton colorMode={colorMode} />,
         }}
       />
     </Stack>

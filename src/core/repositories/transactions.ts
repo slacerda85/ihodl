@@ -1,5 +1,5 @@
 import { MMKV } from 'react-native-mmkv'
-import { Tx } from '../models/tx'
+import { Tx } from '../models/transaction'
 
 const transactionStorage = new MMKV({
   id: 'transaction-storage',

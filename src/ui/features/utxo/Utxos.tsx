@@ -1,9 +1,8 @@
 import { View, TouchableOpacity, Text, Modal, Alert } from 'react-native'
 import { useState } from 'react'
 import * as Clipboard from 'expo-clipboard'
-import { Utxo } from '@/core/models/tx'
+import { Utxo } from '@/core/models/transaction'
 import Button from '@/ui/components/Button'
-import { formatBalance } from '../wallet/utils'
 
 interface UtxosProps {
   utxos: Utxo[]

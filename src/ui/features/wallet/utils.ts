@@ -7,7 +7,7 @@ const formatBalance = (balance: number = 0, unit: 'BTC' | 'Sats' = 'BTC') => {
   }
   if (unit === 'BTC') {
     return `${balance.toLocaleString(undefined, {
-      minimumFractionDigits: 4,
+      // minimumFractionDigits: 4,
       maximumFractionDigits: 8,
     })}`
   }

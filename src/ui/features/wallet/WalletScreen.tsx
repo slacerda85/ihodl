@@ -11,7 +11,6 @@ import CreateWalletIcon from './CreateWalletIcon'
 import ImportWalletIcon from './ImportWalletIcon'
 import ContentContainer from '@/ui/components/ContentContainer'
 import Button from '@/ui/components/Button'
-import { useAddress } from '../address/AddressProvider'
 import TransactionsScreen from '../transactions/TransactionsScreen'
 // import DebugUtxos from '../utxo/DebugUtxos'
 

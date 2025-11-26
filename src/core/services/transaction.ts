@@ -1,5 +1,5 @@
 import { Connection } from '../models/network'
-import { FriendlyTx, MerkleProof, Tx, Utxo } from '../models/tx'
+import { FriendlyTx, MerkleProof, Tx, Utxo } from '../models/transaction'
 import {
   getTransactions,
   getBlockHash,

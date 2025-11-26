@@ -1,4 +1,4 @@
-import { Utxo } from '@/core/models/tx'
+import { Utxo } from '@/core/models/transaction'
 
 export const MINIMUN_CONFIRMATIONS = 6
 

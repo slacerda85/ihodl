@@ -1,4 +1,4 @@
-import { Tx } from './tx'
+import { Tx } from './transaction'
 
 export const enum Purpose {
   BIP44 = 0x8000002c, // Legacy (P2PKH)
@@ -25,7 +25,7 @@ export const enum Change {
 
 export const GAP_LIMIT = 20
 
-type DerivationPath = {
+export type DerivationPath = {
   purpose: Purpose
   coinType: CoinType
   accountIndex: AccountIndex

@@ -1,14 +1,15 @@
 import { mnemonicToSeedSync } from '@/core/lib/bip39'
 import { hmacSeed } from '@/core/lib/crypto'
-import { createPublicKey, deriveChildPrivateKey, splitRootExtendedKey } from '@/core/lib/key'
-import { Account, AccountIndex, Change, CoinType, Purpose } from '@/core/models/account'
+import { createPublicKey, deriveChildKey, splitMasterKey } from '@/core/lib/key'
+import { AccountIndex, Change, CoinType, DerivationPath, Purpose } from '@/core/models/address'
 
-type DeriveAccountKeysParams = Partial<Account> & {
+type DeriveAccountKeysParams = Partial<DerivationPath> & {
   masterKey: Uint8Array
 }
 
 interface KeyServiceInterface {
-  createMasterKey(seed: string): Uint8Array
+  // createMasterKey(seed: string): Uint8Array
+  derive(seed: string, derivationPath: Partial<DerivationPath>): Uint8Array
   deriveAccountKey(seed: string): Uint8Array
   deriveAccountKeys(params: DeriveAccountKeysParams): {
     receivingAccountKey: Uint8Array // key for m/purpose'/coinType'/account'/0
@@ -32,10 +33,7 @@ export default class KeyService implements KeyServiceInterface {
 
   deriveAccountKey(seed: string): Uint8Array {
     const masterKey = this.createMasterKey(seed)
-    return [Purpose.BIP84, CoinType.Bitcoin, AccountIndex.Main].reduce(
-      deriveChildPrivateKey,
-      masterKey,
-    )
+    return [Purpose.BIP84, CoinType.Bitcoin, AccountIndex.Main].reduce(deriveChildKey, masterKey)
   }
 
   deriveAccountKeys({
@@ -44,13 +42,18 @@ export default class KeyService implements KeyServiceInterface {
     coinType = CoinType.Bitcoin,
     accountIndex = AccountIndex.Main,
   }: DeriveAccountKeysParams) {
-    const accountKey = [purpose, coinType, accountIndex]
-      // .map(createHardenedIndex)
-      .reduce(deriveChildPrivateKey, masterKey)
+    const accountKey = [purpose, coinType, accountIndex].reduce(deriveChildKey, masterKey)
     return {
-      receivingAccountKey: deriveChildPrivateKey(accountKey, Change.Receiving),
-      changeAccountKey: deriveChildPrivateKey(accountKey, Change.Change),
+      receivingAccountKey: deriveChildKey(accountKey, Change.Receiving),
+      changeAccountKey: deriveChildKey(accountKey, Change.Change),
     }
+  }
+
+  derive(seed: string, derivationPath: Partial<DerivationPath>): Uint8Array {
+    const masterKey = this.createMasterKey(seed)
+    return Object.values(derivationPath)
+      .filter(v => v !== undefined)
+      .reduce(deriveChildKey, masterKey)
   }
 
   deriveAddressKeys(
@@ -59,7 +62,7 @@ export default class KeyService implements KeyServiceInterface {
   ): {
     addressKey: Uint8Array
   } {
-    const addressKey = deriveChildPrivateKey(accountKey, index)
+    const addressKey = deriveChildKey(accountKey, index)
 
     return {
       addressKey,
@@ -67,7 +70,7 @@ export default class KeyService implements KeyServiceInterface {
   }
 
   deriveAddressPublicKey(addressKey: Uint8Array): Uint8Array {
-    const { privateKey } = splitRootExtendedKey(addressKey)
+    const { privateKey } = splitMasterKey(addressKey)
     const addressPublicKey = createPublicKey(privateKey)
     return addressPublicKey
   }

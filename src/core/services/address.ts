@@ -9,7 +9,7 @@ import {
   GAP_LIMIT,
   Purpose,
 } from '../models/address'
-import { Tx, Utxo } from '../models/tx'
+import { Tx, Utxo } from '../models/transaction'
 import AddressRepository from '../repositories/address'
 import KeyService from './key'
 import SeedService from './seed'

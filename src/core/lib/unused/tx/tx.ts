@@ -1,5 +1,5 @@
-import { FriendlyTx, Tx, FriendlyTxType, FriendlyTxStatus } from '@/core/models/tx'
-import { UTXO } from '@/lib/transactions'
+import { FriendlyTx, Tx, FriendlyTxType, FriendlyTxStatus } from '@/core/models/transaction'
+import { Utxo } from '@/core/models/transaction'
 import { WalletAccount } from '@/core/models/account'
 
 const MINIMUM_CONFIRMATIONS = 6
@@ -116,7 +116,7 @@ function calculateWalletBalance(
   walletAddresses: Set<string>,
 ): {
   balance: number
-  utxos: UTXO[]
+  utxos: Utxo[]
 } {
   // Deduplicar transações
   const uniqueTxs = deduplicateTxs(allTransactions)
@@ -138,19 +138,10 @@ function calculateWalletBalance(
           txid: tx.txid,
           vout: index,
           address: vout.scriptPubKey.address,
+          scriptPubKey: vout.scriptPubKey.hex,
           amount: vout.value,
-          blocktime: tx.blocktime,
-          confirmations: tx.confirmations || 0,
-          isSpent: false,
-          scriptPubKey: {
-            asm: vout.scriptPubKey.asm,
-            hex: vout.scriptPubKey.hex,
-            reqSigs: vout.scriptPubKey.reqSigs,
-            type: vout.scriptPubKey.type,
-            address: vout.scriptPubKey.address,
-            addresses: [vout.scriptPubKey.address],
-          },
-        } as UTXO,
+          confirmations: tx.confirmations ?? 0,
+        } as Utxo,
       }))
       .filter(({ key, utxo }) => walletAddresses.has(utxo.address) && !spentUtxoKeys.has(key))
       .map(({ utxo }) => utxo),
@@ -168,7 +159,7 @@ function calculateWalletBalance(
  */
 export function getWalletAccountsBalance(walletAccounts: WalletAccount[]): {
   balance: number
-  utxos: UTXO[]
+  utxos: Utxo[]
 } {
   const allTransactions: Tx[] = []
   const walletAddresses = new Set<string>()
@@ -298,7 +289,6 @@ export function getFriendlyTxs(addresses: string[], txs: Tx[], walletId: string)
 
     // Adiciona a transação amigável à lista
     friendlyTxs.push({
-      walletId,
       txid,
       date,
       type,

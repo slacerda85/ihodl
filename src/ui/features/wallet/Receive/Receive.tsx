@@ -1,4 +1,4 @@
-import { useState, useEffect, Suspense, useMemo, useCallback } from 'react'
+import { useState } from 'react'
 import {
   View,
   Text,
@@ -18,7 +18,6 @@ import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 import QRCode from '@/ui/components/QRCode'
 import Button from '@/ui/components/Button'
-import { IconButton } from '@/ui/components/Button'
 import { useSettings } from '@/ui/features/settings'
 import { useAddress } from '../../address/AddressProvider'
 export default function Receive() {

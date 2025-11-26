@@ -1,20 +1,15 @@
-import { View, Text, StyleSheet, Pressable } from 'react-native'
+import { View, Text, StyleSheet } from 'react-native'
 import colors from '@/ui/colors'
-import SwapIcon from './SwapIcon'
 import { useSettings } from '@/ui/features/settings'
 import { formatBalance } from './utils'
-import { alpha } from '@/ui/utils'
-import { GlassView } from 'expo-glass-effect'
-// import { useAccount } from '../account/AccountProvider'
 import { useAddress } from '../address/AddressProvider'
-import Utxos from '../utxo/Utxos'
 import Skeleton from '@/ui/components/Skeleton'
 // import TransactionService from '@/core/services/transaction'
 // import { transactions } from '@/lib'
 
 export default function WalletBalance() {
   const { isDark } = useSettings()
-  const { balance, loading, utxos } = useAddress()
+  const { balance, loading } = useAddress()
   // const loading = true
 
   const LoadingWalletBalance = () => (

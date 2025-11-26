@@ -1,4 +1,4 @@
-import { Tx } from './tx'
+import { Tx } from './transaction'
 // bitcoin specific types and constants
 
 export const enum Purpose {

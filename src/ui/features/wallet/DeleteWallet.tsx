@@ -3,7 +3,6 @@ import { StyleSheet, Text, View, ActivityIndicator } from 'react-native'
 
 import { useCallback, useState } from 'react'
 import { useRouter } from 'expo-router'
-// import { deleteWallet } from '@/lib/wallet'
 import { alpha } from '@/ui/utils'
 import { useWallet } from '@/ui/features/wallet'
 import { useSettings } from '@/ui/features/settings'

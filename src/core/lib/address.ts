@@ -2,8 +2,8 @@ import { publicKeyVerify } from 'secp256k1'
 import { hash160, sha256 } from './crypto'
 import { bech32, bech32m } from 'bech32'
 import bs58check from 'bs58check'
-import { Tx } from '../models/tx'
-import { createPublicKey, deriveChildPrivateKey, splitRootExtendedKey } from './key'
+import { Tx } from '../models/transaction'
+import { createPublicKey, deriveChildKey, splitMasterKey } from './key'
 // import { AddressDetails } from '../models/address'
 
 /** Used address information */
@@ -55,22 +55,6 @@ function fromBech32(bech32Address: string): Bech32Result {
   } catch (error) {
     throw new Error(`Invalid Bech32 address: ${(error as Error).message}`)
   }
-}
-
-function createSegwitAddress(publicKey: Uint8Array, version: number = 0): string {
-  if (!publicKeyVerify(publicKey)) {
-    throw new Error('Invalid public key')
-  }
-  // Satoshi's Hash160
-  const hash = hash160(publicKey)
-  // Convert the hash to words (5-bit groups)
-  const programWords = bech32.toWords(hash)
-  // Prepend the version byte to the words array
-  const words = [version, ...programWords]
-  // Encode using Bech32
-  const segWitAddress = bech32.encode('bc', words)
-
-  return segWitAddress
 }
 
 /**
@@ -193,10 +177,10 @@ function legacyToScriptHash(address: string): string {
  * @returns The derived SegWit address.
  */
 function deriveAddress(extendedKey: any, index: number): string {
-  const addressIndexExtendedKey = deriveChildPrivateKey(extendedKey, index)
-  const { privateKey } = splitRootExtendedKey(addressIndexExtendedKey)
+  const addressIndexExtendedKey = deriveChildKey(extendedKey, index)
+  const { privateKey } = splitMasterKey(addressIndexExtendedKey)
   const addressIndexPublicKey = createPublicKey(privateKey)
-  return createSegwitAddress(addressIndexPublicKey)
+  return createAddress(addressIndexPublicKey)
 }
 
 /**
@@ -233,7 +217,6 @@ function generateAddresses(
 export {
   createAddress,
   fromBech32,
-  createSegwitAddress,
   toBech32,
   toBase58check,
   fromBase58check,

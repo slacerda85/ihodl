@@ -1,9 +1,9 @@
-import { AddressCollection, AddressDetails } from '@/core/models/address'
+import { AddressDetails } from '@/core/models/address'
 import { createContext, ReactNode, useState, useEffect, useCallback, useContext } from 'react'
 import { useWallet } from '../wallet'
 import { useNetwork } from '../network/NetworkProvider'
 import AddressService from '@/core/services/address'
-import { Utxo } from '@/core/models/tx'
+import { Utxo } from '@/core/models/transaction'
 import TransactionService from '@/core/services/transaction'
 
 type AddressContextType = {
