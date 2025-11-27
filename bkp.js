@@ -1,4 +1,3 @@
-/** @type {import("jest").Config} **/
 module.exports = {
   preset: 'jest-expo',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
@@ -8,8 +7,7 @@ module.exports = {
     '<rootDir>/src/**/*.(test|spec).(ts|tsx|js|jsx)',
   ],
   transformIgnorePatterns: [
-    'node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|@noble/.*))',
-    'src/lib/crypto.ts',
+    'node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg))',
   ],
   collectCoverageFrom: [
     'src/**/*.(ts|tsx)',
@@ -26,9 +24,6 @@ module.exports = {
     '^@ui/(.*)$': '<rootDir>/src/ui/$1',
     '^@features/(.*)$': '<rootDir>/src/features/$1',
     '^@assets/(.*)$': '<rootDir>/src/assets/$1',
-  },
-  transform: {
-    '^node_modules/@noble/.*\\.(js|ts)$': 'babel-jest',
   },
   testTimeout: 10000,
 }

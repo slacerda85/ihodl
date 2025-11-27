@@ -86,6 +86,7 @@
     "jest-expo": "~54.0.13",
     "prettier": "^3.5.3",
     "react-native-quick-crypto": "^0.7.17",
+    "ts-jest": "^29.4.5",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
   },

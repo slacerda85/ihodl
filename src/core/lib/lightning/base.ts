@@ -13,7 +13,7 @@ import {
   PeerStorageMessage,
   PeerStorageRetrievalMessage,
   InitTlvs,
-} from '@/core/models/lightning'
+} from '@/core/models/lightning/base'
 
 // Fundamental Type Encoding/Decoding Utilities
 export function encodeU16(value: number): Uint8Array {

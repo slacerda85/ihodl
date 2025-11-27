@@ -269,6 +269,7 @@ export {
   sha256,
   hash256,
   hash160,
+  ripemd160,
   createChecksum,
   toBase58,
   fromBase58,

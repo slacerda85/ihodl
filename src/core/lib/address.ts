@@ -136,6 +136,14 @@ function toScriptHash(address: string): string {
 }
 
 /**
+ * Creates P2WPKH scriptPubKey from public key
+ */
+function createP2WPKHScript(pubkey: Uint8Array): Uint8Array {
+  const hash = hash160(pubkey)
+  return new Uint8Array([0x00, 0x14, ...hash])
+}
+
+/**
  * Converts a legacy (P2PKH) address to a scripthash for Electrum queries.
  * @param {string} address - The legacy Bitcoin address (starting with '1').
  * @returns {string} - The scripthash as a hex string.
@@ -224,4 +232,5 @@ export {
   // legacyToScriptHash,
   deriveAddress,
   generateAddresses,
+  createP2WPKHScript,
 }

@@ -28,26 +28,11 @@ export type SciddirOrPubkey = Uint8Array // 9 or 33 bytes
 export type BigSize = bigint // Variable-length unsigned integer
 export type Utf8 = string // UTF-8 string
 
-/**
- * The type field indicates how to interpret the payload field.
- *
- * The messages are grouped logically into five groups, ordered by the most significant bit that is set:
- *
- * Setup & Control (types 0-31)
- *
- * Channel (types 32-127)
- *
- * Commitment (types 128-255)
- *
- * Routing (types 256-511)
- *
- * Custom (types 32768-65535)
- *
- * https://github.com/lightning/bolts/blob/master/01-messaging.md#lightning-message-format
- */
+// Lightning Message Types
 export enum LightningMessageType {
   // setup and control
   WARNING = 1,
+  STFU = 2,
   PEER_STORAGE = 7,
   PEER_STORAGE_RETRIEVAL = 9,
   INIT = 16,
@@ -55,9 +40,35 @@ export enum LightningMessageType {
   PING = 18,
   PONG = 19,
   // channel setup and teardown
-
+  OPEN_CHANNEL = 32,
+  ACCEPT_CHANNEL = 33,
+  FUNDING_CREATED = 34,
+  FUNDING_SIGNED = 35,
+  CHANNEL_READY = 36,
+  SHUTDOWN = 38,
+  CLOSING_SIGNED = 39,
+  CLOSING_COMPLETE = 40,
+  CLOSING_SIG = 41,
+  OPEN_CHANNEL2 = 64,
+  ACCEPT_CHANNEL2 = 65,
+  TX_ADD_INPUT = 66,
+  TX_ADD_OUTPUT = 67,
+  TX_REMOVE_INPUT = 68,
+  TX_REMOVE_OUTPUT = 69,
+  TX_COMPLETE = 70,
+  TX_SIGNATURES = 71,
+  TX_INIT_RBF = 72,
+  TX_ACK_RBF = 73,
+  TX_ABORT = 74,
   // Commitment
-
+  UPDATE_ADD_HTLC = 128,
+  UPDATE_FULFILL_HTLC = 130,
+  UPDATE_FAIL_HTLC = 131,
+  COMMITMENT_SIGNED = 132,
+  REVOKE_AND_ACK = 133,
+  UPDATE_FEE = 134,
+  UPDATE_FAIL_MALFORMED_HTLC = 135,
+  CHANNEL_REESTABLISH = 136,
   // Routing
 
   // Custom

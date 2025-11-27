@@ -2,6 +2,7 @@ import secp256k1 from 'secp256k1'
 import { createChecksum, hash160, hmacSHA512, toBase58, uint8ArrayToHex } from '@/core/lib/crypto'
 import { entropyToMnemonic, mnemonicToSeedSync } from './bip39'
 import wordList from 'bip39/src/wordlists/english.json'
+import { CURVE_ORDER } from '../models/key'
 
 function toMnemonic(entropy: Uint8Array): string {
   // check if nBytes is a valid length of 128, 160, 192, 224, or 256 bits
@@ -75,7 +76,7 @@ function createPublicKey(privateKey: Uint8Array): Uint8Array {
 
 function deriveChildKey(extendedKey: Uint8Array, index: number): Uint8Array {
   const isHardened = index >= 0x80000000
-  const CURVE_ORDER = BigInt('0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141')
+  // const CURVE_ORDER = BigInt('0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141')
 
   // mount the data to be hashed
   const privateKeyPadding = new Uint8Array(1)

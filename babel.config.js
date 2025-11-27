@@ -9,5 +9,11 @@ module.exports = function (api) {
         },
       ],
     ],
+    overrides: [
+      {
+        test: /node_modules\/@noble/,
+        presets: [['@babel/preset-env', { modules: 'commonjs' }]],
+      },
+    ],
   }
 }
