@@ -1,10 +1,9 @@
 import { publicKeyVerify } from 'secp256k1'
 import { hash160, sha256 } from './crypto'
 import { bech32, bech32m } from 'bech32'
-// import bs58check from 'bs58check'
 import { Tx } from '../models/transaction'
 import { createPublicKey, deriveChildKey, splitMasterKey } from './key'
-// import { AddressDetails } from '../models/address'
+import { P2WPKH_VERSION, HASH160_LENGTH } from '../models/address'
 
 /** Used address information */
 export interface AddressDetails {
@@ -77,32 +76,6 @@ function toBech32(publicKeyHash: Uint8Array, version: number = 0, prefix: string
   }
 }
 
-/**
- * Converts a public key hash to a Base58Check address.
- * @param {Uint8Array} publicKeyHash - The public key hash to convert.
- * @returns {string} - The Base58Check address.
- */
-/* function toBase58check(publicKeyHash: Uint8Array): string {
-  try {
-    return bs58check.encode(publicKeyHash)
-  } catch (error) {
-    throw new Error(`Invalid public key hash: ${(error as Error).message}`)
-  }
-} */
-
-/**
- * Converts a Base58Check address to a public key hash.
- * @param {string} base58Address - The Base58Check address to convert.
- * @returns {Uint8Array} - The public key hash.
- */
-/* function fromBase58check(base58Address: string): Uint8Array {
-  try {
-    return bs58check.decode(base58Address)
-  } catch (error) {
-    throw new Error(`Invalid Base58 address: ${(error as Error).message}`)
-  }
-} */
-
 function toScriptHash(address: string): string {
   // Assuming fromBech32 returns { version, data }
   const { version, data } = fromBech32(address)
@@ -136,47 +109,42 @@ function toScriptHash(address: string): string {
 }
 
 /**
+ * Encodes a Lightning node ID (compressed public key) to bech32 format with 'ln' prefix.
+ * @param nodeId - The 33-byte compressed public key.
+ * @returns The bech32-encoded node ID string.
+ */
+function encodeBech32NodeId(nodeId: Uint8Array): string {
+  if (nodeId.length !== 33) {
+    throw new Error('Node ID must be 33 bytes (compressed public key)')
+  }
+  const words = bech32.toWords(nodeId)
+  return bech32.encode('ln', words)
+}
+
+/**
+ * Decodes a bech32-encoded Lightning node ID to the compressed public key.
+ * @param bech32NodeId - The bech32-encoded node ID string.
+ * @returns The 33-byte compressed public key.
+ */
+function decodeBech32NodeId(bech32NodeId: string): Uint8Array {
+  const decoded = bech32.decode(bech32NodeId)
+  if (decoded.prefix !== 'ln') {
+    throw new Error('Invalid HRP for Lightning node ID')
+  }
+  const nodeId = bech32.fromWords(decoded.words)
+  if (nodeId.length !== 33) {
+    throw new Error('Invalid node ID length')
+  }
+  return Uint8Array.from(nodeId)
+}
+
+/**
  * Creates P2WPKH scriptPubKey from public key
  */
 function createP2WPKHScript(pubkey: Uint8Array): Uint8Array {
   const hash = hash160(pubkey)
-  return new Uint8Array([0x00, 0x14, ...hash])
+  return new Uint8Array([P2WPKH_VERSION, HASH160_LENGTH, ...hash])
 }
-
-/**
- * Converts a legacy (P2PKH) address to a scripthash for Electrum queries.
- * @param {string} address - The legacy Bitcoin address (starting with '1').
- * @returns {string} - The scripthash as a hex string.
- */
-/* function legacyToScriptHash(address: string): string {
-  // Decode Base58Check address to get the public key hash (hash160)
-  const hash160 = fromBase58check(address)
-
-  // Validate hash160 length (should be 20 bytes for P2PKH)
-  if (hash160.length !== 20) {
-    throw new Error('Invalid P2PKH address: hash160 must be 20 bytes')
-  }
-
-  // Construct scriptPubKey for P2PKH: OP_DUP OP_HASH160 PUSH20 <hash160> OP_EQUALVERIFY OP_CHECKSIG
-  const scriptPubKey = new Uint8Array(25)
-  scriptPubKey[0] = 0x76 // OP_DUP
-  scriptPubKey[1] = 0xa9 // OP_HASH160
-  scriptPubKey[2] = 0x14 // PUSH20
-  scriptPubKey.set(hash160, 3) // hash160
-  scriptPubKey[23] = 0x88 // OP_EQUALVERIFY
-  scriptPubKey[24] = 0xac // OP_CHECKSIG
-
-  // Hash the scriptPubKey with SHA256
-  const hash = sha256(scriptPubKey)
-
-  // Reverse the hash (little-endian)
-  const reversedHash = new Uint8Array([...hash].reverse())
-
-  // Convert to hex
-  return Array.from(reversedHash)
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('')
-} */
 
 /**
  * Derives a SegWit address from an extended key and address index.
@@ -223,14 +191,15 @@ function generateAddresses(
 }
 
 export {
+  // bitcoin protocol
   createAddress,
+  deriveAddress,
   fromBech32,
   toBech32,
-  // toBase58check,
-  // fromBase58check,
   toScriptHash,
-  // legacyToScriptHash,
-  deriveAddress,
   generateAddresses,
   createP2WPKHScript,
+  // lightning protocol
+  encodeBech32NodeId,
+  decodeBech32NodeId,
 }

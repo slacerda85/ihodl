@@ -16,6 +16,13 @@ export function uint8ArrayFrom(data: number[] | ArrayBuffer | Uint8Array): Uint8
 }
 
 export function hexToUint8Array(hex: string): Uint8Array {
+  if (typeof hex !== 'string') {
+    throw new Error('Hex string expected')
+  }
+  if (hex.length === 0) {
+    return new Uint8Array(0)
+  }
+
   // Remove 0x prefix if present
   hex = hex.replace(/^0x/, '')
 

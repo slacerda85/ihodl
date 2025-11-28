@@ -9,7 +9,7 @@ import { randomUUID as expoRandomUUID } from 'expo-crypto'
 import secp256k1 from 'secp256k1'
 import { pbkdf2 } from '@noble/hashes/pbkdf2.js'
 import { gcm } from '@noble/ciphers/aes.js'
-import { toBytes } from '../utils'
+import { hexToUint8Array, toBytes, uint8ArrayToHex } from '../utils'
 
 // hash functions
 function createEntropy(size: number): Uint8Array {
@@ -93,36 +93,6 @@ function decode(bech32String: string): { prefix: string; data: Uint8Array; versi
       throw new Error('Não é um endereço Bech32 ou Bech32m válido')
     }
   }
-}
-
-function hexToUint8Array(hexString: string): Uint8Array {
-  // Remove 0x prefix if present
-  hexString = hexString.replace(/^0x/, '')
-
-  if (hexString === '') {
-    return new Uint8Array(0)
-  }
-
-  // Check if length is even
-  if (hexString.length % 2 !== 0) {
-    throw new Error('Hex string must have even length')
-  }
-
-  // Validate hex characters
-  if (!/^[0-9a-fA-F]+$/.test(hexString)) {
-    throw new Error('Invalid hex string')
-  }
-
-  const length = hexString.length / 2
-  const array = new Uint8Array(length)
-  for (let i = 0; i < length; i++) {
-    array[i] = parseInt(hexString.substr(i * 2, 2), 16)
-  }
-  return array
-}
-
-function uint8ArrayToHex(uint8Array: Uint8Array): string {
-  return uint8Array.reduce((str, byte) => str + byte.toString(16).padStart(2, '0'), '')
 }
 
 function randomUUID() {
@@ -273,6 +243,7 @@ function createHash(algorithm: string) {
 
 export {
   createEntropy,
+  randomBytes,
   hmacSeed,
   arrayToHex,
   hmacSHA512,
@@ -286,7 +257,6 @@ export {
   fromBase58,
   encode,
   decode,
-  hexToUint8Array,
   uint8ArrayToHex,
   randomUUID,
   encryptSeed,

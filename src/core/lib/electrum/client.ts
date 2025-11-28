@@ -16,7 +16,7 @@ import { get, set, getNumber, setNumber } from '../storage'
 import { STORAGE_KEYS } from '../storage'
 import { Peer } from '@/core/models/network'
 import { sha256 } from '@noble/hashes/sha2.js'
-import { uint8ArrayFromHex, uint8ArrayToHex } from '../utils'
+import { hexToUint8Array, uint8ArrayToHex } from '../utils'
 
 // Connect to an Electrum server and return the socket
 function init() {
@@ -550,7 +550,7 @@ async function getBlockHash(height: number, socket?: TLSSocket): Promise<Electru
     if (!headerHex || headerHex.length !== 160) {
       throw new Error('Invalid header')
     }
-    const headerBytes = uint8ArrayFromHex(headerHex)
+    const headerBytes = hexToUint8Array(headerHex)
     const blockHash = uint8ArrayToHex(sha256(sha256(headerBytes)))
     return { ...data, result: blockHash }
   } catch (error) {

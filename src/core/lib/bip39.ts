@@ -1,7 +1,7 @@
-import { sha256 } from '@noble/hashes/sha2'
-import { sha512 } from '@noble/hashes/sha2'
-import { pbkdf2, pbkdf2Async } from '@noble/hashes/pbkdf2'
-import { randomBytes } from '@noble/hashes/utils'
+import { sha256 } from '@noble/hashes/sha2.js'
+import { sha512 } from '@noble/hashes/sha2.js'
+import { pbkdf2, pbkdf2Async } from '@noble/hashes/pbkdf2.js'
+import { randomBytes } from '@/core/lib/crypto'
 import wordList from 'bip39/src/wordlists/english.json'
 
 let DEFAULT_WORDLIST: string[] | undefined = wordList

@@ -1,5 +1,12 @@
 import secp256k1 from 'secp256k1'
-import { createChecksum, hash160, hmacSHA512, toBase58, uint8ArrayToHex } from '@/core/lib/crypto'
+import {
+  createChecksum,
+  hash160,
+  hmacSeed,
+  hmacSHA512,
+  toBase58,
+  uint8ArrayToHex,
+} from '@/core/lib/crypto'
 import { entropyToMnemonic, mnemonicToSeedSync } from './bip39'
 import wordList from 'bip39/src/wordlists/english.json'
 import { CURVE_ORDER } from '../models/key'
@@ -15,6 +22,11 @@ function toMnemonic(entropy: Uint8Array): string {
 function fromMnemonic(mnemonic: string): Uint8Array {
   const seed = mnemonicToSeedSync(mnemonic)
   return seed
+}
+
+function createMasterKey(seed: Uint8Array): Uint8Array {
+  const masterKey = hmacSeed(seed)
+  return masterKey
 }
 
 function splitMasterKey(masterKey: Uint8Array<ArrayBufferLike>): {
@@ -350,6 +362,7 @@ export const KEY_VERSIONS = {
 }
 
 export {
+  createMasterKey,
   splitMasterKey,
   createHardenedIndex,
   deriveChildKey,

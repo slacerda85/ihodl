@@ -1,5 +1,4 @@
-import { hexToUint8Array } from '../crypto'
-import { uint8ArrayToHex } from '../utils'
+import { uint8ArrayToHex, hexToUint8Array } from '../utils'
 import {
   encodeU16,
   decodeU16,

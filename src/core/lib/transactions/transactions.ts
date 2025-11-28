@@ -1,5 +1,6 @@
 import secp256k1 from 'secp256k1'
-import { hash256, hash160, uint8ArrayToHex, hexToUint8Array } from '@/core/lib/crypto'
+import { hash256, hash160, uint8ArrayToHex } from '@/core/lib/crypto'
+import { hexToUint8Array } from '../utils'
 import { createPublicKey, deriveChildKey, splitMasterKey } from '@/core/lib/key'
 import { Utxo } from '@/core/models/transaction'
 import { fromBech32, deriveAddress } from '../address'

@@ -45,3 +45,8 @@ export type AddressDetails = {
   address: string
   txs: Tx[]
 }
+
+// Script opcodes and constants
+export const OP_0 = 0x00
+export const P2WPKH_VERSION = 0x00
+export const HASH160_LENGTH = 0x14 // 20 bytes
