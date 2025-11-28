@@ -26,9 +26,9 @@ export interface KeyPair {
 export interface HandshakeState {
   ck: Sha256 // chaining key
   h: Sha256 // handshake hash
-  temp_k1?: Sha256
-  temp_k2?: Sha256
-  temp_k3?: Sha256
+  tempK1?: Sha256
+  tempK2?: Sha256
+  tempK3?: Sha256
   e?: KeyPair // ephemeral keypair
   s?: KeyPair // static keypair (ls for local, rs for remote)
 }

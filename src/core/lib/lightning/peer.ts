@@ -107,20 +107,20 @@ class BufferReader {
 
 export function encodeTxAddInputMessage({
   type,
-  channel_id,
-  serial_id,
-  prevtx_len,
+  channelId,
+  serialId,
+  prevtxLen,
   prevtx,
-  prevtx_vout,
+  prevtxVout,
   sequence,
 }: TxAddInputMessage): Uint8Array {
   const buffers = [
     encodeU16(type),
-    channel_id,
-    encodeU64(serial_id),
-    encodeU16(prevtx_len),
+    channelId,
+    encodeU64(serialId),
+    encodeU16(prevtxLen),
     prevtx,
-    encodeU32(prevtx_vout),
+    encodeU32(prevtxVout),
     encodeU32(sequence),
   ]
   const totalLength = buffers.reduce((sum, buf) => sum + buf.length, 0)
@@ -136,19 +136,19 @@ export function encodeTxAddInputMessage({
 export function decodeTxAddInputMessage(buf: Uint8Array): TxAddInputMessage {
   const reader = new BufferReader(buf)
   reader.skip(2) // skip type
-  const channel_id = reader.readBytes(32)
-  const serial_id = reader.readU64()
-  const prevtx_len = reader.readU16()
-  const prevtx = reader.readBytes(prevtx_len)
-  const prevtx_vout = reader.readU32()
+  const channelId = reader.readBytes(32)
+  const serialId = reader.readU64()
+  const prevtxLen = reader.readU16()
+  const prevtx = reader.readBytes(prevtxLen)
+  const prevtxVout = reader.readU32()
   const sequence = reader.readU32()
   return {
     type: LightningMessageType.TX_ADD_INPUT,
-    channel_id,
-    serial_id,
-    prevtx_len,
+    channelId,
+    serialId,
+    prevtxLen,
     prevtx,
-    prevtx_vout,
+    prevtxVout,
     sequence,
   }
 }
@@ -156,8 +156,8 @@ export function decodeTxAddInputMessage(buf: Uint8Array): TxAddInputMessage {
 export function encodeTxAddOutputMessage(msg: TxAddOutputMessage): Uint8Array {
   const buffers = [
     encodeU16(msg.type),
-    msg.channel_id,
-    encodeU64(msg.serial_id),
+    msg.channelId,
+    encodeU64(msg.serialId),
     encodeU64(msg.sats),
     encodeU16(msg.scriptlen),
     msg.script,
@@ -175,15 +175,15 @@ export function encodeTxAddOutputMessage(msg: TxAddOutputMessage): Uint8Array {
 export function decodeTxAddOutputMessage(buf: Uint8Array): TxAddOutputMessage {
   const reader = new BufferReader(buf)
   reader.skip(2) // skip type
-  const channel_id = reader.readBytes(32)
-  const serial_id = reader.readU64()
+  const channelId = reader.readBytes(32)
+  const serialId = reader.readU64()
   const sats = reader.readU64()
   const scriptlen = reader.readU16()
   const script = reader.readBytes(scriptlen)
   return {
     type: LightningMessageType.TX_ADD_OUTPUT,
-    channel_id,
-    serial_id,
+    channelId,
+    serialId,
     sats,
     scriptlen,
     script,
@@ -191,7 +191,7 @@ export function decodeTxAddOutputMessage(buf: Uint8Array): TxAddOutputMessage {
 }
 
 export function encodeTxRemoveInputMessage(msg: TxRemoveInputMessage): Uint8Array {
-  const buffers = [encodeU16(msg.type), msg.channel_id, encodeU64(msg.serial_id)]
+  const buffers = [encodeU16(msg.type), msg.channelId, encodeU64(msg.serialId)]
   const totalLength = buffers.reduce((sum, buf) => sum + buf.length, 0)
   const result = new Uint8Array(totalLength)
   let offset = 0
@@ -205,17 +205,17 @@ export function encodeTxRemoveInputMessage(msg: TxRemoveInputMessage): Uint8Arra
 export function decodeTxRemoveInputMessage(buf: Uint8Array): TxRemoveInputMessage {
   const reader = new BufferReader(buf)
   reader.skip(2) // skip type
-  const channel_id = reader.readBytes(32)
-  const serial_id = reader.readU64()
+  const channelId = reader.readBytes(32)
+  const serialId = reader.readU64()
   return {
     type: LightningMessageType.TX_REMOVE_INPUT,
-    channel_id,
-    serial_id,
+    channelId,
+    serialId,
   }
 }
 
 export function encodeTxRemoveOutputMessage(msg: TxRemoveOutputMessage): Uint8Array {
-  const buffers = [encodeU16(msg.type), msg.channel_id, encodeU64(msg.serial_id)]
+  const buffers = [encodeU16(msg.type), msg.channelId, encodeU64(msg.serialId)]
   const totalLength = buffers.reduce((sum, buf) => sum + buf.length, 0)
   const result = new Uint8Array(totalLength)
   let offset = 0
@@ -229,17 +229,17 @@ export function encodeTxRemoveOutputMessage(msg: TxRemoveOutputMessage): Uint8Ar
 export function decodeTxRemoveOutputMessage(buf: Uint8Array): TxRemoveOutputMessage {
   const reader = new BufferReader(buf)
   reader.skip(2) // skip type
-  const channel_id = reader.readBytes(32)
-  const serial_id = reader.readU64()
+  const channelId = reader.readBytes(32)
+  const serialId = reader.readU64()
   return {
     type: LightningMessageType.TX_REMOVE_OUTPUT,
-    channel_id,
-    serial_id,
+    channelId,
+    serialId,
   }
 }
 
 export function encodeTxCompleteMessage(msg: TxCompleteMessage): Uint8Array {
-  const buffers = [encodeU16(msg.type), msg.channel_id]
+  const buffers = [encodeU16(msg.type), msg.channelId]
   const totalLength = buffers.reduce((sum, buf) => sum + buf.length, 0)
   const result = new Uint8Array(totalLength)
   let offset = 0
@@ -253,21 +253,21 @@ export function encodeTxCompleteMessage(msg: TxCompleteMessage): Uint8Array {
 export function decodeTxCompleteMessage(buf: Uint8Array): TxCompleteMessage {
   const reader = new BufferReader(buf)
   reader.skip(2) // skip type
-  const channel_id = reader.readBytes(32)
+  const channelId = reader.readBytes(32)
   return {
     type: LightningMessageType.TX_COMPLETE,
-    channel_id,
+    channelId,
   }
 }
 
 export function encodeTxSignaturesMessage(msg: TxSignaturesMessage): Uint8Array {
-  const numWitnessesBuf = encodeU16(msg.num_witnesses)
+  const numWitnessesBuf = encodeU16(msg.numWitnesses)
   let witnessesBuf = new Uint8Array(0)
   for (const witness of msg.witnesses) {
     const lenBuf = encodeU16(witness.len)
-    witnessesBuf = new Uint8Array([...witnessesBuf, ...lenBuf, ...witness.witness_data])
+    witnessesBuf = new Uint8Array([...witnessesBuf, ...lenBuf, ...witness.witnessData])
   }
-  const buffers = [encodeU16(msg.type), msg.channel_id, msg.txid, numWitnessesBuf, witnessesBuf]
+  const buffers = [encodeU16(msg.type), msg.channelId, msg.txid, numWitnessesBuf, witnessesBuf]
   const totalLength = buffers.reduce((sum, buf) => sum + buf.length, 0)
   const result = new Uint8Array(totalLength)
   let offset = 0
@@ -281,20 +281,20 @@ export function encodeTxSignaturesMessage(msg: TxSignaturesMessage): Uint8Array 
 export function decodeTxSignaturesMessage(buf: Uint8Array): TxSignaturesMessage {
   const reader = new BufferReader(buf)
   reader.skip(2) // skip type
-  const channel_id = reader.readBytes(32)
+  const channelId = reader.readBytes(32)
   const txid = reader.readBytes(32)
-  const num_witnesses = reader.readU16()
+  const numWitnesses = reader.readU16()
   const witnesses: Witness[] = []
-  for (let i = 0; i < num_witnesses; i++) {
+  for (let i = 0; i < numWitnesses; i++) {
     const len = reader.readU16()
-    const witness_data = reader.readBytes(len)
-    witnesses.push({ len, witness_data })
+    const witnessData = reader.readBytes(len)
+    witnesses.push({ len, witnessData })
   }
   return {
     type: LightningMessageType.TX_SIGNATURES,
-    channel_id,
+    channelId,
     txid,
-    num_witnesses,
+    numWitnesses,
     witnesses,
   }
 }
@@ -302,7 +302,7 @@ export function decodeTxSignaturesMessage(buf: Uint8Array): TxSignaturesMessage 
 export function encodeTxInitRbfMessage(msg: TxInitRbfMessage): Uint8Array {
   const buffers = [
     encodeU16(msg.type),
-    msg.channel_id,
+    msg.channelId,
     encodeU32(msg.locktime),
     encodeU32(msg.feerate),
     encodeTlvStream(msg.tlvs as TlvStream),
@@ -320,13 +320,13 @@ export function encodeTxInitRbfMessage(msg: TxInitRbfMessage): Uint8Array {
 export function decodeTxInitRbfMessage(buf: Uint8Array): TxInitRbfMessage {
   const reader = new BufferReader(buf)
   reader.skip(2) // skip type
-  const channel_id = reader.readBytes(32)
+  const channelId = reader.readBytes(32)
   const locktime = reader.readU32()
   const feerate = reader.readU32()
   const tlvs = decodeTlvStream(reader.remaining()) as TxInitRbfTlvs
   return {
     type: LightningMessageType.TX_INIT_RBF,
-    channel_id,
+    channelId,
     locktime,
     feerate,
     tlvs,
@@ -334,7 +334,7 @@ export function decodeTxInitRbfMessage(buf: Uint8Array): TxInitRbfMessage {
 }
 
 export function encodeTxAckRbfMessage(msg: TxAckRbfMessage): Uint8Array {
-  const buffers = [encodeU16(msg.type), msg.channel_id, encodeTlvStream(msg.tlvs as TlvStream)]
+  const buffers = [encodeU16(msg.type), msg.channelId, encodeTlvStream(msg.tlvs as TlvStream)]
   const totalLength = buffers.reduce((sum, buf) => sum + buf.length, 0)
   const result = new Uint8Array(totalLength)
   let offset = 0
@@ -348,17 +348,17 @@ export function encodeTxAckRbfMessage(msg: TxAckRbfMessage): Uint8Array {
 export function decodeTxAckRbfMessage(buf: Uint8Array): TxAckRbfMessage {
   const reader = new BufferReader(buf)
   reader.skip(2) // skip type
-  const channel_id = reader.readBytes(32)
+  const channelId = reader.readBytes(32)
   const tlvs = decodeTlvStream(reader.remaining()) as TxAckRbfTlvs
   return {
     type: LightningMessageType.TX_ACK_RBF,
-    channel_id,
+    channelId,
     tlvs,
   }
 }
 
 export function encodeTxAbortMessage(msg: TxAbortMessage): Uint8Array {
-  const buffers = [encodeU16(msg.type), msg.channel_id, encodeU16(msg.len), msg.data]
+  const buffers = [encodeU16(msg.type), msg.channelId, encodeU16(msg.len), msg.data]
   const totalLength = buffers.reduce((sum, buf) => sum + buf.length, 0)
   const result = new Uint8Array(totalLength)
   let offset = 0
@@ -372,12 +372,12 @@ export function encodeTxAbortMessage(msg: TxAbortMessage): Uint8Array {
 export function decodeTxAbortMessage(buf: Uint8Array): TxAbortMessage {
   const reader = new BufferReader(buf)
   reader.skip(2) // skip type
-  const channel_id = reader.readBytes(32)
+  const channelId = reader.readBytes(32)
   const len = reader.readU16()
   const data = reader.readBytes(len)
   return {
     type: LightningMessageType.TX_ABORT,
-    channel_id,
+    channelId,
     len,
     data,
   }
@@ -388,24 +388,24 @@ export function decodeTxAbortMessage(buf: Uint8Array): TxAbortMessage {
 export function encodeOpenChannelMessage(msg: OpenChannelMessage): Uint8Array {
   const buffers = [
     encodeU16(msg.type),
-    msg.chain_hash,
-    msg.temporary_channel_id,
-    encodeU64(msg.funding_satoshis),
-    encodeU64(msg.push_msat),
-    encodeU64(msg.dust_limit_satoshis),
-    encodeU64(msg.max_htlc_value_in_flight_msat),
-    encodeU64(msg.channel_reserve_satoshis),
-    encodeU64(msg.htlc_minimum_msat),
-    encodeU32(msg.feerate_per_kw),
-    encodeU16(msg.to_self_delay),
-    encodeU16(msg.max_accepted_htlcs),
-    msg.funding_pubkey,
-    msg.revocation_basepoint,
-    msg.payment_basepoint,
-    msg.delayed_payment_basepoint,
-    msg.htlc_basepoint,
-    msg.first_per_commitment_point,
-    new Uint8Array([msg.channel_flags]),
+    msg.chainHash,
+    msg.temporaryChannelId,
+    encodeU64(msg.fundingSatoshis),
+    encodeU64(msg.pushMsat),
+    encodeU64(msg.dustLimitSatoshis),
+    encodeU64(msg.maxHtlcValueInFlightMsat),
+    encodeU64(msg.channelReserveSatoshis),
+    encodeU64(msg.htlcMinimumMsat),
+    encodeU32(msg.feeratePerKw),
+    encodeU16(msg.toSelfDelay),
+    encodeU16(msg.maxAcceptedHtlcs),
+    msg.fundingPubkey,
+    msg.revocationBasepoint,
+    msg.paymentBasepoint,
+    msg.delayedPaymentBasepoint,
+    msg.htlcBasepoint,
+    msg.firstPerCommitmentPoint,
+    new Uint8Array([msg.channelFlags]),
     encodeTlvStream(msg.tlvs as TlvStream),
   ]
   const totalLength = buffers.reduce((sum, buf) => sum + buf.length, 0)
@@ -421,45 +421,45 @@ export function encodeOpenChannelMessage(msg: OpenChannelMessage): Uint8Array {
 export function decodeOpenChannelMessage(buf: Uint8Array): OpenChannelMessage {
   const reader = new BufferReader(buf)
   reader.skip(2) // skip type
-  const chain_hash = reader.readBytes(32)
-  const temporary_channel_id = reader.readBytes(32)
-  const funding_satoshis = reader.readU64()
-  const push_msat = reader.readU64()
-  const dust_limit_satoshis = reader.readU64()
-  const max_htlc_value_in_flight_msat = reader.readU64()
-  const channel_reserve_satoshis = reader.readU64()
-  const htlc_minimum_msat = reader.readU64()
-  const feerate_per_kw = reader.readU32()
-  const to_self_delay = reader.readU16()
-  const max_accepted_htlcs = reader.readU16()
-  const funding_pubkey = reader.readBytes(33)
-  const revocation_basepoint = reader.readBytes(33)
-  const payment_basepoint = reader.readBytes(33)
-  const delayed_payment_basepoint = reader.readBytes(33)
-  const htlc_basepoint = reader.readBytes(33)
-  const first_per_commitment_point = reader.readBytes(33)
-  const channel_flags = reader.readBytes(1)[0]
+  const chainHash = reader.readBytes(32)
+  const temporaryChannelId = reader.readBytes(32)
+  const fundingSatoshis = reader.readU64()
+  const pushMsat = reader.readU64()
+  const dustLimitSatoshis = reader.readU64()
+  const maxHtlcValueInFlightMsat = reader.readU64()
+  const channelReserveSatoshis = reader.readU64()
+  const htlcMinimumMsat = reader.readU64()
+  const feeratePerKw = reader.readU32()
+  const toSelfDelay = reader.readU16()
+  const maxAcceptedHtlcs = reader.readU16()
+  const fundingPubkey = reader.readBytes(33)
+  const revocationBasepoint = reader.readBytes(33)
+  const paymentBasepoint = reader.readBytes(33)
+  const delayedPaymentBasepoint = reader.readBytes(33)
+  const htlcBasepoint = reader.readBytes(33)
+  const firstPerCommitmentPoint = reader.readBytes(33)
+  const channelFlags = reader.readBytes(1)[0]
   const tlvs = decodeTlvStream(reader.remaining()) as OpenChannelTlvs
   return {
     type: LightningMessageType.OPEN_CHANNEL,
-    chain_hash,
-    temporary_channel_id,
-    funding_satoshis,
-    push_msat,
-    dust_limit_satoshis,
-    max_htlc_value_in_flight_msat,
-    channel_reserve_satoshis,
-    htlc_minimum_msat,
-    feerate_per_kw,
-    to_self_delay,
-    max_accepted_htlcs,
-    funding_pubkey,
-    revocation_basepoint,
-    payment_basepoint,
-    delayed_payment_basepoint,
-    htlc_basepoint,
-    first_per_commitment_point,
-    channel_flags,
+    chainHash,
+    temporaryChannelId,
+    fundingSatoshis,
+    pushMsat,
+    dustLimitSatoshis,
+    maxHtlcValueInFlightMsat,
+    channelReserveSatoshis,
+    htlcMinimumMsat,
+    feeratePerKw,
+    toSelfDelay,
+    maxAcceptedHtlcs,
+    fundingPubkey,
+    revocationBasepoint,
+    paymentBasepoint,
+    delayedPaymentBasepoint,
+    htlcBasepoint,
+    firstPerCommitmentPoint,
+    channelFlags,
     tlvs,
   }
 }
@@ -469,20 +469,20 @@ export function decodeOpenChannelMessage(buf: Uint8Array): OpenChannelMessage {
 export function encodeAcceptChannelMessage(msg: AcceptChannelMessage): Uint8Array {
   const buffers = [
     encodeU16(msg.type),
-    msg.temporary_channel_id,
-    encodeU64(msg.dust_limit_satoshis),
-    encodeU64(msg.max_htlc_value_in_flight_msat),
-    encodeU64(msg.channel_reserve_satoshis),
-    encodeU64(msg.htlc_minimum_msat),
-    encodeU32(msg.minimum_depth),
-    encodeU16(msg.to_self_delay),
-    encodeU16(msg.max_accepted_htlcs),
-    msg.funding_pubkey,
-    msg.revocation_basepoint,
-    msg.payment_basepoint,
-    msg.delayed_payment_basepoint,
-    msg.htlc_basepoint,
-    msg.first_per_commitment_point,
+    msg.temporaryChannelId,
+    encodeU64(msg.dustLimitSatoshis),
+    encodeU64(msg.maxHtlcValueInFlightMsat),
+    encodeU64(msg.channelReserveSatoshis),
+    encodeU64(msg.htlcMinimumMsat),
+    encodeU32(msg.minimumDepth),
+    encodeU16(msg.toSelfDelay),
+    encodeU16(msg.maxAcceptedHtlcs),
+    msg.fundingPubkey,
+    msg.revocationBasepoint,
+    msg.paymentBasepoint,
+    msg.delayedPaymentBasepoint,
+    msg.htlcBasepoint,
+    msg.firstPerCommitmentPoint,
     encodeTlvStream(msg.tlvs as TlvStream),
   ]
   const totalLength = buffers.reduce((sum, buf) => sum + buf.length, 0)
@@ -498,37 +498,37 @@ export function encodeAcceptChannelMessage(msg: AcceptChannelMessage): Uint8Arra
 export function decodeAcceptChannelMessage(buf: Uint8Array): AcceptChannelMessage {
   const reader = new BufferReader(buf)
   reader.skip(2) // skip type
-  const temporary_channel_id = reader.readBytes(32)
-  const dust_limit_satoshis = reader.readU64()
-  const max_htlc_value_in_flight_msat = reader.readU64()
-  const channel_reserve_satoshis = reader.readU64()
-  const htlc_minimum_msat = reader.readU64()
-  const minimum_depth = reader.readU32()
-  const to_self_delay = reader.readU16()
-  const max_accepted_htlcs = reader.readU16()
-  const funding_pubkey = reader.readBytes(33)
-  const revocation_basepoint = reader.readBytes(33)
-  const payment_basepoint = reader.readBytes(33)
-  const delayed_payment_basepoint = reader.readBytes(33)
-  const htlc_basepoint = reader.readBytes(33)
-  const first_per_commitment_point = reader.readBytes(33)
+  const temporaryChannelId = reader.readBytes(32)
+  const dustLimitSatoshis = reader.readU64()
+  const maxHtlcValueInFlightMsat = reader.readU64()
+  const channelReserveSatoshis = reader.readU64()
+  const htlcMinimumMsat = reader.readU64()
+  const minimumDepth = reader.readU32()
+  const toSelfDelay = reader.readU16()
+  const maxAcceptedHtlcs = reader.readU16()
+  const fundingPubkey = reader.readBytes(33)
+  const revocationBasepoint = reader.readBytes(33)
+  const paymentBasepoint = reader.readBytes(33)
+  const delayedPaymentBasepoint = reader.readBytes(33)
+  const htlcBasepoint = reader.readBytes(33)
+  const firstPerCommitmentPoint = reader.readBytes(33)
   const tlvs = decodeTlvStream(reader.remaining()) as AcceptChannelTlvs
   return {
     type: LightningMessageType.ACCEPT_CHANNEL,
-    temporary_channel_id,
-    dust_limit_satoshis,
-    max_htlc_value_in_flight_msat,
-    channel_reserve_satoshis,
-    htlc_minimum_msat,
-    minimum_depth,
-    to_self_delay,
-    max_accepted_htlcs,
-    funding_pubkey,
-    revocation_basepoint,
-    payment_basepoint,
-    delayed_payment_basepoint,
-    htlc_basepoint,
-    first_per_commitment_point,
+    temporaryChannelId,
+    dustLimitSatoshis,
+    maxHtlcValueInFlightMsat,
+    channelReserveSatoshis,
+    htlcMinimumMsat,
+    minimumDepth,
+    toSelfDelay,
+    maxAcceptedHtlcs,
+    fundingPubkey,
+    revocationBasepoint,
+    paymentBasepoint,
+    delayedPaymentBasepoint,
+    htlcBasepoint,
+    firstPerCommitmentPoint,
     tlvs,
   }
 }

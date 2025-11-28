@@ -118,8 +118,8 @@ export function actOneSend(
   const eKey = e || generateKey()
   const h = sha256(new Uint8Array([...state.h, ...eKey.serializeCompressed()]))
   const es = ecdh(eKey.priv, rs)
-  const [ck, temp_k1] = hkdfExtract(state.ck, es)
-  const c = encryptWithAD(temp_k1, 0, h, new Uint8Array(0))
+  const [ck, tempK1] = hkdfExtract(state.ck, es)
+  const c = encryptWithAD(tempK1, 0, h, new Uint8Array(0))
   const h2 = sha256(new Uint8Array([...h, ...c]))
   const message = new Uint8Array(50)
   message[0] = 0 // version
@@ -132,7 +132,7 @@ export function actOneSend(
       ck,
       h: h2,
       e: eKey,
-      temp_k1,
+      tempK1,
     },
   }
 }
@@ -159,9 +159,9 @@ export function actOneReceive(
   const c = message.subarray(34, 50)
   const h = sha256(new Uint8Array([...state.h, ...re]))
   const es = ecdh(ls.priv, re)
-  const [ck, temp_k1] = hkdfExtract(state.ck, es)
+  const [ck, tempK1] = hkdfExtract(state.ck, es)
   try {
-    decryptWithAD(temp_k1, 0, h, c)
+    decryptWithAD(tempK1, 0, h, c)
   } catch {
     return { error: HandshakeError.ACT1_BAD_TAG }
   }
@@ -171,7 +171,7 @@ export function actOneReceive(
       ...state,
       ck,
       h: h2,
-      temp_k1,
+      tempK1,
     },
   }
 }
@@ -189,8 +189,8 @@ export function actTwoSend(
   const eKey = e || generateKey()
   const h = sha256(new Uint8Array([...state.h, ...eKey.serializeCompressed()]))
   const ee = ecdh(eKey.priv, re)
-  const [ck, temp_k2] = hkdfExtract(state.ck, ee)
-  const c = encryptWithAD(temp_k2, 0, h, new Uint8Array(0))
+  const [ck, tempK2] = hkdfExtract(state.ck, ee)
+  const c = encryptWithAD(tempK2, 0, h, new Uint8Array(0))
   const h2 = sha256(new Uint8Array([...h, ...c]))
   const message = new Uint8Array(50)
   message[0] = 0 // version
@@ -203,7 +203,7 @@ export function actTwoSend(
       ck,
       h: h2,
       e: eKey,
-      temp_k2,
+      tempK2,
     },
   }
 }
@@ -230,9 +230,9 @@ export function actTwoReceive(
   const c = message.subarray(34, 50)
   const h = sha256(new Uint8Array([...state.h, ...re]))
   const ee = ecdh(e.priv, re)
-  const [ck, temp_k2] = hkdfExtract(state.ck, ee)
+  const [ck, tempK2] = hkdfExtract(state.ck, ee)
   try {
-    decryptWithAD(temp_k2, 0, h, c)
+    decryptWithAD(tempK2, 0, h, c)
   } catch {
     return { error: HandshakeError.ACT2_BAD_TAG }
   }
@@ -242,7 +242,7 @@ export function actTwoReceive(
       ...state,
       ck,
       h: h2,
-      temp_k2,
+      tempK2,
     },
   }
 }
@@ -257,11 +257,11 @@ export function actThreeSend(
   s: KeyPair,
   re: Point,
 ): { message: Uint8Array; keys: TransportKeys } {
-  const c = encryptWithAD(state.temp_k2!, 1, state.h, s.serializeCompressed())
+  const c = encryptWithAD(state.tempK2!, 1, state.h, s.serializeCompressed())
   const h = sha256(new Uint8Array([...state.h, ...c]))
   const se = ecdh(s.priv, re)
-  const [ck, temp_k3] = hkdfExtract(state.ck, se)
-  const t = encryptWithAD(temp_k3, 0, h, new Uint8Array(0))
+  const [ck, tempK3] = hkdfExtract(state.ck, se)
+  const t = encryptWithAD(tempK3, 0, h, new Uint8Array(0))
   const [rk, sk] = hkdfExtract(ck, new Uint8Array(32)) // zero ikm
   const message = new Uint8Array(66)
   message[0] = 0 // version
@@ -298,15 +298,15 @@ export function actThreeReceive(
   }
   const c = message.subarray(1, 50)
   const t = message.subarray(50, 66)
-  const rsDecrypted = decryptWithAD(state.temp_k2!, 1, state.h, c)
+  const rsDecrypted = decryptWithAD(state.tempK2!, 1, state.h, c)
   if (rsDecrypted.length !== 33 || (rsDecrypted[0] !== 0x02 && rsDecrypted[0] !== 0x03)) {
     return { error: HandshakeError.ACT3_BAD_PUBKEY }
   }
   const h = sha256(new Uint8Array([...state.h, ...c]))
   const se = ecdh(e.priv, rsDecrypted)
-  const [ck, temp_k3] = hkdfExtract(state.ck, se)
+  const [ck, tempK3] = hkdfExtract(state.ck, se)
   try {
-    decryptWithAD(temp_k3, 0, h, t)
+    decryptWithAD(tempK3, 0, h, t)
   } catch {
     return { error: HandshakeError.ACT3_BAD_TAG }
   }

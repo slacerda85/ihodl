@@ -97,17 +97,28 @@ function decode(bech32String: string): { prefix: string; data: Uint8Array; versi
 
 function hexToUint8Array(hexString: string): Uint8Array {
   // Remove 0x prefix if present
-  hexString = hexString.replace('0x', '')
+  hexString = hexString.replace(/^0x/, '')
 
-  // Match every two characters (one byte)
-  const matches = hexString.match(/.{1,2}/g)
+  if (hexString === '') {
+    return new Uint8Array(0)
+  }
 
-  if (!matches) {
+  // Check if length is even
+  if (hexString.length % 2 !== 0) {
+    throw new Error('Hex string must have even length')
+  }
+
+  // Validate hex characters
+  if (!/^[0-9a-fA-F]+$/.test(hexString)) {
     throw new Error('Invalid hex string')
   }
 
-  // Convert each pair of characters to a number and create Uint8Array
-  return new Uint8Array(matches.map(byte => parseInt(byte, 16)))
+  const length = hexString.length / 2
+  const array = new Uint8Array(length)
+  for (let i = 0; i < length; i++) {
+    array[i] = parseInt(hexString.substr(i * 2, 2), 16)
+  }
+  return array
 }
 
 function uint8ArrayToHex(uint8Array: Uint8Array): string {

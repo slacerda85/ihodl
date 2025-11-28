@@ -17,73 +17,73 @@ export type ChainHash = Sha256
 
 // TLV types
 export interface OpenChannelTlvs extends TlvStream {
-  upfront_shutdown_script?: {
-    shutdown_scriptpubkey: Uint8Array
+  upfrontShutdownScript?: {
+    shutdownScriptpubkey: Uint8Array
   }
-  channel_type?: {
+  channelType?: {
     type: Uint8Array
   }
 }
 
 export interface AcceptChannelTlvs extends TlvStream {
-  upfront_shutdown_script?: {
-    shutdown_scriptpubkey: Uint8Array
+  upfrontShutdownScript?: {
+    shutdownScriptpubkey: Uint8Array
   }
-  channel_type?: {
+  channelType?: {
     type: Uint8Array
   }
 }
 
 export interface ChannelReadyTlvs extends TlvStream {
-  short_channel_id?: {
+  shortChannelId?: {
     alias: Uint8Array // short_channel_id
   }
 }
 
 export interface TxInitRbfTlvs extends TlvStream {
-  funding_output_contribution?: {
+  fundingOutputContribution?: {
     satoshis: bigint
   }
-  require_confirmed_inputs?: object
+  requireConfirmedInputs?: object
 }
 
 export interface TxAckRbfTlvs extends TlvStream {
-  funding_output_contribution?: {
+  fundingOutputContribution?: {
     satoshis: bigint
   }
-  require_confirmed_inputs?: object
+  requireConfirmedInputs?: object
 }
 
 export interface ClosingSignedTlvs extends TlvStream {
-  fee_range?: {
-    min_fee_satoshis: number
-    max_fee_satoshis: number
+  feeRange?: {
+    minFeeSatoshis: number
+    maxFeeSatoshis: number
   }
 }
 
 export interface UpdateAddHtlcTlvs extends TlvStream {
-  blinded_path?: {
-    path_key: Point
+  blindedPath?: {
+    pathKey: Point
   }
 }
 
 export interface UpdateFulfillHtlcTlvs extends TlvStream {
-  attribution_data?: {
-    htlc_hold_times: number[]
-    truncated_hmacs: Uint8Array[]
+  attributionData?: {
+    htlcHoldTimes: number[]
+    truncatedHmacs: Uint8Array[]
   }
 }
 
 export interface UpdateFailHtlcTlvs extends TlvStream {
-  attribution_data?: {
-    htlc_hold_times: number[]
-    truncated_hmacs: Uint8Array[]
+  attributionData?: {
+    htlcHoldTimes: number[]
+    truncatedHmacs: Uint8Array[]
   }
 }
 
 export interface ChannelReestablishTlvs extends TlvStream {
-  next_funding?: {
-    next_funding_txid: Sha256
+  nextFunding?: {
+    nextFundingTxid: Sha256
   }
 }
 
@@ -91,18 +91,18 @@ export interface ChannelReestablishTlvs extends TlvStream {
 
 export interface TxAddInputMessage {
   type: LightningMessageType.TX_ADD_INPUT
-  channel_id: ChannelId
-  serial_id: U64
-  prevtx_len: U16
+  channelId: ChannelId
+  serialId: U64
+  prevtxLen: U16
   prevtx: Uint8Array
-  prevtx_vout: U32
+  prevtxVout: U32
   sequence: U32
 }
 
 export interface TxAddOutputMessage {
   type: LightningMessageType.TX_ADD_OUTPUT
-  channel_id: ChannelId
-  serial_id: bigint
+  channelId: ChannelId
+  serialId: bigint
   sats: bigint
   scriptlen: number
   script: Uint8Array
@@ -110,37 +110,37 @@ export interface TxAddOutputMessage {
 
 export interface TxRemoveInputMessage {
   type: LightningMessageType.TX_REMOVE_INPUT
-  channel_id: ChannelId
-  serial_id: bigint
+  channelId: ChannelId
+  serialId: bigint
 }
 
 export interface TxRemoveOutputMessage {
   type: LightningMessageType.TX_REMOVE_OUTPUT
-  channel_id: ChannelId
-  serial_id: bigint
+  channelId: ChannelId
+  serialId: bigint
 }
 
 export interface TxCompleteMessage {
   type: LightningMessageType.TX_COMPLETE
-  channel_id: ChannelId
+  channelId: ChannelId
 }
 
 export interface Witness {
   len: number
-  witness_data: Uint8Array
+  witnessData: Uint8Array
 }
 
 export interface TxSignaturesMessage {
   type: LightningMessageType.TX_SIGNATURES
-  channel_id: ChannelId
+  channelId: ChannelId
   txid: Sha256
-  num_witnesses: number
+  numWitnesses: number
   witnesses: Witness[]
 }
 
 export interface TxInitRbfMessage {
   type: LightningMessageType.TX_INIT_RBF
-  channel_id: ChannelId
+  channelId: ChannelId
   locktime: number
   feerate: number
   tlvs: TxInitRbfTlvs
@@ -148,13 +148,13 @@ export interface TxInitRbfMessage {
 
 export interface TxAckRbfMessage {
   type: LightningMessageType.TX_ACK_RBF
-  channel_id: ChannelId
+  channelId: ChannelId
   tlvs: TxAckRbfTlvs
 }
 
 export interface TxAbortMessage {
   type: LightningMessageType.TX_ABORT
-  channel_id: ChannelId
+  channelId: ChannelId
   len: number
   data: Uint8Array
 }
@@ -163,153 +163,153 @@ export interface TxAbortMessage {
 
 export interface OpenChannelMessage {
   type: LightningMessageType.OPEN_CHANNEL
-  chain_hash: ChainHash
-  temporary_channel_id: ChannelId
-  funding_satoshis: bigint
-  push_msat: bigint
-  dust_limit_satoshis: bigint
-  max_htlc_value_in_flight_msat: bigint
-  channel_reserve_satoshis: bigint
-  htlc_minimum_msat: bigint
-  feerate_per_kw: number
-  to_self_delay: number
-  max_accepted_htlcs: number
-  funding_pubkey: Point
-  revocation_basepoint: Point
-  payment_basepoint: Point
-  delayed_payment_basepoint: Point
-  htlc_basepoint: Point
-  first_per_commitment_point: Point
-  channel_flags: number
+  chainHash: ChainHash
+  temporaryChannelId: ChannelId
+  fundingSatoshis: bigint
+  pushMsat: bigint
+  dustLimitSatoshis: bigint
+  maxHtlcValueInFlightMsat: bigint
+  channelReserveSatoshis: bigint
+  htlcMinimumMsat: bigint
+  feeratePerKw: number
+  toSelfDelay: number
+  maxAcceptedHtlcs: number
+  fundingPubkey: Point
+  revocationBasepoint: Point
+  paymentBasepoint: Point
+  delayedPaymentBasepoint: Point
+  htlcBasepoint: Point
+  firstPerCommitmentPoint: Point
+  channelFlags: number
   tlvs: OpenChannelTlvs
 }
 
 export interface AcceptChannelMessage {
   type: LightningMessageType.ACCEPT_CHANNEL
-  temporary_channel_id: ChannelId
-  dust_limit_satoshis: bigint
-  max_htlc_value_in_flight_msat: bigint
-  channel_reserve_satoshis: bigint
-  htlc_minimum_msat: bigint
-  minimum_depth: number
-  to_self_delay: number
-  max_accepted_htlcs: number
-  funding_pubkey: Point
-  revocation_basepoint: Point
-  payment_basepoint: Point
-  delayed_payment_basepoint: Point
-  htlc_basepoint: Point
-  first_per_commitment_point: Point
+  temporaryChannelId: ChannelId
+  dustLimitSatoshis: bigint
+  maxHtlcValueInFlightMsat: bigint
+  channelReserveSatoshis: bigint
+  htlcMinimumMsat: bigint
+  minimumDepth: number
+  toSelfDelay: number
+  maxAcceptedHtlcs: number
+  fundingPubkey: Point
+  revocationBasepoint: Point
+  paymentBasepoint: Point
+  delayedPaymentBasepoint: Point
+  htlcBasepoint: Point
+  firstPerCommitmentPoint: Point
   tlvs: AcceptChannelTlvs
 }
 
 export interface FundingCreatedMessage {
   type: LightningMessageType.FUNDING_CREATED
-  temporary_channel_id: ChannelId
-  funding_txid: Sha256
-  funding_output_index: number
+  temporaryChannelId: ChannelId
+  fundingTxid: Sha256
+  fundingOutputIndex: number
   signature: Signature
 }
 
 export interface FundingSignedMessage {
   type: LightningMessageType.FUNDING_SIGNED
-  channel_id: ChannelId
+  channelId: ChannelId
   signature: Signature
 }
 
 export interface ChannelReadyMessage {
   type: LightningMessageType.CHANNEL_READY
-  channel_id: ChannelId
-  second_per_commitment_point: Point
+  channelId: ChannelId
+  secondPerCommitmentPoint: Point
   tlvs: ChannelReadyTlvs
 }
 
 // Channel Establishment v2 Messages
 
 export interface OpeningTlvs extends TlvStream {
-  upfront_shutdown_script?: {
-    shutdown_scriptpubkey: Uint8Array
+  upfrontShutdownScript?: {
+    shutdownScriptpubkey: Uint8Array
   }
-  channel_type?: {
+  channelType?: {
     type: Uint8Array
   }
-  require_confirmed_inputs?: object
+  requireConfirmedInputs?: object
 }
 
 export interface AcceptTlvs extends TlvStream {
-  upfront_shutdown_script?: {
-    shutdown_scriptpubkey: Uint8Array
+  upfrontShutdownScript?: {
+    shutdownScriptpubkey: Uint8Array
   }
-  channel_type?: {
+  channelType?: {
     type: Uint8Array
   }
-  require_confirmed_inputs?: object
+  requireConfirmedInputs?: object
 }
 
 export interface OpenChannel2Message {
   type: LightningMessageType.OPEN_CHANNEL2
-  chain_hash: ChainHash
-  temporary_channel_id: ChannelId
-  funding_feerate_perkw: number
-  commitment_feerate_perkw: number
-  funding_satoshis: bigint
-  dust_limit_satoshis: bigint
-  max_htlc_value_in_flight_msat: bigint
-  htlc_minimum_msat: bigint
-  to_self_delay: number
-  max_accepted_htlcs: number
+  chainHash: ChainHash
+  temporaryChannelId: ChannelId
+  fundingFeeratePerkw: number
+  commitmentFeeratePerkw: number
+  fundingSatoshis: bigint
+  dustLimitSatoshis: bigint
+  maxHtlcValueInFlightMsat: bigint
+  htlcMinimumMsat: bigint
+  toSelfDelay: number
+  maxAcceptedHtlcs: number
   locktime: number
-  funding_pubkey: Point
-  revocation_basepoint: Point
-  payment_basepoint: Point
-  delayed_payment_basepoint: Point
-  htlc_basepoint: Point
-  first_per_commitment_point: Point
-  second_per_commitment_point: Point
-  channel_flags: number
+  fundingPubkey: Point
+  revocationBasepoint: Point
+  paymentBasepoint: Point
+  delayedPaymentBasepoint: Point
+  htlcBasepoint: Point
+  firstPerCommitmentPoint: Point
+  secondPerCommitmentPoint: Point
+  channelFlags: number
   tlvs: OpeningTlvs
 }
 
 export interface AcceptChannel2Message {
   type: LightningMessageType.ACCEPT_CHANNEL2
-  temporary_channel_id: ChannelId
-  funding_satoshis: bigint
-  dust_limit_satoshis: bigint
-  max_htlc_value_in_flight_msat: bigint
-  htlc_minimum_msat: bigint
-  minimum_depth: number
-  to_self_delay: number
-  max_accepted_htlcs: number
-  funding_pubkey: Point
-  revocation_basepoint: Point
-  payment_basepoint: Point
-  delayed_payment_basepoint: Point
-  htlc_basepoint: Point
-  first_per_commitment_point: Point
-  second_per_commitment_point: Point
+  temporaryChannelId: ChannelId
+  fundingSatoshis: bigint
+  dustLimitSatoshis: bigint
+  maxHtlcValueInFlightMsat: bigint
+  htlcMinimumMsat: bigint
+  minimumDepth: number
+  toSelfDelay: number
+  maxAcceptedHtlcs: number
+  fundingPubkey: Point
+  revocationBasepoint: Point
+  paymentBasepoint: Point
+  delayedPaymentBasepoint: Point
+  htlcBasepoint: Point
+  firstPerCommitmentPoint: Point
+  secondPerCommitmentPoint: Point
   tlvs: AcceptTlvs
 }
 
 export interface CommitmentSignedMessage {
   type: LightningMessageType.COMMITMENT_SIGNED
-  channel_id: ChannelId
+  channelId: ChannelId
   signature: Signature
-  num_htlcs: number
-  htlc_signature: Signature[]
+  numHtlcs: number
+  htlcSignature: Signature[]
 }
 
 export interface RevokeAndAckMessage {
   type: LightningMessageType.REVOKE_AND_ACK
-  channel_id: ChannelId
-  per_commitment_secret: Uint8Array // 32 bytes
-  next_per_commitment_point: Point
+  channelId: ChannelId
+  perCommitmentSecret: Uint8Array // 32 bytes
+  nextPerCommitmentPoint: Point
 }
 
 // Channel Quiescence Messages
 
 export interface StfuMessage {
   type: LightningMessageType.STFU
-  channel_id: ChannelId
+  channelId: ChannelId
   initiator: number // 0 or 1
 }
 
@@ -317,51 +317,51 @@ export interface StfuMessage {
 
 export interface ShutdownMessage {
   type: LightningMessageType.SHUTDOWN
-  channel_id: ChannelId
+  channelId: ChannelId
   len: number
   scriptpubkey: Uint8Array
 }
 
 export interface ClosingTlvs extends TlvStream {
-  closer_output_only?: {
+  closerOutputOnly?: {
     sig: Signature
   }
-  closee_output_only?: {
+  closeeOutputOnly?: {
     sig: Signature
   }
-  closer_and_closee_outputs?: {
+  closerAndCloseeOutputs?: {
     sig: Signature
   }
 }
 
 export interface ClosingCompleteMessage {
   type: LightningMessageType.CLOSING_COMPLETE
-  channel_id: ChannelId
-  closer_scriptpubkey_len: number
-  closer_scriptpubkey: Uint8Array
-  closee_scriptpubkey_len: number
-  closee_scriptpubkey: Uint8Array
-  fee_satoshis: bigint
+  channelId: ChannelId
+  closerScriptpubkeyLen: number
+  closerScriptpubkey: Uint8Array
+  closeeScriptpubkeyLen: number
+  closeeScriptpubkey: Uint8Array
+  feeSatoshis: bigint
   locktime: number
   tlvs: ClosingTlvs
 }
 
 export interface ClosingSigMessage {
   type: LightningMessageType.CLOSING_SIG
-  channel_id: ChannelId
-  closer_scriptpubkey_len: number
-  closer_scriptpubkey: Uint8Array
-  closee_scriptpubkey_len: number
-  closee_scriptpubkey: Uint8Array
-  fee_satoshis: bigint
+  channelId: ChannelId
+  closerScriptpubkeyLen: number
+  closerScriptpubkey: Uint8Array
+  closeeScriptpubkeyLen: number
+  closeeScriptpubkey: Uint8Array
+  feeSatoshis: bigint
   locktime: number
   tlvs: ClosingTlvs
 }
 
 export interface ClosingSignedMessage {
   type: LightningMessageType.CLOSING_SIGNED
-  channel_id: ChannelId
-  fee_satoshis: bigint
+  channelId: ChannelId
+  feeSatoshis: bigint
   signature: Signature
   tlvs: ClosingSignedTlvs
 }
@@ -370,26 +370,26 @@ export interface ClosingSignedMessage {
 
 export interface UpdateAddHtlcMessage {
   type: LightningMessageType.UPDATE_ADD_HTLC
-  channel_id: ChannelId
+  channelId: ChannelId
   id: bigint
-  amount_msat: bigint
-  payment_hash: Sha256
-  cltv_expiry: number
-  onion_routing_packet: Uint8Array // 1366 bytes
+  amountMsat: bigint
+  paymentHash: Sha256
+  cltvExpiry: number
+  onionRoutingPacket: Uint8Array // 1366 bytes
   tlvs: UpdateAddHtlcTlvs
 }
 
 export interface UpdateFulfillHtlcMessage {
   type: LightningMessageType.UPDATE_FULFILL_HTLC
-  channel_id: ChannelId
+  channelId: ChannelId
   id: bigint
-  payment_preimage: Uint8Array // 32 bytes
+  paymentPreimage: Uint8Array // 32 bytes
   tlvs: UpdateFulfillHtlcTlvs
 }
 
 export interface UpdateFailHtlcMessage {
   type: LightningMessageType.UPDATE_FAIL_HTLC
-  channel_id: ChannelId
+  channelId: ChannelId
   id: bigint
   len: number
   reason: Uint8Array
@@ -398,26 +398,26 @@ export interface UpdateFailHtlcMessage {
 
 export interface UpdateFailMalformedHtlcMessage {
   type: LightningMessageType.UPDATE_FAIL_MALFORMED_HTLC
-  channel_id: ChannelId
+  channelId: ChannelId
   id: bigint
-  sha256_of_onion: Sha256
-  failure_code: number
+  sha256OfOnion: Sha256
+  failureCode: number
 }
 
 export interface UpdateFeeMessage {
   type: LightningMessageType.UPDATE_FEE
-  channel_id: ChannelId
-  feerate_per_kw: number
+  channelId: ChannelId
+  feeratePerKw: number
 }
 
 // Message Retransmission Messages
 
 export interface ChannelReestablishMessage {
   type: LightningMessageType.CHANNEL_REESTABLISH
-  channel_id: ChannelId
-  next_commitment_number: bigint
-  next_revocation_number: bigint
-  your_last_per_commitment_secret: Uint8Array // 32 bytes
-  my_current_per_commitment_point: Point
+  channelId: ChannelId
+  nextCommitmentNumber: bigint
+  nextRevocationNumber: bigint
+  yourLastPerCommitmentSecret: Uint8Array // 32 bytes
+  myCurrentPerCommitmentPoint: Point
   tlvs: ChannelReestablishTlvs
 }

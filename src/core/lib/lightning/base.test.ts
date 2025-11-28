@@ -1,3 +1,5 @@
+import { hexToUint8Array } from '../crypto'
+import { uint8ArrayToHex } from '../utils'
 import {
   encodeU16,
   decodeU16,
@@ -38,14 +40,14 @@ import {
 } from './base'
 
 // Helper functions
-function hexToUint8Array(hex: string): Uint8Array {
+/* function hexToUint8Array(hex: string): Uint8Array {
   const bytes = hex.match(/.{1,2}/g)?.map(byte => parseInt(byte, 16)) || []
   return new Uint8Array(bytes)
 }
 
 function uint8ArrayToHex(arr: Uint8Array): string {
   return Array.from(arr, byte => byte.toString(16).padStart(2, '0')).join('')
-}
+} */
 
 // Basic Unsigned Integers
 describe('Unsigned Integers', () => {

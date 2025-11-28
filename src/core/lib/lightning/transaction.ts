@@ -1,10 +1,11 @@
 // BOLT #3: Bitcoin Transaction and Script Formats - Utility Functions
 
 import { sha256, hash160, verifyMessage, signMessage } from '@/core/lib/crypto'
-// import { createPublicKey } from '@/core/lib/key'
+import { createPublicKey } from '@/core/lib/key'
 import { createP2WPKHScript } from '@/core/lib/address'
 import * as secp from '@noble/secp256k1'
 import { encodeU16, encodeU32, encodeU64 } from './base'
+import { uint8ArrayToHex } from '@/core/lib/utils'
 import {
   Satoshis,
   CltvExpiry,
@@ -22,7 +23,6 @@ import {
   DUST_LIMIT_UNKNOWN_SEGWIT,
 } from '@/core/models/lightning/transaction'
 import { Sha256, Point, Signature } from '@/core/models/lightning/base'
-import { CURVE_ORDER } from '@/core/models/key'
 import { OpCode } from '@/core/models/opcodes'
 
 // const ORDER = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n
@@ -53,76 +53,62 @@ export function deriveRevocationPubkey(
 }
 
 /**
- * Derives local pubkey: per_commitment_point + payment_basepoint + SHA256(per_commitment_point || payment_basepoint)
+ * Derives local pubkey: per_commitment_point + payment_basepoint * SHA256(per_commitment_point || payment_basepoint)
  */
 export function deriveLocalPubkey(
   perCommitmentPoint: Point,
   paymentBasepointPriv: PrivateKey,
 ): Point {
-  const paymentBasepoint = secp.getPublicKey(paymentBasepointPriv, true)
+  const paymentBasepoint = createPublicKey(paymentBasepointPriv)
   const input = new Uint8Array([...perCommitmentPoint, ...paymentBasepoint])
-  const hash = sha256(input)
-  const priv =
-    (BigInt('0x' + Buffer.from(paymentBasepointPriv).toString('hex')) +
-      BigInt('0x' + Buffer.from(hash).toString('hex'))) %
-    CURVE_ORDER
-  const privBytes = new Uint8Array(32)
-  for (let i = 0; i < 32; i++) {
-    privBytes[31 - i] = Number((priv >> BigInt(8 * i)) & 0xffn)
-  }
-  const pub = secp.getPublicKey(privBytes, true)
+  const scalarBytes = sha256(input)
+  const scalar = BigInt('0x' + uint8ArrayToHex(scalarBytes))
+  const multipliedPoint = secp.Point.fromHex(uint8ArrayToHex(paymentBasepoint)).multiply(scalar)
+  const result = secp.Point.fromHex(uint8ArrayToHex(perCommitmentPoint)).add(multipliedPoint)
+  return new Uint8Array(result.toBytes(true))
 }
 
 /**
  * Derives remote pubkey: per_commitment_point + payment_basepoint * SHA256(per_commitment_point || payment_basepoint)
  */
 export function deriveRemotePubkey(perCommitmentPoint: Point, paymentBasepoint: Point): Point {
-  return deriveLocalPubkey(perCommitmentPoint, paymentBasepoint)
+  const input = new Uint8Array([...perCommitmentPoint, ...paymentBasepoint])
+  const scalarBytes = sha256(input)
+  const scalar = BigInt('0x' + uint8ArrayToHex(scalarBytes))
+  const multipliedPoint = secp.Point.fromHex(uint8ArrayToHex(paymentBasepoint)).multiply(scalar)
+  const result = secp.Point.fromHex(uint8ArrayToHex(perCommitmentPoint)).add(multipliedPoint)
+  return new Uint8Array(result.toBytes(true))
 }
 
 /**
- * Derives HTLC pubkey: per_commitment_point + htlc_basepoint + SHA256(per_commitment_point || htlc_basepoint)
+ * Derives HTLC pubkey: per_commitment_point + htlc_basepoint * SHA256(per_commitment_point || htlc_basepoint)
  */
 export function deriveHtlcPubkey(perCommitmentPoint: Point, htlcBasepointPriv: PrivateKey): Point {
-  const htlcBasepoint = secp.getPublicKey(htlcBasepointPriv, true)
+  const htlcBasepoint = createPublicKey(htlcBasepointPriv)
   const input = new Uint8Array([...perCommitmentPoint, ...htlcBasepoint])
-  const hash = sha256(input)
-  const priv =
-    (BigInt('0x' + Buffer.from(htlcBasepointPriv).toString('hex')) +
-      BigInt('0x' + Buffer.from(hash).toString('hex'))) %
-    CURVE_ORDER
-  const privBytes = new Uint8Array(32)
-  for (let i = 0; i < 32; i++) {
-    privBytes[31 - i] = Number((priv >> BigInt(8 * i)) & 0xffn)
-  }
-  const pub = secp.getPublicKey(privBytes, true)
-  return (secp as any).ProjectivePoint.fromHex(perCommitmentPoint)
-    .add((secp as any).ProjectivePoint.fromHex(pub))
-    .toHex(true)
+  const scalarBytes = sha256(input)
+  const scalar = BigInt('0x' + uint8ArrayToHex(scalarBytes))
+  const multipliedPoint = secp.Point.fromHex(uint8ArrayToHex(htlcBasepoint)).multiply(scalar)
+  const result = secp.Point.fromHex(uint8ArrayToHex(perCommitmentPoint)).add(multipliedPoint)
+  return new Uint8Array(result.toBytes(true))
 }
 
 /**
- * Derives delayed pubkey: per_commitment_point + delayed_payment_basepoint + SHA256(per_commitment_point || delayed_payment_basepoint)
+ * Derives delayed pubkey: per_commitment_point + delayed_payment_basepoint * SHA256(per_commitment_point || delayed_payment_basepoint)
  */
 export function deriveDelayedPubkey(
   perCommitmentPoint: Point,
   delayedPaymentBasepointPriv: PrivateKey,
 ): Point {
-  const delayedPaymentBasepoint = secp.getPublicKey(delayedPaymentBasepointPriv, true)
+  const delayedPaymentBasepoint = createPublicKey(delayedPaymentBasepointPriv)
   const input = new Uint8Array([...perCommitmentPoint, ...delayedPaymentBasepoint])
-  const hash = sha256(input)
-  const priv =
-    (BigInt('0x' + Buffer.from(delayedPaymentBasepointPriv).toString('hex')) +
-      BigInt('0x' + Buffer.from(hash).toString('hex'))) %
-    CURVE_ORDER
-  const privBytes = new Uint8Array(32)
-  for (let i = 0; i < 32; i++) {
-    privBytes[31 - i] = Number((priv >> BigInt(8 * i)) & 0xffn)
-  }
-  const pub = secp.getPublicKey(privBytes, true)
-  return (secp as any).ProjectivePoint.fromHex(perCommitmentPoint)
-    .add((secp as any).ProjectivePoint.fromHex(pub))
-    .toHex(true)
+  const scalarBytes = sha256(input)
+  const scalar = BigInt('0x' + uint8ArrayToHex(scalarBytes))
+  const multipliedPoint = secp.Point.fromHex(uint8ArrayToHex(delayedPaymentBasepoint)).multiply(
+    scalar,
+  )
+  const result = secp.Point.fromHex(uint8ArrayToHex(perCommitmentPoint)).add(multipliedPoint)
+  return new Uint8Array(result.toBytes(true))
 }
 
 /**
@@ -593,6 +579,6 @@ export function calculateObscuringFactor(
 ): bigint {
   const input = new Uint8Array([...localPaymentBasepoint, ...remotePaymentBasepoint])
   const hash = sha256(input)
-  const factor = BigInt('0x' + Buffer.from(hash.slice(0, 6)).toString('hex'))
+  const factor = BigInt('0x' + uint8ArrayToHex(hash.slice(0, 6)))
   return factor ^ 42n // XOR with commitment number (example: 42)
 }

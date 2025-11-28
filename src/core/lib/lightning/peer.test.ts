@@ -50,11 +50,11 @@ describe('BOLT #2 Peer Protocol Encoding/Decoding', () => {
     it('should encode and decode correctly', () => {
       const msg: TxAddInputMessage = {
         type: LightningMessageType.TX_ADD_INPUT,
-        channel_id: channelId,
-        serial_id: 0n, // even for initiator
-        prevtx_len: 100,
+        channelId: channelId,
+        serialId: 0n, // even for initiator
+        prevtxLen: 100,
         prevtx: new Uint8Array(100).fill(0x05),
-        prevtx_vout: 0,
+        prevtxVout: 0,
         sequence: 4294967293, // max allowed
       }
 
@@ -68,11 +68,11 @@ describe('BOLT #2 Peer Protocol Encoding/Decoding', () => {
     it('should handle different serial_id parity', () => {
       const msg: TxAddInputMessage = {
         type: LightningMessageType.TX_ADD_INPUT,
-        channel_id: channelId,
-        serial_id: 1n, // odd for non-initiator
-        prevtx_len: 50,
+        channelId: channelId,
+        serialId: 1n, // odd for non-initiator
+        prevtxLen: 50,
         prevtx: new Uint8Array(50).fill(0x06),
-        prevtx_vout: 1,
+        prevtxVout: 1,
         sequence: 0,
       }
 
@@ -87,8 +87,8 @@ describe('BOLT #2 Peer Protocol Encoding/Decoding', () => {
     it('should encode and decode correctly', () => {
       const msg: TxAddOutputMessage = {
         type: LightningMessageType.TX_ADD_OUTPUT,
-        channel_id: channelId,
-        serial_id: 0n,
+        channelId: channelId,
+        serialId: 0n,
         sats: 1000000n,
         scriptlen: 25,
         script: new Uint8Array(25).fill(0x07),
@@ -104,8 +104,8 @@ describe('BOLT #2 Peer Protocol Encoding/Decoding', () => {
     it('should handle odd serial_id', () => {
       const msg: TxAddOutputMessage = {
         type: LightningMessageType.TX_ADD_OUTPUT,
-        channel_id: channelId,
-        serial_id: 1n,
+        channelId: channelId,
+        serialId: 1n,
         sats: 500000n,
         scriptlen: 22,
         script: new Uint8Array(22).fill(0x08),
@@ -122,8 +122,8 @@ describe('BOLT #2 Peer Protocol Encoding/Decoding', () => {
     it('should encode and decode correctly', () => {
       const msg: TxRemoveInputMessage = {
         type: LightningMessageType.TX_REMOVE_INPUT,
-        channel_id: channelId,
-        serial_id: 0n,
+        channelId: channelId,
+        serialId: 0n,
       }
 
       const encoded = encodeTxRemoveInputMessage(msg)
@@ -138,8 +138,8 @@ describe('BOLT #2 Peer Protocol Encoding/Decoding', () => {
     it('should encode and decode correctly', () => {
       const msg: TxRemoveOutputMessage = {
         type: LightningMessageType.TX_REMOVE_OUTPUT,
-        channel_id: channelId,
-        serial_id: 0n,
+        channelId: channelId,
+        serialId: 0n,
       }
 
       const encoded = encodeTxRemoveOutputMessage(msg)
@@ -154,7 +154,7 @@ describe('BOLT #2 Peer Protocol Encoding/Decoding', () => {
     it('should encode and decode correctly', () => {
       const msg: TxCompleteMessage = {
         type: LightningMessageType.TX_COMPLETE,
-        channel_id: channelId,
+        channelId: channelId,
       }
 
       const encoded = encodeTxCompleteMessage(msg)
@@ -168,15 +168,15 @@ describe('BOLT #2 Peer Protocol Encoding/Decoding', () => {
   describe('TxSignaturesMessage', () => {
     it('should encode and decode correctly with witnesses', () => {
       const witnesses: Witness[] = [
-        { len: 10, witness_data: new Uint8Array(10).fill(0x09) },
-        { len: 20, witness_data: new Uint8Array(20).fill(0x0a) },
+        { len: 10, witnessData: new Uint8Array(10).fill(0x09) },
+        { len: 20, witnessData: new Uint8Array(20).fill(0x0a) },
       ]
 
       const msg: TxSignaturesMessage = {
         type: LightningMessageType.TX_SIGNATURES,
-        channel_id: channelId,
+        channelId: channelId,
         txid: sha256,
-        num_witnesses: 2,
+        numWitnesses: 2,
         witnesses,
       }
 
@@ -190,9 +190,9 @@ describe('BOLT #2 Peer Protocol Encoding/Decoding', () => {
     it('should handle empty witnesses', () => {
       const msg: TxSignaturesMessage = {
         type: LightningMessageType.TX_SIGNATURES,
-        channel_id: channelId,
+        channelId: channelId,
         txid: sha256,
-        num_witnesses: 0,
+        numWitnesses: 0,
         witnesses: [],
       }
 
@@ -207,7 +207,7 @@ describe('BOLT #2 Peer Protocol Encoding/Decoding', () => {
     it('should encode and decode correctly', () => {
       const msg: TxInitRbfMessage = {
         type: LightningMessageType.TX_INIT_RBF,
-        channel_id: channelId,
+        channelId: channelId,
         locktime: 123456,
         feerate: 1000,
         tlvs: [], // empty TLVs
@@ -223,7 +223,7 @@ describe('BOLT #2 Peer Protocol Encoding/Decoding', () => {
     it('should handle TLVs', () => {
       const msg: TxInitRbfMessage = {
         type: LightningMessageType.TX_INIT_RBF,
-        channel_id: channelId,
+        channelId: channelId,
         locktime: 654321,
         feerate: 2000,
         tlvs: [
@@ -243,7 +243,7 @@ describe('BOLT #2 Peer Protocol Encoding/Decoding', () => {
     it('should encode and decode correctly', () => {
       const msg: TxAckRbfMessage = {
         type: LightningMessageType.TX_ACK_RBF,
-        channel_id: channelId,
+        channelId: channelId,
         tlvs: [],
       }
 
@@ -257,7 +257,7 @@ describe('BOLT #2 Peer Protocol Encoding/Decoding', () => {
     it('should handle TLVs', () => {
       const msg: TxAckRbfMessage = {
         type: LightningMessageType.TX_ACK_RBF,
-        channel_id: channelId,
+        channelId: channelId,
         tlvs: [
           { type: 0n, length: BigInt(encodeBigSize(75000n).length), value: encodeBigSize(75000n) },
           { type: 1n, length: 0n, value: new Uint8Array(0) },
@@ -276,7 +276,7 @@ describe('BOLT #2 Peer Protocol Encoding/Decoding', () => {
       const data = new Uint8Array([0x42, 0x43, 0x44])
       const msg: TxAbortMessage = {
         type: LightningMessageType.TX_ABORT,
-        channel_id: channelId,
+        channelId: channelId,
         len: 3,
         data,
       }
@@ -291,7 +291,7 @@ describe('BOLT #2 Peer Protocol Encoding/Decoding', () => {
     it('should handle empty data', () => {
       const msg: TxAbortMessage = {
         type: LightningMessageType.TX_ABORT,
-        channel_id: channelId,
+        channelId: channelId,
         len: 0,
         data: new Uint8Array(0),
       }
@@ -307,24 +307,24 @@ describe('BOLT #2 Peer Protocol Encoding/Decoding', () => {
     it('should encode and decode correctly', () => {
       const msg: OpenChannelMessage = {
         type: LightningMessageType.OPEN_CHANNEL,
-        chain_hash: chainHash,
-        temporary_channel_id: channelId,
-        funding_satoshis: 1000000n,
-        push_msat: 0n,
-        dust_limit_satoshis: 546n,
-        max_htlc_value_in_flight_msat: 1000000000n,
-        channel_reserve_satoshis: 10000n,
-        htlc_minimum_msat: 1000n,
-        feerate_per_kw: 1000,
-        to_self_delay: 144,
-        max_accepted_htlcs: 483,
-        funding_pubkey: point,
-        revocation_basepoint: point,
-        payment_basepoint: point,
-        delayed_payment_basepoint: point,
-        htlc_basepoint: point,
-        first_per_commitment_point: point,
-        channel_flags: 0,
+        chainHash: chainHash,
+        temporaryChannelId: channelId,
+        fundingSatoshis: 1000000n,
+        pushMsat: 0n,
+        dustLimitSatoshis: 546n,
+        maxHtlcValueInFlightMsat: 1000000000n,
+        channelReserveSatoshis: 10000n,
+        htlcMinimumMsat: 1000n,
+        feeratePerKw: 1000,
+        toSelfDelay: 144,
+        maxAcceptedHtlcs: 483,
+        fundingPubkey: point,
+        revocationBasepoint: point,
+        paymentBasepoint: point,
+        delayedPaymentBasepoint: point,
+        htlcBasepoint: point,
+        firstPerCommitmentPoint: point,
+        channelFlags: 0,
         tlvs: [],
       }
 
@@ -338,24 +338,24 @@ describe('BOLT #2 Peer Protocol Encoding/Decoding', () => {
     it('should handle TLVs', () => {
       const msg: OpenChannelMessage = {
         type: LightningMessageType.OPEN_CHANNEL,
-        chain_hash: chainHash,
-        temporary_channel_id: channelId,
-        funding_satoshis: 2000000n,
-        push_msat: 100000n,
-        dust_limit_satoshis: 1000n,
-        max_htlc_value_in_flight_msat: 2000000000n,
-        channel_reserve_satoshis: 20000n,
-        htlc_minimum_msat: 2000n,
-        feerate_per_kw: 1500,
-        to_self_delay: 200,
-        max_accepted_htlcs: 400,
-        funding_pubkey: point,
-        revocation_basepoint: point,
-        payment_basepoint: point,
-        delayed_payment_basepoint: point,
-        htlc_basepoint: point,
-        first_per_commitment_point: point,
-        channel_flags: 1,
+        chainHash: chainHash,
+        temporaryChannelId: channelId,
+        fundingSatoshis: 2000000n,
+        pushMsat: 100000n,
+        dustLimitSatoshis: 1000n,
+        maxHtlcValueInFlightMsat: 2000000000n,
+        channelReserveSatoshis: 20000n,
+        htlcMinimumMsat: 2000n,
+        feeratePerKw: 1500,
+        toSelfDelay: 200,
+        maxAcceptedHtlcs: 400,
+        fundingPubkey: point,
+        revocationBasepoint: point,
+        paymentBasepoint: point,
+        delayedPaymentBasepoint: point,
+        htlcBasepoint: point,
+        firstPerCommitmentPoint: point,
+        channelFlags: 1,
         tlvs: [{ type: 1n, length: 4n, value: new Uint8Array([0x00, 0x00, 0x00, 0x00]) }],
       }
 
@@ -370,20 +370,20 @@ describe('BOLT #2 Peer Protocol Encoding/Decoding', () => {
     it('should encode and decode correctly', () => {
       const msg: AcceptChannelMessage = {
         type: LightningMessageType.ACCEPT_CHANNEL,
-        temporary_channel_id: channelId,
-        dust_limit_satoshis: 1000n,
-        max_htlc_value_in_flight_msat: 1500000000n,
-        channel_reserve_satoshis: 15000n,
-        htlc_minimum_msat: 1500n,
-        minimum_depth: 6,
-        to_self_delay: 150,
-        max_accepted_htlcs: 450,
-        funding_pubkey: point,
-        revocation_basepoint: point,
-        payment_basepoint: point,
-        delayed_payment_basepoint: point,
-        htlc_basepoint: point,
-        first_per_commitment_point: point,
+        temporaryChannelId: channelId,
+        dustLimitSatoshis: 1000n,
+        maxHtlcValueInFlightMsat: 1500000000n,
+        channelReserveSatoshis: 15000n,
+        htlcMinimumMsat: 1500n,
+        minimumDepth: 6,
+        toSelfDelay: 150,
+        maxAcceptedHtlcs: 450,
+        fundingPubkey: point,
+        revocationBasepoint: point,
+        paymentBasepoint: point,
+        delayedPaymentBasepoint: point,
+        htlcBasepoint: point,
+        firstPerCommitmentPoint: point,
         tlvs: [],
       }
 
@@ -396,20 +396,20 @@ describe('BOLT #2 Peer Protocol Encoding/Decoding', () => {
     it('should handle TLVs', () => {
       const msg: AcceptChannelMessage = {
         type: LightningMessageType.ACCEPT_CHANNEL,
-        temporary_channel_id: channelId,
-        dust_limit_satoshis: 2000n,
-        max_htlc_value_in_flight_msat: 2500000000n,
-        channel_reserve_satoshis: 25000n,
-        htlc_minimum_msat: 2500n,
-        minimum_depth: 3,
-        to_self_delay: 250,
-        max_accepted_htlcs: 350,
-        funding_pubkey: point,
-        revocation_basepoint: point,
-        payment_basepoint: point,
-        delayed_payment_basepoint: point,
-        htlc_basepoint: point,
-        first_per_commitment_point: point,
+        temporaryChannelId: channelId,
+        dustLimitSatoshis: 2000n,
+        maxHtlcValueInFlightMsat: 2500000000n,
+        channelReserveSatoshis: 25000n,
+        htlcMinimumMsat: 2500n,
+        minimumDepth: 3,
+        toSelfDelay: 250,
+        maxAcceptedHtlcs: 350,
+        fundingPubkey: point,
+        revocationBasepoint: point,
+        paymentBasepoint: point,
+        delayedPaymentBasepoint: point,
+        htlcBasepoint: point,
+        firstPerCommitmentPoint: point,
         tlvs: [{ type: 1n, length: 4n, value: new Uint8Array([0x00, 0x00, 0x00, 0x01]) }],
       }
 

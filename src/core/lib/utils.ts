@@ -15,7 +15,20 @@ export function uint8ArrayFrom(data: number[] | ArrayBuffer | Uint8Array): Uint8
   throw new Error('Invalid data type for Uint8Array creation')
 }
 
-export function uint8ArrayFromHex(hex: string): Uint8Array {
+export function hexToUint8Array(hex: string): Uint8Array {
+  // Remove 0x prefix if present
+  hex = hex.replace(/^0x/, '')
+
+  // Check if length is even
+  if (hex.length % 2 !== 0) {
+    throw new Error('Hex string must have even length')
+  }
+
+  // Validate hex characters
+  if (!/^[0-9a-fA-F]+$/.test(hex)) {
+    throw new Error('Invalid hex string')
+  }
+
   const length = hex.length / 2
   const array = new Uint8Array(length)
   for (let i = 0; i < length; i++) {
@@ -25,9 +38,7 @@ export function uint8ArrayFromHex(hex: string): Uint8Array {
 }
 
 export function uint8ArrayToHex(array: Uint8Array): string {
-  return Array.from(array)
-    .map(byte => byte.toString(16).padStart(2, '0'))
-    .join('')
+  return array.reduce((str, byte) => str + byte.toString(16).padStart(2, '0'), '')
 }
 
 export function concatUint8Arrays(arrays: Uint8Array[]): Uint8Array {
