@@ -26,8 +26,8 @@
     "@react-navigation/bottom-tabs": "^7.2.0",
     "@react-navigation/elements": "^2.3.8",
     "@react-navigation/native": "^7.0.14",
-    "bech32": "^2.0.0",
     "bip39": "^3.1.0",
+    "bolt11": "^1.4.1",
     "bs58": "^6.0.0",
     "bs58check": "^4.0.0",
     "buffer": "^6.0.3",
@@ -53,6 +53,7 @@
     "expo-system-ui": "~6.0.8",
     "expo-task-manager": "~14.0.8",
     "expo-updates": "~29.0.13",
+    "light-bolt11-decoder": "^3.2.0",
     "qrcode-generator": "^2.0.4",
     "react": "19.1.0",
     "react-dom": "19.1.0",
@@ -110,7 +111,6 @@
       "reactNativeDirectoryCheck": {
         "exclude": [
           "@noble/hashes",
-          "bech32",
           "bip39",
           "bs58",
           "bs58check",

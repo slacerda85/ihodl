@@ -18,3 +18,12 @@ jest.mock('react-native-mmkv', () => ({
     getAllKeys: jest.fn(),
   })),
 }))
+
+// Serializer for BigInt
+const bigIntSerializer = {
+  serialize: val => val.toString(),
+  deserialize: val => BigInt(val),
+  test: val => typeof val === 'bigint',
+}
+
+expect.addSnapshotSerializer(bigIntSerializer)

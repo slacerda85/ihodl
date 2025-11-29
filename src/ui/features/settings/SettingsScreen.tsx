@@ -11,7 +11,7 @@ import {
 import { useSettings } from '@/ui/features/settings'
 // import { clearPersistedState } from '@/ui/features/storage/StorageProvider'
 // import Picker from '@/ui/components/Picker/Picker'
-import AccountRepository from '@/core/repositories/account'
+// import AccountRepository from '@/core/repositories/account'
 import SeedRepository from '@/core/repositories/seed'
 import walletRepository from '@/core/repositories/wallet'
 // import { ColorMode } from './state'
@@ -52,21 +52,6 @@ export default function SettingsScreen() {
           const seedRepository = new SeedRepository()
           seedRepository.clear()
           Alert.alert('Seeds Limpas', 'Todas as seeds foram removidas.')
-        },
-      },
-    ])
-  }
-
-  const handleClearAccounts = () => {
-    Alert.alert('Limpar Contas', 'Isso irá limpar todas as contas salvas. Deseja continuar?', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Limpar',
-        style: 'destructive',
-        onPress: () => {
-          const accountRepository = new AccountRepository()
-          accountRepository.clear()
-          Alert.alert('Contas Limpas', 'Todas as contas foram removidas.')
         },
       },
     ])
@@ -122,14 +107,14 @@ export default function SettingsScreen() {
             Limpar Seeds
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity
+        {/* <TouchableOpacity
           style={[styles.clearButton, isDarkEffective && styles.clearButtonDark]}
           onPress={handleClearAccounts}
         >
           <Text style={[styles.clearButtonText, isDarkEffective && styles.clearButtonTextDark]}>
             Limpar Contas
           </Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
         <Text style={[styles.description, isDarkEffective && styles.descriptionDark]}>
           Use os botões acima para limpar dados específicos salvos localmente.
         </Text>

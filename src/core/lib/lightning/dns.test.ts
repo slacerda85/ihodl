@@ -1,12 +1,6 @@
 import { uint8ArrayToHex } from '../utils'
 import { encodeBech32NodeId, decodeBech32NodeId } from '../address'
-import {
-  fromMnemonic,
-  deriveChildKey,
-  createPublicKey,
-  splitMasterKey,
-  createMasterKey,
-} from '../key'
+import { generateTestNodeId } from './test-utils'
 import {
   buildDnsQueryDomain,
   parseDnsReply,
@@ -18,16 +12,8 @@ import {
 } from './dns'
 import { DnsReply, DnsSrvRecord } from '@/core/models/lightning/dns'
 
-// Test mnemonic for consistent test vectors
-const TEST_MNEMONIC =
-  'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
-
 // Derive test node ID from test mnemonic
-const testSeed = fromMnemonic(TEST_MNEMONIC)
-const masterKey = createMasterKey(testSeed) // m/0'
-const childKey = deriveChildKey(masterKey, 0x80000000)
-const { privateKey } = splitMasterKey(childKey)
-const testNodeId = createPublicKey(privateKey)
+const testNodeId = generateTestNodeId()
 const testNodeIdHex = uint8ArrayToHex(testNodeId)
 const testNodeIdBech32 = encodeBech32NodeId(testNodeId)
 
