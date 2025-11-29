@@ -1,4 +1,4 @@
-import { entropyToMnemonic } from '../lib/bip39'
+import { entropyToMnemonic } from '../lib/bip/bip39'
 import { createEntropy } from '../lib/crypto'
 import SeedRepository from '../repositories/seed'
 

@@ -18,7 +18,7 @@ import {
   determineOnChainRequirements,
   validateOnChainHandling,
   updateChannelState,
-} from './onchain'
+} from '../onchain'
 import {
   OutputResolutionState,
   HtlcResolutionAction,

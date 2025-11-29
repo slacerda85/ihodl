@@ -27,3 +27,28 @@ const bigIntSerializer = {
 }
 
 expect.addSnapshotSerializer(bigIntSerializer)
+
+// Fix BigInt serialization for Jest worker communication
+const originalStringify = JSON.stringify
+JSON.stringify = function (value, replacer, space) {
+  return originalStringify(
+    value,
+    (key, val) => {
+      if (typeof val === 'bigint') {
+        return { __bigint__: val.toString() }
+      }
+      return replacer ? replacer(key, val) : val
+    },
+    space,
+  )
+}
+
+const originalParse = JSON.parse
+JSON.parse = function (text, reviver) {
+  return originalParse(text, (key, val) => {
+    if (val && typeof val === 'object' && val.__bigint__) {
+      return BigInt(val.__bigint__)
+    }
+    return reviver ? reviver(key, val) : val
+  })
+}

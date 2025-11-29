@@ -13,7 +13,7 @@ import {
   actThreeReceive,
   encryptMessage,
   decryptMessage,
-} from './transport'
+} from '../transport'
 import { HandshakeError } from '@/core/models/lightning/transport'
 
 // Helper function to convert hex string to Uint8Array

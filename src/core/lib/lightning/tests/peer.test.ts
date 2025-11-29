@@ -36,7 +36,7 @@ import {
   decodeOpenChannelMessage,
   encodeAcceptChannelMessage,
   decodeAcceptChannelMessage,
-} from './peer'
+} from '../peer'
 import { encodeBigSize } from '@/core/lib/lightning/base'
 
 describe('BOLT #2 Peer Protocol Encoding/Decoding', () => {

@@ -31,7 +31,7 @@ import {
 import { Sha256, Signature } from '@/core/models/lightning/base'
 import { sha256 } from '../crypto'
 import { signMessage, verifyMessage } from '../crypto/crypto'
-import { toWords, fromWords, encode, decode } from '../bech32'
+import { toWords, fromWords, encode, decode } from '../bip/bech32'
 import {
   concatUint8Arrays,
   writeUint32BE,

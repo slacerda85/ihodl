@@ -1,6 +1,6 @@
-import { uint8ArrayToHex } from '../utils'
-import { encodeBech32NodeId, decodeBech32NodeId } from '../address'
-import { generateTestNodeId } from './test-utils'
+import { uint8ArrayToHex } from '../../utils'
+import { encodeBech32NodeId, decodeBech32NodeId } from '../../address'
+import { generateTestNodeId } from '../test-utils'
 import {
   buildDnsQueryDomain,
   parseDnsReply,
@@ -9,7 +9,7 @@ import {
   getPeersFromDnsReply,
   createDefaultDnsSeedQuery,
   DnsQueryType,
-} from './dns'
+} from '../dns'
 import { DnsReply, DnsSrvRecord } from '@/core/models/lightning/dns'
 
 // Derive test node ID from test mnemonic

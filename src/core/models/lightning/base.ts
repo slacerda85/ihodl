@@ -190,3 +190,7 @@ export const LIGHTNING_SIGNET_PORT = 39735
 export const LIGHTNING_REGTEST_PORT = 9735 // Same as mainnet typically
 
 export const MAX_MESSAGE_SIZE = 65535
+
+// Bech32 Constants (BIP 173)
+export const BECH32_CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l'
+export const BECH32_GENERATOR = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3]

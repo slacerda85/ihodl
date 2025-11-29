@@ -1,4 +1,4 @@
-import { uint8ArrayToHex, hexToUint8Array } from '../utils'
+import { uint8ArrayToHex, hexToUint8Array } from '../../utils'
 import {
   encodeU16,
   decodeU16,
@@ -36,7 +36,7 @@ import {
   decodePeerStorageMessage,
   encodePeerStorageRetrievalMessage,
   decodePeerStorageRetrievalMessage,
-} from './base'
+} from '../base'
 
 // Basic Unsigned Integers
 describe('Unsigned Integers', () => {

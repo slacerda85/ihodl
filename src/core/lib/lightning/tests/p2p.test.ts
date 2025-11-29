@@ -21,7 +21,7 @@ import {
   decodeChannelAnnouncementMessage,
   encodeChannelUpdateMessage,
   decodeChannelUpdateMessage,
-} from './p2p'
+} from '../p2p'
 import {
   GossipMessageType,
   BITCOIN_CHAIN_HASH,
@@ -31,7 +31,7 @@ import {
   AddressType,
 } from '@/core/models/lightning/p2p'
 import { ShortChannelId, Point } from '@/core/models/lightning/base'
-import { hash256 } from '../crypto'
+import { hash256 } from '../../crypto'
 
 describe('P2P Gossip Protocol', () => {
   describe('Crypto Utilities', () => {

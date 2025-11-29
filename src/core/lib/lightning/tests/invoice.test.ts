@@ -6,10 +6,10 @@ import {
   validateInvoice,
   verifyInvoiceSignature,
   getInvoiceExpiryStatus,
-} from './invoice'
+} from '../invoice'
 import { CurrencyPrefix, AmountMultiplier } from '@/core/models/lightning/invoice'
-import { generateTestPrivateKey, generateTestNodeId } from './test-utils'
-import { sha256 } from '../crypto'
+import { generateTestPrivateKey, generateTestNodeId } from '../test-utils'
+import { sha256 } from '../../crypto'
 
 // Helper function to generate consistent test payment hashes
 function generateTestPaymentHash(seed: string): Uint8Array {

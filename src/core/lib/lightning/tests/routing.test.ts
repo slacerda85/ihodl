@@ -10,7 +10,7 @@ import {
   createFailureMessage,
   initializeAttributionData,
   constructOnionMessage,
-} from './routing'
+} from '../routing'
 import { Point } from '@/core/models/lightning/base'
 import { BlindedPath, OnionmsgTlv } from '@/core/models/lightning/routing'
 import * as secp256k1 from 'secp256k1'
