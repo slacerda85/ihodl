@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { StrictMode, useEffect, useState } from 'react'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as SplashScreen from 'expo-splash-screen'
@@ -37,11 +37,13 @@ export default function RootLayout() {
   }
 
   return (
-    <AppProviders>
-      <AppContent />
-      <InactivityOverlay />
-      <AuthScreen />
-      <StatusBar style="auto" />
-    </AppProviders>
+    <StrictMode>
+      <AppProviders>
+        <AppContent />
+        <InactivityOverlay />
+        <AuthScreen />
+        <StatusBar style="auto" />
+      </AppProviders>
+    </StrictMode>
   )
 }

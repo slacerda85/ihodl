@@ -46,6 +46,9 @@ export default class AddressService implements AddressServiceInterface {
   } {
     const walletService = new WalletService()
     const walletId = walletService.getActiveWalletId()
+    if (!walletId) {
+      throw new Error('No active wallet for deriving account keys')
+    }
     const seed = new SeedService().getSeed(walletId)
     const keyService = new KeyService()
     const masterKey = keyService.createMasterKey(seed)
@@ -83,6 +86,9 @@ export default class AddressService implements AddressServiceInterface {
   async discover(connection: Connection): Promise<AddressCollection> {
     const walletService = new WalletService()
     const walletId = walletService.getActiveWalletId()
+    if (!walletId) {
+      throw new Error('No active wallet for address discovery')
+    }
     const repository = new AddressRepository()
     let collection = repository.read(walletId)
     if (!collection) {
@@ -180,6 +186,9 @@ export default class AddressService implements AddressServiceInterface {
   getUsedAddresses(type: 'receiving' | 'change'): AddressDetails[] {
     const walletService = new WalletService()
     const walletId = walletService.getActiveWalletId()
+    if (!walletId) {
+      throw new Error('No active wallet for getting used addresses')
+    }
     const repository = new AddressRepository()
     const collection = repository.read(walletId)
     if (!collection) {
@@ -194,6 +203,9 @@ export default class AddressService implements AddressServiceInterface {
   getNextUnusedAddress(): string {
     const walletService = new WalletService()
     const walletId = walletService.getActiveWalletId()
+    if (!walletId) {
+      throw new Error('No active wallet for getting next unused address')
+    }
     const repository = new AddressRepository()
     let collection = repository.read(walletId)
     if (!collection) {
@@ -214,6 +226,9 @@ export default class AddressService implements AddressServiceInterface {
   getNextChangeAddress(): string {
     const walletService = new WalletService()
     const walletId = walletService.getActiveWalletId()
+    if (!walletId) {
+      throw new Error('No active wallet for getting next change address')
+    }
     const repository = new AddressRepository()
     let collection = repository.read(walletId)
     if (!collection) {
@@ -234,6 +249,9 @@ export default class AddressService implements AddressServiceInterface {
   clearAddresses(): void {
     const walletService = new WalletService()
     const walletId = walletService.getActiveWalletId()
+    if (!walletId) {
+      throw new Error('No active wallet for clearing addresses')
+    }
     const repository = new AddressRepository()
     repository.deleteByWalletId(walletId)
   }

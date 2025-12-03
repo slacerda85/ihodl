@@ -49,3 +49,7 @@ O projeto utiliza a seguinte convenção de nomenclatura:
 - **Yell Case**: Utilizado para constantes e enums (exemplo: `MINHA_CONSTANTE`, `MEU_ENUM`).
 
 NUNCA utilize snake_case ou kebab-case em qualquer parte do código.
+
+## Comandos de formatação
+
+linter: npm run lint

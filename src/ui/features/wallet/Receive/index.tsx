@@ -1,19 +1,24 @@
 import { useState } from 'react'
-import { View, Text, StyleSheet, Pressable } from 'react-native'
+import { View, Text, StyleSheet, Pressable, TextInput } from 'react-native'
 
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { useSettings } from '../../settings/SettingsProvider'
 
 import Receive from './Receive'
+import ReceiveLightning from './ReceiveLightning'
 import { GlassView } from 'expo-glass-effect'
-// import ReceiveLightning from '../../lightning/ReceiveLightning'
 
 type ReceiveMode = 'onchain' | 'lightning'
 
 export default function ReceiveScreen() {
   const { isDark } = useSettings()
   const [mode, setMode] = useState<ReceiveMode>('onchain')
+  const [amount, setAmount] = useState('')
+  const [description, setDescription] = useState('')
+
+  const amountValue = amount ? BigInt(amount) : 0n
+  const descriptionValue = description || 'Payment'
 
   return (
     <View style={styles.container}>
@@ -44,14 +49,12 @@ export default function ReceiveScreen() {
             mode === 'lightning' && isDark && styles.selectorButtonActiveDark,
           ]}
           onPress={() => setMode('lightning')}
-          disabled
         >
           <Text
             style={[
               styles.selectorText,
               isDark && styles.selectorTextDark,
               mode === 'lightning' && styles.selectorTextActive,
-              styles.selectorTextInactive,
             ]}
           >
             Lightning
@@ -59,10 +62,34 @@ export default function ReceiveScreen() {
         </Pressable>
       </View>
 
-      {/* Content */}
+      {/* Lightning Inputs */}
+      {mode === 'lightning' && (
+        <View style={[styles.inputsContainer, isDark && styles.inputsContainerDark]}>
+          <TextInput
+            style={[styles.input, isDark && styles.inputDark]}
+            placeholder="Amount (sats)"
+            placeholderTextColor={colors.textSecondary[isDark ? 'dark' : 'light']}
+            value={amount}
+            onChangeText={setAmount}
+            keyboardType="numeric"
+          />
+          <TextInput
+            style={[styles.input, isDark && styles.inputDark]}
+            placeholder="Description"
+            placeholderTextColor={colors.textSecondary[isDark ? 'dark' : 'light']}
+            value={description}
+            onChangeText={setDescription}
+          />
+        </View>
+      )}
 
+      {/* Content */}
       <GlassView style={{ borderRadius: 32 }}>
-        <Receive />
+        {mode === 'onchain' ? (
+          <Receive />
+        ) : (
+          <ReceiveLightning amount={amountValue} description={descriptionValue} />
+        )}
       </GlassView>
     </View>
   )
@@ -116,5 +143,22 @@ const styles = StyleSheet.create({
   },
   selectorTextInactive: {
     color: alpha(colors.textSecondary.light, 0.5),
+  },
+  inputsContainer: {
+    marginHorizontal: 24,
+    marginBottom: 16,
+    gap: 12,
+  },
+  inputsContainerDark: {},
+  input: {
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: alpha(colors.black, 0.05),
+    color: colors.text.light,
+    fontSize: 16,
+  },
+  inputDark: {
+    backgroundColor: alpha(colors.white, 0.05),
+    color: colors.text.dark,
   },
 })

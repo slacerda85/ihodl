@@ -1,4 +1,4 @@
-import { Tx, UTXO } from './types'
+import { Tx, Utxo } from './types'
 
 /**
  * Calcula corretamente o saldo e UTXOs de uma carteira
@@ -9,10 +9,10 @@ export function calculateWalletBalance(
   walletAddresses: Set<string>,
 ): {
   balance: number
-  utxos: UTXO[]
+  utxos: Utxo[]
   // spentUtxos: UTXO[]
 } {
-  const utxoMap = new Map<string, UTXO>()
+  const utxoMap = new Map<string, Utxo>()
   // const spentUtxoKeys = new Set<string>()
 
   // Primeiro, identificar todos os UTXOs criados para endereços da carteira
@@ -24,7 +24,7 @@ export function calculateWalletBalance(
           txid: tx.txid,
           vout: vout.n,
           address: vout.scriptPubKey.address,
-          value: vout.value,
+          amount: vout.value,
           blocktime: tx.blocktime,
           confirmations: tx.confirmations || 0,
           isSpent: false,
@@ -55,7 +55,7 @@ export function calculateWalletBalance(
   }
 
   // Separar UTXOs gastos e não gastos
-  const unspentUtxos: UTXO[] = []
+  const unspentUtxos: Utxo[] = []
   // const spentUtxos: UTXO[] = []
 
   for (const utxo of utxoMap.values()) {
@@ -67,7 +67,7 @@ export function calculateWalletBalance(
   }
 
   // Calcular saldo total dos UTXOs não gastos
-  const balance = unspentUtxos.reduce((sum, utxo) => sum + utxo.value, 0)
+  const balance = unspentUtxos.reduce((sum, utxo) => sum + utxo.amount, 0)
 
   return {
     balance,

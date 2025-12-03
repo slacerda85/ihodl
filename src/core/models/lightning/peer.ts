@@ -81,9 +81,9 @@ export interface UpdateFailHtlcTlvs extends TlvStream {
   }
 }
 
-export interface ChannelReestablishTlvs extends TlvStream {
-  nextFunding?: {
-    nextFundingTxid: Sha256
+export interface ShutdownTlvs extends TlvStream {
+  upfrontShutdownScript?: {
+    shutdownScriptpubkey: Uint8Array
   }
 }
 
@@ -295,7 +295,7 @@ export interface CommitmentSignedMessage {
   channelId: ChannelId
   signature: Signature
   numHtlcs: number
-  htlcSignature: Signature[]
+  htlcSignatures: Signature[]
 }
 
 export interface RevokeAndAckMessage {
@@ -320,6 +320,7 @@ export interface ShutdownMessage {
   channelId: ChannelId
   len: number
   scriptpubkey: Uint8Array
+  tlvs: ShutdownTlvs
 }
 
 export interface ClosingTlvs extends TlvStream {
@@ -411,6 +412,12 @@ export interface UpdateFeeMessage {
 }
 
 // Message Retransmission Messages
+
+export interface ChannelReestablishTlvs extends TlvStream {
+  nextFunding?: {
+    nextFundingTxid: Sha256
+  }
+}
 
 export interface ChannelReestablishMessage {
   type: LightningMessageType.CHANNEL_REESTABLISH

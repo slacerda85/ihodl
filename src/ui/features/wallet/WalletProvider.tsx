@@ -3,11 +3,12 @@ import { Wallet } from '@/core/models/wallet'
 import WalletService from '@/core/services/wallet'
 
 type WalletContextType = {
-  activeWalletId: string
+  activeWalletId: string | undefined
   wallets: Wallet[]
   createWallet: typeof WalletService.prototype.createWallet
   unlinkWallet: typeof WalletService.prototype.deleteWallet
   toggleActiveWallet: typeof WalletService.prototype.toggleActiveWallet
+  getMasterKey: typeof WalletService.prototype.getMasterKey
 }
 
 const WalletContext = createContext<WalletContextType | null>(null)
@@ -27,7 +28,7 @@ export default function WalletProvider({ children }: WalletProviderProps) {
   } = walletService
 
   const [wallets, setWallets] = useState<Wallet[]>(getAllWallets)
-  const [activeWalletId, setActiveWalletId] = useState<string>(getActiveWalletId)
+  const [activeWalletId, setActiveWalletId] = useState<string | undefined>(getActiveWalletId)
 
   function createWallet(...args: Parameters<typeof create>) {
     const newWallet = create(...args)
@@ -55,6 +56,7 @@ export default function WalletProvider({ children }: WalletProviderProps) {
         toggleActiveWallet,
         createWallet,
         unlinkWallet,
+        getMasterKey: walletService.getMasterKey.bind(walletService),
       }}
     >
       {children}

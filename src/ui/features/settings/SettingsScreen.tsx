@@ -13,7 +13,7 @@ import { useSettings } from '@/ui/features/settings'
 // import Picker from '@/ui/components/Picker/Picker'
 // import AccountRepository from '@/core/repositories/account'
 import SeedRepository from '@/core/repositories/seed'
-import walletRepository from '@/core/repositories/wallet'
+import WalletService from '@/core/services/wallet'
 // import { ColorMode } from './state'
 // import LightningSection from './LightningSection'
 
@@ -34,7 +34,8 @@ export default function SettingsScreen() {
           text: 'Limpar',
           style: 'destructive',
           onPress: () => {
-            walletRepository.clear()
+            const walletService = new WalletService()
+            walletService.clear()
             Alert.alert('Carteiras Limpas', 'Todas as carteiras foram removidas.')
           },
         },

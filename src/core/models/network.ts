@@ -1,8 +1,12 @@
-import { TLSSocket } from 'tls'
+import TcpSocket from 'react-native-tcp-socket'
 
 export type Peer = {
   host: string
   port: number
 }
 
-export type Connection = TLSSocket
+export type Socket = TcpSocket.Socket
+
+export type TLSSocket = TcpSocket.TLSSocket
+
+export type Connection = Socket | TLSSocket

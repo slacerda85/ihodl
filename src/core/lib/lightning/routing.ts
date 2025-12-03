@@ -36,13 +36,381 @@ import {
   BigSize,
   Point,
   Sha256,
-  // ShortChannelId,
+  ShortChannelId,
   // SciddirOrPubkey,
 } from '@/core/models/lightning/base'
 import { encodeBigSize, decodeBigSize } from '@/core/lib/lightning/base'
 import { hmacSha256, sha256 } from '@/core/lib/crypto'
 import { chacha20 } from '@noble/ciphers/chacha.js'
 import * as secp256k1 from 'secp256k1'
+
+// ==========================================
+// PATHFINDING AND ROUTING GRAPH
+// ==========================================
+
+/**
+ * Routing Graph Node
+ */
+export interface RoutingNode {
+  nodeId: Uint8Array // 33-byte compressed pubkey
+  features?: Uint8Array
+  lastUpdate: number
+  addresses: NodeAddress[]
+  alias?: string
+}
+
+/**
+ * Node Address Types
+ */
+export interface NodeAddress {
+  type: 'ipv4' | 'ipv6' | 'torv2' | 'torv3' | 'dns'
+  address: string
+  port: number
+}
+
+/**
+ * Routing Graph Channel
+ */
+export interface RoutingChannel {
+  shortChannelId: ShortChannelId
+  nodeId1: Uint8Array
+  nodeId2: Uint8Array
+  capacity: bigint
+  features?: Uint8Array
+  lastUpdate: number
+  feeBaseMsat: number
+  feeProportionalMillionths: number
+  cltvExpiryDelta: number
+  htlcMinimumMsat: bigint
+  htlcMaximumMsat?: bigint
+  disabled?: boolean
+}
+
+/**
+ * Payment Route Hop
+ */
+export interface RouteHop {
+  nodeId: Uint8Array
+  shortChannelId: ShortChannelId
+  feeBaseMsat: number
+  feeProportionalMillionths: number
+  cltvExpiryDelta: number
+  htlcMinimumMsat: bigint
+  htlcMaximumMsat?: bigint
+}
+
+/**
+ * Complete Payment Route
+ */
+export interface PaymentRoute {
+  hops: RouteHop[]
+  totalAmountMsat: bigint
+  totalFeeMsat: bigint
+  totalCltvExpiry: number
+}
+
+/**
+ * Pathfinding Algorithm Result
+ */
+export interface PathfindResult {
+  route: PaymentRoute | null
+  error?: string
+}
+
+/**
+ * Lightning Network Routing Graph
+ */
+export class RoutingGraph {
+  private nodes: Map<string, RoutingNode> = new Map()
+  private channels: Map<string, RoutingChannel> = new Map()
+  private nodeChannels: Map<string, Set<string>> = new Map() // nodeId -> channelIds
+
+  /**
+   * Add or update node in routing graph
+   */
+  addNode(node: RoutingNode): void {
+    const key = uint8ArrayToHex(node.nodeId)
+    this.nodes.set(key, { ...node, lastUpdate: Date.now() })
+  }
+
+  /**
+   * Add or update channel in routing graph
+   */
+  addChannel(channel: RoutingChannel): void {
+    const key = uint8ArrayToHex(channel.shortChannelId)
+    this.channels.set(key, { ...channel, lastUpdate: Date.now() })
+
+    // Update node-channel mappings
+    const node1Key = uint8ArrayToHex(channel.nodeId1)
+    const node2Key = uint8ArrayToHex(channel.nodeId2)
+
+    if (!this.nodeChannels.has(node1Key)) {
+      this.nodeChannels.set(node1Key, new Set())
+    }
+    if (!this.nodeChannels.has(node2Key)) {
+      this.nodeChannels.set(node2Key, new Set())
+    }
+
+    this.nodeChannels.get(node1Key)!.add(key)
+    this.nodeChannels.get(node2Key)!.add(key)
+  }
+
+  /**
+   * Remove stale entries older than maxAge
+   */
+  pruneStaleEntries(maxAge: number = 7 * 24 * 60 * 60 * 1000): void {
+    // 7 days
+    const cutoff = Date.now() - maxAge
+
+    // Remove stale nodes
+    for (const [key, node] of this.nodes.entries()) {
+      if (node.lastUpdate < cutoff) {
+        this.nodes.delete(key)
+        this.nodeChannels.delete(key)
+      }
+    }
+
+    // Remove stale channels
+    for (const [key, channel] of this.channels.entries()) {
+      if (channel.lastUpdate < cutoff) {
+        this.channels.delete(key)
+      }
+    }
+  }
+
+  /**
+   * Find route using Dijkstra's algorithm
+   */
+  findRoute(
+    sourceNodeId: Uint8Array,
+    destinationNodeId: Uint8Array,
+    amountMsat: bigint,
+    maxFeeMsat: bigint = 10000n,
+    maxCltvExpiry: number = 144 * 24, // ~24 hours
+  ): PathfindResult {
+    const sourceKey = uint8ArrayToHex(sourceNodeId)
+    const destKey = uint8ArrayToHex(destinationNodeId)
+
+    if (!this.nodes.has(sourceKey) || !this.nodes.has(destKey)) {
+      return { route: null, error: 'Source or destination node not found in graph' }
+    }
+
+    // Dijkstra's algorithm implementation
+    const distances = new Map<string, bigint>()
+    const previous = new Map<string, { nodeId: string; channelId: string }>()
+    const feeDistances = new Map<string, bigint>()
+    const cltvDistances = new Map<string, number>()
+    const unvisited = new Set<string>()
+
+    // Initialize
+    for (const nodeKey of this.nodes.keys()) {
+      distances.set(nodeKey, nodeKey === sourceKey ? 0n : BigInt(Number.MAX_SAFE_INTEGER))
+      feeDistances.set(nodeKey, nodeKey === sourceKey ? 0n : BigInt(Number.MAX_SAFE_INTEGER))
+      cltvDistances.set(nodeKey, nodeKey === sourceKey ? 0 : Number.MAX_SAFE_INTEGER)
+      unvisited.add(nodeKey)
+    }
+
+    while (unvisited.size > 0) {
+      // Find node with minimum distance
+      let current: string | null = null
+      let minDistance = BigInt(Number.MAX_SAFE_INTEGER)
+
+      for (const nodeKey of unvisited) {
+        const dist = distances.get(nodeKey)!
+        if (dist < minDistance) {
+          minDistance = dist
+          current = nodeKey
+        }
+      }
+
+      if (!current || minDistance === BigInt(Number.MAX_SAFE_INTEGER)) {
+        break
+      }
+
+      unvisited.delete(current)
+
+      // If we reached destination, reconstruct path
+      if (current === destKey) {
+        return this.reconstructRoute(current, previous, amountMsat)
+      }
+
+      // Explore neighbors
+      const neighborChannels = this.nodeChannels.get(current)
+      if (!neighborChannels) continue
+
+      for (const channelId of neighborChannels) {
+        const channel = this.channels.get(channelId)
+        if (!channel || channel.disabled) continue
+
+        // Determine neighbor node
+        const currentNodeId = hexToUint8Array(current)
+        const neighborNodeId = channel.nodeId1.every((b, i) => b === currentNodeId[i])
+          ? channel.nodeId2
+          : channel.nodeId1
+        const neighborKey = uint8ArrayToHex(neighborNodeId)
+
+        if (!unvisited.has(neighborKey)) continue
+
+        // Check capacity and amount constraints
+        if (
+          amountMsat < channel.htlcMinimumMsat ||
+          (channel.htlcMaximumMsat && amountMsat > channel.htlcMaximumMsat)
+        ) {
+          continue
+        }
+
+        // Calculate fees for this hop
+        const feeMsat =
+          BigInt(channel.feeBaseMsat) +
+          (amountMsat * BigInt(channel.feeProportionalMillionths)) / 1000000n
+
+        // Calculate CLTV expiry for this hop
+        const cltvExpiry = channel.cltvExpiryDelta
+
+        // Calculate total distance (we use a combination of fee and CLTV)
+        const currentFeeDist = feeDistances.get(current)!
+        const currentCltvDist = cltvDistances.get(current)!
+        const newFeeDist = currentFeeDist + feeMsat
+        const newCltvDist = currentCltvDist + cltvExpiry
+
+        // Skip if constraints exceeded
+        if (newFeeDist > maxFeeMsat || newCltvDist > maxCltvExpiry) {
+          continue
+        }
+
+        const neighborFeeDist = feeDistances.get(neighborKey)!
+        const neighborCltvDist = cltvDistances.get(neighborKey)!
+
+        // Use combined metric: prioritize lower fees, then lower CLTV
+        const currentCombined = distances.get(current)!
+        const newCombined = newFeeDist + BigInt(newCltvDist * 1000) // Weight CLTV less
+        const neighborCombined = distances.get(neighborKey)!
+
+        if (newCombined < neighborCombined) {
+          distances.set(neighborKey, newCombined)
+          feeDistances.set(neighborKey, newFeeDist)
+          cltvDistances.set(neighborKey, newCltvDist)
+          previous.set(neighborKey, { nodeId: current, channelId })
+        }
+      }
+    }
+
+    return { route: null, error: 'No route found' }
+  }
+
+  /**
+   * Reconstruct route from Dijkstra's previous map
+   */
+  private reconstructRoute(
+    destination: string,
+    previous: Map<string, { nodeId: string; channelId: string }>,
+    amountMsat: bigint,
+  ): PathfindResult {
+    const hops: RouteHop[] = []
+    let current = destination
+    let totalFeeMsat = 0n
+    let totalCltvExpiry = 0
+
+    // Reconstruct path in reverse
+    while (previous.has(current)) {
+      const prev = previous.get(current)!
+      const channel = this.channels.get(prev.channelId)!
+
+      // Determine direction (which node is the source for this hop)
+      const currentNodeId = hexToUint8Array(current)
+      const isNode1 = channel.nodeId1.every((b, i) => b === currentNodeId[i])
+
+      const hop: RouteHop = {
+        nodeId: isNode1 ? channel.nodeId2 : channel.nodeId1,
+        shortChannelId: channel.shortChannelId,
+        feeBaseMsat: channel.feeBaseMsat,
+        feeProportionalMillionths: channel.feeProportionalMillionths,
+        cltvExpiryDelta: channel.cltvExpiryDelta,
+        htlcMinimumMsat: channel.htlcMinimumMsat,
+        htlcMaximumMsat: channel.htlcMaximumMsat,
+      }
+
+      hops.unshift(hop)
+
+      // Calculate fees cumulatively
+      const hopFee =
+        BigInt(channel.feeBaseMsat) +
+        (amountMsat * BigInt(channel.feeProportionalMillionths)) / 1000000n
+      totalFeeMsat += hopFee
+      totalCltvExpiry += channel.cltvExpiryDelta
+
+      current = prev.nodeId
+    }
+
+    if (hops.length === 0) {
+      return { route: null, error: 'Failed to reconstruct route' }
+    }
+
+    const route: PaymentRoute = {
+      hops,
+      totalAmountMsat: amountMsat + totalFeeMsat,
+      totalFeeMsat,
+      totalCltvExpiry,
+    }
+
+    return { route }
+  }
+
+  /**
+   * Get all channels for a node
+   */
+  getNodeChannels(nodeId: Uint8Array): RoutingChannel[] {
+    const nodeKey = uint8ArrayToHex(nodeId)
+    const channelIds = this.nodeChannels.get(nodeKey)
+
+    if (!channelIds) return []
+
+    return Array.from(channelIds)
+      .map(id => this.channels.get(id))
+      .filter((channel): channel is RoutingChannel => channel !== undefined)
+  }
+
+  /**
+   * Get node information
+   */
+  getNode(nodeId: Uint8Array): RoutingNode | null {
+    const key = uint8ArrayToHex(nodeId)
+    return this.nodes.get(key) || null
+  }
+
+  /**
+   * Get channel information
+   */
+  getChannel(shortChannelId: ShortChannelId): RoutingChannel | null {
+    const key = uint8ArrayToHex(shortChannelId)
+    return this.channels.get(key) || null
+  }
+
+  /**
+   * Get graph statistics
+   */
+  getStats(): { nodes: number; channels: number } {
+    return {
+      nodes: this.nodes.size,
+      channels: this.channels.size,
+    }
+  }
+}
+
+// Utility functions for hex conversion
+function uint8ArrayToHex(arr: Uint8Array): string {
+  return Array.from(arr)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+function hexToUint8Array(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2)
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(hex.substr(i * 2, 2), 16)
+  }
+  return bytes
+}
 
 // HMAC-SHA256
 // SHA256

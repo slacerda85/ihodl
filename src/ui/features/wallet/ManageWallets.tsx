@@ -8,11 +8,12 @@ import CreateWalletIcon from './CreateWalletIcon'
 import ImportWalletIcon from './ImportWalletIcon'
 import { useWallet } from './WalletProvider'
 import { useSettings } from '../settings/SettingsProvider'
+import { useAddress } from '../address/AddressProvider'
 
 export default function ManageWallets() {
   const router = useRouter()
   const { isDark } = useSettings()
-  // const { getAllWallets, getActiveWalletId, toggleActiveWallet } = useWallet()
+  const { setLoading } = useAddress()
   const { wallets, activeWalletId, toggleActiveWallet } = useWallet()
 
   function handleCreateWallet() {
@@ -24,8 +25,8 @@ export default function ManageWallets() {
   }
 
   function handleSelectWallet(walletId: string) {
-    toggleActiveWallet(walletId)
-    // setTimeout(() => toggleActiveWallet(walletId), 0) // Delay para permitir animação do modal
+    setLoading(true)
+    setTimeout(() => toggleActiveWallet(walletId), 0) // Delay para permitir animação do modal
     router.dismiss()
   }
 

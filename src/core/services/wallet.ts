@@ -3,6 +3,7 @@ import { Wallet } from '@/core/models/wallet'
 import SeedService from './seed'
 import { WalletRepository } from '@/core/repositories/wallet'
 import AddressService from './address'
+import { fromMnemonic, createMasterKey } from '../lib/key'
 // import { AccountService } from './account'
 
 export type CreateWalletParams = Omit<Wallet, 'id'> & {
@@ -16,8 +17,9 @@ interface WalletServiceInterface {
   getWalletIds(): string[]
   editWallet(walletId: string, updates: Partial<Omit<Wallet, 'id'>>): void
   deleteWallet(walletId: string): void
-  getActiveWalletId(): string
+  getActiveWalletId(): string | undefined
   toggleActiveWallet(walletId: string): void
+  clear(): void
 }
 
 export default class WalletService implements WalletServiceInterface {
@@ -57,7 +59,7 @@ export default class WalletService implements WalletServiceInterface {
     walletRepository.save(updatedWallet)
   }
 
-  getActiveWalletId(): string {
+  getActiveWalletId(): string | undefined {
     const walletRepository = new WalletRepository()
     return walletRepository.getActiveWalletId()
   }
@@ -84,7 +86,7 @@ export default class WalletService implements WalletServiceInterface {
       if (remainingWallets.length > 0) {
         walletRepository.setActiveWalletId(remainingWallets[0].id)
       } else {
-        walletRepository.setActiveWalletId('')
+        walletRepository.setActiveWalletId(undefined)
       }
     }
   }
@@ -92,5 +94,18 @@ export default class WalletService implements WalletServiceInterface {
   getAllWallets(): Wallet[] {
     const walletRepository = new WalletRepository()
     return walletRepository.findAll()
+  }
+
+  getMasterKey(walletId: string, password?: string): Uint8Array {
+    const seedService = new SeedService()
+    const mnemonic = seedService.getSeed(walletId, password)
+    const seed = fromMnemonic(mnemonic)
+    const masterKey = createMasterKey(seed)
+    return masterKey
+  }
+
+  clear(): void {
+    const walletRepository = new WalletRepository()
+    walletRepository.clear()
   }
 }

@@ -54,9 +54,11 @@ export type Utxo = {
   txid: string
   vout: number
   address: string
-  scriptPubKey: ScriptPubKey['hex']
+  scriptPubKey: ScriptPubKey
   amount: number
   confirmations: number
+  blocktime: number
+  isSpent: boolean
 }
 
 // UI friendly tx

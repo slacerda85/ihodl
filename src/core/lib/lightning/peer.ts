@@ -20,14 +20,15 @@ import type {
   // ChainHash,
   OpenChannelTlvs,
   AcceptChannelTlvs,
-  // ChannelReadyTlvs,
+  ChannelReadyTlvs,
   TxInitRbfTlvs,
   TxAckRbfTlvs,
-  // ClosingSignedTlvs,
-  // UpdateAddHtlcTlvs,
-  // UpdateFulfillHtlcTlvs,
-  // UpdateFailHtlcTlvs,
-  // ChannelReestablishTlvs,
+  ClosingSignedTlvs,
+  UpdateAddHtlcTlvs,
+  UpdateFulfillHtlcTlvs,
+  UpdateFailHtlcTlvs,
+  ChannelReestablishTlvs,
+  ShutdownTlvs,
   TxAddInputMessage,
   TxAddOutputMessage,
   TxRemoveInputMessage,
@@ -40,9 +41,16 @@ import type {
   TxAbortMessage,
   OpenChannelMessage,
   AcceptChannelMessage,
-  // FundingCreatedMessage,
-  // FundingSignedMessage,
-  // ChannelReadyMessage,
+  FundingCreatedMessage,
+  FundingSignedMessage,
+  ChannelReadyMessage,
+  UpdateAddHtlcMessage,
+  UpdateFulfillHtlcMessage,
+  UpdateFailHtlcMessage,
+  CommitmentSignedMessage,
+  RevokeAndAckMessage,
+  ShutdownMessage,
+  ClosingSignedMessage,
   // OpeningTlvs,
   // AcceptTlvs,
   // OpenChannel2Message,
@@ -534,3 +542,341 @@ export function decodeAcceptChannelMessage(buf: Uint8Array): AcceptChannelMessag
 }
 
 // Add similar functions for all other messages following the same pattern.
+
+// HTLC Messages
+
+export function encodeUpdateAddHtlcMessage(msg: UpdateAddHtlcMessage): Uint8Array {
+  const buffers = [
+    encodeU16(msg.type),
+    msg.channelId,
+    encodeU64(msg.id),
+    encodeU64(msg.amountMsat),
+    msg.paymentHash,
+    encodeU32(msg.cltvExpiry),
+    msg.onionRoutingPacket,
+    encodeTlvStream(msg.tlvs as TlvStream),
+  ]
+  const totalLength = buffers.reduce((sum, buf) => sum + buf.length, 0)
+  const result = new Uint8Array(totalLength)
+  let offset = 0
+  for (const buf of buffers) {
+    result.set(buf, offset)
+    offset += buf.length
+  }
+  return result
+}
+
+export function decodeUpdateAddHtlcMessage(buf: Uint8Array): UpdateAddHtlcMessage {
+  const reader = new BufferReader(buf)
+  reader.skip(2) // skip type
+  const channelId = reader.readBytes(32)
+  const id = reader.readU64()
+  const amountMsat = reader.readU64()
+  const paymentHash = reader.readBytes(32)
+  const cltvExpiry = reader.readU32()
+  const onionRoutingPacket = reader.readBytes(1366)
+  const tlvs = decodeTlvStream(reader.remaining()) as UpdateAddHtlcTlvs
+  return {
+    type: LightningMessageType.UPDATE_ADD_HTLC,
+    channelId,
+    id,
+    amountMsat,
+    paymentHash,
+    cltvExpiry,
+    onionRoutingPacket,
+    tlvs,
+  }
+}
+
+export function encodeUpdateFulfillHtlcMessage(msg: UpdateFulfillHtlcMessage): Uint8Array {
+  const buffers = [encodeU16(msg.type), msg.channelId, encodeU64(msg.id), msg.paymentPreimage]
+  const totalLength = buffers.reduce((sum, buf) => sum + buf.length, 0)
+  const result = new Uint8Array(totalLength)
+  let offset = 0
+  for (const buf of buffers) {
+    result.set(buf, offset)
+    offset += buf.length
+  }
+  return result
+}
+
+export function decodeUpdateFulfillHtlcMessage(buf: Uint8Array): UpdateFulfillHtlcMessage {
+  const reader = new BufferReader(buf)
+  reader.skip(2) // skip type
+  const channelId = reader.readBytes(32)
+  const id = reader.readU64()
+  const paymentPreimage = reader.readBytes(32)
+  const tlvs = decodeTlvStream(reader.remaining()) as UpdateFulfillHtlcTlvs
+  return {
+    type: LightningMessageType.UPDATE_FULFILL_HTLC,
+    channelId,
+    id,
+    paymentPreimage,
+    tlvs,
+  }
+}
+
+export function encodeUpdateFailHtlcMessage(msg: UpdateFailHtlcMessage): Uint8Array {
+  const buffers = [
+    encodeU16(msg.type),
+    msg.channelId,
+    encodeU64(msg.id),
+    encodeU16(msg.len),
+    msg.reason,
+  ]
+  const totalLength = buffers.reduce((sum, buf) => sum + buf.length, 0)
+  const result = new Uint8Array(totalLength)
+  let offset = 0
+  for (const buf of buffers) {
+    result.set(buf, offset)
+    offset += buf.length
+  }
+  return result
+}
+
+export function decodeUpdateFailHtlcMessage(buf: Uint8Array): UpdateFailHtlcMessage {
+  const reader = new BufferReader(buf)
+  reader.skip(2) // skip type
+  const channelId = reader.readBytes(32)
+  const id = reader.readU64()
+  const len = reader.readU16()
+  const reason = reader.readBytes(len)
+  const tlvs = decodeTlvStream(reader.remaining()) as UpdateFailHtlcTlvs
+  return {
+    type: LightningMessageType.UPDATE_FAIL_HTLC,
+    channelId,
+    id,
+    len,
+    reason,
+    tlvs,
+  }
+}
+
+export function encodeCommitmentSignedMessage(msg: CommitmentSignedMessage): Uint8Array {
+  const buffers = [
+    encodeU16(msg.type),
+    msg.channelId,
+    msg.signature,
+    encodeU16(msg.numHtlcs),
+    ...msg.htlcSignatures,
+  ]
+  const totalLength = buffers.reduce((sum, buf) => sum + buf.length, 0)
+  const result = new Uint8Array(totalLength)
+  let offset = 0
+  for (const buf of buffers) {
+    result.set(buf, offset)
+    offset += buf.length
+  }
+  return result
+}
+
+export function decodeCommitmentSignedMessage(buf: Uint8Array): CommitmentSignedMessage {
+  const reader = new BufferReader(buf)
+  reader.skip(2) // skip type
+  const channelId = reader.readBytes(32)
+  const signature = reader.readBytes(64)
+  const numHtlcs = reader.readU16()
+  const htlcSignatures: Uint8Array[] = []
+  for (let i = 0; i < numHtlcs; i++) {
+    htlcSignatures.push(reader.readBytes(64))
+  }
+  return {
+    type: LightningMessageType.COMMITMENT_SIGNED,
+    channelId,
+    signature,
+    numHtlcs,
+    htlcSignatures,
+  }
+}
+
+export function encodeRevokeAndAckMessage(msg: RevokeAndAckMessage): Uint8Array {
+  const buffers = [
+    encodeU16(msg.type),
+    msg.channelId,
+    msg.perCommitmentSecret,
+    msg.nextPerCommitmentPoint,
+  ]
+  const totalLength = buffers.reduce((sum, buf) => sum + buf.length, 0)
+  const result = new Uint8Array(totalLength)
+  let offset = 0
+  for (const buf of buffers) {
+    result.set(buf, offset)
+    offset += buf.length
+  }
+  return result
+}
+
+export function decodeRevokeAndAckMessage(buf: Uint8Array): RevokeAndAckMessage {
+  const reader = new BufferReader(buf)
+  reader.skip(2) // skip type
+  const channelId = reader.readBytes(32)
+  const perCommitmentSecret = reader.readBytes(32)
+  const nextPerCommitmentPoint = reader.readBytes(33)
+  return {
+    type: LightningMessageType.REVOKE_AND_ACK,
+    channelId,
+    perCommitmentSecret,
+    nextPerCommitmentPoint,
+  }
+}
+
+// Funding Messages
+
+export function encodeFundingCreatedMessage(msg: FundingCreatedMessage): Uint8Array {
+  const buffers = [
+    encodeU16(msg.type),
+    msg.temporaryChannelId,
+    msg.fundingTxid,
+    encodeU16(msg.fundingOutputIndex),
+    msg.signature,
+  ]
+  const totalLength = buffers.reduce((sum, buf) => sum + buf.length, 0)
+  const result = new Uint8Array(totalLength)
+  let offset = 0
+  for (const buf of buffers) {
+    result.set(buf, offset)
+    offset += buf.length
+  }
+  return result
+}
+
+export function decodeFundingCreatedMessage(buf: Uint8Array): FundingCreatedMessage {
+  const reader = new BufferReader(buf)
+  reader.skip(2) // skip type
+  const temporaryChannelId = reader.readBytes(32)
+  const fundingTxid = reader.readBytes(32)
+  const fundingOutputIndex = reader.readU16()
+  const signature = reader.readBytes(64)
+  return {
+    type: LightningMessageType.FUNDING_CREATED,
+    temporaryChannelId,
+    fundingTxid,
+    fundingOutputIndex,
+    signature,
+  }
+}
+
+export function encodeFundingSignedMessage(msg: FundingSignedMessage): Uint8Array {
+  const buffers = [encodeU16(msg.type), msg.channelId, msg.signature]
+  const totalLength = buffers.reduce((sum, buf) => sum + buf.length, 0)
+  const result = new Uint8Array(totalLength)
+  let offset = 0
+  for (const buf of buffers) {
+    result.set(buf, offset)
+    offset += buf.length
+  }
+  return result
+}
+
+export function decodeFundingSignedMessage(buf: Uint8Array): FundingSignedMessage {
+  const reader = new BufferReader(buf)
+  reader.skip(2) // skip type
+  const channelId = reader.readBytes(32)
+  const signature = reader.readBytes(64)
+  return {
+    type: LightningMessageType.FUNDING_SIGNED,
+    channelId,
+    signature,
+  }
+}
+
+export function encodeChannelReadyMessage(msg: ChannelReadyMessage): Uint8Array {
+  const buffers = [
+    encodeU16(msg.type),
+    msg.channelId,
+    msg.secondPerCommitmentPoint,
+    encodeTlvStream(msg.tlvs as TlvStream),
+  ]
+  const totalLength = buffers.reduce((sum, buf) => sum + buf.length, 0)
+  const result = new Uint8Array(totalLength)
+  let offset = 0
+  for (const buf of buffers) {
+    result.set(buf, offset)
+    offset += buf.length
+  }
+  return result
+}
+
+export function decodeChannelReadyMessage(buf: Uint8Array): ChannelReadyMessage {
+  const reader = new BufferReader(buf)
+  reader.skip(2) // skip type
+  const channelId = reader.readBytes(32)
+  const secondPerCommitmentPoint = reader.readBytes(33)
+  const tlvs = decodeTlvStream(reader.remaining()) as ChannelReadyTlvs
+  return {
+    type: LightningMessageType.CHANNEL_READY,
+    channelId,
+    secondPerCommitmentPoint,
+    tlvs,
+  }
+}
+
+// Shutdown Messages
+
+export function encodeShutdownMessage(msg: ShutdownMessage): Uint8Array {
+  const buffers = [
+    encodeU16(msg.type),
+    msg.channelId,
+    encodeU16(msg.len),
+    msg.scriptpubkey,
+    encodeTlvStream(msg.tlvs as TlvStream),
+  ]
+  const totalLength = buffers.reduce((sum, buf) => sum + buf.length, 0)
+  const result = new Uint8Array(totalLength)
+  let offset = 0
+  for (const buf of buffers) {
+    result.set(buf, offset)
+    offset += buf.length
+  }
+  return result
+}
+
+export function decodeShutdownMessage(buf: Uint8Array): ShutdownMessage {
+  const reader = new BufferReader(buf)
+  reader.skip(2) // skip type
+  const channelId = reader.readBytes(32)
+  const len = reader.readU16()
+  const scriptpubkey = reader.readBytes(len)
+  const tlvs = decodeTlvStream(reader.remaining()) as ShutdownTlvs
+  return {
+    type: LightningMessageType.SHUTDOWN,
+    channelId,
+    len,
+    scriptpubkey,
+    tlvs,
+  }
+}
+
+export function encodeClosingSignedMessage(msg: ClosingSignedMessage): Uint8Array {
+  const buffers = [
+    encodeU16(msg.type),
+    msg.channelId,
+    encodeU64(msg.feeSatoshis),
+    msg.signature,
+    encodeTlvStream(msg.tlvs as TlvStream),
+  ]
+  const totalLength = buffers.reduce((sum, buf) => sum + buf.length, 0)
+  const result = new Uint8Array(totalLength)
+  let offset = 0
+  for (const buf of buffers) {
+    result.set(buf, offset)
+    offset += buf.length
+  }
+  return result
+}
+
+export function decodeClosingSignedMessage(buf: Uint8Array): ClosingSignedMessage {
+  const reader = new BufferReader(buf)
+  reader.skip(2) // skip type
+  const channelId = reader.readBytes(32)
+  const feeSatoshis = reader.readU64()
+  const signature = reader.readBytes(64)
+  const tlvs = decodeTlvStream(reader.remaining()) as ClosingSignedTlvs
+  return {
+    type: LightningMessageType.CLOSING_SIGNED,
+    channelId,
+    feeSatoshis,
+    signature,
+    tlvs,
+  }
+}

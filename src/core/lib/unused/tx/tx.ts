@@ -1,6 +1,6 @@
 import { FriendlyTx, Tx, FriendlyTxType, FriendlyTxStatus } from '@/core/models/transaction'
 import { Utxo } from '@/core/models/transaction'
-import { WalletAccount } from '@/core/models/account'
+// import { WalletAccount } from '@/core/models/account'
 
 const MINIMUM_CONFIRMATIONS = 6
 
@@ -138,9 +138,11 @@ function calculateWalletBalance(
           txid: tx.txid,
           vout: index,
           address: vout.scriptPubKey.address,
-          scriptPubKey: vout.scriptPubKey.hex,
+          scriptPubKey: vout.scriptPubKey,
           amount: vout.value,
           confirmations: tx.confirmations ?? 0,
+          blocktime: tx.blocktime,
+          isSpent: false,
         } as Utxo,
       }))
       .filter(({ key, utxo }) => walletAddresses.has(utxo.address) && !spentUtxoKeys.has(key))
@@ -151,30 +153,6 @@ function calculateWalletBalance(
   const balance = unspentUtxos.reduce((sum, utxo) => sum + utxo.amount, 0)
 
   return { balance, utxos: unspentUtxos }
-}
-
-/**
- * Calcula o saldo total da carteira baseado nos walletAccounts,
- * somando apenas os UTXOs não gastos
- */
-export function getWalletAccountsBalance(walletAccounts: WalletAccount[]): {
-  balance: number
-  utxos: Utxo[]
-} {
-  const allTransactions: Tx[] = []
-  const walletAddresses = new Set<string>()
-  for (const account of walletAccounts) {
-    // Coletar todas as transações
-    for (const tx of account.txs) {
-      allTransactions.push(tx)
-    }
-    // Coletar todos os endereços da carteira
-    walletAddresses.add(account.address)
-  }
-
-  const { balance, utxos } = calculateWalletBalance(allTransactions, walletAddresses)
-
-  return { balance, utxos }
 }
 
 export function getFriendlyTxs(addresses: string[], txs: Tx[], walletId: string): FriendlyTx[] {

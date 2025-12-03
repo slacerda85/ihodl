@@ -8,13 +8,14 @@ import {
   getRecommendedFeeRates,
 } from '@/core/lib/electrum'
 import { sha256 } from '@noble/hashes/sha2.js'
-import { uint8ArrayFromHex, uint8ArrayToHex, concatUint8Arrays } from '../lib/utils'
+import { hexToUint8Array, uint8ArrayToHex, concatUint8Arrays } from '../lib/utils'
 import { AddressDetails, Change } from '../models/address'
 import { buildTransaction, signTransaction, sendTransaction } from '../lib/transactions'
 import SeedService from './seed'
 import KeyService from './key'
 import WalletService from './wallet'
 import TransactionRepository from '../repositories/transactions'
+import { hash256 } from '../lib/crypto'
 
 interface TransactionServiceInterface {
   deduplicateTxs(txs: Tx[]): Tx[]
@@ -116,9 +117,11 @@ export default class TransactionService implements TransactionServiceInterface {
             txid: tx.txid,
             vout: vout.n,
             address: vout.scriptPubKey.address,
-            scriptPubKey: vout.scriptPubKey.hex,
+            scriptPubKey: vout.scriptPubKey,
             amount: vout.value, // convert BTC to sats
             confirmations: tx.confirmations || 0,
+            blocktime: tx.blocktime,
+            isSpent: false,
           })
         }
       })
@@ -189,8 +192,8 @@ export default class TransactionService implements TransactionServiceInterface {
       const blockHash = blockHashResponse.result
 
       // Compute the block hash from the header
-      const headerBytes = uint8ArrayFromHex(headerHex)
-      const computedBlockHash = uint8ArrayToHex(sha256(sha256(headerBytes)))
+      const headerBytes = hexToUint8Array(headerHex)
+      const computedBlockHash = uint8ArrayToHex(hash256(headerBytes))
 
       // Verify the header is correct
       if (computedBlockHash !== blockHash) {
@@ -233,24 +236,35 @@ export default class TransactionService implements TransactionServiceInterface {
   }
 
   private computeMerkleRoot(merkleBranch: string[], txHash: string, leafPos: number): string {
-    const sha256d = (data: Uint8Array) => sha256(sha256(data))
-
-    let h = uint8ArrayFromHex(txHash) // txid is big-endian
+    // txHash is big-endian hex, convert to little-endian bytes (as per Bitcoin/Electrum convention)
+    let h = hexToUint8Array(txHash).reverse()
     let index = leafPos
 
+    // Process each level of the Merkle branch, starting from the leaf
     for (const item of merkleBranch) {
-      const itemBytes = uint8ArrayFromHex(item)
+      // item is big-endian hex, convert to little-endian bytes
+      const itemBytes = hexToUint8Array(item).reverse()
       let inner: Uint8Array
+      // Determine pairing order based on the position index
+      // If index is odd, pair item (sibling) first, then h (current hash)
+      // If index is even, pair h first, then item
       if (index & 1) {
         inner = concatUint8Arrays([itemBytes, h])
       } else {
         inner = concatUint8Arrays([h, itemBytes])
       }
-      h = sha256d(inner)
+      // Compute double SHA256 hash for the inner node
+      h = hash256(inner)
+      // Move to the next level in the tree
       index >>= 1
     }
 
-    return uint8ArrayToHex(h) // return big-endian
+    // Return the final Merkle root as little-endian hex
+    return uint8ArrayToHex(h)
+  }
+
+  private reverseHexBytes(hex: string): string {
+    return hex.match(/.{2}/g)?.reverse().join('') || ''
   }
 
   getFriendlyTxs(addresses: AddressDetails[]): FriendlyTx[] {
@@ -402,6 +416,9 @@ export default class TransactionService implements TransactionServiceInterface {
   }> {
     const walletService = new WalletService()
     const walletId = walletService.getActiveWalletId()
+    if (!walletId) {
+      throw new Error('No active wallet for signing transaction')
+    }
     const seedService = new SeedService()
     const seed = seedService.getSeed(walletId)
     const keyService = new KeyService()
@@ -478,6 +495,9 @@ export default class TransactionService implements TransactionServiceInterface {
     }
     const walletService = new WalletService()
     const walletId = walletService.getActiveWalletId()
+    if (!walletId) {
+      throw new Error('No active wallet for saving pending transaction')
+    }
     const transactionRepository = new TransactionRepository()
     transactionRepository.savePendingTransaction(walletId, pendingTx)
   }
@@ -485,6 +505,9 @@ export default class TransactionService implements TransactionServiceInterface {
   readPendingTransactions(): Tx[] {
     const walletService = new WalletService()
     const walletId = walletService.getActiveWalletId()
+    if (!walletId) {
+      throw new Error('No active wallet for reading pending transactions')
+    }
     const transactionRepository = new TransactionRepository()
     return transactionRepository.readPendingTransactions(walletId)
   }
@@ -492,6 +515,9 @@ export default class TransactionService implements TransactionServiceInterface {
   deletePendingTransaction(txid: string): void {
     const walletService = new WalletService()
     const walletId = walletService.getActiveWalletId()
+    if (!walletId) {
+      throw new Error('No active wallet for deleting pending transaction')
+    }
     const transactionRepository = new TransactionRepository()
     transactionRepository.deletePendingTransaction(walletId, txid)
   }

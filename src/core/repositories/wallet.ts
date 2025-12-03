@@ -9,8 +9,8 @@ interface WalletRepositoryInterface {
   save(wallet: Wallet): void
   findById(id: string): Wallet | null
   delete(id: string): void
-  setActiveWalletId(id: string): void
-  getActiveWalletId(): string
+  setActiveWalletId(id?: string): void
+  getActiveWalletId(): string | undefined
   findAll(): Wallet[]
   findAllIds(): string[]
   clear(): void
@@ -43,11 +43,20 @@ export class WalletRepository implements WalletRepositoryInterface {
   delete(id: string): void {
     walletStorage.delete(`wallet_${id}`)
   }
-  setActiveWalletId(id: string): void {
+  setActiveWalletId(id?: string): void {
+    if (id === undefined) {
+      walletStorage.delete('active_wallet_id')
+      return
+    }
     walletStorage.set('active_wallet_id', id)
   }
-  getActiveWalletId(): string {
-    return walletStorage.getString('active_wallet_id') || ''
+  getActiveWalletId(): string | undefined {
+    const activeWalletId = walletStorage.getString('active_wallet_id')
+    if (!activeWalletId) {
+      console.warn('No active wallet ID set')
+      return undefined
+    }
+    return activeWalletId
   }
   findAllIds(): string[] {
     const wallets = this.findAll()

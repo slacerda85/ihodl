@@ -8,6 +8,7 @@ import TransactionService from '@/core/services/transaction'
 
 type AddressContextType = {
   loading: boolean
+  setLoading: (loading: boolean) => void
   addresses: AddressDetails[]
   nextReceiveAddress: string
   nextChangeAddress: string
@@ -27,6 +28,8 @@ export default function AddressProvider({ children }: AddressProviderProps) {
   const { activeWalletId } = useWallet()
   const { getConnection } = useNetwork()
   const [loading, setLoading] = useState<boolean>(true)
+
+  // onchain address states
   const [addresses, setAddresses] = useState<AddressDetails[]>([])
   const [usedReceivingAddresses, setUsedReceivingAddresses] = useState<AddressDetails[]>([])
   const [usedChangeAddresses, setUsedChangeAddresses] = useState<AddressDetails[]>([])
@@ -36,11 +39,9 @@ export default function AddressProvider({ children }: AddressProviderProps) {
   const [utxos, setUtxos] = useState<Utxo[]>([])
 
   // fetch and load address collection
-  const loadAddressCollection = useCallback(async () => {
+  const load = useCallback(async () => {
     // check if walletId changed
     if (!activeWalletId) return
-
-    setLoading(true)
     const addressService = new AddressService()
     let nextReceiveAddr: string = ''
     let nextChangeAddr: string = ''
@@ -64,13 +65,16 @@ export default function AddressProvider({ children }: AddressProviderProps) {
     }
     setNextReceiveAddress(nextReceiveAddr)
     setNextChangeAddress(nextChangeAddr)
-    setLoading(false)
   }, [activeWalletId, getConnection])
 
   useEffect(() => {
-    console.log('useEffect: loadAddressCollection')
-    loadAddressCollection()
-  }, [loadAddressCollection])
+    console.log('useEffect: load')
+    setLoading(true)
+    load().then(() => {
+      console.log('Address collection loaded')
+      setLoading(false)
+    })
+  }, [load])
 
   useEffect(() => {
     if (!addresses) return
@@ -84,6 +88,7 @@ export default function AddressProvider({ children }: AddressProviderProps) {
     <AddressContext
       value={{
         loading,
+        setLoading,
         addresses,
         usedReceivingAddresses,
         usedChangeAddresses,

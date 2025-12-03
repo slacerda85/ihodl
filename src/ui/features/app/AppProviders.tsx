@@ -4,6 +4,7 @@ import { WalletProvider } from '@/ui/features/wallet'
 import AuthProvider from '@/ui/features/auth/AuthProvider'
 import NetworkProvider from '../network/NetworkProvider'
 import AddressProvider from '../address/AddressProvider'
+import LightningProvider from '../lightning/LightningProvider'
 
 interface AppProvidersProps {
   children: ReactNode
@@ -15,7 +16,9 @@ export function AppProviders({ children }: AppProvidersProps) {
       <AuthProvider>
         <WalletProvider>
           <NetworkProvider>
-            <AddressProvider>{children}</AddressProvider>
+            <LightningProvider>
+              <AddressProvider>{children}</AddressProvider>
+            </LightningProvider>
           </NetworkProvider>
         </WalletProvider>
       </AuthProvider>

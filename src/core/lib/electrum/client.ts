@@ -1,5 +1,4 @@
-import { TLSSocket, ConnectionOptions } from 'tls'
-import net from 'net'
+// import { TLSSocket, ConnectionOptions } from 'tls'
 import {
   ElectrumMethod,
   ElectrumResponse,
@@ -14,29 +13,14 @@ import { fromBech32, toScriptHash /* legacyToScriptHash */ } from '@/core/lib/ad
 import { initialPeers } from './constants'
 import { get, set, getNumber, setNumber } from '../storage'
 import { STORAGE_KEYS } from '../storage'
-import { Peer } from '@/core/models/network'
 import { sha256 } from '@noble/hashes/sha2.js'
 import { hexToUint8Array, uint8ArrayToHex } from '../utils'
+import { createElectrumSocket } from '@/core/lib/network/socket'
+import { Connection } from '@/core/models/network'
+import { ConnectionOptions } from 'react-native-tcp-socket/lib/types/Socket'
 
 // Connect to an Electrum server and return the socket
-function init() {
-  try {
-    const unsecure = new net.Socket()
-    const socket = new TLSSocket(unsecure, { rejectUnauthorized: false })
-
-    // Add a default error listener to prevent "no listeners" warnings
-    socket.on('error', err => {
-      console.warn('[electrum] Socket error:', err.message)
-    })
-
-    return socket
-  } catch (error) {
-    console.error('Error initializing ElectrumService:', error)
-    throw error
-  }
-}
-
-async function connect(): Promise<TLSSocket> {
+async function connect(): Promise<Connection> {
   console.log('[electrum] connecting Electrum peers...')
   const peers: ConnectionOptions[] = []
   // First try trusted peers
@@ -54,50 +38,22 @@ async function connect(): Promise<TLSSocket> {
   let attempt = 0
   for (const peer of randomPeers) {
     try {
-      // Initialize
-      const socket = init()
-      // default timeout
-      socket.setTimeout(10000)
+      // Use TCP socket for Electrum (non-TLS)
+      const socket = await createElectrumSocket({ host: peer.host!, port: peer.port! }, 10000)
 
-      // Connect peer
-      await new Promise<void>((resolve, reject) => {
-        // error handler
-        const errorHandler = (e: Error) => {
-          console.warn(`[electrum] Connection error to ${peer.host}:${peer.port}:`, e)
-          socket.destroy()
-          reject(e)
-        }
+      // test socket by requesting server version
+      const response = await callElectrumMethod<string>('server.version', ['ihodl', '1.4'], socket)
 
-        const timeoutHandler = () => {
-          console.warn(`[electrum] Connection timeout to ${peer.host}:${peer.port}`)
-          socket.destroy()
-          reject(new Error('Connection timeout'))
-        }
-
-        const { host, port } = peer as Peer
-
-        socket.connect({ host, port }, () => {
-          socket.removeListener('error', errorHandler)
-          socket.removeListener('timeout', timeoutHandler)
-          console.log(`[electrum] connected to ${peer.host}:${peer.port}`)
-          resolve()
-        })
-
-        socket.on('error', errorHandler)
-        socket.on('timeout', timeoutHandler)
-
-        socket.on('close', () => {
-          console.log(`[electrum] Connection closed to ${peer.host}:${peer.port}`)
-          // Aqui você pode disparar reconexão em outro lugar
-        })
-      })
+      console.log(
+        `[electrum] Connected to Electrum server ${peer.host}:${peer.port} - Version: ${response.result}`,
+      )
 
       // If we reach here, connection was successful
       return socket
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
       attempt++
-      console.warn(`[electrum] Failed to connect to ${peer.host}:${peer.port}`)
+      console.warn(`[electrum] Failed to connect to ${peer.host}:${peer.port}, ${error}`)
       // backoff before next attempt with exponential backoff, max delay, and jitter
       if (attempt < randomPeers.length) {
         const baseDelay = 1000 // 1 second base
@@ -115,7 +71,7 @@ async function connect(): Promise<TLSSocket> {
 }
 
 // Close a socket connection
-function close(socket: TLSSocket): void {
+function close(socket: Connection): void {
   if (socket && !socket.destroyed) {
     socket.end()
     socket.destroy()
@@ -128,7 +84,7 @@ function close(socket: TLSSocket): void {
  * @param socket Optional TLSSocket to reuse
  * @returns Array of Electrum peers
  */
-async function getPeers(socket?: TLSSocket): Promise<ElectrumPeer[]> {
+async function getPeers(socket?: Connection): Promise<ElectrumPeer[]> {
   try {
     console.log('[electrum] Fetching peers from server')
     const response = await callElectrumMethod<ElectrumPeer[]>('server.peers.subscribe', [], socket)
@@ -179,12 +135,7 @@ async function testPeers(peers: ConnectionOptions[]): Promise<ConnectionOptions[
   // Test each peer concurrently
   const promises = peers.map(async peer => {
     try {
-      const socket = await init()
-      await new Promise<void>((resolve, reject) => {
-        socket.connect({ host: peer.host!, port: peer.port! }, () => resolve())
-        socket.on('error', reject)
-        setTimeout(() => reject(new Error('Connection timeout')), 5000)
-      })
+      const socket = await createElectrumSocket({ host: peer.host!, port: peer.port! }, 5000)
 
       const response = await callElectrumMethod<{ height: number }>(
         'blockchain.headers.subscribe',
@@ -244,7 +195,7 @@ async function updateTrustedPeers(): Promise<{
   trustedPeers: ElectrumPeer[]
   lastPeerUpdate: number
 } | null> {
-  let socket: TLSSocket | null = null
+  let socket: Connection | null = null
   try {
     console.log('[electrum] Updating trusted peers...')
 
@@ -423,7 +374,7 @@ function peersToConnectionOptions(peers: ElectrumPeer[]): {
 async function callElectrumMethod<T>(
   method: ElectrumMethod,
   params: unknown[] = [],
-  existingSocket?: TLSSocket,
+  existingSocket?: Connection,
 ): Promise<ElectrumResponse<T>> {
   const id = randomUUID()
   const request: JsonRpcRequest = {
@@ -445,7 +396,7 @@ async function callElectrumMethod<T>(
 
       let buffer = ''
 
-      const dataHandler = (data: Buffer) => {
+      const dataHandler = (data: string | Buffer) => {
         buffer += data.toString()
         const lines = buffer.split('\n')
         buffer = lines.pop() || '' // Mantém o restante no buffer
@@ -476,7 +427,7 @@ async function callElectrumMethod<T>(
         reject(err)
       }
 
-      const endHandler = () => {
+      const closeHandler = (hadError: boolean) => {
         if (!buffer.trim()) {
           cleanup()
           reject(new Error('Conexão fechada sem resposta'))
@@ -487,7 +438,7 @@ async function callElectrumMethod<T>(
       const cleanup = () => {
         socket.removeListener('data', dataHandler)
         socket.removeListener('error', errorHandler)
-        socket.removeListener('end', endHandler)
+        socket.removeListener('close', closeHandler)
 
         // Only close if we created this socket
         if (managedSocket) {
@@ -498,7 +449,7 @@ async function callElectrumMethod<T>(
       // Set up event handlers
       socket.on('data', dataHandler)
       socket.on('error', errorHandler)
-      socket.on('end', endHandler)
+      socket.on('close', closeHandler)
     } catch (error) {
       reject(error)
     }
@@ -508,7 +459,7 @@ async function callElectrumMethod<T>(
 // Specific method implementations
 async function getAddressTxHistory(
   address: string,
-  socket?: TLSSocket,
+  socket?: Connection,
 ): Promise<ElectrumResponse<GetHistoryResult[]>> {
   try {
     const scripthash = toScriptHash(address)
@@ -528,7 +479,7 @@ async function getTransaction(
   tx_hash: string,
   verbose: boolean = false,
   // blockHash?: string,
-  socket?: TLSSocket,
+  socket?: Connection,
 ): Promise<ElectrumResponse<Tx>> {
   try {
     const data = await callElectrumMethod<Tx>(
@@ -543,7 +494,10 @@ async function getTransaction(
   }
 }
 
-async function getBlockHash(height: number, socket?: TLSSocket): Promise<ElectrumResponse<string>> {
+async function getBlockHash(
+  height: number,
+  socket?: Connection,
+): Promise<ElectrumResponse<string>> {
   try {
     const data = await callElectrumMethod<string>('blockchain.block.header', [height], socket)
     const headerHex = data.result
@@ -559,7 +513,7 @@ async function getBlockHash(height: number, socket?: TLSSocket): Promise<Electru
   }
 }
 
-async function getBlockHeader(height: number, socket?: TLSSocket): Promise<ElectrumResponse<any>> {
+async function getBlockHeader(height: number, socket?: Connection): Promise<ElectrumResponse<any>> {
   try {
     const data = await callElectrumMethod<any>('blockchain.block.header', [height], socket)
     return data
@@ -572,7 +526,7 @@ async function getBlockHeader(height: number, socket?: TLSSocket): Promise<Elect
 async function getMerkleProof(
   txid: string,
   height: number,
-  socket?: TLSSocket,
+  socket?: Connection,
 ): Promise<ElectrumResponse<GetMerkleResult>> {
   try {
     const data = await callElectrumMethod<GetMerkleResult>(
@@ -596,7 +550,7 @@ async function getMerkleProof(
  */
 async function getTransactions(
   address: string,
-  socket?: TLSSocket,
+  socket?: Connection,
   minConfirmations = 1,
   batchSize = 10,
 ): Promise<Tx[]> {
@@ -605,7 +559,7 @@ async function getTransactions(
 
   // Create a socket if not provided to reuse for multiple calls
   const managedSocket = !socket
-  let usedSocket: TLSSocket | null = null
+  let usedSocket: Connection | null = null
 
   try {
     usedSocket = socket || (await connect())
@@ -695,7 +649,7 @@ async function getTransactions(
 
 async function getTransactionsMultipleAddresses(
   addresses: string[],
-  socket?: TLSSocket,
+  socket?: Connection,
   minConfirmations = 1,
 ): Promise<Tx[]> {
   const allTransactions: Tx[] = []
@@ -719,13 +673,13 @@ async function getTransactionsMultipleAddresses(
  * @param socket Optional TLSSocket to reuse
  * @returns Promise with balance in BTC
  */
-async function getBalance(address: string, socket?: TLSSocket): Promise<number> {
+async function getBalance(address: string, socket?: Connection): Promise<number> {
   const startTime = Date.now()
   console.log(`[electrum] Getting balance for address: ${address}`)
 
   // Create a socket if not provided to reuse for multiple calls
   const managedSocket = !socket
-  let usedSocket: TLSSocket | null = null
+  let usedSocket: Connection | null = null
 
   try {
     usedSocket = socket || (await connect())
@@ -779,7 +733,7 @@ async function getBalance(address: string, socket?: TLSSocket): Promise<number> 
 
 // Estimate fee rate for different confirmation targets
 // Returns fee rate in sat/vB for the given number of blocks
-async function estimateFeeRate(targetBlocks: number = 6, socket?: TLSSocket): Promise<number> {
+async function estimateFeeRate(targetBlocks: number = 6, socket?: Connection): Promise<number> {
   const startTime = Date.now()
   let usedSocket = socket
   const managedSocket = !socket
@@ -835,7 +789,7 @@ async function estimateFeeRate(targetBlocks: number = 6, socket?: TLSSocket): Pr
 }
 
 // Get recommended fee rates for different priority levels
-async function getRecommendedFeeRates(socket?: TLSSocket): Promise<{
+async function getRecommendedFeeRates(socket?: Connection): Promise<{
   slow: number
   normal: number
   fast: number
@@ -869,9 +823,9 @@ async function getRecommendedFeeRates(socket?: TLSSocket): Promise<{
   }
 }
 
-async function getMempoolTransactions(addresses: string[], socket?: TLSSocket): Promise<Tx[]> {
+async function getMempoolTransactions(addresses: string[], socket?: Connection): Promise<Tx[]> {
   const managedSocket = !socket
-  let usedSocket: TLSSocket | null = null
+  let usedSocket: Connection | null = null
 
   try {
     usedSocket = socket || (await connect())
@@ -969,7 +923,7 @@ async function getMempoolTransactions(addresses: string[], socket?: TLSSocket): 
  * @param socket - Optional TLSSocket to reuse
  * @returns Promise resolving to transaction ID
  */
-async function broadcastTransaction(rawTxHex: string, socket?: TLSSocket): Promise<string> {
+async function broadcastTransaction(rawTxHex: string, socket?: Connection): Promise<string> {
   try {
     const data = await callElectrumMethod<string>(
       'blockchain.transaction.broadcast',

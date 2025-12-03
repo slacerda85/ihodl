@@ -1,5 +1,7 @@
 import { Utxo } from '@/core/models/transaction'
 
+export type { Utxo }
+
 export const MINIMUN_CONFIRMATIONS = 6
 
 export type TxHistory = {
