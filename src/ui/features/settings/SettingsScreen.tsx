@@ -15,7 +15,7 @@ import { useSettings } from '@/ui/features/settings'
 import SeedRepository from '@/core/repositories/seed'
 import WalletService from '@/core/services/wallet'
 // import { ColorMode } from './state'
-// import LightningSection from './LightningSection'
+import LightningSection from './LightningSection'
 
 export default function SettingsScreen() {
   const colorScheme = useColorScheme()
@@ -86,7 +86,9 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      <View style={styles.section}>{/* <LightningSection isDark={isDarkEffective} /> */}</View>
+      <View style={styles.section}>
+        <LightningSection isDark={isDarkEffective} />
+      </View>
 
       <View style={styles.section}>
         <Text style={[styles.subtitle, isDarkEffective && styles.subtitleDark]}>
