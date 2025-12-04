@@ -31,12 +31,12 @@ function OnChainFeeWarning({ isDark, estimatedFee }: OnChainFeeWarningProps) {
       <IconSymbol name="info.circle.fill" size={20} color={colors.info} />
       <View style={styles.feeWarningTextContainer}>
         <Text style={[styles.feeWarningTitle, isDark && styles.feeWarningTitleDark]}>
-          On-chain fee expected
+          Channel opening required
         </Text>
         <Text style={[styles.feeWarningMessage, isDark && styles.feeWarningMessageDark]}>
           {estimatedFee
-            ? `A channel opening fee of ~${estimatedFee.toString()} sats will be deducted from your payment.`
-            : 'An on-chain operation will be required to receive this payment. A fee will be deducted from the received amount.'}
+            ? `A fee of ~${estimatedFee.toString()} sats will be deducted from your first payment.`
+            : 'A small fee will be deducted from your first payment.'}
         </Text>
       </View>
     </View>

@@ -1,7 +1,7 @@
 // BOLT #3: Commitment Transaction Builder
 // Constrói commitment transactions para canais Lightning
 
-import { sha256, signMessage, verifyMessage } from '../crypto/crypto'
+import { sha256, ripemd160, hash160, signMessage, verifyMessage } from '../crypto/crypto'
 import { uint8ArrayToHex } from '../utils'
 import { HTLCManager, HTLCOwner, UpdateAddHtlc } from './htlc'
 import {
@@ -11,6 +11,7 @@ import {
   derivePubkey,
   deriveRevocationPubkey,
 } from './revocation'
+import { OpCode } from '@/core/models/opcodes'
 
 // ==========================================
 // CONSTANTES BOLT #3
@@ -307,12 +308,28 @@ export function toRemoteScript(remotePubkey: Uint8Array, channelType: ChannelTyp
 }
 
 /**
- * Cria script de HTLC oferecido (offered HTLC)
+ * Cria script de HTLC oferecido (offered HTLC) - BOLT #3 compliant
  *
- * @param revocationPubkey - Chave de revogação
- * @param localHtlcPubkey - Chave HTLC local
- * @param remoteHtlcPubkey - Chave HTLC remota
+ * Script (sem anchors):
+ * OP_DUP OP_HASH160 <RIPEMD160(SHA256(revocationpubkey))> OP_EQUAL
+ * OP_IF
+ *     OP_CHECKSIG
+ * OP_ELSE
+ *     <remote_htlcpubkey> OP_SWAP OP_SIZE 32 OP_EQUAL
+ *     OP_NOTIF
+ *         OP_DROP 2 OP_SWAP <local_htlcpubkey> 2 OP_CHECKMULTISIG
+ *     OP_ELSE
+ *         OP_HASH160 <RIPEMD160(payment_hash)> OP_EQUALVERIFY OP_CHECKSIG
+ *     OP_ENDIF
+ * OP_ENDIF
+ *
+ * Com anchors, adiciona: OP_1 OP_CHECKSEQUENCEVERIFY OP_DROP antes do último OP_ENDIF
+ *
+ * @param revocationPubkey - Chave de revogação (33 bytes)
+ * @param localHtlcPubkey - Chave HTLC local (33 bytes)
+ * @param remoteHtlcPubkey - Chave HTLC remota (33 bytes)
  * @param paymentHash - Hash do pagamento (32 bytes)
+ * @param hasAnchors - Se true, adiciona CSV delay para anchors
  * @returns Script do HTLC oferecido
  */
 export function offeredHtlcScript(
@@ -320,44 +337,120 @@ export function offeredHtlcScript(
   localHtlcPubkey: Uint8Array,
   remoteHtlcPubkey: Uint8Array,
   paymentHash: Uint8Array,
+  hasAnchors: boolean = false,
 ): Uint8Array {
-  // Nota: Este é um script simplificado. O script completo BOLT #3 é mais complexo
-  // OP_DUP OP_HASH160 <RIPEMD160(SHA256(revocationpubkey))> OP_EQUAL
-  // OP_IF
-  //     OP_CHECKSIG
-  // OP_ELSE
-  //     <remote_htlcpubkey> OP_SWAP OP_SIZE 32 OP_EQUAL
-  //     OP_IF
-  //         OP_HASH160 <RIPEMD160(payment_hash)> OP_EQUALVERIFY
-  //         2 OP_SWAP <local_htlcpubkey> 2 OP_CHECKMULTISIG
-  //     OP_ELSE
-  //         OP_DROP <cltv_expiry> OP_CHECKLOCKTIMEVERIFY OP_DROP
-  //         OP_CHECKSIG
-  //     OP_ENDIF
-  // OP_ENDIF
+  // Calcular hashes necessários
+  const revocationPubkeyHash = hash160(revocationPubkey) // RIPEMD160(SHA256(revocationpubkey))
+  const paymentHashRipemd = ripemd160(paymentHash) // RIPEMD160(payment_hash) - payment_hash já é SHA256
 
-  // Versão simplificada para início
+  // Tamanho máximo do script
   const script = new Uint8Array(200)
   let offset = 0
 
-  // Por simplicidade, usar apenas o payment hash por enquanto
-  script[offset++] = 0xa8 // OP_SHA256
-  script[offset++] = 0x20 // Push 32 bytes
-  script.set(paymentHash, offset)
-  offset += 32
-  script[offset++] = 0x87 // OP_EQUAL
+  // OP_DUP OP_HASH160 <20 bytes revocationPubkeyHash> OP_EQUAL
+  script[offset++] = OpCode.OP_DUP
+  script[offset++] = OpCode.OP_HASH160
+  script[offset++] = 0x14 // Push 20 bytes
+  script.set(revocationPubkeyHash, offset)
+  offset += 20
+  script[offset++] = OpCode.OP_EQUAL
+
+  // OP_IF
+  script[offset++] = OpCode.OP_IF
+
+  // OP_CHECKSIG
+  script[offset++] = OpCode.OP_CHECKSIG
+
+  // OP_ELSE
+  script[offset++] = OpCode.OP_ELSE
+
+  // <remote_htlcpubkey>
+  script[offset++] = 0x21 // Push 33 bytes
+  script.set(remoteHtlcPubkey, offset)
+  offset += 33
+
+  // OP_SWAP OP_SIZE
+  script[offset++] = OpCode.OP_SWAP
+  script[offset++] = OpCode.OP_SIZE
+
+  // <32> (usando push de 1 byte para o valor 32)
+  script[offset++] = 0x01 // Push 1 byte
+  script[offset++] = 0x20 // 32
+
+  // OP_EQUAL
+  script[offset++] = OpCode.OP_EQUAL
+
+  // OP_NOTIF
+  script[offset++] = OpCode.OP_NOTIF
+
+  // OP_DROP OP_2 OP_SWAP
+  script[offset++] = OpCode.OP_DROP
+  script[offset++] = OpCode.OP_2
+  script[offset++] = OpCode.OP_SWAP
+
+  // <local_htlcpubkey>
+  script[offset++] = 0x21 // Push 33 bytes
+  script.set(localHtlcPubkey, offset)
+  offset += 33
+
+  // OP_2 OP_CHECKMULTISIG
+  script[offset++] = OpCode.OP_2
+  script[offset++] = OpCode.OP_CHECKMULTISIG
+
+  // OP_ELSE
+  script[offset++] = OpCode.OP_ELSE
+
+  // OP_HASH160 <20 bytes paymentHashRipemd> OP_EQUALVERIFY
+  script[offset++] = OpCode.OP_HASH160
+  script[offset++] = 0x14 // Push 20 bytes
+  script.set(paymentHashRipemd, offset)
+  offset += 20
+  script[offset++] = OpCode.OP_EQUALVERIFY
+
+  // OP_CHECKSIG
+  script[offset++] = OpCode.OP_CHECKSIG
+
+  // OP_ENDIF
+  script[offset++] = OpCode.OP_ENDIF
+
+  // Para canais com anchors, adicionar CSV delay
+  if (hasAnchors) {
+    script[offset++] = OpCode.OP_1
+    script[offset++] = OpCode.OP_CHECKSEQUENCEVERIFY
+    script[offset++] = OpCode.OP_DROP
+  }
+
+  // OP_ENDIF final
+  script[offset++] = OpCode.OP_ENDIF
 
   return script.subarray(0, offset)
 }
 
 /**
- * Cria script de HTLC recebido (received HTLC)
+ * Cria script de HTLC recebido (received HTLC) - BOLT #3 compliant
  *
- * @param revocationPubkey - Chave de revogação
- * @param localHtlcPubkey - Chave HTLC local
- * @param remoteHtlcPubkey - Chave HTLC remota
+ * Script (sem anchors):
+ * OP_DUP OP_HASH160 <RIPEMD160(SHA256(revocationpubkey))> OP_EQUAL
+ * OP_IF
+ *     OP_CHECKSIG
+ * OP_ELSE
+ *     <remote_htlcpubkey> OP_SWAP OP_SIZE 32 OP_EQUAL
+ *     OP_IF
+ *         OP_HASH160 <RIPEMD160(payment_hash)> OP_EQUALVERIFY
+ *         2 OP_SWAP <local_htlcpubkey> 2 OP_CHECKMULTISIG
+ *     OP_ELSE
+ *         OP_DROP <cltv_expiry> OP_CHECKLOCKTIMEVERIFY OP_DROP OP_CHECKSIG
+ *     OP_ENDIF
+ * OP_ENDIF
+ *
+ * Com anchors, adiciona: OP_1 OP_CHECKSEQUENCEVERIFY OP_DROP antes do último OP_ENDIF
+ *
+ * @param revocationPubkey - Chave de revogação (33 bytes)
+ * @param localHtlcPubkey - Chave HTLC local (33 bytes)
+ * @param remoteHtlcPubkey - Chave HTLC remota (33 bytes)
  * @param paymentHash - Hash do pagamento (32 bytes)
- * @param cltvExpiry - Altura do bloco de expiração
+ * @param cltvExpiry - Altura do bloco de expiração (CLTV absolute)
+ * @param hasAnchors - Se true, adiciona CSV delay para anchors
  * @returns Script do HTLC recebido
  */
 export function receivedHtlcScript(
@@ -366,19 +459,139 @@ export function receivedHtlcScript(
   remoteHtlcPubkey: Uint8Array,
   paymentHash: Uint8Array,
   cltvExpiry: number,
+  hasAnchors: boolean = false,
 ): Uint8Array {
-  // Versão simplificada
-  const script = new Uint8Array(200)
+  // Calcular hashes necessários
+  const revocationPubkeyHash = hash160(revocationPubkey) // RIPEMD160(SHA256(revocationpubkey))
+  const paymentHashRipemd = ripemd160(paymentHash) // RIPEMD160(payment_hash)
+
+  // Tamanho máximo do script
+  const script = new Uint8Array(220)
   let offset = 0
 
-  // Por simplicidade, usar apenas o payment hash por enquanto
-  script[offset++] = 0xa8 // OP_SHA256
-  script[offset++] = 0x20 // Push 32 bytes
-  script.set(paymentHash, offset)
-  offset += 32
-  script[offset++] = 0x87 // OP_EQUAL
+  // OP_DUP OP_HASH160 <20 bytes revocationPubkeyHash> OP_EQUAL
+  script[offset++] = OpCode.OP_DUP
+  script[offset++] = OpCode.OP_HASH160
+  script[offset++] = 0x14 // Push 20 bytes
+  script.set(revocationPubkeyHash, offset)
+  offset += 20
+  script[offset++] = OpCode.OP_EQUAL
+
+  // OP_IF
+  script[offset++] = OpCode.OP_IF
+
+  // OP_CHECKSIG
+  script[offset++] = OpCode.OP_CHECKSIG
+
+  // OP_ELSE
+  script[offset++] = OpCode.OP_ELSE
+
+  // <remote_htlcpubkey>
+  script[offset++] = 0x21 // Push 33 bytes
+  script.set(remoteHtlcPubkey, offset)
+  offset += 33
+
+  // OP_SWAP OP_SIZE
+  script[offset++] = OpCode.OP_SWAP
+  script[offset++] = OpCode.OP_SIZE
+
+  // <32> (usando push de 1 byte para o valor 32)
+  script[offset++] = 0x01 // Push 1 byte
+  script[offset++] = 0x20 // 32
+
+  // OP_EQUAL
+  script[offset++] = OpCode.OP_EQUAL
+
+  // OP_IF
+  script[offset++] = OpCode.OP_IF
+
+  // OP_HASH160 <20 bytes paymentHashRipemd> OP_EQUALVERIFY
+  script[offset++] = OpCode.OP_HASH160
+  script[offset++] = 0x14 // Push 20 bytes
+  script.set(paymentHashRipemd, offset)
+  offset += 20
+  script[offset++] = OpCode.OP_EQUALVERIFY
+
+  // OP_2 OP_SWAP
+  script[offset++] = OpCode.OP_2
+  script[offset++] = OpCode.OP_SWAP
+
+  // <local_htlcpubkey>
+  script[offset++] = 0x21 // Push 33 bytes
+  script.set(localHtlcPubkey, offset)
+  offset += 33
+
+  // OP_2 OP_CHECKMULTISIG
+  script[offset++] = OpCode.OP_2
+  script[offset++] = OpCode.OP_CHECKMULTISIG
+
+  // OP_ELSE
+  script[offset++] = OpCode.OP_ELSE
+
+  // OP_DROP
+  script[offset++] = OpCode.OP_DROP
+
+  // <cltv_expiry> - encoded properly
+  const cltvBytes = encodeCltvExpiry(cltvExpiry)
+  script.set(cltvBytes, offset)
+  offset += cltvBytes.length
+
+  // OP_CHECKLOCKTIMEVERIFY OP_DROP OP_CHECKSIG
+  script[offset++] = OpCode.OP_CHECKLOCKTIMEVERIFY
+  script[offset++] = OpCode.OP_DROP
+  script[offset++] = OpCode.OP_CHECKSIG
+
+  // OP_ENDIF
+  script[offset++] = OpCode.OP_ENDIF
+
+  // Para canais com anchors, adicionar CSV delay
+  if (hasAnchors) {
+    script[offset++] = OpCode.OP_1
+    script[offset++] = OpCode.OP_CHECKSEQUENCEVERIFY
+    script[offset++] = OpCode.OP_DROP
+  }
+
+  // OP_ENDIF final
+  script[offset++] = OpCode.OP_ENDIF
 
   return script.subarray(0, offset)
+}
+
+/**
+ * Codifica CLTV expiry para uso em script
+ * Valores até 16 usam OP_1-OP_16, valores maiores usam push de bytes
+ */
+function encodeCltvExpiry(cltv: number): Uint8Array {
+  if (cltv <= 0) {
+    return new Uint8Array([OpCode.OP_0])
+  }
+  if (cltv <= 16) {
+    // Use OP_1 through OP_16 (0x51 - 0x60)
+    return new Uint8Array([0x50 + cltv])
+  }
+
+  // Encode como minimal push conforme BIP 62
+  // Precisamos encontrar o menor encoding possível
+  const bytes: number[] = []
+  let n = cltv
+
+  while (n > 0) {
+    bytes.push(n & 0xff)
+    n >>= 8
+  }
+
+  // Se o bit mais alto estiver setado, adicionar 0x00 para manter positivo
+  if (bytes[bytes.length - 1] & 0x80) {
+    bytes.push(0x00)
+  }
+
+  const result = new Uint8Array(1 + bytes.length)
+  result[0] = bytes.length // Push N bytes
+  for (let i = 0; i < bytes.length; i++) {
+    result[i + 1] = bytes[i]
+  }
+
+  return result
 }
 
 /**
@@ -637,12 +850,16 @@ export class CommitmentBuilder {
     // TODO: Implementar lógica completa
     const isOffered = true // Simplificado
 
+    // Verificar se canal usa anchors
+    const hasAnchors = this.channelType >= ChannelType.ANCHORS
+
     const script = isOffered
       ? offeredHtlcScript(
           keys.revocationPubkey,
           keys.localHtlcPubkey,
           keys.remoteHtlcPubkey,
           htlc.paymentHash,
+          hasAnchors,
         )
       : receivedHtlcScript(
           keys.revocationPubkey,
@@ -650,6 +867,7 @@ export class CommitmentBuilder {
           keys.remoteHtlcPubkey,
           htlc.paymentHash,
           htlc.cltvExpiry,
+          hasAnchors,
         )
 
     return {

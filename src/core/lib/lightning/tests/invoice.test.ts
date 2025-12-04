@@ -6,8 +6,14 @@ import {
   validateInvoice,
   verifyInvoiceSignature,
   getInvoiceExpiryStatus,
+  parseAmountFromHrp,
+  formatAmountForHrp,
+  validateTaggedFieldLength,
+  isFeatureRequired,
+  isFeatureSupported,
+  KNOWN_FEATURE_BITS,
 } from '../invoice'
-import { CurrencyPrefix, AmountMultiplier } from '@/core/models/lightning/invoice'
+import { CurrencyPrefix, AmountMultiplier, TaggedFieldType } from '@/core/models/lightning/invoice'
 import { generateTestPrivateKey, generateTestNodeId } from '../test-utils'
 import { sha256 } from '../../crypto'
 
@@ -722,6 +728,135 @@ describe('Invoice Functions', () => {
         // If it throws during decode, that's also acceptable
         expect(error).toBeDefined()
       }
+    })
+  })
+
+  describe('Amount Parsing and Formatting', () => {
+    it('should parse milli amount correctly', () => {
+      const result = parseAmountFromHrp('25m')
+      expect(result.toString()).toBe('2500000000') // 25 mBTC = 2,500,000,000 msat
+    })
+
+    it('should parse micro amount correctly', () => {
+      const result = parseAmountFromHrp('2500u')
+      expect(result.toString()).toBe('250000000') // 2500 µBTC = 250,000,000 msat
+    })
+
+    it('should parse nano amount correctly', () => {
+      const result = parseAmountFromHrp('1000n')
+      expect(result.toString()).toBe('100000') // 1000 nBTC = 100,000 msat
+    })
+
+    it('should parse pico amount correctly', () => {
+      const result = parseAmountFromHrp('10000p')
+      expect(result.toString()).toBe('1000') // 10000 pBTC = 1000 msat
+    })
+
+    it('should throw for empty amount string', () => {
+      expect(() => parseAmountFromHrp('')).toThrow('Amount string is empty')
+    })
+
+    it('should throw for invalid multiplier', () => {
+      expect(() => parseAmountFromHrp('100x')).toThrow('Invalid amount multiplier')
+    })
+
+    it('should format amount as milli when possible', () => {
+      const result = formatAmountForHrp(2500000000n) // 25 mBTC
+      expect(result).toBe('25m')
+    })
+
+    it('should format amount as micro when possible', () => {
+      const result = formatAmountForHrp(250000000n) // 2500 µBTC
+      expect(result).toBe('2500u')
+    })
+
+    it('should format amount as nano when possible', () => {
+      const result = formatAmountForHrp(1000n) // 10 nBTC (can't be represented in µBTC)
+      expect(result).toBe('10n')
+    })
+
+    it('should format amount as pico for smallest amounts', () => {
+      const result = formatAmountForHrp(1n) // 1 msat = 10 pBTC
+      expect(result).toBe('10p')
+    })
+
+    it('should throw for zero amount', () => {
+      expect(() => formatAmountForHrp(0n)).toThrow('Amount must be positive')
+    })
+
+    it('should throw for negative amount', () => {
+      expect(() => formatAmountForHrp(-1n)).toThrow('Amount must be positive')
+    })
+  })
+
+  describe('Tagged Field Validation', () => {
+    it('should validate payment hash length (52 words)', () => {
+      const result = validateTaggedFieldLength(TaggedFieldType.PAYMENT_HASH, 52)
+      expect(result.valid).toBe(true)
+    })
+
+    it('should reject invalid payment hash length', () => {
+      const result = validateTaggedFieldLength(TaggedFieldType.PAYMENT_HASH, 50)
+      expect(result.valid).toBe(false)
+      expect(result.error).toContain('invalid length')
+    })
+
+    it('should validate payment secret length (52 words)', () => {
+      const result = validateTaggedFieldLength(TaggedFieldType.PAYMENT_SECRET, 52)
+      expect(result.valid).toBe(true)
+    })
+
+    it('should reject invalid payment secret length', () => {
+      const result = validateTaggedFieldLength(TaggedFieldType.PAYMENT_SECRET, 60)
+      expect(result.valid).toBe(false)
+    })
+
+    it('should validate expiry within range', () => {
+      const result = validateTaggedFieldLength(TaggedFieldType.EXPIRY, 5)
+      expect(result.valid).toBe(true)
+    })
+
+    it('should accept unknown field types', () => {
+      const result = validateTaggedFieldLength(99 as TaggedFieldType, 100)
+      expect(result.valid).toBe(true)
+    })
+  })
+
+  describe('Feature Bit Functions', () => {
+    it('should detect required feature (even bit set)', () => {
+      // Bit 8 set in byte 1
+      const features = new Uint8Array([0x00, 0x01]) // Bit 8 = 1
+      expect(isFeatureRequired(features, 8)).toBe(true)
+    })
+
+    it('should not detect optional feature as required', () => {
+      // Bit 9 set (odd = optional)
+      const features = new Uint8Array([0x00, 0x02]) // Bit 9 = 1
+      expect(isFeatureRequired(features, 9)).toBe(false)
+    })
+
+    it('should detect supported feature (either bit set)', () => {
+      // Bit 14 set (payment secret)
+      const features = new Uint8Array([0x00, 0x40]) // Bit 14 = 1
+      expect(isFeatureSupported(features, 14)).toBe(true)
+    })
+
+    it('should detect supported feature from odd bit', () => {
+      // Bit 15 set (optional payment secret)
+      const features = new Uint8Array([0x00, 0x80]) // Bit 15 = 1
+      expect(isFeatureSupported(features, 14)).toBe(true) // Check even bit, detects odd
+    })
+
+    it('should return false for unsupported feature', () => {
+      const features = new Uint8Array([0x00])
+      expect(isFeatureSupported(features, 16)).toBe(false)
+    })
+
+    it('should have correct KNOWN_FEATURE_BITS values', () => {
+      expect(KNOWN_FEATURE_BITS.VAR_ONION_OPTIN).toBe(8)
+      expect(KNOWN_FEATURE_BITS.PAYMENT_SECRET).toBe(14)
+      expect(KNOWN_FEATURE_BITS.BASIC_MPP).toBe(16)
+      expect(KNOWN_FEATURE_BITS.OPTION_ANCHOR_OUTPUTS).toBe(20)
     })
   })
 })

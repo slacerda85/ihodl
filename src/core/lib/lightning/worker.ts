@@ -78,6 +78,9 @@ import {
   encodeUpdateAddHtlcMessage,
   encodeUpdateFulfillHtlcMessage,
   encodeUpdateFailHtlcMessage,
+  encodeChannelReestablishMessage,
+  decodeChannelReestablishMessage,
+  createChannelReestablishMessage,
 } from './peer'
 
 import {
@@ -1738,7 +1741,45 @@ export class LightningWorker {
 
   private async handleChannelReestablish(message: Uint8Array, peerId: string): Promise<void> {
     console.log(`[lightning] Received channel_reestablish from ${peerId}`)
-    // Processar reconexão de canal
+
+    // Decodificar mensagem
+    const reestablishMsg = decodeChannelReestablishMessage(message)
+    const channelId = uint8ArrayToHex(reestablishMsg.channelId)
+
+    console.log(
+      `[lightning] channel_reestablish: channelId=${channelId}, ` +
+        `nextCommitmentNumber=${reestablishMsg.nextCommitmentNumber}, ` +
+        `nextRevocationNumber=${reestablishMsg.nextRevocationNumber}`,
+    )
+
+    // Verificar se temos este canal
+    const channel = this.channels.get(channelId)
+    if (!channel) {
+      console.warn(`[lightning] Received channel_reestablish for unknown channel ${channelId}`)
+      return
+    }
+
+    // Verificar se o canal está em estado apropriado para reestablish
+    if (channel.state === 'closed' || channel.state === 'closing') {
+      console.warn(`[lightning] Channel ${channelId} is ${channel.state}, ignoring reestablish`)
+      return
+    }
+
+    // Processar TLVs
+    const tlvs = this.parseReestablishTlvs((reestablishMsg.tlvs as any) || [])
+
+    // Atualizar estado do canal com informações do peer
+    ;(channel as any).remoteNextCommitmentNumber = reestablishMsg.nextCommitmentNumber
+    ;(channel as any).remoteNextRevocationNumber = reestablishMsg.nextRevocationNumber
+
+    // Enviar nossa resposta channel_reestablish
+    try {
+      await this.sendChannelReestablish(channelId, reestablishMsg, tlvs)
+    } catch (error) {
+      console.error(`[lightning] Failed to send channel_reestablish: ${error}`)
+    }
+
+    console.log(`[lightning] Channel ${channelId} reestablished with peer ${peerId}`)
   }
 
   private async sendError(peerId: string, errorMessage: string): Promise<void> {
@@ -5864,22 +5905,39 @@ export class LightningWorker {
     const peerConnection = this.peerManager.getPeerConnection(channel.peerId)
     if (!peerConnection) throw new Error('Peer connection not found')
 
-    // TODO: Implementar ChannelReestablishMessage
-    // const reestablishMessage = {
-    //   type: 136, // LightningMessageType.CHANNEL_REESTABLISH
-    //   channelId: hexToUint8Array(channelId),
-    //   nextCommitmentNumber: (channel as any).currentCommitmentNumber || 0n,
-    //   nextRevocationNumber: (channel as any).nextRevocationNumber || 0n,
-    //   yourLastPerCommitmentSecret: new Uint8Array(32), // TODO: Implementar
-    //   myCurrentPerCommitmentPoint: new Uint8Array(33), // TODO: Implementar
-    //   tlvs,
-    // }
+    // Obter dados do canal
+    const channelIdBytes = hexToUint8Array(channelId)
+
+    // Usar valores do estado do canal
+    // nextCommitmentNumber: próximo commitment que esperamos enviar
+    // nextRevocationNumber: commitment cujo secret esperamos receber
+    const nextCommitmentNumber = BigInt((channel as any).localCommitmentNumber || 1) + 1n
+    const nextRevocationNumber = BigInt((channel as any).remoteCommitmentNumber || 0)
+
+    // Último secret recebido (zeros se nenhum revogado ainda)
+    const yourLastPerCommitmentSecret = (channel as any).lastReceivedSecret || new Uint8Array(32)
+
+    // Nosso per-commitment point atual
+    const myCurrentPerCommitmentPoint =
+      (channel as any).localPerCommitmentPoint || new Uint8Array(33).fill(0x02)
+
+    // Construir mensagem channel_reestablish
+    const reestablishMessage = createChannelReestablishMessage(
+      channelIdBytes,
+      nextCommitmentNumber,
+      nextRevocationNumber,
+      yourLastPerCommitmentSecret,
+      myCurrentPerCommitmentPoint,
+      remoteTlvs.nextFundingTxId, // Para splice, se aplicável
+    )
 
     // Codificar e enviar
-    // TODO: Implementar encodeChannelReestablishMessage
-    // const encodedReestablish = encodeChannelReestablishMessage(reestablishMessage)
-    // const encryptedReestablish = await encryptMessage(peerConnection.transportKeys, encodedReestablish)
-    // await this.sendRaw(peerConnection, encryptedReestablish.encrypted)
+    const encodedReestablish = encodeChannelReestablishMessage(reestablishMessage)
+    const encryptedReestablish = await encryptMessage(
+      peerConnection.transportKeys,
+      encodedReestablish,
+    )
+    await this.sendRaw(peerConnection, encryptedReestablish.encrypted)
 
     console.log(`[lightning] Sent channel_reestablish for channel ${channelId}`)
   }

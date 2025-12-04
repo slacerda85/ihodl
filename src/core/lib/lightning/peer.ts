@@ -10,7 +10,7 @@ import {
   encodeTlvStream,
   decodeTlvStream,
 } from '@/core/lib/lightning/base'
-import { TlvStream } from '@/core/models/lightning/base'
+import { TlvStream, TlvRecord } from '@/core/models/lightning/base'
 
 import type {
   // ChannelId,
@@ -51,6 +51,7 @@ import type {
   RevokeAndAckMessage,
   ShutdownMessage,
   ClosingSignedMessage,
+  ChannelReestablishMessage,
   // OpeningTlvs,
   // AcceptTlvs,
   // OpenChannel2Message,
@@ -743,6 +744,129 @@ export function decodeRevokeAndAckMessage(buf: Uint8Array): RevokeAndAckMessage 
     channelId,
     perCommitmentSecret,
     nextPerCommitmentPoint,
+  }
+}
+
+// Channel Reestablish Messages - BOLT #2
+
+/**
+ * Encodes a channel_reestablish message - BOLT #2
+ *
+ * This message is sent when reconnecting to a peer to synchronize
+ * channel state. It contains:
+ * - channel_id: 32 bytes
+ * - next_commitment_number: u64 (our next commitment number)
+ * - next_revocation_number: u64 (commitment number of next revocation_secret we expect)
+ * - your_last_per_commitment_secret: 32 bytes (last per-commitment secret received, or zeros)
+ * - my_current_per_commitment_point: 33 bytes (our current per-commitment point)
+ * - tlvs: optional TLV stream (next_funding for splice)
+ */
+export function encodeChannelReestablishMessage(msg: ChannelReestablishMessage): Uint8Array {
+  // Build buffers array
+  const buffers: Uint8Array[] = [
+    encodeU16(msg.type),
+    msg.channelId,
+    encodeU64(msg.nextCommitmentNumber),
+    encodeU64(msg.nextRevocationNumber),
+    msg.yourLastPerCommitmentSecret,
+    msg.myCurrentPerCommitmentPoint,
+  ]
+
+  // Encode TLVs if present
+  if (msg.tlvs?.nextFunding) {
+    // TLV type 0: next_funding_txid (32 bytes)
+    const tlvRecords: TlvRecord[] = [
+      {
+        type: 0n,
+        length: 32n,
+        value: msg.tlvs.nextFunding.nextFundingTxid,
+      },
+    ]
+    buffers.push(encodeTlvStream(tlvRecords as TlvStream))
+  }
+
+  const totalLength = buffers.reduce((sum, buf) => sum + buf.length, 0)
+  const result = new Uint8Array(totalLength)
+  let offset = 0
+  for (const buf of buffers) {
+    result.set(buf, offset)
+    offset += buf.length
+  }
+  return result
+}
+
+/**
+ * Decodes a channel_reestablish message - BOLT #2
+ */
+export function decodeChannelReestablishMessage(buf: Uint8Array): ChannelReestablishMessage {
+  const reader = new BufferReader(buf)
+  reader.skip(2) // skip type
+
+  const channelId = reader.readBytes(32)
+  const nextCommitmentNumber = reader.readU64()
+  const nextRevocationNumber = reader.readU64()
+  const yourLastPerCommitmentSecret = reader.readBytes(32)
+  const myCurrentPerCommitmentPoint = reader.readBytes(33)
+
+  // Parse TLVs from remaining data
+  const tlvStream = decodeTlvStream(reader.remaining())
+  const tlvs = tlvStream as ChannelReestablishTlvs
+
+  // Check for next_funding TLV (type 0)
+  for (const tlv of tlvStream) {
+    if (tlv.type === 0n && tlv.value.length === 32) {
+      ;(tlvs as unknown as { nextFunding: { nextFundingTxid: Uint8Array } }).nextFunding = {
+        nextFundingTxid: tlv.value,
+      }
+    }
+  }
+
+  return {
+    type: LightningMessageType.CHANNEL_REESTABLISH,
+    channelId,
+    nextCommitmentNumber,
+    nextRevocationNumber,
+    yourLastPerCommitmentSecret,
+    myCurrentPerCommitmentPoint,
+    tlvs,
+  }
+}
+
+/**
+ * Creates a channel_reestablish message for reconnection
+ *
+ * @param channelId - The channel identifier
+ * @param nextCommitmentNumber - Our next commitment number
+ * @param nextRevocationNumber - The commitment number of the next revocation we expect
+ * @param lastReceivedSecret - Last per-commitment secret received (32 bytes of zeros if none)
+ * @param currentPoint - Our current per-commitment point
+ * @param nextFundingTxid - Optional: next funding txid for splice
+ */
+export function createChannelReestablishMessage(
+  channelId: Uint8Array,
+  nextCommitmentNumber: bigint,
+  nextRevocationNumber: bigint,
+  lastReceivedSecret: Uint8Array,
+  currentPoint: Uint8Array,
+  nextFundingTxid?: Uint8Array,
+): ChannelReestablishMessage {
+  const baseTlvs: TlvRecord[] = []
+  const tlvs = baseTlvs as ChannelReestablishTlvs
+
+  if (nextFundingTxid) {
+    ;(tlvs as unknown as { nextFunding: { nextFundingTxid: Uint8Array } }).nextFunding = {
+      nextFundingTxid,
+    }
+  }
+
+  return {
+    type: LightningMessageType.CHANNEL_REESTABLISH,
+    channelId,
+    nextCommitmentNumber,
+    nextRevocationNumber,
+    yourLastPerCommitmentSecret: lastReceivedSecret,
+    myCurrentPerCommitmentPoint: currentPoint,
+    tlvs,
   }
 }
 

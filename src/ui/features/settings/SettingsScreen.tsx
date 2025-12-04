@@ -9,12 +9,8 @@ import {
   TouchableOpacity,
 } from 'react-native'
 import { useSettings } from '@/ui/features/settings'
-// import { clearPersistedState } from '@/ui/features/storage/StorageProvider'
-// import Picker from '@/ui/components/Picker/Picker'
-// import AccountRepository from '@/core/repositories/account'
 import SeedRepository from '@/core/repositories/seed'
 import WalletService from '@/core/services/wallet'
-// import { ColorMode } from './state'
 import LightningSection from './LightningSection'
 
 export default function SettingsScreen() {

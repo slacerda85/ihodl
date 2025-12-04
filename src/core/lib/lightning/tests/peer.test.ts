@@ -17,6 +17,7 @@ import type {
   TxAbortMessage,
   OpenChannelMessage,
   AcceptChannelMessage,
+  ChannelReestablishMessage,
   Witness,
 } from '@/core/models/lightning/peer'
 import {
@@ -42,6 +43,9 @@ import {
   decodeOpenChannelMessage,
   encodeAcceptChannelMessage,
   decodeAcceptChannelMessage,
+  encodeChannelReestablishMessage,
+  decodeChannelReestablishMessage,
+  createChannelReestablishMessage,
 } from '../peer'
 import { encodeBigSize } from '@/core/lib/lightning/base'
 
@@ -423,6 +427,114 @@ describe('BOLT #2 Peer Protocol Encoding/Decoding', () => {
       const decoded = decodeAcceptChannelMessage(encoded)
 
       expect(decoded).toEqual(msg)
+    })
+  })
+
+  describe('channel_reestablish', () => {
+    it('should encode and decode basic channel_reestablish message', () => {
+      const msg: ChannelReestablishMessage = {
+        type: LightningMessageType.CHANNEL_REESTABLISH,
+        channelId: channelId,
+        nextCommitmentNumber: 5n,
+        nextRevocationNumber: 4n,
+        yourLastPerCommitmentSecret: sha256,
+        myCurrentPerCommitmentPoint: point,
+        tlvs: [],
+      }
+
+      const encoded = encodeChannelReestablishMessage(msg)
+      const decoded = decodeChannelReestablishMessage(encoded)
+
+      expect(decoded.type).toEqual(msg.type)
+      expect(decoded.channelId).toEqual(msg.channelId)
+      expect(decoded.nextCommitmentNumber).toEqual(msg.nextCommitmentNumber)
+      expect(decoded.nextRevocationNumber).toEqual(msg.nextRevocationNumber)
+      expect(decoded.yourLastPerCommitmentSecret).toEqual(msg.yourLastPerCommitmentSecret)
+      expect(decoded.myCurrentPerCommitmentPoint).toEqual(msg.myCurrentPerCommitmentPoint)
+    })
+
+    it('should handle large commitment numbers', () => {
+      const msg: ChannelReestablishMessage = {
+        type: LightningMessageType.CHANNEL_REESTABLISH,
+        channelId: channelId,
+        nextCommitmentNumber: 0xffffffffffffffffn, // Max u64
+        nextRevocationNumber: 0xfffffffffffffffen,
+        yourLastPerCommitmentSecret: sha256,
+        myCurrentPerCommitmentPoint: point,
+        tlvs: [],
+      }
+
+      const encoded = encodeChannelReestablishMessage(msg)
+      const decoded = decodeChannelReestablishMessage(encoded)
+
+      expect(decoded.nextCommitmentNumber).toEqual(msg.nextCommitmentNumber)
+      expect(decoded.nextRevocationNumber).toEqual(msg.nextRevocationNumber)
+    })
+
+    it('should encode with zero secret for first reestablish', () => {
+      const zeroSecret = new Uint8Array(32).fill(0) // Zeros when no secret received yet
+
+      const msg: ChannelReestablishMessage = {
+        type: LightningMessageType.CHANNEL_REESTABLISH,
+        channelId: channelId,
+        nextCommitmentNumber: 1n,
+        nextRevocationNumber: 0n,
+        yourLastPerCommitmentSecret: zeroSecret,
+        myCurrentPerCommitmentPoint: point,
+        tlvs: [],
+      }
+
+      const encoded = encodeChannelReestablishMessage(msg)
+      const decoded = decodeChannelReestablishMessage(encoded)
+
+      expect(decoded.yourLastPerCommitmentSecret).toEqual(zeroSecret)
+    })
+
+    it('should create message using helper function', () => {
+      const created = createChannelReestablishMessage(channelId, 10n, 9n, sha256, point)
+
+      expect(created.type).toEqual(LightningMessageType.CHANNEL_REESTABLISH)
+      expect(created.channelId).toEqual(channelId)
+      expect(created.nextCommitmentNumber).toEqual(10n)
+      expect(created.nextRevocationNumber).toEqual(9n)
+      expect(created.yourLastPerCommitmentSecret).toEqual(sha256)
+      expect(created.myCurrentPerCommitmentPoint).toEqual(point)
+    })
+
+    it('should have correct message type value', () => {
+      const msg: ChannelReestablishMessage = {
+        type: LightningMessageType.CHANNEL_REESTABLISH,
+        channelId: channelId,
+        nextCommitmentNumber: 1n,
+        nextRevocationNumber: 0n,
+        yourLastPerCommitmentSecret: sha256,
+        myCurrentPerCommitmentPoint: point,
+        tlvs: [],
+      }
+
+      const encoded = encodeChannelReestablishMessage(msg)
+
+      // Type should be 136 (0x0088) in first 2 bytes
+      expect(encoded[0]).toBe(0x00)
+      expect(encoded[1]).toBe(0x88)
+    })
+
+    it('should have correct message length without TLVs', () => {
+      const msg: ChannelReestablishMessage = {
+        type: LightningMessageType.CHANNEL_REESTABLISH,
+        channelId: channelId,
+        nextCommitmentNumber: 1n,
+        nextRevocationNumber: 0n,
+        yourLastPerCommitmentSecret: sha256,
+        myCurrentPerCommitmentPoint: point,
+        tlvs: [],
+      }
+
+      const encoded = encodeChannelReestablishMessage(msg)
+
+      // Expected length: 2 (type) + 32 (channel_id) + 8 (next_commitment_number) +
+      // 8 (next_revocation_number) + 32 (secret) + 33 (point) = 115 bytes
+      expect(encoded.length).toBe(115)
     })
   })
 })

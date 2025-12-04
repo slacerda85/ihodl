@@ -39,6 +39,15 @@ import {
   readUint32BE,
   readUint16BE,
 } from '../utils'
+import secp256k1 from 'secp256k1'
+
+/**
+ * BOLT #11 Signature Constants
+ * The signature is over the SHA256 hash of the human-readable part + data part
+ * Recovery ID is appended as a single byte (0-3)
+ */
+const SIGNATURE_SIZE = 65 // 64 bytes r,s + 1 byte recovery id
+const SIGNATURE_WORDS = 104 // 520 bits / 5 = 104 words
 
 /**
  * Converts amount with multiplier to millisatoshis
@@ -794,3 +803,321 @@ export function getInvoiceExpiryStatus(
     expiryTimestamp,
   }
 }
+
+// =============================
+// BOLT #11 Advanced Functions
+// =============================
+
+/**
+ * Recovery ID for ECDSA signatures in Lightning invoices
+ * The recovery ID is a single byte (0-3) appended to the signature
+ */
+export interface SignatureWithRecovery {
+  signature: Uint8Array // 64 bytes (r + s)
+  recoveryId: number // 0-3
+}
+
+/**
+ * Reconstructs the signing preimage for an invoice
+ * Per BOLT #11: The signature is over SHA256(hrp + data part as bytes)
+ * where data part includes timestamp and tagged fields as 5-bit words
+ * @param hrp - Human readable part
+ * @param dataWords - 5-bit words (timestamp + tagged fields, excluding signature)
+ * @returns The hash to be signed
+ */
+export function getInvoiceSigningHash(hrp: string, dataWords: number[]): Uint8Array {
+  // Convert 5-bit words to bytes for signing
+  // The data part is the raw 5-bit words, not converted to 8-bit
+  const dataBytes = new Uint8Array(dataWords)
+  const hrpBytes = new TextEncoder().encode(hrp)
+  const combined = concatUint8Arrays([hrpBytes, dataBytes])
+  return sha256(combined)
+}
+
+/**
+ * Recovers the public key from an invoice signature
+ * Per BOLT #11: The signature includes a recovery ID for public key recovery
+ * @param invoice - The decoded invoice with signature
+ * @param invoiceString - Original invoice string for hash reconstruction
+ * @returns Recovered public key or undefined if recovery fails
+ */
+export function recoverInvoicePublicKey(
+  invoice: Invoice,
+  invoiceString: string,
+): Uint8Array | undefined {
+  try {
+    // Decode to get the raw data
+    const decoded = decode(invoiceString)
+    const words = decoded.words
+
+    // Get signature words (last 104 words = 520 bits / 5)
+    const sigWordsLength = 104
+    const dataWords = words.slice(0, -sigWordsLength)
+
+    // Get the hash that was signed
+    const hash = getInvoiceSigningHash(decoded.prefix, dataWords)
+
+    // The signature bytes include recovery ID as last byte
+    const sigWords = words.slice(-sigWordsLength)
+    const sigBytes = new Uint8Array(fromWords(sigWords, false))
+
+    if (sigBytes.length < 65) {
+      return undefined
+    }
+
+    const signature = sigBytes.slice(0, 64)
+    const recoveryId = sigBytes[64]
+
+    // Validate recovery ID (must be 0-3)
+    if (recoveryId > 3) {
+      return undefined
+    }
+
+    // Recover the public key using secp256k1
+    const pubkey = secp256k1.ecdsaRecover(signature, recoveryId, hash, true)
+    return pubkey
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Signs an invoice with recovery ID support per BOLT #11
+ * @param hash - The hash to sign (from getInvoiceSigningHash)
+ * @param privateKey - The private key
+ * @returns Signature with recovery ID
+ */
+export function signInvoiceWithRecovery(
+  hash: Uint8Array,
+  privateKey: Uint8Array,
+): SignatureWithRecovery {
+  const { signature, recid } = secp256k1.ecdsaSign(hash, privateKey)
+  return {
+    signature,
+    recoveryId: recid,
+  }
+}
+
+/**
+ * Verifies invoice signature with public key recovery
+ * @param invoice - The decoded invoice
+ * @param invoiceString - Original invoice string
+ * @param expectedPubkey - Optional expected public key to verify against
+ * @returns Verification result with recovered pubkey
+ */
+export function verifyInvoiceSignatureWithRecovery(
+  invoice: Invoice,
+  invoiceString: string,
+  expectedPubkey?: Uint8Array,
+): { valid: boolean; recoveredPubkey?: Uint8Array; error?: string } {
+  try {
+    const recoveredPubkey = recoverInvoicePublicKey(invoice, invoiceString)
+
+    if (!recoveredPubkey) {
+      return { valid: false, error: 'Failed to recover public key' }
+    }
+
+    // If expected pubkey is provided, verify it matches
+    if (expectedPubkey) {
+      const matches =
+        recoveredPubkey.length === expectedPubkey.length &&
+        recoveredPubkey.every((byte, i) => byte === expectedPubkey[i])
+
+      if (!matches) {
+        return {
+          valid: false,
+          recoveredPubkey,
+          error: 'Recovered public key does not match expected',
+        }
+      }
+    }
+
+    // If invoice has payee pubkey, verify it matches
+    if (invoice.taggedFields.payeePubkey) {
+      const matches =
+        recoveredPubkey.length === invoice.taggedFields.payeePubkey.length &&
+        recoveredPubkey.every((byte, i) => byte === invoice.taggedFields.payeePubkey![i])
+
+      if (!matches) {
+        return {
+          valid: false,
+          recoveredPubkey,
+          error: 'Recovered public key does not match payee pubkey in invoice',
+        }
+      }
+    }
+
+    return { valid: true, recoveredPubkey }
+  } catch (error) {
+    return {
+      valid: false,
+      error: error instanceof Error ? error.message : 'Unknown error during verification',
+    }
+  }
+}
+
+/**
+ * Parses amount with optional multiplier from HRP suffix
+ * Per BOLT #11: amount is expressed as `number` followed by multiplier
+ * @param amountStr - Amount string (e.g., "2500u", "1m", "1000n")
+ * @returns Amount in millisatoshis
+ */
+export function parseAmountFromHrp(amountStr: string): bigint {
+  if (!amountStr || amountStr.length === 0) {
+    throw new Error('Amount string is empty')
+  }
+
+  const multiplierChar = amountStr[amountStr.length - 1]
+  const multipliers: Record<string, AmountMultiplier> = {
+    m: AmountMultiplier.MILLI,
+    u: AmountMultiplier.MICRO,
+    n: AmountMultiplier.NANO,
+    p: AmountMultiplier.PICO,
+  }
+
+  const multiplier = multipliers[multiplierChar]
+  if (!multiplier) {
+    throw new Error(`Invalid amount multiplier: ${multiplierChar}`)
+  }
+
+  const amountValue = parseInt(amountStr.slice(0, -1), 10)
+  if (isNaN(amountValue) || amountValue <= 0) {
+    throw new Error(`Invalid amount value: ${amountStr.slice(0, -1)}`)
+  }
+
+  return calculateAmount(amountValue, multiplier)
+}
+
+/**
+ * Formats millisatoshis to the most compact representation for HRP
+ * @param millisatoshis - Amount in millisatoshis
+ * @returns Formatted amount string (e.g., "2500u", "1m")
+ */
+export function formatAmountForHrp(millisatoshis: bigint): string {
+  if (millisatoshis <= 0n) {
+    throw new Error('Amount must be positive')
+  }
+
+  // Try milli (1 mBTC = 100,000,000 msat)
+  if (millisatoshis >= 100000000n && millisatoshis % 100000000n === 0n) {
+    return `${millisatoshis / 100000000n}m`
+  }
+
+  // Try micro (1 µBTC = 100,000 msat)
+  if (millisatoshis >= 100000n && millisatoshis % 100000n === 0n) {
+    return `${millisatoshis / 100000n}u`
+  }
+
+  // Try nano (1 nBTC = 100 msat)
+  if (millisatoshis >= 100n && millisatoshis % 100n === 0n) {
+    return `${millisatoshis / 100n}n`
+  }
+
+  // Use pico (1 pBTC = 0.1 msat)
+  return `${millisatoshis * 10n}p`
+}
+
+/**
+ * Validates tagged field lengths according to BOLT #11
+ * @param type - Field type
+ * @param dataLength - Length in 5-bit words
+ * @returns Validation result
+ */
+export function validateTaggedFieldLength(
+  type: TaggedFieldType,
+  dataLength: number,
+): { valid: boolean; error?: string } {
+  const expectedLengths: Partial<Record<TaggedFieldType, { min: number; max: number }>> = {
+    [TaggedFieldType.PAYMENT_HASH]: { min: 52, max: 52 }, // 256 bits = 52 words
+    [TaggedFieldType.PAYMENT_SECRET]: { min: 52, max: 52 }, // 256 bits = 52 words
+    [TaggedFieldType.DESCRIPTION_HASH]: { min: 52, max: 52 }, // 256 bits = 52 words
+    [TaggedFieldType.PAYEE_PUBKEY]: { min: 53, max: 53 }, // 264 bits = 53 words (33 bytes)
+    [TaggedFieldType.EXPIRY]: { min: 1, max: 10 }, // Variable
+    [TaggedFieldType.MIN_FINAL_CLTV_EXPIRY_DELTA]: { min: 1, max: 10 }, // Variable
+    [TaggedFieldType.ROUTING_INFO]: { min: 0, max: 1024 }, // Variable, can be empty
+    [TaggedFieldType.FEATURES]: { min: 0, max: 1024 }, // Variable
+  }
+
+  const constraint = expectedLengths[type]
+  if (!constraint) {
+    // Unknown field type, accept any length
+    return { valid: true }
+  }
+
+  if (dataLength < constraint.min || dataLength > constraint.max) {
+    return {
+      valid: false,
+      error: `Field type ${type} has invalid length ${dataLength}, expected ${constraint.min}-${constraint.max}`,
+    }
+  }
+
+  return { valid: true }
+}
+
+/**
+ * Checks if a feature is required (even bit set) per BOLT #9
+ * @param features - Feature bitvector
+ * @param featureBit - Feature bit number (even for compulsory, odd for optional)
+ * @returns True if feature is required
+ */
+export function isFeatureRequired(features: Uint8Array, featureBit: number): boolean {
+  if (featureBit % 2 !== 0) {
+    return false // Odd bits are optional, not required
+  }
+
+  const byteIndex = Math.floor(featureBit / 8)
+  const bitIndex = featureBit % 8
+
+  if (byteIndex >= features.length) {
+    return false
+  }
+
+  return (features[byteIndex] & (1 << bitIndex)) !== 0
+}
+
+/**
+ * Checks if a feature is supported (either bit set) per BOLT #9
+ * @param features - Feature bitvector
+ * @param featureBit - Feature bit number (provide even bit, will check both)
+ * @returns True if feature is supported
+ */
+export function isFeatureSupported(features: Uint8Array, featureBit: number): boolean {
+  const evenBit = featureBit % 2 === 0 ? featureBit : featureBit - 1
+  const oddBit = evenBit + 1
+
+  const evenByteIndex = Math.floor(evenBit / 8)
+  const evenBitIndex = evenBit % 8
+  const oddByteIndex = Math.floor(oddBit / 8)
+  const oddBitIndex = oddBit % 8
+
+  const evenSet =
+    evenByteIndex < features.length && (features[evenByteIndex] & (1 << evenBitIndex)) !== 0
+  const oddSet =
+    oddByteIndex < features.length && (features[oddByteIndex] & (1 << oddBitIndex)) !== 0
+
+  return evenSet || oddSet
+}
+
+/**
+ * Known feature bits per BOLT #9
+ */
+export const KNOWN_FEATURE_BITS = {
+  OPTION_DATA_LOSS_PROTECT: 0,
+  INITIAL_ROUTING_SYNC: 2, // Deprecated
+  OPTION_UPFRONT_SHUTDOWN_SCRIPT: 4,
+  GOSSIP_QUERIES: 6,
+  VAR_ONION_OPTIN: 8, // Required for payments
+  GOSSIP_QUERIES_EX: 10,
+  OPTION_STATIC_REMOTEKEY: 12,
+  PAYMENT_SECRET: 14, // Required for invoices
+  BASIC_MPP: 16, // Multi-path payments
+  OPTION_SUPPORT_LARGE_CHANNEL: 18,
+  OPTION_ANCHOR_OUTPUTS: 20,
+  OPTION_ANCHORS_ZERO_FEE_HTLC_TX: 22,
+  OPTION_ROUTE_BLINDING: 24,
+  OPTION_SHUTDOWN_ANYSEGWIT: 26,
+  OPTION_CHANNEL_TYPE: 44,
+  OPTION_SCID_ALIAS: 46,
+  OPTION_PAYMENT_METADATA: 48,
+  OPTION_ZEROCONF: 50,
+} as const

@@ -18,6 +18,22 @@ import {
   determineOnChainRequirements,
   validateOnChainHandling,
   updateChannelState,
+  // BOLT #5: Sweep and Justice Transactions
+  calculateSweepWitnessWeight,
+  canSweepOutput,
+  buildSweepTransaction,
+  buildToLocalSweepWitness,
+  buildHtlcTimeoutSweepWitness,
+  buildHtlcSuccessSweepWitness,
+  buildJusticeTransaction,
+  buildToLocalPenaltyWitness,
+  buildOfferedHtlcPenaltyWitness,
+  buildReceivedHtlcPenaltyWitness,
+  detectRevokedCommitment,
+  findRevokedOutputs,
+  deriveRevocationPrivkey,
+  serializeSweepTransaction,
+  SweepOutputType,
 } from '../onchain'
 import {
   OutputResolutionState,
@@ -823,6 +839,722 @@ describe('BOLT #5: On-chain Transaction Handling', () => {
         const result = processTransactionAnalysis(analysis, mockContext, mockChannelState)
 
         expect(result?.nextActions).toContain(HtlcResolutionAction.SPEND_WITH_PREIMAGE)
+      })
+    })
+  })
+
+  // ==========================================
+  // BOLT #5: SWEEP TRANSACTIONS
+  // ==========================================
+
+  describe('BOLT #5: Sweep Transactions', () => {
+    const mockTxid = new Uint8Array(32).fill(0xaa)
+    const mockWitnessScript = new Uint8Array(80).fill(0xbb)
+    const mockSignature = new Uint8Array(72).fill(0xcc)
+    const mockDestinationScript = new Uint8Array(34).fill(0xdd)
+
+    describe('calculateSweepWitnessWeight', () => {
+      it('should calculate correct weight for TO_LOCAL sweep', () => {
+        const weight = calculateSweepWitnessWeight(SweepOutputType.TO_LOCAL)
+        expect(weight).toBe(156) // <local_delayedsig> 0 <witnessScript>
+      })
+
+      it('should calculate correct weight for TO_REMOTE sweep', () => {
+        const weight = calculateSweepWitnessWeight(SweepOutputType.TO_REMOTE)
+        expect(weight).toBe(200) // Default estimativa conservadora (P2WPKH não está implementado)
+      })
+
+      it('should calculate correct weight for HTLC_TIMEOUT sweep', () => {
+        const weight = calculateSweepWitnessWeight(SweepOutputType.HTLC_TIMEOUT)
+        expect(weight).toBe(289) // 0 <remotesig> <localsig> <> <witnessScript>
+      })
+
+      it('should calculate correct weight for HTLC_SUCCESS sweep', () => {
+        const weight = calculateSweepWitnessWeight(SweepOutputType.HTLC_SUCCESS)
+        expect(weight).toBe(321) // 0 <remotesig> <localsig> <preimage> <witnessScript>
+      })
+
+      it('should calculate correct weight for HTLC_SECOND_STAGE sweep', () => {
+        const weight = calculateSweepWitnessWeight(SweepOutputType.HTLC_SECOND_STAGE)
+        expect(weight).toBe(156) // <local_delayedsig> 0 <witnessScript>
+      })
+    })
+
+    describe('canSweepOutput', () => {
+      it('should allow sweep when CLTV is expired', () => {
+        const output = {
+          type: SweepOutputType.HTLC_TIMEOUT,
+          txid: mockTxid,
+          vout: 0,
+          value: 100000n,
+          script: mockWitnessScript,
+          cltvExpiry: 1000,
+        }
+
+        const result = canSweepOutput(output, 1001)
+        expect(result.canSweep).toBe(true)
+      })
+
+      it('should not allow sweep when CLTV is not expired', () => {
+        const output = {
+          type: SweepOutputType.HTLC_TIMEOUT,
+          txid: mockTxid,
+          vout: 0,
+          value: 100000n,
+          script: mockWitnessScript,
+          cltvExpiry: 1000,
+        }
+
+        const result = canSweepOutput(output, 999)
+        expect(result.canSweep).toBe(false)
+        expect(result.reason).toBe('CLTV not expired')
+        expect(result.blocksUntilSweepable).toBe(1)
+      })
+
+      it('should allow sweep when at exact CLTV height', () => {
+        const output = {
+          type: SweepOutputType.HTLC_TIMEOUT,
+          txid: mockTxid,
+          vout: 0,
+          value: 100000n,
+          script: mockWitnessScript,
+          cltvExpiry: 1000,
+        }
+
+        const result = canSweepOutput(output, 1000)
+        expect(result.canSweep).toBe(true)
+      })
+
+      it('should allow sweep for output without CLTV', () => {
+        const output = {
+          type: SweepOutputType.TO_LOCAL,
+          txid: mockTxid,
+          vout: 0,
+          value: 100000n,
+          script: mockWitnessScript,
+          csvDelay: 144,
+        }
+
+        const result = canSweepOutput(output, 500)
+        expect(result.canSweep).toBe(true)
+      })
+    })
+
+    describe('buildSweepTransaction', () => {
+      it('should build sweep transaction with single output', () => {
+        const params = {
+          outputs: [
+            {
+              type: SweepOutputType.TO_LOCAL,
+              txid: mockTxid,
+              vout: 0,
+              value: 100000n,
+              script: mockWitnessScript,
+              csvDelay: 144,
+            },
+          ],
+          destinationScript: mockDestinationScript,
+          feeRatePerKw: 1000,
+          currentBlockHeight: 1000,
+        }
+
+        const result = buildSweepTransaction(params)
+
+        expect(result).not.toBeNull()
+        expect(result?.version).toBe(2)
+        expect(result?.inputs.length).toBe(1)
+        expect(result?.outputs.length).toBe(1)
+        expect(result?.fee).toBeGreaterThan(0n)
+        expect(result?.totalSwept).toBeLessThan(100000n)
+      })
+
+      it('should build sweep transaction with multiple outputs', () => {
+        const params = {
+          outputs: [
+            {
+              type: SweepOutputType.TO_LOCAL,
+              txid: mockTxid,
+              vout: 0,
+              value: 100000n,
+              script: mockWitnessScript,
+              csvDelay: 144,
+            },
+            {
+              type: SweepOutputType.HTLC_SECOND_STAGE,
+              txid: mockTxid,
+              vout: 1,
+              value: 50000n,
+              script: mockWitnessScript,
+              csvDelay: 144,
+            },
+          ],
+          destinationScript: mockDestinationScript,
+          feeRatePerKw: 1000,
+          currentBlockHeight: 1000,
+        }
+
+        const result = buildSweepTransaction(params)
+
+        expect(result).not.toBeNull()
+        expect(result?.inputs.length).toBe(2)
+        expect(result?.totalSwept).toBeGreaterThan(0n)
+      })
+
+      it('should return null when all outputs are not sweepable', () => {
+        const params = {
+          outputs: [
+            {
+              type: SweepOutputType.HTLC_TIMEOUT,
+              txid: mockTxid,
+              vout: 0,
+              value: 100000n,
+              script: mockWitnessScript,
+              cltvExpiry: 2000, // Not expired
+            },
+          ],
+          destinationScript: mockDestinationScript,
+          feeRatePerKw: 1000,
+          currentBlockHeight: 1000,
+        }
+
+        const result = buildSweepTransaction(params)
+
+        expect(result).toBeNull()
+      })
+
+      it('should return null when output value is below dust', () => {
+        const params = {
+          outputs: [
+            {
+              type: SweepOutputType.TO_LOCAL,
+              txid: mockTxid,
+              vout: 0,
+              value: 500n, // Below dust
+              script: mockWitnessScript,
+            },
+          ],
+          destinationScript: mockDestinationScript,
+          feeRatePerKw: 1000,
+          currentBlockHeight: 1000,
+        }
+
+        const result = buildSweepTransaction(params)
+
+        expect(result).toBeNull()
+      })
+
+      it('should set correct locktime for HTLC outputs', () => {
+        const params = {
+          outputs: [
+            {
+              type: SweepOutputType.HTLC_TIMEOUT,
+              txid: mockTxid,
+              vout: 0,
+              value: 100000n,
+              script: mockWitnessScript,
+              cltvExpiry: 1500,
+            },
+          ],
+          destinationScript: mockDestinationScript,
+          feeRatePerKw: 1000,
+          currentBlockHeight: 1600,
+        }
+
+        const result = buildSweepTransaction(params)
+
+        expect(result).not.toBeNull()
+        expect(result?.locktime).toBe(1500)
+      })
+
+      it('should set correct sequence for CSV delay', () => {
+        const params = {
+          outputs: [
+            {
+              type: SweepOutputType.TO_LOCAL,
+              txid: mockTxid,
+              vout: 0,
+              value: 100000n,
+              script: mockWitnessScript,
+              csvDelay: 144,
+            },
+          ],
+          destinationScript: mockDestinationScript,
+          feeRatePerKw: 1000,
+          currentBlockHeight: 1000,
+        }
+
+        const result = buildSweepTransaction(params)
+
+        expect(result).not.toBeNull()
+        expect(result?.inputs[0].sequence).toBe(144)
+      })
+    })
+
+    describe('buildToLocalSweepWitness', () => {
+      it('should build correct witness stack', () => {
+        const witness = buildToLocalSweepWitness(mockSignature, mockWitnessScript)
+
+        expect(witness.length).toBe(3)
+        expect(witness[0]).toEqual(mockSignature)
+        expect(witness[1]).toEqual(new Uint8Array([])) // 0 for non-revocation path
+        expect(witness[2]).toEqual(mockWitnessScript)
+      })
+    })
+
+    describe('buildHtlcTimeoutSweepWitness', () => {
+      it('should build correct witness stack', () => {
+        const localSig = new Uint8Array(72).fill(0x11)
+        const remoteSig = new Uint8Array(72).fill(0x22)
+
+        const witness = buildHtlcTimeoutSweepWitness(localSig, remoteSig, mockWitnessScript)
+
+        expect(witness.length).toBe(5)
+        expect(witness[0]).toEqual(new Uint8Array([])) // OP_CHECKMULTISIG dummy
+        expect(witness[1]).toEqual(remoteSig)
+        expect(witness[2]).toEqual(localSig)
+        expect(witness[3]).toEqual(new Uint8Array([])) // Empty for timeout path
+        expect(witness[4]).toEqual(mockWitnessScript)
+      })
+    })
+
+    describe('buildHtlcSuccessSweepWitness', () => {
+      it('should build correct witness stack with preimage', () => {
+        const localSig = new Uint8Array(72).fill(0x11)
+        const remoteSig = new Uint8Array(72).fill(0x22)
+
+        const witness = buildHtlcSuccessSweepWitness(
+          localSig,
+          remoteSig,
+          mockPreimage,
+          mockWitnessScript,
+        )
+
+        expect(witness.length).toBe(5)
+        expect(witness[0]).toEqual(new Uint8Array([])) // OP_CHECKMULTISIG dummy
+        expect(witness[1]).toEqual(remoteSig)
+        expect(witness[2]).toEqual(localSig)
+        expect(witness[3]).toEqual(mockPreimage)
+        expect(witness[4]).toEqual(mockWitnessScript)
+      })
+    })
+  })
+
+  // ==========================================
+  // BOLT #5: JUSTICE/PENALTY TRANSACTIONS
+  // ==========================================
+
+  describe('BOLT #5: Justice/Penalty Transactions', () => {
+    const mockTxid = new Uint8Array(32).fill(0xaa)
+    const mockWitnessScript = new Uint8Array(80).fill(0xbb)
+    const mockSignature = new Uint8Array(72).fill(0xcc)
+    const mockDestinationScript = new Uint8Array(34).fill(0xdd)
+    const mockRevocationPubkey = new Uint8Array(33).fill(0xee)
+    const mockPerCommitmentSecret = new Uint8Array(32).fill(0xff)
+
+    describe('calculatePenaltyWeight (BOLT #5 Penalty Witness)', () => {
+      it('should return BOLT #5 weight for TO_LOCAL_PENALTY', () => {
+        const weight = calculatePenaltyWeight(PenaltyTransactionType.TO_LOCAL_PENALTY)
+        expect(weight).toBe(160)
+      })
+
+      it('should return BOLT #5 weight for OFFERED_HTLC_PENALTY', () => {
+        const weight = calculatePenaltyWeight(PenaltyTransactionType.OFFERED_HTLC_PENALTY)
+        expect(weight).toBe(243)
+      })
+
+      it('should return BOLT #5 weight for RECEIVED_HTLC_PENALTY', () => {
+        const weight = calculatePenaltyWeight(PenaltyTransactionType.RECEIVED_HTLC_PENALTY)
+        expect(weight).toBe(249)
+      })
+    })
+
+    describe('buildJusticeTransaction', () => {
+      it('should build justice transaction with single revoked output', () => {
+        const params = {
+          revokedOutputs: [
+            {
+              type: PenaltyTransactionType.TO_LOCAL_PENALTY,
+              txid: mockTxid,
+              vout: 0,
+              value: 1000000n,
+              witnessScript: mockWitnessScript,
+            },
+          ],
+          destinationScript: mockDestinationScript,
+          feeRatePerKw: 1000,
+          revocationPrivkey: mockPerCommitmentSecret,
+          perCommitmentSecret: mockPerCommitmentSecret,
+          revocationBasepoint: mockPoint,
+        }
+
+        const result = buildJusticeTransaction(params)
+
+        expect(result).not.toBeNull()
+        expect(result?.version).toBe(2)
+        expect(result?.locktime).toBe(0) // Penalty tx não precisa de locktime
+        expect(result?.inputs.length).toBe(1)
+        expect(result?.outputs.length).toBe(1)
+        expect(result?.totalRecovered).toBeGreaterThan(0n)
+        expect(result?.fee).toBeGreaterThan(0n)
+      })
+
+      it('should build justice transaction with multiple revoked outputs', () => {
+        const params = {
+          revokedOutputs: [
+            {
+              type: PenaltyTransactionType.TO_LOCAL_PENALTY,
+              txid: mockTxid,
+              vout: 0,
+              value: 1000000n,
+              witnessScript: mockWitnessScript,
+            },
+            {
+              type: PenaltyTransactionType.OFFERED_HTLC_PENALTY,
+              txid: mockTxid,
+              vout: 1,
+              value: 500000n,
+              witnessScript: mockWitnessScript,
+            },
+            {
+              type: PenaltyTransactionType.RECEIVED_HTLC_PENALTY,
+              txid: mockTxid,
+              vout: 2,
+              value: 300000n,
+              witnessScript: mockWitnessScript,
+            },
+          ],
+          destinationScript: mockDestinationScript,
+          feeRatePerKw: 1000,
+          revocationPrivkey: mockPerCommitmentSecret,
+          perCommitmentSecret: mockPerCommitmentSecret,
+          revocationBasepoint: mockPoint,
+        }
+
+        const result = buildJusticeTransaction(params)
+
+        expect(result).not.toBeNull()
+        expect(result?.inputs.length).toBe(3)
+        expect(result?.totalRecovered).toBeLessThan(1800000n) // Total - fee
+      })
+
+      it('should return null when no revoked outputs', () => {
+        const params = {
+          revokedOutputs: [],
+          destinationScript: mockDestinationScript,
+          feeRatePerKw: 1000,
+          revocationPrivkey: mockPerCommitmentSecret,
+          perCommitmentSecret: mockPerCommitmentSecret,
+          revocationBasepoint: mockPoint,
+        }
+
+        const result = buildJusticeTransaction(params)
+
+        expect(result).toBeNull()
+      })
+
+      it('should return null when output is below dust after fee', () => {
+        const params = {
+          revokedOutputs: [
+            {
+              type: PenaltyTransactionType.TO_LOCAL_PENALTY,
+              txid: mockTxid,
+              vout: 0,
+              value: 500n, // Very small value
+              witnessScript: mockWitnessScript,
+            },
+          ],
+          destinationScript: mockDestinationScript,
+          feeRatePerKw: 10000, // High fee rate
+          revocationPrivkey: mockPerCommitmentSecret,
+          perCommitmentSecret: mockPerCommitmentSecret,
+          revocationBasepoint: mockPoint,
+        }
+
+        const result = buildJusticeTransaction(params)
+
+        expect(result).toBeNull()
+      })
+
+      it('should set correct penalty type on inputs', () => {
+        const params = {
+          revokedOutputs: [
+            {
+              type: PenaltyTransactionType.OFFERED_HTLC_PENALTY,
+              txid: mockTxid,
+              vout: 1,
+              value: 500000n,
+              witnessScript: mockWitnessScript,
+            },
+          ],
+          destinationScript: mockDestinationScript,
+          feeRatePerKw: 1000,
+          revocationPrivkey: mockPerCommitmentSecret,
+          perCommitmentSecret: mockPerCommitmentSecret,
+          revocationBasepoint: mockPoint,
+        }
+
+        const result = buildJusticeTransaction(params)
+
+        expect(result?.inputs[0].penaltyType).toBe(PenaltyTransactionType.OFFERED_HTLC_PENALTY)
+      })
+    })
+
+    describe('buildToLocalPenaltyWitness', () => {
+      it('should build correct witness stack for to_local penalty', () => {
+        const witness = buildToLocalPenaltyWitness(mockSignature, mockWitnessScript)
+
+        expect(witness.length).toBe(3)
+        expect(witness[0]).toEqual(mockSignature)
+        expect(witness[1]).toEqual(new Uint8Array([0x01])) // 1 for revocation path
+        expect(witness[2]).toEqual(mockWitnessScript)
+      })
+    })
+
+    describe('buildOfferedHtlcPenaltyWitness', () => {
+      it('should build correct witness stack for offered HTLC penalty', () => {
+        const witness = buildOfferedHtlcPenaltyWitness(
+          mockSignature,
+          mockRevocationPubkey,
+          mockWitnessScript,
+        )
+
+        expect(witness.length).toBe(3)
+        expect(witness[0]).toEqual(mockSignature)
+        expect(witness[1]).toEqual(mockRevocationPubkey)
+        expect(witness[2]).toEqual(mockWitnessScript)
+      })
+    })
+
+    describe('buildReceivedHtlcPenaltyWitness', () => {
+      it('should build correct witness stack for received HTLC penalty', () => {
+        const witness = buildReceivedHtlcPenaltyWitness(
+          mockSignature,
+          mockRevocationPubkey,
+          mockWitnessScript,
+        )
+
+        expect(witness.length).toBe(3)
+        expect(witness[0]).toEqual(mockSignature)
+        expect(witness[1]).toEqual(mockRevocationPubkey)
+        expect(witness[2]).toEqual(mockWitnessScript)
+      })
+    })
+
+    describe('detectRevokedCommitment', () => {
+      it('should detect revoked commitment when secret is non-zero', () => {
+        const result = detectRevokedCommitment(mockTxid, mockPerCommitmentSecret, mockPoint)
+
+        expect(result).toBe(true)
+      })
+
+      it('should not detect revoked commitment when secret is zero', () => {
+        const zeroSecret = new Uint8Array(32).fill(0)
+        const result = detectRevokedCommitment(mockTxid, zeroSecret, mockPoint)
+
+        expect(result).toBe(false)
+      })
+    })
+
+    describe('findRevokedOutputs', () => {
+      it('should find P2WSH outputs in revoked commitment', () => {
+        const tx: Tx = {
+          ...mockCommitmentTx,
+          vout: [
+            {
+              value: 0.01,
+              n: 0,
+              scriptPubKey: {
+                asm: '',
+                hex: '0020' + 'aa'.repeat(32),
+                reqSigs: 1,
+                type: 'witness_v0_scripthash',
+                address: 'bc1qmockaddress',
+              },
+            },
+            {
+              value: 0.005,
+              n: 1,
+              scriptPubKey: {
+                asm: '',
+                hex: '0020' + 'bb'.repeat(32),
+                reqSigs: 1,
+                type: 'witness_v0_scripthash',
+                address: 'bc1qmockaddress2',
+              },
+            },
+          ],
+        }
+
+        const result = findRevokedOutputs(tx, mockContext, mockPerCommitmentSecret)
+
+        expect(result.length).toBe(2)
+        expect(result[0].type).toBe(PenaltyTransactionType.TO_LOCAL_PENALTY)
+        expect(result[0].vout).toBe(0)
+        expect(result[1].vout).toBe(1)
+      })
+
+      it('should skip non-P2WSH outputs', () => {
+        const tx: Tx = {
+          ...mockCommitmentTx,
+          vout: [
+            {
+              value: 0.01,
+              n: 0,
+              scriptPubKey: {
+                asm: '',
+                hex: '0014' + 'aa'.repeat(20), // P2WPKH
+                reqSigs: 1,
+                type: 'witness_v0_keyhash',
+                address: 'bc1qmockaddress',
+              },
+            },
+          ],
+        }
+
+        const result = findRevokedOutputs(tx, mockContext, mockPerCommitmentSecret)
+
+        expect(result.length).toBe(0)
+      })
+    })
+
+    describe('deriveRevocationPrivkey', () => {
+      it('should derive revocation privkey from secrets', () => {
+        const revocationBasepointSecret = new Uint8Array(32).fill(0x11)
+        const perCommitmentSecret = new Uint8Array(32).fill(0x22)
+        const revocationBasepoint = new Uint8Array(33).fill(0x33)
+        const perCommitmentPoint = new Uint8Array(33).fill(0x44)
+
+        const result = deriveRevocationPrivkey(
+          revocationBasepointSecret,
+          perCommitmentSecret,
+          revocationBasepoint,
+          perCommitmentPoint,
+        )
+
+        expect(result).toBeInstanceOf(Uint8Array)
+        expect(result.length).toBe(32)
+        // O resultado deve ser determinístico
+        const result2 = deriveRevocationPrivkey(
+          revocationBasepointSecret,
+          perCommitmentSecret,
+          revocationBasepoint,
+          perCommitmentPoint,
+        )
+        expect(result).toEqual(result2)
+      })
+    })
+
+    describe('serializeSweepTransaction', () => {
+      it('should serialize sweep transaction to bytes', () => {
+        const tx = {
+          version: 2,
+          locktime: 1000,
+          inputs: [
+            {
+              txid: mockTxid,
+              vout: 0,
+              sequence: 144,
+              witnessScript: mockWitnessScript,
+              witnessStack: [],
+            },
+          ],
+          outputs: [
+            {
+              value: 90000n,
+              scriptPubKey: mockDestinationScript,
+            },
+          ],
+          weight: 500,
+          fee: 10000n,
+          totalSwept: 90000n,
+        }
+
+        const result = serializeSweepTransaction(tx)
+
+        expect(result).toBeInstanceOf(Uint8Array)
+        expect(result.length).toBeGreaterThan(0)
+
+        // Verificar versão (little-endian)
+        expect(result[0]).toBe(2)
+        expect(result[1]).toBe(0)
+        expect(result[2]).toBe(0)
+        expect(result[3]).toBe(0)
+
+        // Verificar marker e flag (segwit)
+        expect(result[4]).toBe(0)
+        expect(result[5]).toBe(1)
+      })
+
+      it('should serialize justice transaction to bytes', () => {
+        const tx = {
+          version: 2,
+          locktime: 0,
+          inputs: [
+            {
+              txid: mockTxid,
+              vout: 0,
+              sequence: 0xffffffff,
+              witnessScript: mockWitnessScript,
+              penaltyType: PenaltyTransactionType.TO_LOCAL_PENALTY,
+            },
+          ],
+          outputs: [
+            {
+              value: 900000n,
+              scriptPubKey: mockDestinationScript,
+            },
+          ],
+          weight: 400,
+          fee: 100000n,
+          totalRecovered: 900000n,
+        }
+
+        const result = serializeSweepTransaction(tx)
+
+        expect(result).toBeInstanceOf(Uint8Array)
+        expect(result.length).toBeGreaterThan(0)
+      })
+    })
+  })
+
+  // ==========================================
+  // BOLT #5 Appendix A: Expected Weights
+  // ==========================================
+
+  describe('BOLT #5 Appendix A: Weight Calculations', () => {
+    describe('Penalty Transaction Witness Weights', () => {
+      it('to_local_penalty_witness should be 160 bytes', () => {
+        // From Appendix A: to_local_penalty_witness: 160 bytes
+        // 1 (items) + 1 (siglen) + 73 (sig) + 1 (1 for revocation) + 1 (script len) + 83 (script)
+        expect(calculatePenaltyWeight(PenaltyTransactionType.TO_LOCAL_PENALTY)).toBe(160)
+      })
+
+      it('offered_htlc_penalty_witness should be 243 bytes', () => {
+        // From Appendix A: offered_htlc_penalty_witness: 243 bytes
+        expect(calculatePenaltyWeight(PenaltyTransactionType.OFFERED_HTLC_PENALTY)).toBe(243)
+      })
+
+      it('accepted_htlc_penalty_witness should be 249 bytes', () => {
+        // From Appendix A: accepted_htlc_penalty_witness: 249 bytes
+        expect(calculatePenaltyWeight(PenaltyTransactionType.RECEIVED_HTLC_PENALTY)).toBe(249)
+      })
+    })
+
+    describe('Penalty Transaction Input Weights', () => {
+      it('to_local penalty input should be 324 bytes', () => {
+        // From Appendix A: to_local_penalty input: 324 bytes
+        // 41 (prevout) + 4 (sequence) + 1 (script len) + 160 (witness) + 118 (script)
+        expect(calculatePenaltyInputWeight(PenaltyTransactionType.TO_LOCAL_PENALTY)).toBe(324)
+      })
+
+      it('offered HTLC penalty input should be 407 bytes', () => {
+        // From Appendix A: offered_htlc_penalty input: 407 bytes
+        expect(calculatePenaltyInputWeight(PenaltyTransactionType.OFFERED_HTLC_PENALTY)).toBe(407)
+      })
+
+      it('received HTLC penalty input should be 413 bytes', () => {
+        // From Appendix A: accepted_htlc_penalty input: 413 bytes
+        expect(calculatePenaltyInputWeight(PenaltyTransactionType.RECEIVED_HTLC_PENALTY)).toBe(413)
       })
     })
   })

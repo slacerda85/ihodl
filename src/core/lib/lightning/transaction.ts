@@ -179,7 +179,21 @@ export function createToLocalScript(
 }
 
 /**
- * Creates P2WSH script for offered HTLC
+ * Creates P2WSH script for offered HTLC - BOLT #3 compliant
+ *
+ * Script:
+ * OP_DUP OP_HASH160 <RIPEMD160(SHA256(revocationpubkey))> OP_EQUAL
+ * OP_IF
+ *     OP_CHECKSIG
+ * OP_ELSE
+ *     <remote_htlcpubkey> OP_SWAP OP_SIZE 32 OP_EQUAL
+ *     OP_NOTIF
+ *         OP_DROP 2 OP_SWAP <local_htlcpubkey> 2 OP_CHECKMULTISIG
+ *     OP_ELSE
+ *         OP_HASH160 <RIPEMD160(payment_hash)> OP_EQUALVERIFY OP_CHECKSIG
+ *     OP_ENDIF
+ *     [OP_1 OP_CHECKSEQUENCEVERIFY OP_DROP] // if anchors
+ * OP_ENDIF
  */
 export function createOfferedHtlcScript(
   revocationPubkey: Point,
@@ -189,47 +203,95 @@ export function createOfferedHtlcScript(
   cltvExpiry: CltvExpiry,
   optionAnchors: boolean = false,
 ): Uint8Array {
-  const paymentHash160 = hash160(paymentHash)
-  const expiryBuf = encodeU32(cltvExpiry)
-  const script = new Uint8Array([
-    OpCode.OP_HASH160,
-    0x14, // 20 bytes
-    ...paymentHash160,
-    OpCode.OP_EQUAL,
-    OpCode.OP_IF,
-    0x21, // 33 bytes
-    ...revocationPubkey,
-    OpCode.OP_CHECKSIG,
-    OpCode.OP_ELSE,
-    0x21, // 33 bytes
-    ...remoteHtlcPubkey,
-    OpCode.OP_SWAP,
-    OpCode.OP_SIZE,
-    0x20, // 32
-    OpCode.OP_EQUAL,
-    OpCode.OP_NOTIF,
-    OpCode.OP_DROP,
-    OpCode.OP_2,
-    OpCode.OP_SWAP,
-    0x21, // 33 bytes
-    ...localHtlcPubkey,
-    OpCode.OP_2,
-    OpCode.OP_CHECKMULTISIG,
-    OpCode.OP_ELSE,
-    OpCode.OP_SHA256,
-    0x14, // 20 bytes
-    ...paymentHash160,
-    OpCode.OP_EQUALVERIFY,
-    OpCode.OP_CHECKSIG,
-    OpCode.OP_ENDIF,
-    ...(optionAnchors ? [OpCode.OP_1, OpCode.OP_CHECKSEQUENCEVERIFY, OpCode.OP_DROP] : []), // 1 OP_CHECKSEQUENCEVERIFY OP_DROP
-    OpCode.OP_ENDIF,
-  ])
-  return script
+  // BOLT #3: use RIPEMD160(SHA256(revocation_pubkey)) para o check
+  const revocationHash = hash160(revocationPubkey)
+  // Para o payment, usa RIPEMD160(payment_hash) onde payment_hash já é SHA256(preimage)
+  const paymentHashRipemd = ripemd160Hash(paymentHash)
+
+  const parts: number[] = []
+
+  // OP_DUP OP_HASH160 <20 bytes> OP_EQUAL
+  parts.push(OpCode.OP_DUP)
+  parts.push(OpCode.OP_HASH160)
+  parts.push(0x14) // 20 bytes
+  parts.push(...revocationHash)
+  parts.push(OpCode.OP_EQUAL)
+
+  // OP_IF
+  parts.push(OpCode.OP_IF)
+
+  // OP_CHECKSIG
+  parts.push(OpCode.OP_CHECKSIG)
+
+  // OP_ELSE
+  parts.push(OpCode.OP_ELSE)
+
+  // <remote_htlcpubkey>
+  parts.push(0x21) // 33 bytes
+  parts.push(...remoteHtlcPubkey)
+
+  // OP_SWAP OP_SIZE <32> OP_EQUAL
+  parts.push(OpCode.OP_SWAP)
+  parts.push(OpCode.OP_SIZE)
+  parts.push(0x01) // Push 1 byte
+  parts.push(0x20) // 32
+  parts.push(OpCode.OP_EQUAL)
+
+  // OP_NOTIF
+  parts.push(OpCode.OP_NOTIF)
+
+  // OP_DROP OP_2 OP_SWAP <local_htlcpubkey> OP_2 OP_CHECKMULTISIG
+  parts.push(OpCode.OP_DROP)
+  parts.push(OpCode.OP_2)
+  parts.push(OpCode.OP_SWAP)
+  parts.push(0x21) // 33 bytes
+  parts.push(...localHtlcPubkey)
+  parts.push(OpCode.OP_2)
+  parts.push(OpCode.OP_CHECKMULTISIG)
+
+  // OP_ELSE
+  parts.push(OpCode.OP_ELSE)
+
+  // OP_HASH160 <RIPEMD160(payment_hash)> OP_EQUALVERIFY OP_CHECKSIG
+  parts.push(OpCode.OP_HASH160)
+  parts.push(0x14) // 20 bytes
+  parts.push(...paymentHashRipemd)
+  parts.push(OpCode.OP_EQUALVERIFY)
+  parts.push(OpCode.OP_CHECKSIG)
+
+  // OP_ENDIF
+  parts.push(OpCode.OP_ENDIF)
+
+  // Anchors: OP_1 OP_CHECKSEQUENCEVERIFY OP_DROP
+  if (optionAnchors) {
+    parts.push(OpCode.OP_1)
+    parts.push(OpCode.OP_CHECKSEQUENCEVERIFY)
+    parts.push(OpCode.OP_DROP)
+  }
+
+  // OP_ENDIF final
+  parts.push(OpCode.OP_ENDIF)
+
+  return new Uint8Array(parts)
 }
 
 /**
- * Creates P2WSH script for received HTLC
+ * Creates P2WSH script for received HTLC - BOLT #3 compliant
+ *
+ * Script:
+ * OP_DUP OP_HASH160 <RIPEMD160(SHA256(revocationpubkey))> OP_EQUAL
+ * OP_IF
+ *     OP_CHECKSIG
+ * OP_ELSE
+ *     <remote_htlcpubkey> OP_SWAP OP_SIZE 32 OP_EQUAL
+ *     OP_IF
+ *         OP_HASH160 <RIPEMD160(payment_hash)> OP_EQUALVERIFY
+ *         2 OP_SWAP <local_htlcpubkey> 2 OP_CHECKMULTISIG
+ *     OP_ELSE
+ *         OP_DROP <cltv_expiry> OP_CHECKLOCKTIMEVERIFY OP_DROP OP_CHECKSIG
+ *     OP_ENDIF
+ *     [OP_1 OP_CHECKSEQUENCEVERIFY OP_DROP] // if anchors
+ * OP_ENDIF
  */
 export function createReceivedHtlcScript(
   revocationPubkey: Point,
@@ -239,46 +301,123 @@ export function createReceivedHtlcScript(
   cltvExpiry: CltvExpiry,
   optionAnchors: boolean = false,
 ): Uint8Array {
-  const paymentHash160 = hash160(paymentHash)
-  const expiryBuf = encodeU32(cltvExpiry)
-  const script = new Uint8Array([
-    OpCode.OP_HASH160,
-    0x14, // paymentHash160 size (20 bytes)
-    ...paymentHash160,
-    OpCode.OP_EQUAL,
-    OpCode.OP_IF,
-    0x21, // 33 bytes length
-    ...revocationPubkey,
-    OpCode.OP_CHECKSIG,
-    OpCode.OP_ELSE,
-    0x21, // 33 bytes length
-    ...remoteHtlcPubkey,
-    OpCode.OP_SWAP,
-    OpCode.OP_SIZE,
-    0x20, // 32
-    OpCode.OP_EQUAL,
-    OpCode.OP_IF,
-    OpCode.OP_SHA256,
-    0x14, // 20 bytes length
-    ...paymentHash160,
-    OpCode.OP_EQUALVERIFY,
-    OpCode.OP_2,
-    OpCode.OP_SWAP,
-    0x21, // 33 bytes length
-    ...localHtlcPubkey,
-    OpCode.OP_2,
-    OpCode.OP_CHECKMULTISIG,
-    OpCode.OP_ELSE,
-    OpCode.OP_DROP,
-    ...expiryBuf,
-    OpCode.OP_CHECKLOCKTIMEVERIFY,
-    OpCode.OP_DROP,
-    OpCode.OP_CHECKSIG,
-    OpCode.OP_ENDIF,
-    ...(optionAnchors ? [OpCode.OP_1, OpCode.OP_CHECKSEQUENCEVERIFY, OpCode.OP_DROP] : []), // 1 OP_CHECKSEQUENCEVERIFY OP_DROP
-    OpCode.OP_ENDIF,
-  ])
-  return script
+  // BOLT #3: use RIPEMD160(SHA256(revocation_pubkey)) para o check
+  const revocationHash = hash160(revocationPubkey)
+  // Para o payment, usa RIPEMD160(payment_hash)
+  const paymentHashRipemd = ripemd160Hash(paymentHash)
+
+  const parts: number[] = []
+
+  // OP_DUP OP_HASH160 <20 bytes> OP_EQUAL
+  parts.push(OpCode.OP_DUP)
+  parts.push(OpCode.OP_HASH160)
+  parts.push(0x14) // 20 bytes
+  parts.push(...revocationHash)
+  parts.push(OpCode.OP_EQUAL)
+
+  // OP_IF
+  parts.push(OpCode.OP_IF)
+
+  // OP_CHECKSIG
+  parts.push(OpCode.OP_CHECKSIG)
+
+  // OP_ELSE
+  parts.push(OpCode.OP_ELSE)
+
+  // <remote_htlcpubkey>
+  parts.push(0x21) // 33 bytes
+  parts.push(...remoteHtlcPubkey)
+
+  // OP_SWAP OP_SIZE <32> OP_EQUAL
+  parts.push(OpCode.OP_SWAP)
+  parts.push(OpCode.OP_SIZE)
+  parts.push(0x01) // Push 1 byte
+  parts.push(0x20) // 32
+  parts.push(OpCode.OP_EQUAL)
+
+  // OP_IF
+  parts.push(OpCode.OP_IF)
+
+  // OP_HASH160 <RIPEMD160(payment_hash)> OP_EQUALVERIFY
+  parts.push(OpCode.OP_HASH160)
+  parts.push(0x14) // 20 bytes
+  parts.push(...paymentHashRipemd)
+  parts.push(OpCode.OP_EQUALVERIFY)
+
+  // OP_2 OP_SWAP <local_htlcpubkey> OP_2 OP_CHECKMULTISIG
+  parts.push(OpCode.OP_2)
+  parts.push(OpCode.OP_SWAP)
+  parts.push(0x21) // 33 bytes
+  parts.push(...localHtlcPubkey)
+  parts.push(OpCode.OP_2)
+  parts.push(OpCode.OP_CHECKMULTISIG)
+
+  // OP_ELSE
+  parts.push(OpCode.OP_ELSE)
+
+  // OP_DROP <cltv_expiry> OP_CHECKLOCKTIMEVERIFY OP_DROP OP_CHECKSIG
+  parts.push(OpCode.OP_DROP)
+
+  // Encode CLTV expiry como minimal push
+  const cltvBytes = encodeCltvExpiryForScript(cltvExpiry)
+  parts.push(...cltvBytes)
+
+  parts.push(OpCode.OP_CHECKLOCKTIMEVERIFY)
+  parts.push(OpCode.OP_DROP)
+  parts.push(OpCode.OP_CHECKSIG)
+
+  // OP_ENDIF
+  parts.push(OpCode.OP_ENDIF)
+
+  // Anchors: OP_1 OP_CHECKSEQUENCEVERIFY OP_DROP
+  if (optionAnchors) {
+    parts.push(OpCode.OP_1)
+    parts.push(OpCode.OP_CHECKSEQUENCEVERIFY)
+    parts.push(OpCode.OP_DROP)
+  }
+
+  // OP_ENDIF final
+  parts.push(OpCode.OP_ENDIF)
+
+  return new Uint8Array(parts)
+}
+
+/**
+ * Helper: RIPEMD160 standalone (não hash160 que é RIPEMD160(SHA256))
+ */
+function ripemd160Hash(data: Uint8Array): Uint8Array {
+  // Importar de @noble/hashes/legacy
+  const { ripemd160 } = require('@noble/hashes/legacy.js')
+  return ripemd160(data)
+}
+
+/**
+ * Encodes CLTV expiry for use in script (minimal push encoding)
+ */
+function encodeCltvExpiryForScript(cltv: number): number[] {
+  if (cltv <= 0) {
+    return [OpCode.OP_0]
+  }
+  if (cltv <= 16) {
+    // Use OP_1 through OP_16 (0x51 - 0x60)
+    return [0x50 + cltv]
+  }
+
+  // Encode como minimal push conforme BIP 62
+  const bytes: number[] = []
+  let n = cltv
+
+  while (n > 0) {
+    bytes.push(n & 0xff)
+    n >>= 8
+  }
+
+  // Se o bit mais alto estiver setado, adicionar 0x00 para manter positivo
+  if (bytes[bytes.length - 1] & 0x80) {
+    bytes.push(0x00)
+  }
+
+  return [bytes.length, ...bytes]
 }
 
 /**
@@ -477,7 +616,10 @@ export function buildCommitmentTransaction(params: CommitmentParams): Commitment
 // HTLC transaction construction
 
 /**
- * Builds an HTLC-timeout transaction
+ * Builds an HTLC-timeout transaction - BOLT #3 compliant
+ *
+ * Usado quando o HTLC oferecido expira sem ser resgatado
+ * O output vai para to_local (com delay)
  */
 export function buildHtlcTimeoutTransaction(
   commitmentTxid: Sha256,
@@ -485,19 +627,26 @@ export function buildHtlcTimeoutTransaction(
   amount: Satoshis,
   cltvExpiry: CltvExpiry,
   feeratePerKw: number,
+  localDelayedPubkey: Point,
+  revocationPubkey: Point,
+  toSelfDelay: number,
   optionAnchors: boolean = false,
 ): HtlcTimeoutTransaction {
   const fee = calculateHtlcFee(feeratePerKw, optionAnchors)
   const outputAmount = amount - fee
 
+  // Output script é to_local com delay (igual ao to_local do commitment)
+  // OP_IF <revocationpubkey> OP_ELSE <to_self_delay> OP_CSV OP_DROP <local_delayedpubkey> OP_ENDIF OP_CHECKSIG
+  const outputScript = createToLocalScript(revocationPubkey, localDelayedPubkey, toSelfDelay)
+
   return {
     version: 2,
-    locktime: cltvExpiry,
+    locktime: cltvExpiry, // CLTV expiry
     inputs: [
       {
         commitmentTxid,
         commitmentOutputIndex: htlcOutputIndex,
-        sequence: optionAnchors ? 1 : 0,
+        sequence: optionAnchors ? 1 : 0, // 1 para anchors (CSV), 0 caso contrário
         scriptSig: new Uint8Array(),
         witness: [], // Will be filled during signing
       },
@@ -505,34 +654,43 @@ export function buildHtlcTimeoutTransaction(
     outputs: [
       {
         value: outputAmount,
-        scriptPubKey: new Uint8Array(), // To local pubkey
-        pubkey: new Uint8Array(33), // Placeholder
+        scriptPubKey: createP2wshScript(outputScript),
+        pubkey: localDelayedPubkey,
       },
     ],
   }
 }
 
 /**
- * Builds an HTLC-success transaction
+ * Builds an HTLC-success transaction - BOLT #3 compliant
+ *
+ * Usado quando o HTLC recebido é resgatado com o preimage
+ * O output vai para to_local (com delay)
  */
 export function buildHtlcSuccessTransaction(
   commitmentTxid: Sha256,
   htlcOutputIndex: number,
   amount: Satoshis,
   feeratePerKw: number,
+  localDelayedPubkey: Point,
+  revocationPubkey: Point,
+  toSelfDelay: number,
   optionAnchors: boolean = false,
 ): HtlcSuccessTransaction {
   const fee = calculateHtlcFee(feeratePerKw, optionAnchors)
   const outputAmount = amount - fee
 
+  // Output script é to_local com delay (igual ao to_local do commitment)
+  const outputScript = createToLocalScript(revocationPubkey, localDelayedPubkey, toSelfDelay)
+
   return {
     version: 2,
-    locktime: 0,
+    locktime: 0, // Sem locktime para success
     inputs: [
       {
         commitmentTxid,
         commitmentOutputIndex: htlcOutputIndex,
-        sequence: optionAnchors ? 1 : 0,
+        sequence: optionAnchors ? 1 : 0, // 1 para anchors (CSV), 0 caso contrário
         scriptSig: new Uint8Array(),
         witness: [], // Will be filled during signing
       },
@@ -540,11 +698,23 @@ export function buildHtlcSuccessTransaction(
     outputs: [
       {
         value: outputAmount,
-        scriptPubKey: new Uint8Array(), // To remote pubkey
-        pubkey: new Uint8Array(33), // Placeholder
+        scriptPubKey: createP2wshScript(outputScript),
+        pubkey: localDelayedPubkey,
       },
     ],
   }
+}
+
+/**
+ * Creates P2WSH script for witness script
+ */
+function createP2wshScript(witnessScript: Uint8Array): Uint8Array {
+  const scriptHash = sha256(witnessScript)
+  const result = new Uint8Array(34)
+  result[0] = 0x00 // OP_0
+  result[1] = 0x20 // Push 32 bytes
+  result.set(scriptHash, 2)
+  return result
 }
 
 // Signature verification utilities

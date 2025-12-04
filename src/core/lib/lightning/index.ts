@@ -142,3 +142,25 @@ export {
   type FundingSignedMessage,
   type ChannelReadyMessage,
 } from './channel'
+
+// Peer Protocol (BOLT #2)
+export {
+  encodeChannelReestablishMessage,
+  decodeChannelReestablishMessage,
+  createChannelReestablishMessage,
+  PeerManager,
+} from './peer'
+
+// Multi-Path Payments (BOLT #4)
+export {
+  MppPaymentManager,
+  MppPaymentCollector,
+  encodeTu64 as encodeMppTu64,
+  decodeTu64 as decodeMppTu64,
+  generatePartId,
+  uint8ArrayToHex as mppUint8ArrayToHex,
+  type PendingMppPayment,
+  type IncomingMppHtlc,
+  type MppReceiveResult,
+  type TimedOutPayment,
+} from './mpp'
