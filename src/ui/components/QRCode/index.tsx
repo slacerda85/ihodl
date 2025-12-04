@@ -1,16 +1,24 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { View, ActivityIndicator } from 'react-native'
+import { View, ActivityIndicator, StyleProp, ViewStyle } from 'react-native'
 import Svg, { Rect } from 'react-native-svg'
 import qrcode from 'qrcode-generator'
+import IHodlLogo from '@/ui/assets/ihodl-logo'
 
 interface QRCodeProps {
   value: string
   size: number | 'auto'
   color: string
   backgroundColor: string
+  showLogo?: boolean
 }
 
-export default function QRCode({ value, size, color, backgroundColor }: QRCodeProps) {
+export default function QRCode({
+  value,
+  size,
+  color,
+  backgroundColor,
+  showLogo = true,
+}: QRCodeProps) {
   const [qrElements, setQrElements] = useState<React.ReactElement[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [containerSize, setContainerSize] = useState(size === 'auto' ? 0 : size)
@@ -22,7 +30,9 @@ export default function QRCode({ value, size, color, backgroundColor }: QRCodePr
       setIsLoading(true)
       let qr: any
       try {
-        qr = qrcode(0, 'L') // Type 0, error correction L
+        // Use error correction 'H' (high) when showing logo to ensure QR remains scannable
+        // 'H' allows up to 30% of the QR code to be damaged/covered
+        qr = qrcode(0, showLogo ? 'H' : 'L')
         qr.addData(value)
         qr.make()
       } catch (error) {
@@ -34,16 +44,36 @@ export default function QRCode({ value, size, color, backgroundColor }: QRCodePr
       const moduleCount = qr.getModuleCount()
       const moduleSize = qrSize / moduleCount
 
+      // Calculate center area to exclude when showing logo (approximately 25% of QR size)
+      const logoSizeRatio = 0.25
+      const logoSize = qrSize * logoSizeRatio
+      const logoStart = (qrSize - logoSize) / 2
+      const logoEnd = logoStart + logoSize
+
       const elements = []
 
       for (let row = 0; row < moduleCount; row++) {
         for (let col = 0; col < moduleCount; col++) {
           if (qr.isDark(row, col)) {
+            const x = col * moduleSize
+            const y = row * moduleSize
+
+            // Skip modules in the center area where logo will be placed
+            if (showLogo) {
+              const moduleEndX = x + moduleSize
+              const moduleEndY = y + moduleSize
+              const isInLogoArea =
+                x >= logoStart && moduleEndX <= logoEnd && y >= logoStart && moduleEndY <= logoEnd
+              if (isInLogoArea) {
+                continue
+              }
+            }
+
             elements.push(
               <Rect
                 key={`${row}-${col}`}
-                x={col * moduleSize}
-                y={row * moduleSize}
+                x={x}
+                y={y}
                 width={moduleSize}
                 height={moduleSize}
                 fill={color}
@@ -56,7 +86,7 @@ export default function QRCode({ value, size, color, backgroundColor }: QRCodePr
       setQrElements(elements)
       setIsLoading(false)
     },
-    [value, color],
+    [value, color, showLogo],
   )
 
   useEffect(() => {
@@ -76,8 +106,24 @@ export default function QRCode({ value, size, color, backgroundColor }: QRCodePr
     }
   }
 
-  const viewStyle =
-    size === 'auto' ? { flex: 1, backgroundColor } : { width: size, height: size, backgroundColor }
+  const viewStyle: StyleProp<ViewStyle> =
+    size === 'auto'
+      ? {
+          height: '100%',
+          width: '100%',
+          backgroundColor,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }
+      : {
+          width: size,
+          height: size,
+          backgroundColor,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }
 
   if (isLoading) {
     return (
@@ -86,6 +132,9 @@ export default function QRCode({ value, size, color, backgroundColor }: QRCodePr
       </View>
     )
   }
+
+  const actualSize = size === 'auto' ? containerSize : size
+  const logoDisplaySize = actualSize * 0.22
 
   return (
     <View style={viewStyle} onLayout={size === 'auto' ? handleLayout : undefined}>
@@ -96,6 +145,23 @@ export default function QRCode({ value, size, color, backgroundColor }: QRCodePr
       >
         {qrElements}
       </Svg>
+      {showLogo && (
+        <View
+          style={{
+            position: 'absolute',
+            width: logoDisplaySize,
+            height: logoDisplaySize,
+            backgroundColor,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: 6,
+            borderWidth: 2,
+            borderColor: color,
+          }}
+        >
+          <IHodlLogo width={logoDisplaySize * 0.75} height={logoDisplaySize * 0.75} />
+        </View>
+      )}
     </View>
   )
 }
