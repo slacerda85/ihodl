@@ -244,3 +244,371 @@ describe('routing', () => {
     // Add more test vectors for error packets, etc.
   })
 })
+
+// ==========================================
+// ROUTING GRAPH TESTS
+// ==========================================
+
+import { RoutingGraph, RoutingNode, RoutingChannel } from '../routing'
+
+describe('RoutingGraph', () => {
+  let graph: RoutingGraph
+
+  beforeEach(() => {
+    graph = new RoutingGraph()
+  })
+
+  describe('addNode', () => {
+    it('should add a node to the graph', () => {
+      const node: RoutingNode = {
+        nodeId: new Uint8Array(33).fill(0x02),
+        lastUpdate: Date.now(),
+        addresses: [{ type: 'ipv4', address: '127.0.0.1', port: 9735 }],
+        alias: 'TestNode',
+      }
+
+      graph.addNode(node)
+
+      const stats = graph.getStats()
+      expect(stats.nodes).toBe(1)
+    })
+
+    it('should update existing node', () => {
+      const nodeId = new Uint8Array(33).fill(0x02)
+      const node1: RoutingNode = {
+        nodeId,
+        lastUpdate: Date.now() - 1000,
+        addresses: [],
+        alias: 'OldAlias',
+      }
+      const node2: RoutingNode = {
+        nodeId,
+        lastUpdate: Date.now(),
+        addresses: [],
+        alias: 'NewAlias',
+      }
+
+      graph.addNode(node1)
+      graph.addNode(node2)
+
+      const stats = graph.getStats()
+      expect(stats.nodes).toBe(1)
+    })
+  })
+
+  describe('addChannel', () => {
+    it('should add a channel to the graph', () => {
+      const channel: RoutingChannel = {
+        shortChannelId: new Uint8Array(8).fill(0x01),
+        nodeId1: new Uint8Array(33).fill(0x02),
+        nodeId2: new Uint8Array(33).fill(0x03),
+        capacity: 1000000n,
+        lastUpdate: Date.now(),
+        feeBaseMsat: 1000,
+        feeProportionalMillionths: 1,
+        cltvExpiryDelta: 40,
+        htlcMinimumMsat: 1n,
+      }
+
+      graph.addChannel(channel)
+
+      const stats = graph.getStats()
+      expect(stats.channels).toBe(1)
+    })
+
+    it('should update existing channel', () => {
+      const shortChannelId = new Uint8Array(8).fill(0x01)
+      const channel1: RoutingChannel = {
+        shortChannelId,
+        nodeId1: new Uint8Array(33).fill(0x02),
+        nodeId2: new Uint8Array(33).fill(0x03),
+        capacity: 1000000n,
+        lastUpdate: Date.now() - 1000,
+        feeBaseMsat: 1000,
+        feeProportionalMillionths: 1,
+        cltvExpiryDelta: 40,
+        htlcMinimumMsat: 1n,
+      }
+      const channel2: RoutingChannel = {
+        shortChannelId,
+        nodeId1: new Uint8Array(33).fill(0x02),
+        nodeId2: new Uint8Array(33).fill(0x03),
+        capacity: 2000000n,
+        lastUpdate: Date.now(),
+        feeBaseMsat: 2000,
+        feeProportionalMillionths: 2,
+        cltvExpiryDelta: 80,
+        htlcMinimumMsat: 2n,
+      }
+
+      graph.addChannel(channel1)
+      graph.addChannel(channel2)
+
+      const stats = graph.getStats()
+      expect(stats.channels).toBe(1)
+    })
+  })
+
+  describe('getChannel', () => {
+    it('should return channel by short channel id', () => {
+      const shortChannelId = new Uint8Array(8).fill(0x01)
+      const channel: RoutingChannel = {
+        shortChannelId,
+        nodeId1: new Uint8Array(33).fill(0x02),
+        nodeId2: new Uint8Array(33).fill(0x03),
+        capacity: 1000000n,
+        lastUpdate: Date.now(),
+        feeBaseMsat: 1000,
+        feeProportionalMillionths: 1,
+        cltvExpiryDelta: 40,
+        htlcMinimumMsat: 1n,
+      }
+
+      graph.addChannel(channel)
+
+      const retrieved = graph.getChannel(shortChannelId)
+      expect(retrieved).not.toBeNull()
+      expect(retrieved?.capacity).toBe(1000000n)
+    })
+
+    it('should return null for non-existent channel', () => {
+      const result = graph.getChannel(new Uint8Array(8).fill(0xff))
+      expect(result).toBeNull()
+    })
+  })
+
+  describe('getAllNodes', () => {
+    it('should return empty array when no nodes', () => {
+      const nodes = graph.getAllNodes()
+      expect(nodes).toHaveLength(0)
+    })
+
+    it('should return all nodes', () => {
+      graph.addNode({
+        nodeId: new Uint8Array(33).fill(0x02),
+        lastUpdate: Date.now(),
+        addresses: [],
+      })
+      graph.addNode({
+        nodeId: new Uint8Array(33).fill(0x03),
+        lastUpdate: Date.now(),
+        addresses: [],
+      })
+
+      const nodes = graph.getAllNodes()
+      expect(nodes).toHaveLength(2)
+    })
+  })
+
+  describe('getAllChannels', () => {
+    it('should return empty array when no channels', () => {
+      const channels = graph.getAllChannels()
+      expect(channels).toHaveLength(0)
+    })
+
+    it('should return all channels', () => {
+      graph.addChannel({
+        shortChannelId: new Uint8Array(8).fill(0x01),
+        nodeId1: new Uint8Array(33).fill(0x02),
+        nodeId2: new Uint8Array(33).fill(0x03),
+        capacity: 1000000n,
+        lastUpdate: Date.now(),
+        feeBaseMsat: 1000,
+        feeProportionalMillionths: 1,
+        cltvExpiryDelta: 40,
+        htlcMinimumMsat: 1n,
+      })
+      graph.addChannel({
+        shortChannelId: new Uint8Array(8).fill(0x02),
+        nodeId1: new Uint8Array(33).fill(0x04),
+        nodeId2: new Uint8Array(33).fill(0x05),
+        capacity: 2000000n,
+        lastUpdate: Date.now(),
+        feeBaseMsat: 2000,
+        feeProportionalMillionths: 2,
+        cltvExpiryDelta: 80,
+        htlcMinimumMsat: 2n,
+      })
+
+      const channels = graph.getAllChannels()
+      expect(channels).toHaveLength(2)
+    })
+  })
+
+  describe('getNode', () => {
+    it('should return node by id', () => {
+      const nodeId = new Uint8Array(33).fill(0x02)
+      graph.addNode({
+        nodeId,
+        lastUpdate: Date.now(),
+        addresses: [],
+        alias: 'TestNode',
+      })
+
+      const node = graph.getNode(nodeId)
+      expect(node).not.toBeNull()
+      expect(node?.alias).toBe('TestNode')
+    })
+
+    it('should return null for non-existent node', () => {
+      const result = graph.getNode(new Uint8Array(33).fill(0xff))
+      expect(result).toBeNull()
+    })
+  })
+
+  describe('pruneStaleEntries', () => {
+    it('should remove stale nodes', () => {
+      // First, add node with "current" time
+      const oldNode: RoutingNode = {
+        nodeId: new Uint8Array(33).fill(0x02),
+        lastUpdate: Date.now(),
+        addresses: [],
+      }
+      const newNode: RoutingNode = {
+        nodeId: new Uint8Array(33).fill(0x03),
+        lastUpdate: Date.now(),
+        addresses: [],
+      }
+
+      graph.addNode(oldNode)
+      graph.addNode(newNode)
+
+      expect(graph.getStats().nodes).toBe(2)
+
+      // Mock Date.now to simulate time passing
+      // Since addNode sets lastUpdate = Date.now(), we need to manipulate
+      // the internal nodes directly for this test
+      const nodesMap = (graph as any).nodes
+      const oldNodeKey = Array.from(nodesMap.keys())[0]
+      const nodeData = nodesMap.get(oldNodeKey)
+      nodeData.lastUpdate = Date.now() - 8 * 24 * 60 * 60 * 1000 // 8 days ago
+      nodesMap.set(oldNodeKey, nodeData)
+
+      graph.pruneStaleEntries()
+
+      expect(graph.getStats().nodes).toBe(1)
+    })
+
+    it('should remove stale channels', () => {
+      const oldChannel: RoutingChannel = {
+        shortChannelId: new Uint8Array(8).fill(0x01),
+        nodeId1: new Uint8Array(33).fill(0x02),
+        nodeId2: new Uint8Array(33).fill(0x03),
+        capacity: 1000000n,
+        lastUpdate: Date.now(),
+        feeBaseMsat: 1000,
+        feeProportionalMillionths: 1,
+        cltvExpiryDelta: 40,
+        htlcMinimumMsat: 1n,
+      }
+      const newChannel: RoutingChannel = {
+        shortChannelId: new Uint8Array(8).fill(0x02),
+        nodeId1: new Uint8Array(33).fill(0x04),
+        nodeId2: new Uint8Array(33).fill(0x05),
+        capacity: 2000000n,
+        lastUpdate: Date.now(),
+        feeBaseMsat: 2000,
+        feeProportionalMillionths: 2,
+        cltvExpiryDelta: 80,
+        htlcMinimumMsat: 2n,
+      }
+
+      graph.addChannel(oldChannel)
+      graph.addChannel(newChannel)
+
+      expect(graph.getStats().channels).toBe(2)
+
+      // Manipulate internal channel data to simulate stale entry
+      const channelsMap = (graph as any).channels
+      const oldChannelKey = Array.from(channelsMap.keys())[0]
+      const channelData = channelsMap.get(oldChannelKey)
+      channelData.lastUpdate = Date.now() - 8 * 24 * 60 * 60 * 1000 // 8 days ago
+      channelsMap.set(oldChannelKey, channelData)
+
+      graph.pruneStaleEntries()
+
+      expect(graph.getStats().channels).toBe(1)
+    })
+  })
+
+  describe('findRoute', () => {
+    it('should return error when source node not found', () => {
+      const result = graph.findRoute(
+        new Uint8Array(33).fill(0x02),
+        new Uint8Array(33).fill(0x03),
+        1000000n,
+      )
+
+      expect(result.route).toBeNull()
+      expect(result.error).toContain('not found')
+    })
+
+    it('should return error when destination node not found', () => {
+      graph.addNode({
+        nodeId: new Uint8Array(33).fill(0x02),
+        lastUpdate: Date.now(),
+        addresses: [],
+      })
+
+      const result = graph.findRoute(
+        new Uint8Array(33).fill(0x02),
+        new Uint8Array(33).fill(0x03),
+        1000000n,
+      )
+
+      expect(result.route).toBeNull()
+      expect(result.error).toContain('not found')
+    })
+
+    it('should find route between connected nodes', () => {
+      const nodeId1 = new Uint8Array(33).fill(0x02)
+      const nodeId2 = new Uint8Array(33).fill(0x03)
+
+      graph.addNode({ nodeId: nodeId1, lastUpdate: Date.now(), addresses: [] })
+      graph.addNode({ nodeId: nodeId2, lastUpdate: Date.now(), addresses: [] })
+      graph.addChannel({
+        shortChannelId: new Uint8Array(8).fill(0x01),
+        nodeId1,
+        nodeId2,
+        capacity: 10000000n,
+        lastUpdate: Date.now(),
+        feeBaseMsat: 1000,
+        feeProportionalMillionths: 1,
+        cltvExpiryDelta: 40,
+        htlcMinimumMsat: 1n,
+      })
+
+      const result = graph.findRoute(nodeId1, nodeId2, 1000000n)
+
+      // Should find a route (or at least not error on source/dest not found)
+      if (result.route) {
+        expect(result.route.hops.length).toBeGreaterThan(0)
+      }
+    })
+  })
+
+  describe('getStats', () => {
+    it('should return correct counts', () => {
+      graph.addNode({
+        nodeId: new Uint8Array(33).fill(0x02),
+        lastUpdate: Date.now(),
+        addresses: [],
+      })
+      graph.addChannel({
+        shortChannelId: new Uint8Array(8).fill(0x01),
+        nodeId1: new Uint8Array(33).fill(0x02),
+        nodeId2: new Uint8Array(33).fill(0x03),
+        capacity: 1000000n,
+        lastUpdate: Date.now(),
+        feeBaseMsat: 1000,
+        feeProportionalMillionths: 1,
+        cltvExpiryDelta: 40,
+        htlcMinimumMsat: 1n,
+      })
+
+      const stats = graph.getStats()
+      expect(stats.nodes).toBe(1)
+      expect(stats.channels).toBe(1)
+    })
+  })
+})

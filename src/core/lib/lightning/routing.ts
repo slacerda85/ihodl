@@ -387,6 +387,28 @@ export class RoutingGraph {
   }
 
   /**
+   * Get all nodes in the routing graph
+   */
+  getAllNodes(): RoutingNode[] {
+    return Array.from(this.nodes.values())
+  }
+
+  /**
+   * Get all channels in the routing graph
+   */
+  getAllChannels(): RoutingChannel[] {
+    return Array.from(this.channels.values())
+  }
+
+  /**
+   * Get node by ID
+   */
+  getNode(nodeId: Uint8Array): RoutingNode | null {
+    const key = uint8ArrayToHex(nodeId)
+    return this.nodes.get(key) || null
+  }
+
+  /**
    * Get graph statistics
    */
   getStats(): { nodes: number; channels: number } {

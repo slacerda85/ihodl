@@ -5,7 +5,7 @@ export {
   createTCPSocket,
   createSecureTLSSocket,
   createElectrumSocket,
-  createProductionLightningSocket,
+  createLightningSocket,
   isSocketConnected,
   getSocketInfo,
   type SocketConfig,

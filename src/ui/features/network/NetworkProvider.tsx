@@ -1,14 +1,14 @@
 import { Connection } from '@/core/models/network'
 import { createContext, ReactNode, useContext, useRef } from 'react'
 import networkService from '@/core/services/network'
-import LightningClient from '@/core/lib/lightning/client'
+import LightningWorker from '@/core/lib/lightning/worker'
 
 type NetworkContextType = {
   getConnection(): Promise<Connection>
-  getLightningClient(
+  getLightningWorker(
     masterKey: Uint8Array,
     network?: 'mainnet' | 'testnet' | 'regtest',
-  ): Promise<LightningClient>
+  ): Promise<LightningWorker>
 }
 const NetworkContext = createContext<NetworkContextType | null>(null)
 
@@ -18,7 +18,7 @@ interface NetworkProviderProps {
 
 export default function NetworkProvider({ children }: NetworkProviderProps) {
   const connectionRef = useRef<Connection | null>(null)
-  const lightningClientRef = useRef<LightningClient | null>(null)
+  const lightningClientRef = useRef<LightningWorker | null>(null)
 
   async function getConnection() {
     // Verificar se a conexão existe e está saudável
@@ -42,10 +42,10 @@ export default function NetworkProvider({ children }: NetworkProviderProps) {
     return connectionRef.current
   }
 
-  async function getLightningClient(
+  async function getLightningWorker(
     masterKey: Uint8Array,
     network: 'mainnet' | 'testnet' | 'regtest' = 'mainnet',
-  ): Promise<LightningClient> {
+  ): Promise<LightningWorker> {
     // Verificar se já existe um cliente ativo
     if (lightningClientRef.current) {
       // Verificar se a conexão ainda está saudável
@@ -57,12 +57,12 @@ export default function NetworkProvider({ children }: NetworkProviderProps) {
       await lightningClientRef.current.close()
     }
 
-    // Criar novo cliente Lightning
-    const client = await networkService.createLightningClient(masterKey, network)
-    lightningClientRef.current = client
+    // Criar novo worker Lightning
+    const worker = await networkService.createLightningWorker(masterKey, network)
+    lightningClientRef.current = worker
 
     // Configurar listener de erro
-    const connection = (client as any).connection
+    const connection = (worker as any).connection
     if (connection.listenerCount('error') === 0) {
       connection.on('error', (err: Error) => {
         console.warn('[NetworkProvider] Lightning connection error:', err.message)
@@ -70,7 +70,7 @@ export default function NetworkProvider({ children }: NetworkProviderProps) {
       })
     }
 
-    return client
+    return worker
   }
 
   // Função auxiliar para verificar saúde da conexão
@@ -80,7 +80,7 @@ export default function NetworkProvider({ children }: NetworkProviderProps) {
   }
 
   // no .Provider necessary anymore in React 19
-  return <NetworkContext value={{ getConnection, getLightningClient }}>{children}</NetworkContext>
+  return <NetworkContext value={{ getConnection, getLightningWorker }}>{children}</NetworkContext>
 }
 
 export function useNetwork() {

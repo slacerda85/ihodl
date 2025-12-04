@@ -1,7 +1,7 @@
 // BOLT #3: Commitment Transaction Builder
 // Constrói commitment transactions para canais Lightning
 
-import { sha256 } from '../crypto/crypto'
+import { sha256, signMessage, verifyMessage } from '../crypto/crypto'
 import { uint8ArrayToHex } from '../utils'
 import { HTLCManager, HTLCOwner, UpdateAddHtlc } from './htlc'
 import {
@@ -58,6 +58,7 @@ export interface LocalConfig {
   channelReserveSat: bigint
   /** Basepoints */
   fundingPubkey: Uint8Array
+  fundingPrivateKey: Uint8Array
   revocationBasepoint: Uint8Array
   paymentBasepoint: Uint8Array
   delayedPaymentBasepoint: Uint8Array
@@ -721,6 +722,76 @@ export class CommitmentBuilder {
     const feeSat = BigInt(Math.ceil((totalWeight * feeratePerKw) / 1000))
 
     return feeSat
+  }
+
+  /**
+   * Assina uma commitment transaction
+   * @param commitmentTx - Commitment transaction a ser assinada
+   * @returns Assinatura de 64 bytes (r + s)
+   */
+  signCommitmentTx(commitmentTx: CommitmentTx): Uint8Array {
+    // Calcular sighash da transação
+    const sighash = this.calculateCommitmentSighash(commitmentTx)
+
+    // Assinar usando a chave privada de funding
+    return signMessage(sighash, this.localConfig.fundingPrivateKey)
+  }
+
+  /**
+   * Calcula o sighash para uma commitment transaction
+   * Baseado em BIP 143 (SegWit v0)
+   */
+  private calculateCommitmentSighash(commitmentTx: CommitmentTx): Uint8Array {
+    // Para simplificar, vamos usar uma versão básica do sighash
+    // Na prática, seria necessário serializar a transação completa
+    // seguindo as regras do BIP 143
+
+    // Por enquanto, usar um hash simples dos dados principais
+    const data = new Uint8Array(32 + 4 + 4 + 32 + 4) // txid + vout + sequence + script + amount
+    let offset = 0
+
+    // TXID do funding (reverso)
+    const txidReversed = new Uint8Array(this.fundingTxid).reverse()
+    data.set(txidReversed, offset)
+    offset += 32
+
+    // VOUT
+    new DataView(data.buffer).setUint32(offset, this.fundingOutputIndex, true)
+    offset += 4
+
+    // Sequence
+    new DataView(data.buffer).setUint32(offset, commitmentTx.inputs[0].sequence, true)
+    offset += 4
+
+    // Script do funding output (2-of-2 multisig)
+    const fundingScript = fundingOutputScript(
+      this.localConfig.fundingPubkey,
+      this.remoteConfig.fundingPubkey,
+    )
+    // Para sighash, usamos o scriptPubKey do output sendo gasto
+    const scriptHash = sha256(fundingScript)
+    data.set(scriptHash.slice(0, 32), offset)
+    offset += 32
+
+    // Amount (funding satoshis)
+    new DataView(data.buffer).setBigUint64(offset, this.fundingSatoshis, true)
+
+    // Hash duplo SHA256
+    return sha256(sha256(data))
+  }
+
+  /**
+   * Verifica uma assinatura de commitment transaction
+   * @param commitmentTx - Commitment transaction
+   * @param signature - Assinatura a verificar (64 bytes)
+   * @returns true se a assinatura for válida
+   */
+  verifyCommitmentSignature(commitmentTx: CommitmentTx, signature: Uint8Array): boolean {
+    // Calcular sighash da transação
+    const sighash = this.calculateCommitmentSighash(commitmentTx)
+
+    // Verificar assinatura usando a chave pública de funding do peer
+    return verifyMessage(sighash, signature, this.remoteConfig.fundingPubkey)
   }
 
   /**

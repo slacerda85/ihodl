@@ -344,8 +344,8 @@ export function encodeInvoice(params: InvoiceCreateParams): string {
   // Encode tagged fields
   const taggedWords = encodeTaggedFields(taggedFields)
 
-  // Create signature data: human-readable part + data part (excluding signature)
-  const hrp = params.currency
+  // Build human-readable part with currency and amount
+  const hrp = buildHumanReadablePart(params.currency, params.amount)
 
   // Reconstruct the original data bytes for signing (timestamp + tagged fields data)
   const timestampBytes = new Uint8Array(4)
@@ -421,6 +421,50 @@ export function decodeInvoice(invoiceString: string): Invoice {
     taggedFields,
     signature,
   }
+}
+
+/**
+ * Builds the human-readable part of a Lightning invoice
+ * Combines currency prefix with amount (e.g., 'lnbc' + 2500 micro-bitcoin -> 'lnbc2500u')
+ * @param currency - Currency prefix (e.g., 'lnbc')
+ * @param amount - Amount in millisatoshis (undefined for any-amount invoices)
+ * @returns Human-readable part string
+ */
+function buildHumanReadablePart(currency: CurrencyPrefix, amount?: bigint): string {
+  // Se amount for undefined ou 0, retornar apenas o currency (invoice sem valor fixo)
+  if (!amount || amount === 0n) {
+    return currency
+  }
+
+  // Escolher o melhor multiplicador para representar o amount
+  // Preferir unidades maiores quando possível para invoices mais curtas
+  // 1 BTC = 100,000,000,000 msat
+  // m (milli) = 100,000,000 msat
+  // u (micro) = 100,000 msat
+  // n (nano) = 100 msat
+  // p (pico) = 0.1 msat (precisa terminar em 0)
+
+  // Tentar milli (mais compacto para valores grandes)
+  if (amount >= 100000000n && amount % 100000000n === 0n) {
+    const value = amount / 100000000n
+    return `${currency}${value}m`
+  }
+
+  // Tentar micro
+  if (amount >= 100000n && amount % 100000n === 0n) {
+    const value = amount / 100000n
+    return `${currency}${value}u`
+  }
+
+  // Tentar nano
+  if (amount >= 100n && amount % 100n === 0n) {
+    const value = amount / 100n
+    return `${currency}${value}n`
+  }
+
+  // Usar pico (menor unidade, valor * 10 porque 1 pico = 0.1 msat)
+  const value = amount * 10n
+  return `${currency}${value}p`
 }
 
 /**

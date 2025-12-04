@@ -34,6 +34,37 @@ export interface PaymentResult {
   preimage?: Uint8Array // Payment preimage (prova de pagamento)
   paymentHash: Uint8Array
   error?: string
+  mppResult?: {
+    totalParts: number
+    successfulParts: number
+    failedParts: number
+    partialSuccess?: boolean
+  }
+}
+
+// MPP Session for tracking multi-part payments
+export interface MPPSession {
+  paymentHash: Uint8Array // Hash do pagamento principal
+  totalAmount: bigint // Valor total do pagamento em millisatoshis
+  partsCount: number // Número de partes do pagamento
+  timeout: number // Timeout em segundos
+  parts: PaymentPartResult[] // Resultados das partes individuais
+  totalAmountMsat?: bigint // Alias para totalAmount
+  timeoutMs?: number // Alias para timeout
+  totalParts?: number // Alias para partsCount
+  markPartSent?(partIndex: number): void
+  markPartCompleted?(partIndex: number, preimage?: Uint8Array): void
+  markPartFailed?(partIndex: number, error?: string): void
+}
+
+// Result of individual payment part in MPP
+export interface PaymentPartResult {
+  route: any[] // Route usado para esta parte (array de hops)
+  amount: bigint // Valor desta parte em millisatoshis
+  success: boolean
+  preimage?: Uint8Array // Preimage desta parte (se sucesso)
+  error?: string // Erro específico desta parte
+  partIndex?: number // Índice da parte no MPP
 }
 
 // Invoice generation parameters

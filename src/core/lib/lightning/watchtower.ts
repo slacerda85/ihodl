@@ -8,6 +8,8 @@
  */
 
 import { sha256 } from '../crypto'
+import { uint8ArrayToHex, hexToUint8Array } from '../utils'
+import lightningRepository from '../../repositories/lightning'
 
 // ==========================================
 // TIPOS
@@ -26,6 +28,17 @@ export enum ChannelState {
   CLOSING = 'closing',
   CLOSED = 'closed',
   ERROR = 'error',
+}
+
+/**
+ * Status de monitoramento do canal
+ */
+export enum ChannelMonitorStatus {
+  ACTIVE = 'active',
+  BREACH_DETECTED = 'breach_detected',
+  PENALTY_BROADCAST = 'penalty_broadcast',
+  CLOSED = 'closed',
+  PAUSED = 'paused',
 }
 
 /**
@@ -50,12 +63,18 @@ export interface ChannelInfo {
 export interface WatchtowerChannel {
   channelId: string
   remotePubkey: Uint8Array
+  localPubkey?: Uint8Array
+  fundingTxid?: string
+  fundingOutputIndex?: number
   localBalance: bigint
   remoteBalance: bigint
+  capacity?: bigint
   commitmentNumber: bigint
   lastCommitmentTx: Uint8Array | null
   revocationSecrets: Map<bigint, Uint8Array> // commitment_number -> revocation_secret
   breachDetected: boolean
+  status: ChannelMonitorStatus
+  lastChecked: number
 }
 
 /**
@@ -67,6 +86,7 @@ export interface BreachResult {
   penaltyTx?: Uint8Array
   commitmentNumber?: bigint
   revokedAmount?: bigint
+  severity?: 'low' | 'medium' | 'high' | 'critical'
 }
 
 /**
@@ -76,6 +96,9 @@ export interface WatchtowerConfig {
   checkIntervalMs: number
   maxStoredSecrets: number
   autoRecover: boolean
+  autoBroadcastPenalty: boolean
+  onBreachDetected?: (channelId: string, result: BreachResult) => void
+  onPenaltyBroadcast?: (channelId: string, txid: string) => void
 }
 
 /**
@@ -83,9 +106,28 @@ export interface WatchtowerConfig {
  */
 export interface WatchtowerStats {
   monitoredChannels: number
+  activeChannels: number
   totalSecretsStored: number
   breachesDetected: number
   penaltiesBroadcast: number
+  lastCheck: number
+  isRunning: boolean
+}
+
+/**
+ * Evento do Watchtower para UI
+ */
+export interface WatchtowerEvent {
+  type:
+    | 'breach_detected'
+    | 'penalty_broadcast'
+    | 'channel_added'
+    | 'channel_removed'
+    | 'check_complete'
+    | 'error'
+  channelId?: string
+  timestamp: number
+  data?: Record<string, unknown>
 }
 
 // ==========================================
@@ -100,20 +142,265 @@ export class Watchtower {
   private monitoredChannels: Map<string, WatchtowerChannel> = new Map()
   private stats: WatchtowerStats = {
     monitoredChannels: 0,
+    activeChannels: 0,
     totalSecretsStored: 0,
     breachesDetected: 0,
     penaltiesBroadcast: 0,
+    lastCheck: 0,
+    isRunning: false,
   }
   private config: WatchtowerConfig
+  private checkInterval: ReturnType<typeof setInterval> | null = null
+  private eventListeners: ((event: WatchtowerEvent) => void)[] = []
+  private events: WatchtowerEvent[] = []
+  private maxEvents: number = 100
 
   constructor(config?: Partial<WatchtowerConfig>) {
     this.config = {
       checkIntervalMs: 60000, // 1 minuto
       maxStoredSecrets: 1000,
       autoRecover: true,
+      autoBroadcastPenalty: true,
       ...config,
     }
   }
+
+  // ==========================================
+  // LIFECYCLE
+  // ==========================================
+
+  /**
+   * Inicia monitoramento periódico
+   */
+  start(): void {
+    if (this.stats.isRunning) {
+      console.log('[watchtower] Already running')
+      return
+    }
+
+    console.log('[watchtower] Starting channel monitoring...')
+    this.stats.isRunning = true
+
+    // Verificação inicial
+    this.checkAllChannels()
+
+    // Verificação periódica
+    this.checkInterval = setInterval(() => {
+      this.checkAllChannels()
+    }, this.config.checkIntervalMs)
+  }
+
+  /**
+   * Para monitoramento
+   */
+  stop(): void {
+    if (!this.stats.isRunning) return
+
+    console.log('[watchtower] Stopping channel monitoring...')
+    this.stats.isRunning = false
+
+    if (this.checkInterval) {
+      clearInterval(this.checkInterval)
+      this.checkInterval = null
+    }
+  }
+
+  /**
+   * Verifica todos os canais
+   */
+  async checkAllChannels(): Promise<void> {
+    this.stats.lastCheck = Date.now()
+
+    for (const [channelId, channel] of this.monitoredChannels) {
+      if (channel.status !== ChannelMonitorStatus.ACTIVE) continue
+
+      try {
+        // Em uma implementação real, verificaríamos a blockchain
+        // por transações suspeitas no funding output
+        channel.lastChecked = Date.now()
+      } catch (error) {
+        console.error(`[watchtower] Error checking channel ${channelId}:`, error)
+      }
+    }
+
+    this.emitEvent({ type: 'check_complete', timestamp: Date.now() })
+  }
+
+  // ==========================================
+  // EVENT SYSTEM
+  // ==========================================
+
+  /**
+   * Emite evento para listeners
+   */
+  private emitEvent(event: WatchtowerEvent): void {
+    // Adiciona ao histórico
+    this.events.push(event)
+    if (this.events.length > this.maxEvents) {
+      this.events.shift()
+    }
+
+    // Notifica listeners
+    for (const listener of this.eventListeners) {
+      try {
+        listener(event)
+      } catch (error) {
+        console.error('[watchtower] Error in event listener:', error)
+      }
+    }
+  }
+
+  /**
+   * Registra listener para eventos
+   */
+  addEventListener(listener: (event: WatchtowerEvent) => void): () => void {
+    this.eventListeners.push(listener)
+    return () => {
+      const index = this.eventListeners.indexOf(listener)
+      if (index >= 0) {
+        this.eventListeners.splice(index, 1)
+      }
+    }
+  }
+
+  /**
+   * Obtém histórico de eventos
+   */
+  getEvents(): WatchtowerEvent[] {
+    return [...this.events]
+  }
+
+  /**
+   * Limpa histórico de eventos
+   */
+  clearEvents(): void {
+    this.events = []
+  }
+
+  // ==========================================
+  // PERSISTENCE
+  // ==========================================
+
+  /**
+   * Persiste canal no storage
+   */
+  private persistChannel(channel: WatchtowerChannel): void {
+    try {
+      // Converter revocationSecrets Map para formato do repositório
+      const revokedCommitments = Array.from(channel.revocationSecrets.entries()).map(
+        ([num, secret]) => ({
+          commitmentNumber: num.toString(),
+          commitmentTxid: '', // Preenchido quando breach detectado
+          revocationKey: uint8ArrayToHex(secret),
+          localDelayedPubkey: '', // Preenchido na criação
+          toSelfDelay: 144, // Default CSV delay
+          amount: '0', // Calculado do commitment
+          createdAt: Date.now(),
+        }),
+      )
+
+      lightningRepository.saveWatchtowerChannel(channel.channelId, {
+        channelId: channel.channelId,
+        remotePubkey: uint8ArrayToHex(channel.remotePubkey),
+        localPubkey: channel.localPubkey ? uint8ArrayToHex(channel.localPubkey) : '',
+        fundingTxid: channel.fundingTxid ?? '',
+        fundingOutputIndex: channel.fundingOutputIndex ?? 0,
+        localBalance: channel.localBalance.toString(),
+        remoteBalance: channel.remoteBalance.toString(),
+        capacity: (channel.capacity ?? 0n).toString(),
+        currentCommitmentNumber: channel.commitmentNumber.toString(),
+        status: channel.status,
+        lastChecked: channel.lastChecked,
+        revokedCommitments,
+      })
+    } catch (error) {
+      console.error(`[watchtower] Error persisting channel ${channel.channelId}:`, error)
+    }
+  }
+
+  /**
+   * Carrega canais do storage
+   */
+  async loadFromStorage(): Promise<void> {
+    try {
+      const channels = lightningRepository.getWatchtowerChannels()
+
+      for (const [channelId, persisted] of Object.entries(channels)) {
+        // Reconstruir revocationSecrets Map
+        const revocationSecrets = new Map<bigint, Uint8Array>()
+        if (persisted.revokedCommitments) {
+          for (const revoked of persisted.revokedCommitments) {
+            revocationSecrets.set(
+              BigInt(revoked.commitmentNumber),
+              hexToUint8Array(revoked.revocationKey),
+            )
+          }
+        }
+
+        const channel: WatchtowerChannel = {
+          channelId,
+          remotePubkey: hexToUint8Array(persisted.remotePubkey),
+          localPubkey: persisted.localPubkey ? hexToUint8Array(persisted.localPubkey) : undefined,
+          fundingTxid: persisted.fundingTxid || undefined,
+          fundingOutputIndex: persisted.fundingOutputIndex || undefined,
+          localBalance: BigInt(persisted.localBalance),
+          remoteBalance: BigInt(persisted.remoteBalance),
+          capacity: persisted.capacity ? BigInt(persisted.capacity) : undefined,
+          commitmentNumber: BigInt(persisted.currentCommitmentNumber),
+          lastCommitmentTx: null,
+          revocationSecrets,
+          breachDetected: false, // Inferido do status
+          status: persisted.status as ChannelMonitorStatus,
+          lastChecked: persisted.lastChecked,
+        }
+
+        this.monitoredChannels.set(channelId, channel)
+        this.stats.monitoredChannels++
+        this.stats.totalSecretsStored += revocationSecrets.size
+      }
+
+      this.stats.activeChannels = this.getActiveChannelCount()
+      console.log(`[watchtower] Loaded ${this.monitoredChannels.size} channels from storage`)
+    } catch (error) {
+      console.error('[watchtower] Error loading from storage:', error)
+    }
+  }
+
+  /**
+   * Persiste stats no storage
+   */
+  private persistStats(): void {
+    try {
+      lightningRepository.saveWatchtowerStats({
+        breachesDetected: this.stats.breachesDetected,
+        penaltiesBroadcast: this.stats.penaltiesBroadcast,
+        lastCheck: this.stats.lastCheck,
+      })
+    } catch (error) {
+      console.error('[watchtower] Error persisting stats:', error)
+    }
+  }
+
+  // ==========================================
+  // HELPERS
+  // ==========================================
+
+  /**
+   * Conta canais ativos
+   */
+  private getActiveChannelCount(): number {
+    let count = 0
+    for (const channel of this.monitoredChannels.values()) {
+      if (channel.status === ChannelMonitorStatus.ACTIVE) {
+        count++
+      }
+    }
+    return count
+  }
+
+  // ==========================================
+  // CHANNEL MANAGEMENT
+  // ==========================================
 
   /**
    * Adiciona canal para monitoramento
@@ -126,17 +413,33 @@ export class Watchtower {
     const watchtowerChannel: WatchtowerChannel = {
       channelId,
       remotePubkey,
+      fundingTxid: channelInfo.fundingTxid,
+      fundingOutputIndex: channelInfo.fundingOutputIndex,
       localBalance: channelInfo.localBalance,
       remoteBalance: channelInfo.remoteBalance,
+      capacity: channelInfo.capacity,
       commitmentNumber: 0n,
       lastCommitmentTx: null,
       revocationSecrets: new Map(),
       breachDetected: false,
+      status: ChannelMonitorStatus.ACTIVE,
+      lastChecked: Date.now(),
     }
 
     this.monitoredChannels.set(channelId, watchtowerChannel)
     this.stats.monitoredChannels++
+    this.stats.activeChannels = this.getActiveChannelCount()
+
     console.log(`[watchtower] Added channel ${channelId} for monitoring`)
+
+    // Persistir
+    this.persistChannel(watchtowerChannel)
+
+    this.emitEvent({
+      type: 'channel_added',
+      channelId,
+      timestamp: Date.now(),
+    })
   }
 
   /**
@@ -150,7 +453,19 @@ export class Watchtower {
       this.stats.totalSecretsStored -= channel.revocationSecrets.size
       this.monitoredChannels.delete(channelId)
       this.stats.monitoredChannels--
+      this.stats.activeChannels = this.getActiveChannelCount()
+
+      // Remover do storage
+      lightningRepository.deleteWatchtowerChannel(channelId)
+      this.persistStats()
+
       console.log(`[watchtower] Removed channel ${channelId} from monitoring`)
+
+      this.emitEvent({
+        type: 'channel_removed',
+        channelId,
+        timestamp: Date.now(),
+      })
     }
   }
 
@@ -203,6 +518,9 @@ export class Watchtower {
     channel.revocationSecrets.set(commitmentNumber, revocationSecret)
     this.stats.totalSecretsStored++
 
+    // Persistir alteração
+    this.persistChannel(channel)
+
     console.log(
       `[watchtower] Stored revocation secret for channel ${channelId}, commitment ${commitmentNumber}`,
     )
@@ -243,6 +561,7 @@ export class Watchtower {
 
       // BREACH DETECTADO!
       channel.breachDetected = true
+      channel.status = ChannelMonitorStatus.BREACH_DETECTED
       this.stats.breachesDetected++
 
       console.warn(
@@ -252,15 +571,44 @@ export class Watchtower {
       // Gerar penalty transaction
       const penaltyTx = this.generatePenaltyTx(channel, commitmentNumber, revocationSecret)
 
-      return {
+      // Persistir mudança de estado
+      this.persistChannel(channel)
+      this.persistStats()
+
+      // Emitir evento
+      const result: BreachResult = {
         breach: true,
         reason: 'Old commitment transaction broadcast',
         penaltyTx,
         commitmentNumber,
         revokedAmount: channel.localBalance + channel.remoteBalance,
+        severity: 'critical',
       }
+
+      this.emitEvent({
+        type: 'breach_detected',
+        channelId,
+        timestamp: Date.now(),
+        data: {
+          commitmentNumber: commitmentNumber.toString(),
+          revokedAmount: result.revokedAmount?.toString(),
+        },
+      })
+
+      // Chamar callback se configurado
+      if (this.config.onBreachDetected) {
+        this.config.onBreachDetected(channelId, result)
+      }
+
+      return result
     } catch (error) {
       console.error(`[watchtower] Error checking for breach:`, error)
+      this.emitEvent({
+        type: 'error',
+        channelId,
+        timestamp: Date.now(),
+        data: { error: String(error) },
+      })
       return { breach: false, reason: `Error: ${error}` }
     }
   }

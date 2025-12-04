@@ -1,3 +1,9 @@
+// Mock socket before any imports that need it
+jest.mock('@/core/lib/network/socket', () => ({
+  createLightningSocket: jest.fn().mockResolvedValue({}),
+  createElectrumSocket: jest.fn().mockResolvedValue({}),
+}))
+
 import { LightningMessageType } from '@/core/models/lightning/base'
 import type {
   TxAddInputMessage,

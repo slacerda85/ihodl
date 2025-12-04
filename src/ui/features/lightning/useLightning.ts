@@ -1,5 +1,5 @@
 // Custom hook para operações Lightning
-// Simplifica o uso do LightningClient em componentes React
+// Simplifica o uso do LightningWorker em componentes React
 
 import { useState, useCallback } from 'react'
 import { useNetwork } from '../network/NetworkProvider'
@@ -34,7 +34,7 @@ export interface UseLightningResult {
  * Gerencia estado de loading e erro automaticamente
  */
 export function useLightning(): UseLightningResult {
-  const { getLightningClient } = useNetwork()
+  const { getLightningWorker } = useNetwork()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
 
@@ -47,8 +47,8 @@ export function useLightning(): UseLightningResult {
       setIsLoading(true)
       setError(null)
       try {
-        const client = await getLightningClient(masterKey, network)
-        const invoice = await client.generateInvoice(params)
+        const worker = await getLightningWorker(masterKey, network)
+        const invoice = await worker.generateInvoice(params)
         return invoice
       } catch (err) {
         const error = err instanceof Error ? err : new Error('Failed to generate invoice')
@@ -58,7 +58,7 @@ export function useLightning(): UseLightningResult {
         setIsLoading(false)
       }
     },
-    [getLightningClient],
+    [getLightningWorker],
   )
 
   const sendPayment = useCallback(
@@ -70,8 +70,8 @@ export function useLightning(): UseLightningResult {
       setIsLoading(true)
       setError(null)
       try {
-        const client = await getLightningClient(masterKey, network)
-        const result = await client.sendPayment(request)
+        const worker = await getLightningWorker(masterKey, network)
+        const result = await worker.sendPayment(request)
         return result
       } catch (err) {
         const error = err instanceof Error ? err : new Error('Failed to send payment')
@@ -81,7 +81,7 @@ export function useLightning(): UseLightningResult {
         setIsLoading(false)
       }
     },
-    [getLightningClient],
+    [getLightningWorker],
   )
 
   const getBalance = useCallback(
@@ -92,8 +92,8 @@ export function useLightning(): UseLightningResult {
       setIsLoading(true)
       setError(null)
       try {
-        const client = await getLightningClient(masterKey, network)
-        const balance = await client.getBalance()
+        const worker = await getLightningWorker(masterKey, network)
+        const balance = await worker.getBalance()
         return balance
       } catch (err) {
         const error = err instanceof Error ? err : new Error('Failed to get balance')
@@ -103,7 +103,7 @@ export function useLightning(): UseLightningResult {
         setIsLoading(false)
       }
     },
-    [getLightningClient],
+    [getLightningWorker],
   )
 
   return {

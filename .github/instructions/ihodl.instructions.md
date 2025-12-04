@@ -28,7 +28,7 @@ Foi utilizada uma arquitetura de camadas simples dentro da pasta `core`, definid
 
 - **Repositories**: A pasta `repositories` gerencia a persistência de dados e a comunicação com fontes de dados externas, como bancos de dados ou APIs.
 
-- **Services**: A pasta `services` contém a lógica de negócio e as operações principais do aplicativo, como gerenciamento de carteiras, transações e comunicação com a rede Bitcoin.
+- **Services**: A pasta `services` contém a lógica de negócio e as operações principais do aplicativo, como gerenciamento de carteiras, transações e comunicação com a rede Bitcoin. o FrontEnd se comunica com o core SOMENTE através dos services.
 
 ## Interface do usuário
 

@@ -8,7 +8,7 @@ import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 import QRCode from '@/ui/components/QRCode'
 import Button from '@/ui/components/Button'
 import { useSettings } from '@/ui/features/settings'
-import { useLightning } from '@/ui/features/lightning/LightningProvider'
+import { useLightning, Invoice } from '@/ui/features/lightning/LightningProvider'
 
 interface ReceiveLightningProps {
   amount: bigint
@@ -17,36 +17,43 @@ interface ReceiveLightningProps {
 
 export default function ReceiveLightning({ amount, description }: ReceiveLightningProps) {
   const { isDark } = useSettings()
-  const { generateInvoice, client } = useLightning()
+  const { generateInvoice, state } = useLightning()
 
   const [loading, setLoading] = useState(false)
-  const [invoiceData, setInvoiceData] = useState<{
-    invoice: string
-    qrCode: string
-    amount: bigint
-    channelOpeningFee?: bigint
-    requiresChannel: boolean
-    paymentHash: string
-  } | null>(null)
+  const [invoiceData, setInvoiceData] = useState<Invoice | null>(null)
+
+  // Converter satoshis para millisatoshis (1 sat = 1000 msat)
+  const amountMsat = amount * 1000n
 
   // Generate invoice on mount or when props change
   useEffect(() => {
     const generate = async () => {
-      if (!client || !amount) return
+      // Verificar se está inicializado
+      if (!state.isInitialized) return
 
+      // Procurar invoice pendente existente com mesmo amount e description
+      const existingInvoice = state.invoices.find(inv => {
+        const now = Date.now()
+        const isNotExpired = inv.expiresAt > now
+        const isPending = inv.status === 'pending'
+        const sameAmount = inv.amount === amountMsat
+        const sameDescription = inv.description === description
+
+        return isPending && isNotExpired && sameAmount && sameDescription
+      })
+
+      if (existingInvoice) {
+        // Reutilizar invoice existente
+        console.log('[ReceiveLightning] Reusing existing invoice:', existingInvoice.paymentHash)
+        setInvoiceData(existingInvoice)
+        return
+      }
+
+      // Não encontrou invoice válida, gerar nova
       setLoading(true)
       try {
-        const invoice = await generateInvoice(amount, description)
-        // For now, create a basic invoice data object
-        // TODO: Parse invoice to extract payment hash, etc.
-        const data = {
-          invoice,
-          qrCode: invoice, // Use invoice as QR code for now
-          amount,
-          requiresChannel: false,
-          paymentHash: '', // TODO: extract from invoice
-        }
-        setInvoiceData(data)
+        const invoice = await generateInvoice(amountMsat, description)
+        setInvoiceData(invoice)
       } catch (error) {
         console.error('Error generating invoice:', error)
         Alert.alert('Error', 'Failed to generate Lightning invoice')
@@ -56,7 +63,7 @@ export default function ReceiveLightning({ amount, description }: ReceiveLightni
     }
 
     generate()
-  }, [amount, description, client, generateInvoice])
+  }, [amountMsat, description, state.isInitialized, state.invoices, generateInvoice])
 
   // Handle share invoice
   const handleShareInvoice = async () => {
@@ -91,6 +98,40 @@ export default function ReceiveLightning({ amount, description }: ReceiveLightni
     }
   }
 
+  function reduceInvoiceString(invoice: string): string {
+    if (invoice.length <= 20) return invoice
+    return `${invoice.slice(0, 10)}...${invoice.slice(-10)}`
+  }
+
+  // Se o serviço não está inicializado, mostrar loading ou erro
+  if (!state.isInitialized && state.isLoading) {
+    return (
+      <View style={[styles.contentWrapper, isDark && styles.contentWrapperDark]}>
+        <View style={[styles.sectionBox, isDark && styles.sectionBoxDark]}>
+          <View style={styles.qrContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.subtitle, isDark && styles.subtitleDark, { marginTop: 16 }]}>
+              Initializing Lightning...
+            </Text>
+          </View>
+        </View>
+      </View>
+    )
+  }
+
+  if (state.error) {
+    return (
+      <View style={[styles.contentWrapper, isDark && styles.contentWrapperDark]}>
+        <View style={[styles.sectionBox, isDark && styles.sectionBoxDark]}>
+          <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
+            Lightning Error
+          </Text>
+          <Text style={[styles.subtitle, isDark && styles.subtitleDark]}>{state.error}</Text>
+        </View>
+      </View>
+    )
+  }
+
   return (
     <View>
       <ScrollView style={[styles.scrollView, isDark && styles.scrollViewDark]}>
@@ -120,11 +161,11 @@ export default function ReceiveLightning({ amount, description }: ReceiveLightni
               </View>
               {/* Exibição da invoice */}
               <Text style={[styles.addressText, isDark && styles.addressTextDark]}>
-                {invoiceData.invoice}
+                {reduceInvoiceString(invoiceData.invoice)}
               </Text>
 
               {/* Channel opening fee notice */}
-              {invoiceData.requiresChannel && invoiceData.channelOpeningFee && (
+              {invoiceData.requiresChannelOpening && invoiceData.channelOpeningFee && (
                 <Text style={[styles.feeNotice, isDark && styles.feeNoticeDark]}>
                   Uma taxa de abertura de canal será cobrada:{' '}
                   {invoiceData.channelOpeningFee.toString()} sats

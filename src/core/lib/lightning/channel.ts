@@ -12,7 +12,20 @@ import {
   CommitmentTx,
   ChannelType,
   DUST_LIMIT_P2WPKH,
+  fundingOutputScript,
 } from './commitment'
+import {
+  encodeOpenChannelMessage,
+  encodeAcceptChannelMessage,
+  encodeFundingSignedMessage,
+  encodeUpdateAddHtlcMessage,
+  encodeUpdateFulfillHtlcMessage,
+  encodeUpdateFailHtlcMessage,
+  encodeCommitmentSignedMessage,
+  encodeRevokeAndAckMessage,
+  encodeShutdownMessage,
+} from './peer'
+import { signMessage, verifyMessage, hash256 } from '../crypto/crypto'
 
 // ==========================================
 // TIPOS E ENUMS
@@ -381,6 +394,37 @@ export class ChannelManager {
   }
 
   /**
+   * Cria e broadcasta a funding transaction (como funder)
+   */
+  async createFundingTransaction(
+    walletService: any, // LightningWalletService
+    utxos: any[],
+    changeAddress: string,
+    feeratePerByte: number,
+  ): Promise<{ txid: Uint8Array; outputIndex: number; signature: Uint8Array }> {
+    if (!this.weAreFunder) {
+      throw new Error('Only funder can create funding transaction')
+    }
+
+    if (this.info.state !== ChannelState.OPENING) {
+      throw new Error(`Cannot create funding tx in state ${this.info.state}`)
+    }
+
+    // Usar o LightningWalletService para criar a funding transaction
+    const result = await walletService.createFundingTransaction(
+      this,
+      utxos,
+      changeAddress,
+      feeratePerByte,
+    )
+
+    // Transicionar para FUNDED
+    this.setFundingTx(result.txid, result.outputIndex)
+
+    return result
+  }
+
+  /**
    * Define a funding transaction
    */
   setFundingTx(txid: Uint8Array, outputIndex: number): void {
@@ -604,15 +648,15 @@ export class ChannelManager {
     // Construir commitment do peer (REMOTE)
     const remoteCommitment = this.commitmentBuilder.buildCommitmentTx(HTLCOwner.REMOTE)
 
-    // Assinar commitment
-    // TODO: Implementar assinatura real
-    const signature = new Uint8Array(64)
+    // Assinar commitment usando chave privada real
+    const signature = this.commitmentBuilder.signCommitmentTx(remoteCommitment)
 
     // Assinar HTLCs
     const htlcSignatures: Uint8Array[] = []
     for (const output of remoteCommitment.outputs) {
       if (output.type === 'htlc_offered' || output.type === 'htlc_received') {
-        // TODO: Implementar assinatura HTLC
+        // Para HTLCs, também precisamos assinar, mas por enquanto usar stub
+        // TODO: Implementar assinatura HTLC completa
         htlcSignatures.push(new Uint8Array(64))
       }
     }
@@ -626,17 +670,25 @@ export class ChannelManager {
   /**
    * Processa commitment_signed recebido
    */
-  handleCommitmentSigned(_signature: Uint8Array, _htlcSignatures: Uint8Array[]): Uint8Array {
+  handleCommitmentSigned(signature: Uint8Array, htlcSignatures: Uint8Array[]): Uint8Array {
     if (!this.commitmentBuilder) {
       throw new Error('CommitmentBuilder not initialized')
     }
 
-    // Construir nosso commitment (LOCAL)
-    // Usado para verificação da assinatura
-    this.commitmentBuilder.buildCommitmentTx(HTLCOwner.LOCAL)
+    // Construir nosso commitment (LOCAL) para verificação
+    const localCommitment = this.commitmentBuilder.buildCommitmentTx(HTLCOwner.LOCAL)
 
-    // Verificar assinatura
-    // TODO: Implementar verificação
+    // Verificar assinatura do commitment
+    const isValidSignature = this.commitmentBuilder.verifyCommitmentSignature(
+      localCommitment,
+      signature,
+    )
+    if (!isValidSignature) {
+      throw new Error('Invalid commitment signature')
+    }
+
+    // Verificar assinaturas HTLC
+    // TODO: Implementar verificação de assinaturas HTLC
 
     // Atualizar estado
     this.htlcManager.recvCtx()
@@ -854,47 +906,187 @@ export class ChannelManager {
   }
 
   // ==========================================
-  // MESSAGE SERIALIZATION (stubs)
+  // MESSAGE SERIALIZATION
   // ==========================================
 
   private createOpenChannelMessage(): Uint8Array {
-    // TODO: Implementar serialização completa
-    return new Uint8Array()
+    // Primeiro per-commitment point
+    const firstPerCommitmentPoint = secretToPoint(
+      getPerCommitmentSecretFromSeed(this.info.localConfig.perCommitmentSecretSeed, 0),
+    )
+
+    const message = {
+      type: 32, // OPEN_CHANNEL
+      chainHash: new Uint8Array(32), // TODO: Bitcoin mainnet chain hash
+      temporaryChannelId: this.info.tempChannelId,
+      fundingSatoshis: this.info.fundingSatoshis,
+      pushMsat: 0n, // No push for now
+      dustLimitSatoshis: this.info.localConfig.dustLimitSat,
+      maxHtlcValueInFlightMsat: this.info.localConfig.maxHtlcValueInFlightMsat,
+      channelReserveSatoshis: this.info.localConfig.channelReserveSat,
+      htlcMinimumMsat: this.info.localConfig.htlcMinimumMsat,
+      feeratePerKw: this.info.feeratePerKw,
+      toSelfDelay: this.info.localConfig.toSelfDelay,
+      maxAcceptedHtlcs: this.info.localConfig.maxAcceptedHtlcs,
+      fundingPubkey: this.info.localConfig.fundingPubkey,
+      revocationBasepoint: this.info.localConfig.revocationBasepoint,
+      paymentBasepoint: this.info.localConfig.paymentBasepoint,
+      delayedPaymentBasepoint: this.info.localConfig.delayedPaymentBasepoint,
+      htlcBasepoint: this.info.localConfig.htlcBasepoint,
+      firstPerCommitmentPoint,
+      channelFlags: this.info.flags & ChannelFlags.ANNOUNCE_CHANNEL ? 1 : 0,
+      tlvs: [],
+    }
+
+    return encodeOpenChannelMessage(message)
   }
 
   private createAcceptChannelMessage(): Uint8Array {
-    return new Uint8Array()
+    // Primeiro per-commitment point
+    const firstPerCommitmentPoint = secretToPoint(
+      getPerCommitmentSecretFromSeed(this.info.localConfig.perCommitmentSecretSeed, 0),
+    )
+
+    const message = {
+      type: 33, // ACCEPT_CHANNEL
+      temporaryChannelId: this.info.tempChannelId,
+      dustLimitSatoshis: this.info.localConfig.dustLimitSat,
+      maxHtlcValueInFlightMsat: this.info.localConfig.maxHtlcValueInFlightMsat,
+      channelReserveSatoshis: this.info.localConfig.channelReserveSat,
+      htlcMinimumMsat: this.info.localConfig.htlcMinimumMsat,
+      minimumDepth: this.info.minimumDepth,
+      toSelfDelay: this.info.localConfig.toSelfDelay,
+      maxAcceptedHtlcs: this.info.localConfig.maxAcceptedHtlcs,
+      fundingPubkey: this.info.localConfig.fundingPubkey,
+      revocationBasepoint: this.info.localConfig.revocationBasepoint,
+      paymentBasepoint: this.info.localConfig.paymentBasepoint,
+      delayedPaymentBasepoint: this.info.localConfig.delayedPaymentBasepoint,
+      htlcBasepoint: this.info.localConfig.htlcBasepoint,
+      firstPerCommitmentPoint,
+      tlvs: [],
+    }
+
+    return encodeAcceptChannelMessage(message)
   }
 
   private createFundingSignedMessage(signature: Uint8Array): Uint8Array {
-    return new Uint8Array()
+    if (!this.info.channelId) {
+      throw new Error('Channel ID not set')
+    }
+
+    const message = {
+      type: 35, // FUNDING_SIGNED
+      channelId: this.info.channelId,
+      signature,
+    }
+
+    return encodeFundingSignedMessage(message)
   }
 
   private createUpdateAddHtlcMessage(htlc: UpdateAddHtlc): Uint8Array {
-    return new Uint8Array()
+    if (!this.info.channelId) {
+      throw new Error('Channel ID not set')
+    }
+
+    if (!htlc.onionRoutingPacket) {
+      throw new Error('Onion routing packet required for HTLC')
+    }
+
+    const message = {
+      type: 128, // UPDATE_ADD_HTLC
+      channelId: this.info.channelId,
+      id: htlc.htlcId,
+      amountMsat: htlc.amountMsat,
+      paymentHash: htlc.paymentHash,
+      cltvExpiry: htlc.cltvExpiry,
+      onionRoutingPacket: htlc.onionRoutingPacket,
+      tlvs: [],
+    }
+
+    return encodeUpdateAddHtlcMessage(message)
   }
 
   private createUpdateFulfillHtlcMessage(htlcId: bigint, preimage: Uint8Array): Uint8Array {
-    return new Uint8Array()
+    if (!this.info.channelId) {
+      throw new Error('Channel ID not set')
+    }
+
+    const message = {
+      type: 130, // UPDATE_FULFILL_HTLC
+      channelId: this.info.channelId,
+      id: htlcId,
+      paymentPreimage: preimage,
+      tlvs: [],
+    }
+
+    return encodeUpdateFulfillHtlcMessage(message)
   }
 
   private createUpdateFailHtlcMessage(htlcId: bigint, reason: Uint8Array): Uint8Array {
-    return new Uint8Array()
+    if (!this.info.channelId) {
+      throw new Error('Channel ID not set')
+    }
+
+    const message = {
+      type: 131, // UPDATE_FAIL_HTLC
+      channelId: this.info.channelId,
+      id: htlcId,
+      len: reason.length,
+      reason,
+      tlvs: [],
+    }
+
+    return encodeUpdateFailHtlcMessage(message)
   }
 
   private createCommitmentSignedMessage(
     signature: Uint8Array,
     htlcSignatures: Uint8Array[],
   ): Uint8Array {
-    return new Uint8Array()
+    if (!this.info.channelId) {
+      throw new Error('Channel ID not set')
+    }
+
+    const message = {
+      type: 132, // COMMITMENT_SIGNED
+      channelId: this.info.channelId,
+      signature,
+      numHtlcs: htlcSignatures.length,
+      htlcSignatures,
+    }
+
+    return encodeCommitmentSignedMessage(message)
   }
 
   private serializeRevokeAndAck(secret: Uint8Array, nextPoint: Uint8Array): Uint8Array {
-    return new Uint8Array()
+    if (!this.info.channelId) {
+      throw new Error('Channel ID not set')
+    }
+
+    const message = {
+      type: 133, // REVOKE_AND_ACK
+      channelId: this.info.channelId,
+      perCommitmentSecret: secret,
+      nextPerCommitmentPoint: nextPoint,
+    }
+
+    return encodeRevokeAndAckMessage(message)
   }
 
   private createShutdownMessage(scriptPubkey: Uint8Array): Uint8Array {
-    return new Uint8Array()
+    if (!this.info.channelId) {
+      throw new Error('Channel ID not set')
+    }
+
+    const message = {
+      type: 38, // SHUTDOWN
+      channelId: this.info.channelId,
+      len: scriptPubkey.length,
+      scriptpubkey: scriptPubkey,
+      tlvs: [],
+    }
+
+    return encodeShutdownMessage(message)
   }
 
   private serializeChannelReestablish(
@@ -903,6 +1095,23 @@ export class ChannelManager {
     lastSecret: Uint8Array,
     nextPoint: Uint8Array,
   ): Uint8Array {
+    if (!this.info.channelId) {
+      throw new Error('Channel ID not set')
+    }
+
+    // TODO: Implementar encodeChannelReestablishMessage no peer.ts
+    // const message = {
+    //   type: 136, // CHANNEL_REESTABLISH
+    //   channelId: this.info.channelId,
+    //   nextCommitmentNumber,
+    //   nextRevocationNumber,
+    //   lastPerCommitmentSecret: lastSecret,
+    //   nextPerCommitmentPoint: nextPoint,
+    //   tlvs: [],
+    // }
+    // return encodeChannelReestablishMessage(message)
+
+    // Stub implementation
     return new Uint8Array()
   }
 
