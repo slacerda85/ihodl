@@ -777,3 +777,536 @@ export function getPaymentFlowType(invreq: InvoiceRequest): PaymentFlowType {
   // Otherwise it's a refund/ATM scenario
   return PaymentFlowType.MERCHANT_PAYS_USER
 }
+
+// ============================================================================
+// Offer Creation
+// ============================================================================
+
+/**
+ * Parâmetros para criar uma nova offer
+ */
+export interface CreateOfferParams {
+  /** Descrição do produto/serviço */
+  description: string
+  /** Valor em millisatoshis (omitir para valor variável) */
+  amountMsat?: bigint
+  /** Pubkey do issuer (33 bytes) */
+  issuerPubkey: Uint8Array
+  /** Alias do issuer (opcional) */
+  issuer?: string
+  /** Validade em segundos a partir de agora (opcional) */
+  expirySeconds?: number
+  /** Quantidade máxima por invoice (0 = ilimitado, omitir se não aplicável) */
+  quantityMax?: bigint
+  /** Chains válidas (omitir para Bitcoin mainnet) */
+  chains?: Uint8Array[]
+  /** Blinded paths para privacidade (alternativa ao issuer pubkey) */
+  paths?: import('@/core/models/lightning/routing').BlindedPath[]
+}
+
+/**
+ * Cria uma nova offer
+ */
+export function createOffer(params: CreateOfferParams): {
+  offer: Offer
+  encoded: string
+  tlvStream: Bolt12TlvStream
+} {
+  const offer: Offer = {
+    description: params.description,
+    issuerId: params.issuerPubkey,
+  }
+
+  // Campos opcionais
+  if (params.amountMsat !== undefined) {
+    offer.amount = params.amountMsat
+  }
+  if (params.issuer) {
+    offer.issuer = params.issuer
+  }
+  if (params.expirySeconds) {
+    offer.absoluteExpiry = BigInt(Math.floor(Date.now() / 1000) + params.expirySeconds)
+  }
+  if (params.quantityMax !== undefined) {
+    offer.quantityMax = params.quantityMax
+  }
+  if (params.chains && params.chains.length > 0) {
+    offer.chains = params.chains
+  }
+  if (params.paths && params.paths.length > 0) {
+    offer.paths = params.paths
+    // Se paths presente, pode omitir issuer_id
+  }
+
+  // Converter para TLV stream
+  const tlvStream = offerToTlvStream(offer)
+
+  // Encodar em bech32
+  const encoded = encodeBolt12(OFFER_PREFIX, tlvStream)
+
+  return { offer, encoded, tlvStream }
+}
+
+/**
+ * Converte Offer para TLV stream
+ */
+export function offerToTlvStream(offer: Offer): Bolt12TlvStream {
+  const records: Bolt12TlvRecord[] = []
+
+  // offer_chains (type 2) - opcional
+  if (offer.chains && offer.chains.length > 0) {
+    const value = concatUint8Arrays(offer.chains)
+    records.push({ type: BigInt(OfferTlvType.OFFER_CHAINS), length: BigInt(value.length), value })
+  }
+
+  // offer_metadata (type 4) - opcional
+  if (offer.metadata) {
+    records.push({
+      type: BigInt(OfferTlvType.OFFER_METADATA),
+      length: BigInt(offer.metadata.length),
+      value: offer.metadata,
+    })
+  }
+
+  // offer_currency (type 6) - opcional
+  if (offer.currency) {
+    const value = new TextEncoder().encode(offer.currency)
+    records.push({ type: BigInt(OfferTlvType.OFFER_CURRENCY), length: BigInt(value.length), value })
+  }
+
+  // offer_amount (type 8) - opcional
+  if (offer.amount !== undefined) {
+    const value = encodeTu64(offer.amount)
+    records.push({ type: BigInt(OfferTlvType.OFFER_AMOUNT), length: BigInt(value.length), value })
+  }
+
+  // offer_description (type 10) - obrigatório se amount presente
+  if (offer.description) {
+    const value = new TextEncoder().encode(offer.description)
+    records.push({
+      type: BigInt(OfferTlvType.OFFER_DESCRIPTION),
+      length: BigInt(value.length),
+      value,
+    })
+  }
+
+  // offer_features (type 12) - opcional
+  if (offer.features) {
+    records.push({
+      type: BigInt(OfferTlvType.OFFER_FEATURES),
+      length: BigInt(offer.features.length),
+      value: offer.features,
+    })
+  }
+
+  // offer_absolute_expiry (type 14) - opcional
+  if (offer.absoluteExpiry !== undefined) {
+    const value = encodeTu64(offer.absoluteExpiry)
+    records.push({
+      type: BigInt(OfferTlvType.OFFER_ABSOLUTE_EXPIRY),
+      length: BigInt(value.length),
+      value,
+    })
+  }
+
+  // offer_paths (type 16) - opcional
+  if (offer.paths && offer.paths.length > 0) {
+    const value = encodeBlindedPaths(offer.paths)
+    records.push({ type: BigInt(OfferTlvType.OFFER_PATHS), length: BigInt(value.length), value })
+  }
+
+  // offer_issuer (type 18) - opcional
+  if (offer.issuer) {
+    const value = new TextEncoder().encode(offer.issuer)
+    records.push({ type: BigInt(OfferTlvType.OFFER_ISSUER), length: BigInt(value.length), value })
+  }
+
+  // offer_quantity_max (type 20) - opcional
+  if (offer.quantityMax !== undefined) {
+    const value = encodeTu64(offer.quantityMax)
+    records.push({
+      type: BigInt(OfferTlvType.OFFER_QUANTITY_MAX),
+      length: BigInt(value.length),
+      value,
+    })
+  }
+
+  // offer_issuer_id (type 22) - obrigatório se paths não presente
+  if (offer.issuerId) {
+    records.push({
+      type: BigInt(OfferTlvType.OFFER_ISSUER_ID),
+      length: BigInt(offer.issuerId.length),
+      value: offer.issuerId,
+    })
+  }
+
+  return records
+}
+
+/**
+ * Decodifica offer de string bech32
+ */
+export function decodeOffer(offerString: string): Offer {
+  const { hrp, tlvStream } = decodeBolt12(offerString)
+
+  if (hrp !== OFFER_PREFIX) {
+    throw new Error(`Invalid offer prefix: expected '${OFFER_PREFIX}', got '${hrp}'`)
+  }
+
+  return tlvStreamToOffer(tlvStream)
+}
+
+/**
+ * Converte TLV stream para Offer
+ */
+export function tlvStreamToOffer(tlvStream: Bolt12TlvStream): Offer {
+  const offer: Partial<Offer> = {}
+
+  for (const record of tlvStream) {
+    const type = Number(record.type)
+
+    switch (type) {
+      case OfferTlvType.OFFER_CHAINS:
+        offer.chains = splitIntoChunks(record.value, 32)
+        break
+      case OfferTlvType.OFFER_METADATA:
+        offer.metadata = record.value
+        break
+      case OfferTlvType.OFFER_CURRENCY:
+        offer.currency = new TextDecoder().decode(record.value)
+        break
+      case OfferTlvType.OFFER_AMOUNT:
+        offer.amount = decodeTu64(record.value)
+        break
+      case OfferTlvType.OFFER_DESCRIPTION:
+        offer.description = new TextDecoder().decode(record.value)
+        break
+      case OfferTlvType.OFFER_FEATURES:
+        offer.features = record.value
+        break
+      case OfferTlvType.OFFER_ABSOLUTE_EXPIRY:
+        offer.absoluteExpiry = decodeTu64(record.value)
+        break
+      case OfferTlvType.OFFER_PATHS:
+        offer.paths = decodeBlindedPaths(record.value)
+        break
+      case OfferTlvType.OFFER_ISSUER:
+        offer.issuer = new TextDecoder().decode(record.value)
+        break
+      case OfferTlvType.OFFER_QUANTITY_MAX:
+        offer.quantityMax = decodeTu64(record.value)
+        break
+      case OfferTlvType.OFFER_ISSUER_ID:
+        offer.issuerId = record.value
+        break
+    }
+  }
+
+  return offer as Offer
+}
+
+// ============================================================================
+// Invoice Request Creation
+// ============================================================================
+
+/**
+ * Parâmetros para criar invoice request
+ */
+export interface CreateInvoiceRequestParams {
+  /** Offer original para responder */
+  offer: Offer
+  /** Pubkey do payer (33 bytes) */
+  payerPubkey: Uint8Array
+  /** Chave privada para assinar (32 bytes) */
+  payerPrivateKey: Uint8Array
+  /** Quantidade (obrigatório se offer tem quantity_max) */
+  quantity?: bigint
+  /** Valor específico se offer não tem amount fixo */
+  amountMsat?: bigint
+  /** Nota do payer (opcional) */
+  payerNote?: string
+  /** Chain específica (opcional, default Bitcoin mainnet) */
+  chain?: Uint8Array
+}
+
+/**
+ * Cria invoice request para uma offer
+ */
+export async function createInvoiceRequest(params: CreateInvoiceRequestParams): Promise<{
+  invoiceRequest: InvoiceRequest
+  encoded: string
+  tlvStream: Bolt12TlvStream
+}> {
+  // Gerar metadata aleatório
+  const invreqMetadata = crypto.getRandomValues(new Uint8Array(32))
+
+  const invreq: InvoiceRequest = {
+    // Mirror offer fields
+    chains: params.offer.chains,
+    metadata: params.offer.metadata,
+    currency: params.offer.currency,
+    amount: params.offer.amount,
+    description: params.offer.description,
+    features: params.offer.features,
+    absoluteExpiry: params.offer.absoluteExpiry,
+    paths: params.offer.paths,
+    issuer: params.offer.issuer,
+    quantityMax: params.offer.quantityMax,
+    issuerId: params.offer.issuerId,
+
+    // Invoice request fields
+    invreqMetadata,
+    invreqPayerId: params.payerPubkey,
+  }
+
+  // Campos opcionais
+  if (params.chain) {
+    invreq.invreqChain = params.chain
+  }
+  if (params.amountMsat !== undefined) {
+    invreq.invreqAmount = params.amountMsat
+  }
+  if (params.quantity !== undefined) {
+    invreq.invreqQuantity = params.quantity
+  }
+  if (params.payerNote) {
+    invreq.invreqPayerNote = params.payerNote
+  }
+
+  // Converter para TLV (sem assinatura)
+  const tlvStreamUnsigned = invoiceRequestToTlvStream(invreq, false)
+
+  // Calcular Merkle root e assinar
+  const merkleTree = buildMerkleTree(tlvStreamUnsigned)
+  const merkleRoot = getMerkleRoot(merkleTree)
+
+  // Assinar com chave privada do payer
+  const signature = await signMerkleRoot(merkleRoot, params.payerPrivateKey, 'invoice_request')
+  invreq.signature = signature
+
+  // Converter para TLV (com assinatura)
+  const tlvStream = invoiceRequestToTlvStream(invreq, true)
+
+  // Encodar em bech32
+  const encoded = encodeBolt12(INVOICE_REQUEST_PREFIX, tlvStream)
+
+  return { invoiceRequest: invreq, encoded, tlvStream }
+}
+
+/**
+ * Converte InvoiceRequest para TLV stream
+ */
+export function invoiceRequestToTlvStream(
+  invreq: InvoiceRequest,
+  includeSignature: boolean,
+): Bolt12TlvStream {
+  const records: Bolt12TlvRecord[] = []
+
+  // invreq_metadata (type 0) - obrigatório
+  records.push({
+    type: 0n,
+    length: BigInt(invreq.invreqMetadata.length),
+    value: invreq.invreqMetadata,
+  })
+
+  // Mirror offer fields (types 2-22)
+  if (invreq.chains && invreq.chains.length > 0) {
+    const value = concatUint8Arrays(invreq.chains)
+    records.push({ type: 2n, length: BigInt(value.length), value })
+  }
+  if (invreq.metadata) {
+    records.push({ type: 4n, length: BigInt(invreq.metadata.length), value: invreq.metadata })
+  }
+  if (invreq.currency) {
+    const value = new TextEncoder().encode(invreq.currency)
+    records.push({ type: 6n, length: BigInt(value.length), value })
+  }
+  if (invreq.amount !== undefined) {
+    const value = encodeTu64(invreq.amount)
+    records.push({ type: 8n, length: BigInt(value.length), value })
+  }
+  if (invreq.description) {
+    const value = new TextEncoder().encode(invreq.description)
+    records.push({ type: 10n, length: BigInt(value.length), value })
+  }
+  if (invreq.features) {
+    records.push({ type: 12n, length: BigInt(invreq.features.length), value: invreq.features })
+  }
+  if (invreq.absoluteExpiry !== undefined) {
+    const value = encodeTu64(invreq.absoluteExpiry)
+    records.push({ type: 14n, length: BigInt(value.length), value })
+  }
+  if (invreq.paths && invreq.paths.length > 0) {
+    const value = encodeBlindedPaths(invreq.paths)
+    records.push({ type: 16n, length: BigInt(value.length), value })
+  }
+  if (invreq.issuer) {
+    const value = new TextEncoder().encode(invreq.issuer)
+    records.push({ type: 18n, length: BigInt(value.length), value })
+  }
+  if (invreq.quantityMax !== undefined) {
+    const value = encodeTu64(invreq.quantityMax)
+    records.push({ type: 20n, length: BigInt(value.length), value })
+  }
+  if (invreq.issuerId) {
+    records.push({ type: 22n, length: BigInt(invreq.issuerId.length), value: invreq.issuerId })
+  }
+
+  // Invoice request specific fields (types 80-89)
+  if (invreq.invreqChain) {
+    records.push({
+      type: BigInt(InvoiceRequestTlvType.INVREQ_CHAIN),
+      length: BigInt(invreq.invreqChain.length),
+      value: invreq.invreqChain,
+    })
+  }
+  if (invreq.invreqAmount !== undefined) {
+    const value = encodeTu64(invreq.invreqAmount)
+    records.push({
+      type: BigInt(InvoiceRequestTlvType.INVREQ_AMOUNT),
+      length: BigInt(value.length),
+      value,
+    })
+  }
+  if (invreq.invreqFeatures) {
+    records.push({
+      type: BigInt(InvoiceRequestTlvType.INVREQ_FEATURES),
+      length: BigInt(invreq.invreqFeatures.length),
+      value: invreq.invreqFeatures,
+    })
+  }
+  if (invreq.invreqQuantity !== undefined) {
+    const value = encodeTu64(invreq.invreqQuantity)
+    records.push({
+      type: BigInt(InvoiceRequestTlvType.INVREQ_QUANTITY),
+      length: BigInt(value.length),
+      value,
+    })
+  }
+
+  // invreq_payer_id (type 88) - obrigatório
+  records.push({
+    type: BigInt(InvoiceRequestTlvType.INVREQ_PAYER_ID),
+    length: BigInt(invreq.invreqPayerId.length),
+    value: invreq.invreqPayerId,
+  })
+
+  if (invreq.invreqPayerNote) {
+    const value = new TextEncoder().encode(invreq.invreqPayerNote)
+    records.push({
+      type: BigInt(InvoiceRequestTlvType.INVREQ_PAYER_NOTE),
+      length: BigInt(value.length),
+      value,
+    })
+  }
+
+  // Signature (type 240) - opcional
+  if (includeSignature && invreq.signature) {
+    records.push({
+      type: BigInt(InvoiceRequestTlvType.SIGNATURE),
+      length: BigInt(invreq.signature.length),
+      value: invreq.signature,
+    })
+  }
+
+  return records
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/**
+ * Codifica tu64 (truncated unsigned 64-bit)
+ */
+function encodeTu64(value: bigint): Uint8Array {
+  if (value === 0n) return new Uint8Array(0)
+
+  const buffer = new Uint8Array(8)
+  new DataView(buffer.buffer).setBigUint64(0, value, false)
+
+  // Truncar zeros à esquerda
+  let start = 0
+  while (start < 7 && buffer[start] === 0) start++
+  return buffer.slice(start)
+}
+
+/**
+ * Decodifica tu64
+ */
+function decodeTu64(bytes: Uint8Array): bigint {
+  if (bytes.length === 0) return 0n
+
+  let value = 0n
+  for (const byte of bytes) {
+    value = (value << 8n) | BigInt(byte)
+  }
+  return value
+}
+
+/**
+ * Divide array em chunks de tamanho fixo
+ */
+function splitIntoChunks(arr: Uint8Array, chunkSize: number): Uint8Array[] {
+  const result: Uint8Array[] = []
+  for (let i = 0; i < arr.length; i += chunkSize) {
+    result.push(arr.slice(i, i + chunkSize))
+  }
+  return result
+}
+
+/**
+ * Codifica blinded paths para TLV
+ */
+function encodeBlindedPaths(
+  paths: import('@/core/models/lightning/routing').BlindedPath[],
+): Uint8Array {
+  // Simplificado - implementação completa requer encoding dos hops
+  const chunks: Uint8Array[] = []
+  for (const path of paths) {
+    // introduction_node (33 bytes)
+    chunks.push(path.introductionNode)
+    // blinding (33 bytes)
+    chunks.push(path.blinding)
+    // num_hops (1 byte)
+    chunks.push(new Uint8Array([path.numHops]))
+    // hops seria encodado aqui...
+  }
+  return concatUint8Arrays(chunks)
+}
+
+/**
+ * Decodifica blinded paths de TLV
+ */
+function decodeBlindedPaths(
+  bytes: Uint8Array,
+): import('@/core/models/lightning/routing').BlindedPath[] {
+  // Simplificado - implementação completa requer parsing dos hops
+  const paths: import('@/core/models/lightning/routing').BlindedPath[] = []
+
+  let offset = 0
+  while (offset < bytes.length) {
+    if (offset + 67 > bytes.length) break
+
+    const introductionNode = bytes.slice(offset, offset + 33)
+    offset += 33
+
+    const blinding = bytes.slice(offset, offset + 33)
+    offset += 33
+
+    const numHops = bytes[offset]
+    offset += 1
+
+    paths.push({
+      introductionNode,
+      blinding,
+      numHops,
+      hops: [], // Seria decodificado aqui
+    })
+
+    // Pular os hops (simplificado)
+    // Em implementação real, precisaria decodificar cada hop
+  }
+
+  return paths
+}

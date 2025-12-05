@@ -26,6 +26,413 @@ import { RoutingGraph, PaymentRoute } from './routing'
 import { encodeBigSize } from './base'
 import { randomBytes } from '../crypto'
 
+// ==========================================
+// FASE 3: ENHANCED MPP FEATURES
+// ==========================================
+
+/**
+ * Configuração avançada para retry inteligente
+ */
+export interface EnhancedRetryConfig {
+  /** Máximo de retries por parte */
+  maxRetriesPerPart: number
+  /** Máximo de retries totais do pagamento */
+  maxTotalRetries: number
+  /** Delay base entre retries (ms) */
+  retryDelayMs: number
+  /** Fator de backoff exponencial */
+  backoffFactor: number
+  /** Delay máximo entre retries (ms) */
+  maxRetryDelayMs: number
+  /** Se deve tentar resplit em falha */
+  enableResplit: boolean
+  /** Se deve fazer probe de liquidez */
+  enableLiquidityProbing: boolean
+}
+
+export const DEFAULT_ENHANCED_RETRY_CONFIG: EnhancedRetryConfig = {
+  maxRetriesPerPart: 3,
+  maxTotalRetries: 10,
+  retryDelayMs: 100,
+  backoffFactor: 2,
+  maxRetryDelayMs: 5000,
+  enableResplit: true,
+  enableLiquidityProbing: true,
+}
+
+/**
+ * Informação de falha de canal/path
+ */
+export interface FailedPathInfo {
+  /** ID do canal que falhou */
+  channelId: Uint8Array
+  /** Node que reportou a falha */
+  failingNode?: Uint8Array
+  /** Código de falha */
+  failureCode: FailureCode
+  /** Timestamp da falha */
+  timestamp: number
+  /** Quantidade que falhou */
+  amountMsat: bigint
+  /** Quantas vezes falhou */
+  failureCount: number
+  /** Expiry da exclusão (quando pode tentar de novo) */
+  exclusionExpiry: number
+}
+
+/**
+ * Gerenciador de exclusão de paths
+ */
+export class PathExclusionManager {
+  private failedPaths: Map<string, FailedPathInfo> = new Map()
+  private failedNodes: Map<string, number> = new Map() // nodeId -> expiry timestamp
+
+  /** Duração padrão de exclusão (30 minutos) */
+  private static readonly DEFAULT_EXCLUSION_DURATION_MS = 30 * 60 * 1000
+
+  /** Exclusão curta para erros temporários (5 minutos) */
+  private static readonly SHORT_EXCLUSION_DURATION_MS = 5 * 60 * 1000
+
+  /** Exclusão longa para erros graves (2 horas) */
+  private static readonly LONG_EXCLUSION_DURATION_MS = 2 * 60 * 60 * 1000
+
+  /**
+   * Registra falha de um canal/path
+   */
+  recordFailure(
+    channelId: Uint8Array,
+    failureCode: FailureCode,
+    amountMsat: bigint,
+    failingNode?: Uint8Array,
+  ): void {
+    const channelHex = uint8ArrayToHex(channelId)
+    const existing = this.failedPaths.get(channelHex)
+
+    const exclusionDuration = this.getExclusionDuration(failureCode)
+
+    if (existing) {
+      existing.failureCount++
+      existing.timestamp = Date.now()
+      existing.amountMsat = amountMsat
+      existing.failureCode = failureCode
+      // Aumentar exclusão com falhas repetidas
+      existing.exclusionExpiry = Date.now() + exclusionDuration * Math.min(existing.failureCount, 4)
+    } else {
+      this.failedPaths.set(channelHex, {
+        channelId,
+        failingNode,
+        failureCode,
+        timestamp: Date.now(),
+        amountMsat,
+        failureCount: 1,
+        exclusionExpiry: Date.now() + exclusionDuration,
+      })
+    }
+
+    // Também excluir o node se aplicável
+    if (failingNode && this.shouldExcludeNode(failureCode)) {
+      const nodeHex = uint8ArrayToHex(failingNode)
+      this.failedNodes.set(nodeHex, Date.now() + exclusionDuration)
+    }
+  }
+
+  /**
+   * Verifica se canal está excluído
+   */
+  isChannelExcluded(channelId: Uint8Array): boolean {
+    const channelHex = uint8ArrayToHex(channelId)
+    const info = this.failedPaths.get(channelHex)
+    return info !== undefined && info.exclusionExpiry > Date.now()
+  }
+
+  /**
+   * Verifica se canal está excluído para um valor específico
+   */
+  isChannelExcludedForAmount(channelId: Uint8Array, amountMsat: bigint): boolean {
+    const channelHex = uint8ArrayToHex(channelId)
+    const info = this.failedPaths.get(channelHex)
+
+    if (!info || info.exclusionExpiry <= Date.now()) return false
+
+    // Se falhou para valor menor ou igual, está excluído
+    if (info.amountMsat <= amountMsat) return true
+
+    // Para valores menores, pode tentar (liquidez parcial)
+    return false
+  }
+
+  /**
+   * Verifica se node está excluído
+   */
+  isNodeExcluded(nodeId: Uint8Array): boolean {
+    const nodeHex = uint8ArrayToHex(nodeId)
+    const expiry = this.failedNodes.get(nodeHex)
+    return expiry !== undefined && expiry > Date.now()
+  }
+
+  /**
+   * Retorna canais excluídos para filtragem de rotas
+   */
+  getExcludedChannels(): Set<string> {
+    const excluded = new Set<string>()
+    const now = Date.now()
+
+    for (const [channelHex, info] of this.failedPaths) {
+      if (info.exclusionExpiry > now) {
+        excluded.add(channelHex)
+      }
+    }
+
+    return excluded
+  }
+
+  /**
+   * Retorna nodes excluídos
+   */
+  getExcludedNodes(): Set<string> {
+    const excluded = new Set<string>()
+    const now = Date.now()
+
+    for (const [nodeHex, expiry] of this.failedNodes) {
+      if (expiry > now) {
+        excluded.add(nodeHex)
+      }
+    }
+
+    return excluded
+  }
+
+  /**
+   * Limpa exclusões expiradas
+   */
+  pruneExpired(): void {
+    const now = Date.now()
+
+    for (const [key, info] of this.failedPaths) {
+      if (info.exclusionExpiry <= now) {
+        this.failedPaths.delete(key)
+      }
+    }
+
+    for (const [key, expiry] of this.failedNodes) {
+      if (expiry <= now) {
+        this.failedNodes.delete(key)
+      }
+    }
+  }
+
+  /**
+   * Registra sucesso de um canal (remove exclusão)
+   */
+  recordSuccess(channelId: Uint8Array): void {
+    const channelHex = uint8ArrayToHex(channelId)
+    this.failedPaths.delete(channelHex)
+  }
+
+  /**
+   * Determina duração de exclusão baseado no código de falha
+   */
+  private getExclusionDuration(failureCode: FailureCode): number {
+    switch (failureCode) {
+      // Erros temporários - exclusão curta
+      case FailureCode.TEMPORARY_NODE_FAILURE:
+      case FailureCode.TEMPORARY_CHANNEL_FAILURE:
+        return PathExclusionManager.SHORT_EXCLUSION_DURATION_MS
+
+      // Erros de liquidez - exclusão média
+      case FailureCode.AMOUNT_BELOW_MINIMUM:
+      case FailureCode.INSUFFICIENT_BALANCE:
+        return PathExclusionManager.DEFAULT_EXCLUSION_DURATION_MS
+
+      // Erros graves - exclusão longa
+      case FailureCode.PERMANENT_NODE_FAILURE:
+      case FailureCode.PERMANENT_CHANNEL_FAILURE:
+      case FailureCode.REQUIRED_NODE_FEATURE_MISSING:
+      case FailureCode.REQUIRED_CHANNEL_FEATURE_MISSING:
+        return PathExclusionManager.LONG_EXCLUSION_DURATION_MS
+
+      // Erros desconhecidos - exclusão média
+      default:
+        return PathExclusionManager.DEFAULT_EXCLUSION_DURATION_MS
+    }
+  }
+
+  /**
+   * Determina se deve excluir o node baseado no erro
+   */
+  private shouldExcludeNode(failureCode: FailureCode): boolean {
+    switch (failureCode) {
+      case FailureCode.PERMANENT_NODE_FAILURE:
+      case FailureCode.REQUIRED_NODE_FEATURE_MISSING:
+      case FailureCode.TEMPORARY_NODE_FAILURE:
+        return true
+      default:
+        return false
+    }
+  }
+}
+
+/**
+ * Estratégias de splitting dinâmico
+ */
+export enum SplitStrategy {
+  /** Dividir igualmente */
+  EQUAL = 'equal',
+  /** Baseado em liquidez conhecida */
+  LIQUIDITY_BASED = 'liquidity_based',
+  /** Baseado em taxa de sucesso */
+  SUCCESS_RATE_BASED = 'success_rate_based',
+  /** Híbrido (liquidez + sucesso) */
+  HYBRID = 'hybrid',
+  /** Adaptativo (muda baseado em falhas) */
+  ADAPTIVE = 'adaptive',
+}
+
+/**
+ * Resultado de análise de erro de pagamento
+ */
+export interface PaymentErrorAnalysis {
+  /** Código de falha original */
+  originalCode: FailureCode
+  /** Se é erro recuperável */
+  isRecoverable: boolean
+  /** Ação recomendada */
+  recommendedAction: 'retry' | 'resplit' | 'abort' | 'wait'
+  /** Canal a excluir (se aplicável) */
+  channelToExclude?: Uint8Array
+  /** Node a excluir (se aplicável) */
+  nodeToExclude?: Uint8Array
+  /** Novo valor sugerido para tentar */
+  suggestedAmountMsat?: bigint
+  /** Delay antes de retry */
+  retryDelayMs: number
+  /** Mensagem de erro legível */
+  humanReadableError: string
+}
+
+/**
+ * Analisa erro de pagamento e determina melhor ação
+ */
+export function analyzePaymentError(
+  failureCode: FailureCode,
+  failingChannel?: Uint8Array,
+  failingNode?: Uint8Array,
+  attemptedAmountMsat?: bigint,
+  retryCount: number = 0,
+): PaymentErrorAnalysis {
+  const baseDelay = 100 * Math.pow(2, Math.min(retryCount, 5)) // Exponential backoff
+
+  switch (failureCode) {
+    // Erros de liquidez - pode tentar com valor menor
+    case FailureCode.TEMPORARY_CHANNEL_FAILURE:
+      return {
+        originalCode: failureCode,
+        isRecoverable: true,
+        recommendedAction: 'resplit',
+        channelToExclude: failingChannel,
+        suggestedAmountMsat: attemptedAmountMsat ? attemptedAmountMsat / 2n : undefined,
+        retryDelayMs: baseDelay,
+        humanReadableError: 'Canal temporariamente indisponível - tentando rota alternativa',
+      }
+
+    case FailureCode.AMOUNT_BELOW_MINIMUM:
+      return {
+        originalCode: failureCode,
+        isRecoverable: false,
+        recommendedAction: 'abort',
+        retryDelayMs: 0,
+        humanReadableError: 'Valor abaixo do mínimo do canal',
+      }
+
+    case FailureCode.INSUFFICIENT_BALANCE:
+      return {
+        originalCode: failureCode,
+        isRecoverable: true,
+        recommendedAction: 'resplit',
+        channelToExclude: failingChannel,
+        suggestedAmountMsat: attemptedAmountMsat ? (attemptedAmountMsat * 3n) / 4n : undefined,
+        retryDelayMs: baseDelay,
+        humanReadableError: 'Liquidez insuficiente - dividindo pagamento',
+      }
+
+    // Erros de node - tentar evitar node
+    case FailureCode.TEMPORARY_NODE_FAILURE:
+      return {
+        originalCode: failureCode,
+        isRecoverable: true,
+        recommendedAction: 'retry',
+        nodeToExclude: failingNode,
+        retryDelayMs: baseDelay * 2,
+        humanReadableError: 'Node temporariamente indisponível',
+      }
+
+    case FailureCode.PERMANENT_NODE_FAILURE:
+      return {
+        originalCode: failureCode,
+        isRecoverable: retryCount < 2, // Pode tentar outra rota
+        recommendedAction: retryCount < 2 ? 'retry' : 'abort',
+        nodeToExclude: failingNode,
+        retryDelayMs: baseDelay * 3,
+        humanReadableError: 'Node permanentemente indisponível',
+      }
+
+    // Erros de feature - provavelmente fatal
+    case FailureCode.REQUIRED_NODE_FEATURE_MISSING:
+    case FailureCode.REQUIRED_CHANNEL_FEATURE_MISSING:
+      return {
+        originalCode: failureCode,
+        isRecoverable: false,
+        recommendedAction: 'abort',
+        nodeToExclude: failingNode,
+        retryDelayMs: 0,
+        humanReadableError: 'Feature requerida não suportada',
+      }
+
+    // Erros de CLTV - pode ajustar e tentar de novo
+    case FailureCode.INCORRECT_CLTV_EXPIRY:
+    case FailureCode.EXPIRY_TOO_SOON:
+      return {
+        originalCode: failureCode,
+        isRecoverable: true,
+        recommendedAction: 'retry',
+        channelToExclude: failingChannel,
+        retryDelayMs: baseDelay,
+        humanReadableError: 'Erro de timing - ajustando parâmetros',
+      }
+
+    // Erro de MPP - timeout de partes
+    case FailureCode.MPP_TIMEOUT:
+      return {
+        originalCode: failureCode,
+        isRecoverable: true,
+        recommendedAction: 'retry',
+        retryDelayMs: baseDelay * 2,
+        humanReadableError: 'Timeout de pagamento multipart - tentando novamente',
+      }
+
+    // Destino não encontrado
+    case FailureCode.UNKNOWN_NEXT_PEER:
+      return {
+        originalCode: failureCode,
+        isRecoverable: false,
+        recommendedAction: 'abort',
+        retryDelayMs: 0,
+        humanReadableError: 'Destino não encontrado na rede',
+      }
+
+    // Erro desconhecido
+    default:
+      return {
+        originalCode: failureCode,
+        isRecoverable: retryCount < 3,
+        recommendedAction: retryCount < 3 ? 'retry' : 'abort',
+        channelToExclude: failingChannel,
+        retryDelayMs: baseDelay * 2,
+        humanReadableError: `Erro de pagamento: ${FailureCode[failureCode] || failureCode}`,
+      }
+  }
+}
+
 /**
  * MPP Payment Manager
  * Handles splitting, routing, and tracking of multi-path payments
@@ -1060,3 +1467,383 @@ function decodeTu64(data: Uint8Array): bigint {
 // Export for testing
 export { encodeTu64, decodeTu64, generatePartId, uint8ArrayToHex }
 export type { PendingMppPayment, IncomingMppHtlc, MppReceiveResult, TimedOutPayment }
+
+// ==========================================
+// DYNAMIC SPLITTER
+// ==========================================
+
+/**
+ * Histórico de tentativa de pagamento para aprendizado
+ */
+export interface PaymentAttemptHistory {
+  amountMsat: bigint
+  channelId: Uint8Array
+  success: boolean
+  timestamp: number
+  feePaid?: bigint
+}
+
+/**
+ * Splitter dinâmico baseado em liquidez e histórico
+ */
+export class DynamicSplitter {
+  private attemptHistory: PaymentAttemptHistory[] = []
+  private channelSuccessRates: Map<string, { successes: number; failures: number }> = new Map()
+  private maxHistorySize: number = 1000
+
+  /**
+   * Registra tentativa de pagamento
+   */
+  recordAttempt(attempt: PaymentAttemptHistory): void {
+    this.attemptHistory.push(attempt)
+
+    // Manter tamanho do histórico
+    if (this.attemptHistory.length > this.maxHistorySize) {
+      this.attemptHistory = this.attemptHistory.slice(-this.maxHistorySize)
+    }
+
+    // Atualizar taxa de sucesso do canal
+    const channelHex = uint8ArrayToHex(attempt.channelId)
+    const stats = this.channelSuccessRates.get(channelHex) || { successes: 0, failures: 0 }
+
+    if (attempt.success) {
+      stats.successes++
+    } else {
+      stats.failures++
+    }
+
+    this.channelSuccessRates.set(channelHex, stats)
+  }
+
+  /**
+   * Calcula split dinâmico baseado em estratégia
+   */
+  calculateDynamicSplit(
+    totalAmountMsat: bigint,
+    availableChannels: ChannelLiquidity[],
+    strategy: SplitStrategy,
+    config: MppConfig,
+  ): MppPartAllocation[] {
+    switch (strategy) {
+      case SplitStrategy.EQUAL:
+        return this.splitEqual(totalAmountMsat, availableChannels.length, config)
+
+      case SplitStrategy.LIQUIDITY_BASED:
+        return this.splitByLiquidity(totalAmountMsat, availableChannels, config)
+
+      case SplitStrategy.SUCCESS_RATE_BASED:
+        return this.splitBySuccessRate(totalAmountMsat, availableChannels, config)
+
+      case SplitStrategy.HYBRID:
+        return this.splitHybrid(totalAmountMsat, availableChannels, config)
+
+      case SplitStrategy.ADAPTIVE:
+        return this.splitAdaptive(totalAmountMsat, availableChannels, config)
+
+      default:
+        return this.splitEqual(totalAmountMsat, availableChannels.length, config)
+    }
+  }
+
+  /**
+   * Split igual
+   */
+  private splitEqual(
+    totalAmountMsat: bigint,
+    numChannels: number,
+    config: MppConfig,
+  ): MppPartAllocation[] {
+    const numParts = Math.min(numChannels, config.maxParts)
+    const baseAmount = totalAmountMsat / BigInt(numParts)
+    const remainder = totalAmountMsat % BigInt(numParts)
+
+    const parts: MppPartAllocation[] = []
+
+    for (let i = 0; i < numParts; i++) {
+      parts.push({
+        index: i,
+        amountMsat: i === 0 ? baseAmount + remainder : baseAmount,
+      })
+    }
+
+    return parts
+  }
+
+  /**
+   * Split baseado em liquidez disponível
+   */
+  private splitByLiquidity(
+    totalAmountMsat: bigint,
+    channels: ChannelLiquidity[],
+    config: MppConfig,
+  ): MppPartAllocation[] {
+    const parts: MppPartAllocation[] = []
+    let remainingAmount = totalAmountMsat
+
+    // Ordenar por liquidez disponível
+    const sortedChannels = [...channels].sort((a, b) => Number(b.availableMsat - a.availableMsat))
+
+    for (
+      let i = 0;
+      i < Math.min(sortedChannels.length, config.maxParts) && remainingAmount > 0n;
+      i++
+    ) {
+      const channel = sortedChannels[i]
+
+      // Usar no máximo 80% da liquidez disponível para margem de segurança
+      const maxForChannel = (channel.availableMsat * 80n) / 100n
+      const amountForPart = remainingAmount < maxForChannel ? remainingAmount : maxForChannel
+
+      if (amountForPart >= config.minPartSizeMsat) {
+        parts.push({
+          index: i,
+          amountMsat: amountForPart,
+          preferredChannelId: channel.channelId,
+        })
+        remainingAmount -= amountForPart
+      }
+    }
+
+    // Se sobrou, adicionar ao primeiro part
+    if (remainingAmount > 0n && parts.length > 0) {
+      parts[0].amountMsat += remainingAmount
+    }
+
+    return parts
+  }
+
+  /**
+   * Split baseado em taxa de sucesso histórica
+   */
+  private splitBySuccessRate(
+    totalAmountMsat: bigint,
+    channels: ChannelLiquidity[],
+    config: MppConfig,
+  ): MppPartAllocation[] {
+    // Calcular score baseado em sucesso
+    const channelsWithScore = channels.map(ch => {
+      const channelHex = uint8ArrayToHex(ch.channelId)
+      const stats = this.channelSuccessRates.get(channelHex)
+
+      let successRate = 0.5 // Default 50%
+      if (stats && stats.successes + stats.failures > 0) {
+        successRate = stats.successes / (stats.successes + stats.failures)
+      }
+
+      return {
+        channel: ch,
+        score: successRate * Number(ch.availableMsat),
+      }
+    })
+
+    // Ordenar por score
+    channelsWithScore.sort((a, b) => b.score - a.score)
+
+    const parts: MppPartAllocation[] = []
+    let remainingAmount = totalAmountMsat
+    const totalScore = channelsWithScore.reduce((sum, c) => sum + c.score, 0)
+
+    for (
+      let i = 0;
+      i < Math.min(channelsWithScore.length, config.maxParts) && remainingAmount > 0n;
+      i++
+    ) {
+      const { channel, score } = channelsWithScore[i]
+
+      // Proporção baseada no score
+      const proportion = totalScore > 0 ? score / totalScore : 1 / channelsWithScore.length
+      let amountForPart = BigInt(Math.floor(Number(totalAmountMsat) * proportion))
+
+      // Limitar pelo restante e mínimo
+      if (amountForPart > remainingAmount) amountForPart = remainingAmount
+      if (amountForPart < config.minPartSizeMsat && remainingAmount >= config.minPartSizeMsat) {
+        amountForPart = config.minPartSizeMsat
+      }
+
+      if (amountForPart >= config.minPartSizeMsat) {
+        parts.push({
+          index: i,
+          amountMsat: amountForPart,
+          preferredChannelId: channel.channelId,
+        })
+        remainingAmount -= amountForPart
+      }
+    }
+
+    // Se sobrou, adicionar ao primeiro part
+    if (remainingAmount > 0n && parts.length > 0) {
+      parts[0].amountMsat += remainingAmount
+    }
+
+    return parts
+  }
+
+  /**
+   * Split híbrido (liquidez + sucesso)
+   */
+  private splitHybrid(
+    totalAmountMsat: bigint,
+    channels: ChannelLiquidity[],
+    config: MppConfig,
+  ): MppPartAllocation[] {
+    // Combinar liquidez com taxa de sucesso
+    const channelsWithScore = channels.map(ch => {
+      const channelHex = uint8ArrayToHex(ch.channelId)
+      const stats = this.channelSuccessRates.get(channelHex)
+
+      let successRate = ch.successRate
+      if (stats && stats.successes + stats.failures >= 5) {
+        // Usar histórico se tiver dados suficientes
+        successRate = stats.successes / (stats.successes + stats.failures)
+      }
+
+      // Score = raiz(liquidez) * successRate^2 (favorece alta taxa de sucesso)
+      const score = Math.sqrt(Number(ch.availableMsat)) * Math.pow(successRate, 2)
+
+      return { channel: ch, score }
+    })
+
+    channelsWithScore.sort((a, b) => b.score - a.score)
+
+    const parts: MppPartAllocation[] = []
+    let remainingAmount = totalAmountMsat
+
+    for (
+      let i = 0;
+      i < Math.min(channelsWithScore.length, config.maxParts) && remainingAmount > 0n;
+      i++
+    ) {
+      const { channel } = channelsWithScore[i]
+
+      // Usar liquidez disponível como limite
+      const maxForChannel = (channel.availableMsat * 85n) / 100n
+      const amountForPart = remainingAmount < maxForChannel ? remainingAmount : maxForChannel
+
+      if (amountForPart >= config.minPartSizeMsat) {
+        parts.push({
+          index: i,
+          amountMsat: amountForPart,
+          preferredChannelId: channel.channelId,
+        })
+        remainingAmount -= amountForPart
+      }
+    }
+
+    if (remainingAmount > 0n && parts.length > 0) {
+      parts[0].amountMsat += remainingAmount
+    }
+
+    return parts
+  }
+
+  /**
+   * Split adaptativo - muda estratégia baseado em falhas recentes
+   */
+  private splitAdaptive(
+    totalAmountMsat: bigint,
+    channels: ChannelLiquidity[],
+    config: MppConfig,
+  ): MppPartAllocation[] {
+    // Analisar falhas recentes
+    const recentFailures = this.attemptHistory.filter(
+      a => !a.success && Date.now() - a.timestamp < 10 * 60 * 1000,
+    ).length
+
+    const recentTotal = this.attemptHistory.filter(
+      a => Date.now() - a.timestamp < 10 * 60 * 1000,
+    ).length
+
+    const recentFailureRate = recentTotal > 0 ? recentFailures / recentTotal : 0
+
+    // Se muitas falhas recentes, ser mais conservador
+    if (recentFailureRate > 0.5) {
+      // Usar mais partes menores
+      const conservativeConfig = {
+        ...config,
+        maxParts: Math.min(config.maxParts * 2, 10),
+        minPartSizeMsat: config.minPartSizeMsat / 2n,
+      }
+      return this.splitByLiquidity(totalAmountMsat, channels, conservativeConfig)
+    }
+
+    // Se taxa de sucesso alta, pode ser mais agressivo
+    if (recentFailureRate < 0.1 && recentTotal > 5) {
+      return this.splitBySuccessRate(totalAmountMsat, channels, config)
+    }
+
+    // Default: híbrido
+    return this.splitHybrid(totalAmountMsat, channels, config)
+  }
+
+  /**
+   * Resplit após falha - divide parte que falhou em partes menores
+   */
+  resplitFailedPart(
+    failedAmount: bigint,
+    failedChannelId: Uint8Array,
+    availableChannels: ChannelLiquidity[],
+    config: MppConfig,
+  ): MppPartAllocation[] {
+    // Filtrar canal que falhou
+    const channelsWithoutFailed = availableChannels.filter(
+      ch => uint8ArrayToHex(ch.channelId) !== uint8ArrayToHex(failedChannelId),
+    )
+
+    if (channelsWithoutFailed.length === 0) {
+      // Tentar o mesmo canal com valor menor
+      return [
+        {
+          index: 0,
+          amountMsat: failedAmount / 2n,
+          preferredChannelId: failedChannelId,
+        },
+        {
+          index: 1,
+          amountMsat: failedAmount - failedAmount / 2n,
+        },
+      ]
+    }
+
+    // Dividir em 2 partes usando canais alternativos
+    const numNewParts = Math.min(2, channelsWithoutFailed.length)
+    const amountPerPart = failedAmount / BigInt(numNewParts)
+    const remainder = failedAmount % BigInt(numNewParts)
+
+    const parts: MppPartAllocation[] = []
+
+    for (let i = 0; i < numNewParts; i++) {
+      parts.push({
+        index: i,
+        amountMsat: i === 0 ? amountPerPart + remainder : amountPerPart,
+        preferredChannelId: channelsWithoutFailed[i].channelId,
+      })
+    }
+
+    return parts
+  }
+
+  /**
+   * Limpa histórico antigo
+   */
+  pruneHistory(maxAgeMs: number = 24 * 60 * 60 * 1000): void {
+    const cutoff = Date.now() - maxAgeMs
+    this.attemptHistory = this.attemptHistory.filter(a => a.timestamp > cutoff)
+  }
+
+  /**
+   * Retorna estatísticas de sucesso por canal
+   */
+  getChannelStats(): Map<string, { successRate: number; attempts: number }> {
+    const result = new Map<string, { successRate: number; attempts: number }>()
+
+    for (const [channelHex, stats] of this.channelSuccessRates) {
+      const total = stats.successes + stats.failures
+      result.set(channelHex, {
+        successRate: total > 0 ? stats.successes / total : 0,
+        attempts: total,
+      })
+    }
+
+    return result
+  }
+}

@@ -238,3 +238,44 @@ export {
   type NewTxCallback,
   type MonitorOptions,
 } from './electrum'
+
+// Channel Backup & Restore (BOLT #2)
+export {
+  // Constants
+  CHANNEL_BACKUP_VERSION,
+  KNOWN_BACKUP_VERSIONS,
+  BACKUP_MAGIC,
+  // Types
+  RestoreState,
+  type ChannelBackupData,
+  type FullBackup,
+  type EncryptedBackup,
+  type RestoreContext,
+  type RestoreResult,
+  type SweepInfo,
+  type RestoreSummary,
+  // Serialization
+  serializeChannelBackup,
+  deserializeChannelBackup,
+  serializeFullBackup,
+  deserializeFullBackup,
+  // Encryption
+  encryptBackup,
+  decryptBackup,
+  exportEncryptedBackup,
+  importEncryptedBackup,
+  exportSingleChannelBackup,
+  importSingleChannelBackup,
+  // Utility
+  deriveChannelIdFromFunding,
+  validateChannelBackup,
+  getBackupChecksum,
+  createBackupFromPersistedChannel,
+  // Restore
+  prepareChannelRestore,
+  createRestoreReestablishMessage,
+  prepareSweepInfo,
+  isChannelCloseTransaction,
+  calculateSweepAddress,
+  createRestoreSummary,
+} from './backup'

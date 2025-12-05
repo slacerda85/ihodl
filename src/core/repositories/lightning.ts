@@ -1,4 +1,15 @@
 import { MMKV } from 'react-native-mmkv'
+import {
+  type ChannelBackupData,
+  type FullBackup,
+  type RestoreContext,
+  CHANNEL_BACKUP_VERSION,
+  exportEncryptedBackup,
+  importEncryptedBackup,
+  createBackupFromPersistedChannel,
+  prepareChannelRestore,
+  RestoreState,
+} from '@/core/lib/lightning/backup'
 
 // Import types from persistence
 export interface PersistedChannel {
@@ -83,6 +94,9 @@ const STORAGE_KEYS = {
   ROUTING_GRAPH: 'routing_graph',
   WATCHTOWER_CHANNELS: 'watchtower_channels',
   WATCHTOWER_STATS: 'watchtower_stats',
+  CHANNEL_BACKUPS: 'channel_backups',
+  RESTORE_CONTEXTS: 'restore_contexts',
+  LAST_BACKUP_TIME: 'last_backup_time',
 } as const
 
 // Watchtower types
@@ -162,6 +176,20 @@ interface LightningRepositoryInterface {
     nodes: Record<string, RoutingNode>
     channels: Record<string, RoutingChannel>
   }
+
+  // Backup & Restore
+  saveChannelBackup(channelId: string, backup: ChannelBackupData): void
+  getChannelBackup(channelId: string): ChannelBackupData | null
+  getAllChannelBackups(): Record<string, ChannelBackupData>
+  deleteChannelBackup(channelId: string): void
+  createFullBackup(): FullBackup
+  exportEncryptedBackup(password: string): string
+  importEncryptedBackup(data: string, password: string): FullBackup
+  saveRestoreContext(channelId: string, context: RestoreContext): void
+  getRestoreContext(channelId: string): RestoreContext | null
+  getAllRestoreContexts(): Record<string, RestoreContext>
+  updateLastBackupTime(): void
+  getLastBackupTime(): number | null
 
   // Utility
   clearAll(): void
@@ -464,6 +492,203 @@ export class LightningRepository implements LightningRepositoryInterface {
     lightningStorage.delete(STORAGE_KEYS.WATCHTOWER_CHANNELS)
     lightningStorage.delete(STORAGE_KEYS.WATCHTOWER_STATS)
   }
+
+  // ==========================================
+  // CHANNEL BACKUP & RESTORE
+  // ==========================================
+
+  /**
+   * Salva backup de um canal
+   */
+  saveChannelBackup(channelId: string, backup: ChannelBackupData): void {
+    const backups = this.getAllChannelBackups()
+    backups[channelId] = backup
+    lightningStorage.set(STORAGE_KEYS.CHANNEL_BACKUPS, JSON.stringify(backups))
+    this.updateLastBackupTime()
+  }
+
+  /**
+   * Obtém backup de um canal
+   */
+  getChannelBackup(channelId: string): ChannelBackupData | null {
+    const backups = this.getAllChannelBackups()
+    return backups[channelId] || null
+  }
+
+  /**
+   * Obtém todos os backups de canais
+   */
+  getAllChannelBackups(): Record<string, ChannelBackupData> {
+    try {
+      const data = lightningStorage.getString(STORAGE_KEYS.CHANNEL_BACKUPS)
+      return data ? JSON.parse(data) : {}
+    } catch (error) {
+      console.error('[lightning-repo] Failed to parse channel backups:', error)
+      lightningStorage.delete(STORAGE_KEYS.CHANNEL_BACKUPS)
+      return {}
+    }
+  }
+
+  /**
+   * Remove backup de um canal
+   */
+  deleteChannelBackup(channelId: string): void {
+    const backups = this.getAllChannelBackups()
+    delete backups[channelId]
+    lightningStorage.set(STORAGE_KEYS.CHANNEL_BACKUPS, JSON.stringify(backups))
+  }
+
+  /**
+   * Cria backup completo de todos os canais
+   */
+  createFullBackup(): FullBackup {
+    const channels = this.findAllChannels()
+    const peers = this.findAllPeers()
+    const seeds = this.getAllChannelSeeds()
+    const nodeKey = this.getNodeKey()
+
+    const channelBackups: ChannelBackupData[] = []
+
+    for (const [channelId, channel] of Object.entries(channels)) {
+      const seed = seeds[channelId]
+      const peer = peers[channel.nodeId]
+
+      if (!seed || !peer || !channel.fundingTxid) {
+        console.warn(`[lightning-repo] Skipping channel ${channelId} - missing data`)
+        continue
+      }
+
+      try {
+        const backup = createBackupFromPersistedChannel(
+          channel,
+          {
+            localPrivkey: nodeKey ? uint8ArrayToHex(nodeKey) : '',
+            channelSeed: seed,
+          },
+          {
+            host: peer.host,
+            port: peer.port,
+          },
+        )
+        channelBackups.push(backup)
+      } catch (error) {
+        console.error(`[lightning-repo] Failed to create backup for channel ${channelId}:`, error)
+      }
+    }
+
+    return {
+      version: CHANNEL_BACKUP_VERSION,
+      createdAt: Date.now(),
+      nodePrivkey: nodeKey ? uint8ArrayToHex(nodeKey) : undefined,
+      channels: channelBackups,
+    }
+  }
+
+  /**
+   * Exporta backup encriptado como string
+   */
+  exportEncryptedBackup(password: string): string {
+    const backup = this.createFullBackup()
+    return exportEncryptedBackup(backup, password)
+  }
+
+  /**
+   * Importa backup encriptado
+   */
+  importEncryptedBackup(data: string, password: string): FullBackup {
+    return importEncryptedBackup(data, password)
+  }
+
+  /**
+   * Salva contexto de restauração
+   */
+  saveRestoreContext(channelId: string, context: RestoreContext): void {
+    const contexts = this.getAllRestoreContexts()
+    contexts[channelId] = context
+    lightningStorage.set(STORAGE_KEYS.RESTORE_CONTEXTS, JSON.stringify(contexts))
+  }
+
+  /**
+   * Obtém contexto de restauração
+   */
+  getRestoreContext(channelId: string): RestoreContext | null {
+    const contexts = this.getAllRestoreContexts()
+    return contexts[channelId] || null
+  }
+
+  /**
+   * Obtém todos os contextos de restauração
+   */
+  getAllRestoreContexts(): Record<string, RestoreContext> {
+    try {
+      const data = lightningStorage.getString(STORAGE_KEYS.RESTORE_CONTEXTS)
+      return data ? JSON.parse(data) : {}
+    } catch (error) {
+      console.error('[lightning-repo] Failed to parse restore contexts:', error)
+      lightningStorage.delete(STORAGE_KEYS.RESTORE_CONTEXTS)
+      return {}
+    }
+  }
+
+  /**
+   * Inicia restauração de todos os canais de um backup
+   */
+  startBackupRestore(backup: FullBackup): RestoreContext[] {
+    const contexts: RestoreContext[] = []
+
+    for (const channelBackup of backup.channels) {
+      const context = prepareChannelRestore(channelBackup)
+      this.saveRestoreContext(channelBackup.channelId, context)
+      contexts.push(context)
+    }
+
+    return contexts
+  }
+
+  /**
+   * Atualiza estado de restauração de um canal
+   */
+  updateRestoreState(channelId: string, state: RestoreState, error?: string): void {
+    const context = this.getRestoreContext(channelId)
+    if (context) {
+      context.state = state
+      context.lastAttempt = Date.now()
+      context.attempts += 1
+      if (error) {
+        context.error = error
+      }
+      this.saveRestoreContext(channelId, context)
+    }
+  }
+
+  /**
+   * Atualiza timestamp do último backup
+   */
+  updateLastBackupTime(): void {
+    lightningStorage.set(STORAGE_KEYS.LAST_BACKUP_TIME, Date.now().toString())
+  }
+
+  /**
+   * Obtém timestamp do último backup
+   */
+  getLastBackupTime(): number | null {
+    const data = lightningStorage.getString(STORAGE_KEYS.LAST_BACKUP_TIME)
+    return data ? parseInt(data, 10) : null
+  }
+
+  /**
+   * Limpa dados de restauração
+   */
+  clearRestoreData(): void {
+    lightningStorage.delete(STORAGE_KEYS.RESTORE_CONTEXTS)
+  }
+}
+
+// Helper function
+function uint8ArrayToHex(array: Uint8Array): string {
+  return Array.from(array)
+    .map(byte => byte.toString(16).padStart(2, '0'))
+    .join('')
 }
 
 const lightningRepository = new LightningRepository()

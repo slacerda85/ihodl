@@ -716,3 +716,530 @@ export function supportsTrampolineRouting(features: Uint8Array): boolean {
   const trampolineByte = features[features.length - 8] // Big-endian
   return (trampolineByte & 0x01) !== 0 || (trampolineByte & 0x02) !== 0
 }
+
+// ==========================================
+// ENHANCED TRAMPOLINE ROUTING
+// ==========================================
+
+/**
+ * Estatísticas de performance de um nó trampoline
+ */
+export interface TrampolineNodeStats {
+  nodeId: string
+  totalAttempts: number
+  successfulPayments: number
+  failedPayments: number
+  avgResponseTimeMs: number
+  lastUsed: number
+  lastFailure?: number
+  failureReasons: Map<number, number> // errorCode -> count
+}
+
+/**
+ * Resultado de seleção de nó trampoline
+ */
+export interface TrampolineSelection {
+  primary: TrampolineNode
+  fallbacks: TrampolineNode[]
+  strategy: TrampolineSelectionStrategy
+}
+
+export enum TrampolineSelectionStrategy {
+  LOWEST_FEE = 'lowest_fee',
+  HIGHEST_SUCCESS_RATE = 'highest_success',
+  LOWEST_LATENCY = 'lowest_latency',
+  ROUND_ROBIN = 'round_robin',
+  WEIGHTED_RANDOM = 'weighted_random',
+}
+
+/**
+ * Configuração do Enhanced Trampoline Router
+ */
+export interface EnhancedTrampolineConfig {
+  maxRetries: number
+  enableFallbackToGossip: boolean
+  preferredStrategy: TrampolineSelectionStrategy
+  maxFeePpm: number
+  minSuccessRate: number
+  failureCooldownMs: number
+}
+
+const DEFAULT_ENHANCED_CONFIG: EnhancedTrampolineConfig = {
+  maxRetries: 4,
+  enableFallbackToGossip: true,
+  preferredStrategy: TrampolineSelectionStrategy.WEIGHTED_RANDOM,
+  maxFeePpm: 5000, // 0.5%
+  minSuccessRate: 0.5,
+  failureCooldownMs: 60000, // 1 minuto
+}
+
+/**
+ * Gerenciador de estatísticas de nós trampoline
+ */
+export class TrampolineStatsManager {
+  private stats: Map<string, TrampolineNodeStats> = new Map()
+
+  /**
+   * Registra tentativa de pagamento
+   */
+  recordAttempt(nodeId: Uint8Array, startTime: number): void {
+    const nodeIdHex = uint8ArrayToHex(nodeId)
+    const stat = this.getOrCreate(nodeIdHex)
+    stat.totalAttempts++
+    stat.lastUsed = Date.now()
+    this.stats.set(nodeIdHex, stat)
+  }
+
+  /**
+   * Registra sucesso de pagamento
+   */
+  recordSuccess(nodeId: Uint8Array, responseTimeMs: number): void {
+    const nodeIdHex = uint8ArrayToHex(nodeId)
+    const stat = this.getOrCreate(nodeIdHex)
+    stat.successfulPayments++
+
+    // Atualizar média de tempo de resposta
+    const totalResponses = stat.successfulPayments
+    stat.avgResponseTimeMs =
+      (stat.avgResponseTimeMs * (totalResponses - 1) + responseTimeMs) / totalResponses
+
+    this.stats.set(nodeIdHex, stat)
+  }
+
+  /**
+   * Registra falha de pagamento
+   */
+  recordFailure(nodeId: Uint8Array, errorCode: number): void {
+    const nodeIdHex = uint8ArrayToHex(nodeId)
+    const stat = this.getOrCreate(nodeIdHex)
+    stat.failedPayments++
+    stat.lastFailure = Date.now()
+
+    // Contar razão de falha
+    const currentCount = stat.failureReasons.get(errorCode) || 0
+    stat.failureReasons.set(errorCode, currentCount + 1)
+
+    this.stats.set(nodeIdHex, stat)
+  }
+
+  /**
+   * Calcula taxa de sucesso de um nó
+   */
+  getSuccessRate(nodeId: Uint8Array): number {
+    const nodeIdHex = uint8ArrayToHex(nodeId)
+    const stat = this.stats.get(nodeIdHex)
+
+    if (!stat || stat.totalAttempts === 0) {
+      return 0.5 // Default 50% para nós sem histórico
+    }
+
+    return stat.successfulPayments / stat.totalAttempts
+  }
+
+  /**
+   * Verifica se nó está em cooldown por falha recente
+   */
+  isInCooldown(nodeId: Uint8Array, cooldownMs: number): boolean {
+    const nodeIdHex = uint8ArrayToHex(nodeId)
+    const stat = this.stats.get(nodeIdHex)
+
+    if (!stat || !stat.lastFailure) return false
+
+    return Date.now() - stat.lastFailure < cooldownMs
+  }
+
+  /**
+   * Retorna estatísticas de um nó
+   */
+  getStats(nodeId: Uint8Array): TrampolineNodeStats | undefined {
+    return this.stats.get(uint8ArrayToHex(nodeId))
+  }
+
+  /**
+   * Retorna todas as estatísticas
+   */
+  getAllStats(): TrampolineNodeStats[] {
+    return Array.from(this.stats.values())
+  }
+
+  private getOrCreate(nodeIdHex: string): TrampolineNodeStats {
+    let stat = this.stats.get(nodeIdHex)
+    if (!stat) {
+      stat = {
+        nodeId: nodeIdHex,
+        totalAttempts: 0,
+        successfulPayments: 0,
+        failedPayments: 0,
+        avgResponseTimeMs: 0,
+        lastUsed: 0,
+        failureReasons: new Map(),
+      }
+    }
+    return stat
+  }
+
+  /**
+   * Limpa estatísticas antigas
+   */
+  pruneOldStats(maxAgeMs: number = 7 * 24 * 60 * 60 * 1000): void {
+    const cutoff = Date.now() - maxAgeMs
+    for (const [nodeId, stat] of this.stats) {
+      if (stat.lastUsed < cutoff) {
+        this.stats.delete(nodeId)
+      }
+    }
+  }
+}
+
+/**
+ * Seletor inteligente de nós trampoline
+ */
+export class SmartTrampolineSelector {
+  private statsManager: TrampolineStatsManager
+  private availableNodes: TrampolineNode[]
+  private roundRobinIndex: number = 0
+  private config: EnhancedTrampolineConfig
+
+  constructor(
+    availableNodes: TrampolineNode[],
+    statsManager?: TrampolineStatsManager,
+    config?: Partial<EnhancedTrampolineConfig>,
+  ) {
+    this.availableNodes = availableNodes
+    this.statsManager = statsManager || new TrampolineStatsManager()
+    this.config = { ...DEFAULT_ENHANCED_CONFIG, ...config }
+  }
+
+  /**
+   * Seleciona melhor nó trampoline baseado na estratégia
+   */
+  select(
+    amountMsat: bigint,
+    destinationNodeId?: Uint8Array,
+    excludeNodeIds?: Uint8Array[],
+  ): TrampolineSelection | null {
+    // Filtrar nós excluídos e em cooldown
+    const excludeSet = new Set(excludeNodeIds?.map(n => uint8ArrayToHex(n)) || [])
+    const eligibleNodes = this.availableNodes.filter(node => {
+      const nodeIdHex = uint8ArrayToHex(node.nodeId)
+      if (excludeSet.has(nodeIdHex)) return false
+      if (this.statsManager.isInCooldown(node.nodeId, this.config.failureCooldownMs)) return false
+
+      // Verificar taxa de sucesso mínima
+      const successRate = this.statsManager.getSuccessRate(node.nodeId)
+      if (successRate < this.config.minSuccessRate) return false
+
+      // Verificar fee máxima
+      const fee = this.calculateFee(node, amountMsat)
+      const feePpm = Number((fee * 1000000n) / amountMsat)
+      if (feePpm > this.config.maxFeePpm) return false
+
+      return true
+    })
+
+    if (eligibleNodes.length === 0) {
+      console.warn('[trampoline] No eligible trampoline nodes')
+      return null
+    }
+
+    // Selecionar baseado na estratégia
+    let sortedNodes: TrampolineNode[]
+
+    switch (this.config.preferredStrategy) {
+      case TrampolineSelectionStrategy.LOWEST_FEE:
+        sortedNodes = this.sortByLowestFee(eligibleNodes, amountMsat)
+        break
+
+      case TrampolineSelectionStrategy.HIGHEST_SUCCESS_RATE:
+        sortedNodes = this.sortBySuccessRate(eligibleNodes)
+        break
+
+      case TrampolineSelectionStrategy.LOWEST_LATENCY:
+        sortedNodes = this.sortByLatency(eligibleNodes)
+        break
+
+      case TrampolineSelectionStrategy.ROUND_ROBIN:
+        sortedNodes = this.getNextRoundRobin(eligibleNodes)
+        break
+
+      case TrampolineSelectionStrategy.WEIGHTED_RANDOM:
+      default:
+        sortedNodes = this.weightedRandomSort(eligibleNodes, amountMsat)
+        break
+    }
+
+    return {
+      primary: sortedNodes[0],
+      fallbacks: sortedNodes.slice(1),
+      strategy: this.config.preferredStrategy,
+    }
+  }
+
+  /**
+   * Ordena por fee mais baixa
+   */
+  private sortByLowestFee(nodes: TrampolineNode[], amountMsat: bigint): TrampolineNode[] {
+    return [...nodes].sort((a, b) => {
+      const feeA = this.calculateFee(a, amountMsat)
+      const feeB = this.calculateFee(b, amountMsat)
+      return Number(feeA - feeB)
+    })
+  }
+
+  /**
+   * Ordena por taxa de sucesso
+   */
+  private sortBySuccessRate(nodes: TrampolineNode[]): TrampolineNode[] {
+    return [...nodes].sort((a, b) => {
+      const rateA = this.statsManager.getSuccessRate(a.nodeId)
+      const rateB = this.statsManager.getSuccessRate(b.nodeId)
+      return rateB - rateA
+    })
+  }
+
+  /**
+   * Ordena por latência média
+   */
+  private sortByLatency(nodes: TrampolineNode[]): TrampolineNode[] {
+    return [...nodes].sort((a, b) => {
+      const statsA = this.statsManager.getStats(a.nodeId)
+      const statsB = this.statsManager.getStats(b.nodeId)
+      const latencyA = statsA?.avgResponseTimeMs || Infinity
+      const latencyB = statsB?.avgResponseTimeMs || Infinity
+      return latencyA - latencyB
+    })
+  }
+
+  /**
+   * Round robin simples
+   */
+  private getNextRoundRobin(nodes: TrampolineNode[]): TrampolineNode[] {
+    const result: TrampolineNode[] = []
+    const start = this.roundRobinIndex % nodes.length
+
+    for (let i = 0; i < nodes.length; i++) {
+      result.push(nodes[(start + i) % nodes.length])
+    }
+
+    this.roundRobinIndex++
+    return result
+  }
+
+  /**
+   * Seleção aleatória ponderada
+   * Combina sucesso rate, fee e latência em um score
+   */
+  private weightedRandomSort(nodes: TrampolineNode[], amountMsat: bigint): TrampolineNode[] {
+    const scored = nodes.map(node => {
+      const successRate = this.statsManager.getSuccessRate(node.nodeId)
+      const fee = this.calculateFee(node, amountMsat)
+      const feePpm = Number((fee * 1000000n) / amountMsat)
+      const stats = this.statsManager.getStats(node.nodeId)
+      const latency = stats?.avgResponseTimeMs || 1000
+
+      // Score = successRate^2 * (1 / feePpm) * (1 / log(latency))
+      // Maior score = melhor
+      const feeScore = 1000 / Math.max(feePpm, 1)
+      const latencyScore = 1 / Math.log(Math.max(latency, 2))
+      const score = Math.pow(successRate, 2) * feeScore * latencyScore
+
+      // Adicionar randomização
+      const randomFactor = 0.8 + Math.random() * 0.4 // 0.8 - 1.2
+      return { node, score: score * randomFactor }
+    })
+
+    scored.sort((a, b) => b.score - a.score)
+    return scored.map(s => s.node)
+  }
+
+  private calculateFee(node: TrampolineNode, amountMsat: bigint): bigint {
+    const proportionalFee = (amountMsat * BigInt(node.feeProportionalMillionths)) / 1000000n
+    return node.feeBaseMsat + proportionalFee
+  }
+}
+
+/**
+ * Enhanced Trampoline Router com seleção inteligente e fallback
+ */
+export class EnhancedTrampolineRouter extends TrampolineRouter {
+  private statsManager: TrampolineStatsManager
+  private selector: SmartTrampolineSelector
+  private config: EnhancedTrampolineConfig
+  private currentSelection?: TrampolineSelection
+  private paymentStartTime: number = 0
+
+  constructor(trampolineNodes?: TrampolineNode[], config?: Partial<EnhancedTrampolineConfig>) {
+    super(trampolineNodes)
+    this.config = { ...DEFAULT_ENHANCED_CONFIG, ...config }
+    this.statsManager = new TrampolineStatsManager()
+    this.selector = new SmartTrampolineSelector(
+      this.getTrampolineNodes(),
+      this.statsManager,
+      config,
+    )
+  }
+
+  /**
+   * Inicia um novo pagamento com seleção inteligente
+   */
+  startPayment(amountMsat: bigint, destinationNodeId?: Uint8Array): TrampolineSelection | null {
+    this.resetFeeLevel()
+    this.paymentStartTime = Date.now()
+
+    this.currentSelection = this.selector.select(amountMsat, destinationNodeId)
+
+    if (this.currentSelection) {
+      // Registrar tentativa
+      this.statsManager.recordAttempt(this.currentSelection.primary.nodeId, this.paymentStartTime)
+    }
+
+    return this.currentSelection
+  }
+
+  /**
+   * Registra sucesso do pagamento
+   */
+  recordPaymentSuccess(): void {
+    if (!this.currentSelection) return
+
+    const responseTime = Date.now() - this.paymentStartTime
+    this.statsManager.recordSuccess(this.currentSelection.primary.nodeId, responseTime)
+
+    console.log(
+      `[trampoline] Payment succeeded via ${this.currentSelection.primary.alias || 'unknown'} in ${responseTime}ms`,
+    )
+  }
+
+  /**
+   * Registra falha e tenta fallback
+   */
+  handlePaymentFailure(errorCode: number): TrampolineNode | null {
+    if (!this.currentSelection) return null
+
+    // Registrar falha
+    this.statsManager.recordFailure(this.currentSelection.primary.nodeId, errorCode)
+
+    console.log(
+      `[trampoline] Payment failed via ${this.currentSelection.primary.alias || 'unknown'}: error ${errorCode.toString(16)}`,
+    )
+
+    // Se é erro de fee, tentar com fee mais alta no mesmo nó
+    if (this.shouldRetryWithHigherFee(errorCode)) {
+      return this.currentSelection.primary
+    }
+
+    // Tentar próximo fallback
+    if (this.currentSelection.fallbacks.length > 0) {
+      const fallback = this.currentSelection.fallbacks.shift()!
+      this.currentSelection.primary = fallback
+      this.statsManager.recordAttempt(fallback.nodeId, Date.now())
+      return fallback
+    }
+
+    return null
+  }
+
+  /**
+   * Cria pagamento com seleção inteligente
+   */
+  createSmartTrampolinePayment(
+    destinationNodeId: Uint8Array,
+    amountMsat: bigint,
+    paymentHash: Uint8Array,
+    paymentSecret: Uint8Array,
+    currentBlockHeight: number,
+  ): { result: TrampolineOnionResult; selectedNode: TrampolineNode } | null {
+    const selection = this.startPayment(amountMsat, destinationNodeId)
+    if (!selection) return null
+
+    const result = this.createTrampolinePayment(
+      destinationNodeId,
+      amountMsat,
+      paymentHash,
+      paymentSecret,
+      currentBlockHeight,
+    )
+
+    if (!result) return null
+
+    return {
+      result,
+      selectedNode: selection.primary,
+    }
+  }
+
+  /**
+   * Retorna estatísticas de todos os nós
+   */
+  getNodeStats(): TrampolineNodeStats[] {
+    return this.statsManager.getAllStats()
+  }
+
+  /**
+   * Retorna melhor nó baseado em histórico
+   */
+  getBestNode(amountMsat: bigint): TrampolineNode | null {
+    const selection = this.selector.select(amountMsat)
+    return selection?.primary || null
+  }
+}
+
+/**
+ * Rota com múltiplos trampolines (E2E trampoline routing)
+ */
+export interface MultiTrampolineRoute {
+  trampolines: TrampolineNode[]
+  totalAmountMsat: bigint
+  totalFeeMsat: bigint
+  totalCltvDelta: number
+}
+
+/**
+ * Cria rota com múltiplos nós trampoline (para maior privacidade)
+ */
+export function createMultiTrampolineRoute(
+  trampolines: TrampolineNode[],
+  destinationNodeId: Uint8Array,
+  amountMsat: bigint,
+  currentBlockHeight: number,
+): MultiTrampolineRoute | null {
+  if (trampolines.length === 0 || trampolines.length > MAX_TRAMPOLINE_HOPS - 1) {
+    console.error(`[trampoline] Invalid number of trampolines: ${trampolines.length}`)
+    return null
+  }
+
+  let totalFee = 0n
+  let totalCltvDelta = 0
+  let currentAmount = amountMsat
+
+  // Calcular de trás para frente
+  for (let i = trampolines.length - 1; i >= 0; i--) {
+    const node = trampolines[i]
+
+    // Fee para este hop
+    const fee =
+      node.feeBaseMsat + (currentAmount * BigInt(node.feeProportionalMillionths)) / 1000000n
+    totalFee += fee
+    currentAmount += fee
+
+    // CLTV
+    totalCltvDelta += node.cltvExpiryDelta
+  }
+
+  return {
+    trampolines,
+    totalAmountMsat: currentAmount,
+    totalFeeMsat: totalFee,
+    totalCltvDelta,
+  }
+}
+
+/**
+ * Factory para Enhanced Trampoline Router
+ */
+export function createEnhancedTrampolineRouter(
+  trampolineNodes?: TrampolineNode[],
+  config?: Partial<EnhancedTrampolineConfig>,
+): EnhancedTrampolineRouter {
+  return new EnhancedTrampolineRouter(trampolineNodes, config)
+}

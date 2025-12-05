@@ -52,24 +52,8 @@ import type {
   ShutdownMessage,
   ClosingSignedMessage,
   ChannelReestablishMessage,
-  // OpeningTlvs,
-  // AcceptTlvs,
-  // OpenChannel2Message,
-  // AcceptChannel2Message,
-  // CommitmentSignedMessage,
-  // RevokeAndAckMessage,
-  // StfuMessage,
-  // ShutdownMessage,
-  // ClosingTlvs,
-  // ClosingCompleteMessage,
-  // ClosingSigMessage,
-  // ClosingSignedMessage,
-  // UpdateAddHtlcMessage,
-  // UpdateFulfillHtlcMessage,
-  // UpdateFailHtlcMessage,
-  // UpdateFailMalformedHtlcMessage,
-  // UpdateFeeMessage,
-  // ChannelReestablishMessage,
+  UpdateFailMalformedHtlcMessage,
+  UpdateFeeMessage,
 } from '@/core/models/lightning/peer'
 
 // ==========================================
@@ -676,6 +660,90 @@ export function decodeUpdateFailHtlcMessage(buf: Uint8Array): UpdateFailHtlcMess
     len,
     reason,
     tlvs,
+  }
+}
+
+/**
+ * BOLT #2: update_fail_malformed_htlc
+ * Sent when an HTLC is malformed and cannot be properly processed.
+ *
+ * Message format:
+ * - type: 135 (u16)
+ * - channel_id: 32 bytes
+ * - id: u64 (HTLC id)
+ * - sha256_of_onion: 32 bytes (hash of malformed onion)
+ * - failure_code: u16 (MUST have BADONION bit set)
+ */
+export function encodeUpdateFailMalformedHtlcMessage(
+  msg: UpdateFailMalformedHtlcMessage,
+): Uint8Array {
+  const buffers = [
+    encodeU16(msg.type),
+    msg.channelId,
+    encodeU64(msg.id),
+    msg.sha256OfOnion,
+    encodeU16(msg.failureCode),
+  ]
+  const totalLength = buffers.reduce((sum, buf) => sum + buf.length, 0)
+  const result = new Uint8Array(totalLength)
+  let offset = 0
+  for (const buf of buffers) {
+    result.set(buf, offset)
+    offset += buf.length
+  }
+  return result
+}
+
+export function decodeUpdateFailMalformedHtlcMessage(
+  buf: Uint8Array,
+): UpdateFailMalformedHtlcMessage {
+  const reader = new BufferReader(buf)
+  reader.skip(2) // skip type
+  const channelId = reader.readBytes(32)
+  const id = reader.readU64()
+  const sha256OfOnion = reader.readBytes(32)
+  const failureCode = reader.readU16()
+  return {
+    type: LightningMessageType.UPDATE_FAIL_MALFORMED_HTLC,
+    channelId,
+    id,
+    sha256OfOnion,
+    failureCode,
+  }
+}
+
+/**
+ * BOLT #2: update_fee
+ * Sent when one party wants to update the fee rate for the commitment transaction.
+ *
+ * Message format:
+ * - type: 134 (u16)
+ * - channel_id: 32 bytes
+ * - feerate_per_kw: u32 (fee rate in satoshis per 1000-weight)
+ *
+ * Only the funder can send this message.
+ */
+export function encodeUpdateFeeMessage(msg: UpdateFeeMessage): Uint8Array {
+  const buffers = [encodeU16(msg.type), msg.channelId, encodeU32(msg.feeratePerKw)]
+  const totalLength = buffers.reduce((sum, buf) => sum + buf.length, 0)
+  const result = new Uint8Array(totalLength)
+  let offset = 0
+  for (const buf of buffers) {
+    result.set(buf, offset)
+    offset += buf.length
+  }
+  return result
+}
+
+export function decodeUpdateFeeMessage(buf: Uint8Array): UpdateFeeMessage {
+  const reader = new BufferReader(buf)
+  reader.skip(2) // skip type
+  const channelId = reader.readBytes(32)
+  const feeratePerKw = reader.readU32()
+  return {
+    type: LightningMessageType.UPDATE_FEE,
+    channelId,
+    feeratePerKw,
   }
 }
 

@@ -1,7 +1,11 @@
-// Exemplo de componente para gerar e exibir Lightning invoices
-// Demonstra o uso do hook useLightning
+/**
+ * LightningInvoiceGenerator
+ *
+ * Componente para gerar e exibir Lightning invoices.
+ * Otimizado para React 19 e React Compiler.
+ */
 
-import React, { useState } from 'react'
+import { useState, useCallback, memo } from 'react'
 import {
   View,
   Text,
@@ -10,83 +14,202 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native'
-import { useLightning } from './useLightning'
-import type { InvoiceWithChannelInfo } from '@/core/models/lightning/client'
+
+import { useLightningContext } from './hooks'
+import { formatMsat, satToMsat } from './utils'
+import type { Invoice } from './types'
+
+// ==========================================
+// TYPES
+// ==========================================
 
 interface LightningInvoiceGeneratorProps {
-  masterKey: Uint8Array
-  network?: 'mainnet' | 'testnet' | 'regtest'
+  /** Callback chamado quando invoice é gerada com sucesso */
+  onInvoiceGenerated?: (invoice: Invoice) => void
+  /** Callback chamado em caso de erro */
+  onError?: (error: Error) => void
 }
 
-export default function LightningInvoiceGenerator({
-  masterKey,
-  network = 'testnet',
+// ==========================================
+// SUB-COMPONENTS (extraídos para evitar re-criação)
+// ==========================================
+
+interface InputGroupProps {
+  label: string
+  placeholder: string
+  value: string
+  onChangeText: (text: string) => void
+  disabled?: boolean
+  keyboardType?: 'default' | 'numeric'
+}
+
+const InputGroup = memo(function InputGroup({
+  label,
+  placeholder,
+  value,
+  onChangeText,
+  disabled,
+  keyboardType = 'default',
+}: InputGroupProps) {
+  return (
+    <View style={styles.inputGroup}>
+      <Text style={styles.label}>{label}</Text>
+      <TextInput
+        style={styles.input}
+        placeholder={placeholder}
+        keyboardType={keyboardType}
+        value={value}
+        onChangeText={onChangeText}
+        editable={!disabled}
+      />
+    </View>
+  )
+})
+
+interface ErrorDisplayProps {
+  message: string
+}
+
+const ErrorDisplay = memo(function ErrorDisplay({ message }: ErrorDisplayProps) {
+  return (
+    <View style={styles.errorContainer}>
+      <Text style={styles.errorText}>{message}</Text>
+    </View>
+  )
+})
+
+interface ChannelFeeWarningProps {
+  fee: bigint
+}
+
+const ChannelFeeWarning = memo(function ChannelFeeWarning({ fee }: ChannelFeeWarningProps) {
+  return (
+    <View style={styles.warningContainer}>
+      <Text style={styles.warningText}>
+        ⚠️ First payment - Channel opening fee: {formatMsat(fee * 1000n)}
+      </Text>
+      <Text style={styles.warningSubtext}>
+        This fee is charged only once to open your first Lightning channel. Future payments will
+        have minimal fees.
+      </Text>
+    </View>
+  )
+})
+
+interface InvoiceDisplayProps {
+  invoice: Invoice
+}
+
+const InvoiceDisplay = memo(function InvoiceDisplay({ invoice }: InvoiceDisplayProps) {
+  return (
+    <View style={styles.invoiceContainer}>
+      <Text style={styles.invoiceTitle}>Invoice Generated!</Text>
+
+      {/* Amount */}
+      <View style={styles.invoiceRow}>
+        <Text style={styles.invoiceLabel}>Amount:</Text>
+        <Text style={styles.invoiceValue}>
+          {invoice.amount ? formatMsat(invoice.amount) : 'Any amount'}
+        </Text>
+      </View>
+
+      {/* Channel opening fee warning */}
+      {invoice.requiresChannelOpening && invoice.channelOpeningFee && (
+        <ChannelFeeWarning fee={invoice.channelOpeningFee} />
+      )}
+
+      {/* Invoice string (for QR code) */}
+      <View style={styles.invoiceRow}>
+        <Text style={styles.invoiceLabel}>Invoice:</Text>
+      </View>
+      <View style={styles.qrCodePlaceholder}>
+        <Text style={styles.qrCodeText}>QR Code Here</Text>
+        <Text style={styles.invoiceString} numberOfLines={3}>
+          {invoice.invoice}
+        </Text>
+      </View>
+
+      {/* Payment hash */}
+      <View style={styles.invoiceRow}>
+        <Text style={styles.invoiceLabel}>Payment Hash:</Text>
+        <Text style={styles.invoiceValue} numberOfLines={1}>
+          {invoice.paymentHash.substring(0, 16)}...
+        </Text>
+      </View>
+    </View>
+  )
+})
+
+// ==========================================
+// MAIN COMPONENT
+// ==========================================
+
+function LightningInvoiceGenerator({
+  onInvoiceGenerated,
+  onError,
 }: LightningInvoiceGeneratorProps) {
-  const { generateInvoice, isLoading, error } = useLightning()
+  const { state, generateInvoice } = useLightningContext()
   const [amount, setAmount] = useState('')
   const [description, setDescription] = useState('')
-  const [invoice, setInvoice] = useState<InvoiceWithChannelInfo | null>(null)
+  const [invoice, setInvoice] = useState<Invoice | null>(null)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const handleGenerateInvoice = async () => {
+  const handleGenerateInvoice = useCallback(async () => {
+    setError(null)
+    setIsGenerating(true)
+
     try {
       // Converter amount para millisatoshis (se fornecido)
-      const amountMsat = amount ? BigInt(amount) * 1000n : undefined
+      const amountMsat = amount ? satToMsat(BigInt(amount)) : 0n
 
-      const result = await generateInvoice(
-        {
-          amount: amountMsat,
-          description: description || 'Lightning payment',
-          expiry: 3600, // 1 hora
-        },
-        masterKey,
-        network,
-      )
+      const result = await generateInvoice(amountMsat, description || 'Lightning payment')
 
       setInvoice(result)
+      onInvoiceGenerated?.(result)
     } catch (err) {
-      console.error('Failed to generate invoice:', err)
+      const errorMessage = err instanceof Error ? err.message : 'Failed to generate invoice'
+      setError(errorMessage)
+      onError?.(err instanceof Error ? err : new Error(errorMessage))
+    } finally {
+      setIsGenerating(false)
     }
-  }
+  }, [amount, description, generateInvoice, onInvoiceGenerated, onError])
 
-  const formatSats = (msat?: bigint): string => {
-    if (!msat) return 'Any amount'
-    return `${Number(msat / 1000n)} sats`
-  }
+  const isLoading = isGenerating || state.isLoading
+  const isDisabled = isLoading || !state.isInitialized
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Generate Lightning Invoice</Text>
 
-      {/* Amount input */}
-      <View style={styles.inputGroup}>
-        <Text style={styles.label}>Amount (sats)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Leave empty for donation invoice"
-          keyboardType="numeric"
-          value={amount}
-          onChangeText={setAmount}
-          editable={!isLoading}
-        />
-      </View>
+      {!state.isInitialized && (
+        <View style={styles.warningContainer}>
+          <Text style={styles.warningText}>⚠️ Lightning not initialized</Text>
+        </View>
+      )}
 
-      {/* Description input */}
-      <View style={styles.inputGroup}>
-        <Text style={styles.label}>Description</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="What is this payment for?"
-          value={description}
-          onChangeText={setDescription}
-          editable={!isLoading}
-        />
-      </View>
+      <InputGroup
+        label="Amount (sats)"
+        placeholder="Leave empty for donation invoice"
+        value={amount}
+        onChangeText={setAmount}
+        disabled={isDisabled}
+        keyboardType="numeric"
+      />
 
-      {/* Generate button */}
+      <InputGroup
+        label="Description"
+        placeholder="What is this payment for?"
+        value={description}
+        onChangeText={setDescription}
+        disabled={isDisabled}
+      />
+
       <TouchableOpacity
-        style={[styles.button, isLoading && styles.buttonDisabled]}
+        style={[styles.button, isDisabled && styles.buttonDisabled]}
         onPress={handleGenerateInvoice}
-        disabled={isLoading}
+        disabled={isDisabled}
       >
         {isLoading ? (
           <ActivityIndicator color="#fff" />
@@ -95,61 +218,19 @@ export default function LightningInvoiceGenerator({
         )}
       </TouchableOpacity>
 
-      {/* Error display */}
-      {error && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error.message}</Text>
-        </View>
-      )}
+      {error && <ErrorDisplay message={error} />}
 
-      {/* Invoice display */}
-      {invoice && (
-        <View style={styles.invoiceContainer}>
-          <Text style={styles.invoiceTitle}>Invoice Generated!</Text>
-
-          {/* Amount */}
-          <View style={styles.invoiceRow}>
-            <Text style={styles.invoiceLabel}>Amount:</Text>
-            <Text style={styles.invoiceValue}>{formatSats(invoice.amount)}</Text>
-          </View>
-
-          {/* Channel opening fee warning */}
-          {invoice.requiresChannel && invoice.channelOpeningFee && (
-            <View style={styles.warningContainer}>
-              <Text style={styles.warningText}>
-                ⚠️ First payment - Channel opening fee:{' '}
-                {formatSats(invoice.channelOpeningFee * 1000n)}
-              </Text>
-              <Text style={styles.warningSubtext}>
-                This fee is charged only once to open your first Lightning channel. Future payments
-                will have minimal fees.
-              </Text>
-            </View>
-          )}
-
-          {/* Invoice string (for QR code) */}
-          <View style={styles.invoiceRow}>
-            <Text style={styles.invoiceLabel}>Invoice:</Text>
-          </View>
-          <View style={styles.qrCodePlaceholder}>
-            <Text style={styles.qrCodeText}>QR Code Here</Text>
-            <Text style={styles.invoiceString} numberOfLines={3}>
-              {invoice.qrCode}
-            </Text>
-          </View>
-
-          {/* Payment hash */}
-          <View style={styles.invoiceRow}>
-            <Text style={styles.invoiceLabel}>Payment Hash:</Text>
-            <Text style={styles.invoiceValue} numberOfLines={1}>
-              {invoice.paymentHash.substring(0, 16)}...
-            </Text>
-          </View>
-        </View>
-      )}
+      {invoice && <InvoiceDisplay invoice={invoice} />}
     </View>
   )
 }
+
+// Exportar como memo para evitar re-renders desnecessários
+export default memo(LightningInvoiceGenerator)
+
+// ==========================================
+// STYLES
+// ==========================================
 
 const styles = StyleSheet.create({
   container: {

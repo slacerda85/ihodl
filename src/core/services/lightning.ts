@@ -18,6 +18,7 @@ import {
   DEFAULT_MIN_FINAL_CLTV_EXPIRY_DELTA,
 } from '@/core/models/lightning/invoice'
 import { deriveChildKey, createPublicKey } from '../lib/key'
+import { LightningTransport, getTransport, type TransportEvent } from './transport'
 
 // ==========================================
 // TIPOS
@@ -88,13 +89,69 @@ export interface PaymentState {
   error?: string
 }
 
+// ==========================================
+// TRANSPORTE (BOLT1)
+// ==========================================
+
+/** Instância singleton do transporte */
+let transport: LightningTransport | null = null
+
 /**
- * Configuração de fees para abertura de canal (estilo Phoenix)
+ * Obtém ou cria a instância do transporte
  */
-export interface ChannelOpeningFeeConfig {
-  baseFee: bigint
-  feeRate: number // percentual (ex: 0.01 = 1%)
-  minChannelSize: bigint
+function getOrCreateTransport(): LightningTransport {
+  if (!transport) {
+    transport = getTransport()
+  }
+  return transport
+}
+
+/**
+ * Conecta a um peer Lightning (BOLT1)
+ *
+ * @param peerId - ID do peer no formato nodeId@host:port
+ */
+export async function connectToPeer(peerId: string): Promise<void> {
+  const t = getOrCreateTransport()
+  await t.connect(peerId)
+}
+
+/**
+ * Desconecta do peer atual
+ */
+export async function disconnect(): Promise<void> {
+  const t = getOrCreateTransport()
+  await t.disconnect()
+}
+
+/**
+ * Envia ping para manter conexão (BOLT1)
+ */
+export async function sendPing(): Promise<void> {
+  const t = getOrCreateTransport()
+  await t.sendPing()
+}
+
+/**
+ * Obtém status de conexão atual
+ */
+export function getConnectionStatus() {
+  const t = getOrCreateTransport()
+  return {
+    isConnected: t.isConnected,
+    peerId: t.peerId,
+    negotiatedFeatures: t.negotiatedFeatures,
+    lastPing: t.lastPing,
+    lastPong: t.lastPong,
+  }
+}
+
+/**
+ * Adiciona listener para eventos de transporte
+ */
+export function addTransportListener(listener: (event: TransportEvent) => void): () => void {
+  const t = getOrCreateTransport()
+  return t.addListener(listener)
 }
 
 /**

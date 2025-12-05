@@ -327,6 +327,11 @@ export function actThreeReceive(
 
 /**
  * Encrypts and sends a Lightning message
+ *
+ * BOLT #8 Key Rotation:
+ * - A key is to be rotated after a party encrypts or decrypts 1000 times with it.
+ * - The rotation uses HKDF with the current chaining key and the current encryption key.
+ * - For sending: uses sk (sending key) and sck (sending chaining key)
  */
 export function encryptMessage(
   keys: TransportKeys,
@@ -335,26 +340,44 @@ export function encryptMessage(
   if (message.length > MAX_MESSAGE_SIZE) {
     throw new Error('Message too large')
   }
+
+  // Encrypt length prefix using sending key (sk)
   const lengthBuf = encodeU16(message.length)
   const lc = encryptWithAD(keys.sk, keys.sn, new Uint8Array(0), lengthBuf)
   keys.sn++
+
+  // Encrypt message body using sending key (sk)
   const c = encryptWithAD(keys.sk, keys.sn, new Uint8Array(0), message)
   keys.sn++
+
+  // Concatenate encrypted length and message
   const encrypted = new Uint8Array(lc.length + c.length)
   encrypted.set(lc)
   encrypted.set(c, lc.length)
-  // Key rotation
+
+  // Key rotation for sending key (BOLT #8)
+  // After 1000 messages, rotate the key using HKDF
   if (keys.sn >= KEY_ROTATION_INTERVAL) {
     const [ck, k] = hkdfExtract(keys.sck, keys.sk)
     keys.sk = k
     keys.sck = ck
     keys.sn = 0
   }
+
   return { encrypted, newKeys: keys }
 }
 
 /**
  * Receives and decrypts a Lightning message
+ */
+/**
+ * Receives and decrypts a Lightning message
+ *
+ * BOLT #8 Key Rotation:
+ * - A key is to be rotated after a party encrypts or decrypts 1000 times with it.
+ * - The rotation uses HKDF with the current chaining key and the current encryption key.
+ * - For receiving: uses rk (receiving key) and rck (receiving chaining key)
+ * - For sending: uses sk (sending key) and sck (sending chaining key)
  */
 export function decryptMessage(
   keys: TransportKeys,
@@ -363,22 +386,30 @@ export function decryptMessage(
   if (encrypted.length < 18) {
     return { error: 'Encrypted message too short' }
   }
+
+  // Decrypt length prefix using receiving key (rk)
   const lc = encrypted.subarray(0, 18)
-  const lengthBuf = decryptWithAD(keys.sk, keys.rn, new Uint8Array(0), lc)
+  const lengthBuf = decryptWithAD(keys.rk, keys.rn, new Uint8Array(0), lc)
   keys.rn++
+
   const length = new DataView(lengthBuf.buffer).getUint16(0, false) // big-endian
   if (encrypted.length < 18 + length + 16) {
     return { error: 'Encrypted message incomplete' }
   }
+
+  // Decrypt message body using receiving key (rk)
   const c = encrypted.subarray(18, 18 + length + 16)
-  const message = decryptWithAD(keys.sk, keys.rn, new Uint8Array(0), c)
+  const message = decryptWithAD(keys.rk, keys.rn, new Uint8Array(0), c)
   keys.rn++
-  // Key rotation
+
+  // Key rotation for receiving key (BOLT #8)
+  // After 1000 messages, rotate the key using HKDF
   if (keys.rn >= KEY_ROTATION_INTERVAL) {
-    const [ck, k] = hkdfExtract(keys.rck, keys.sk)
-    keys.sk = k
+    const [ck, k] = hkdfExtract(keys.rck, keys.rk)
+    keys.rk = k
     keys.rck = ck
     keys.rn = 0
   }
+
   return { message, newKeys: keys }
 }

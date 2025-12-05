@@ -5,7 +5,15 @@
  * Segue o padrão: lib -> services -> hooks/providers
  */
 
-import { createContext, ReactNode, useState, useContext, useEffect, useCallback } from 'react'
+import {
+  createContext,
+  ReactNode,
+  useState,
+  useContext,
+  useEffect,
+  useCallback,
+  useRef,
+} from 'react'
 import watchtowerService, {
   WatchtowerStatus,
   WatchtowerEventForUI,
@@ -183,9 +191,34 @@ export function WatchtowerProvider({ children, autoStart = true }: WatchtowerPro
   }, [state.isInitialized])
 
   // Auto-initialize on mount
+  // Usando IIFE para evitar problemas com async/await no useEffect
+  const initRef = useRef(false)
   useEffect(() => {
-    initialize()
-  }, [initialize])
+    if (!initRef.current && autoStart) {
+      initRef.current = true
+      // Chamada assíncrona não-bloqueante
+      void (async () => {
+        try {
+          await watchtowerService.initialize({ autoStart })
+          const status = watchtowerService.getStatus()
+          const channels = watchtowerService.getMonitoredChannels()
+          const events = watchtowerService.getEvents()
+
+          setState({
+            isInitialized: true,
+            isRunning: status.isRunning,
+            status,
+            channels,
+            events,
+            hasBreaches: status.breachesDetected > 0,
+            lastBreachEvent: events.find(e => e.type === 'breach_detected'),
+          })
+        } catch (error) {
+          console.error('[WatchtowerProvider] Auto-init failed:', error)
+        }
+      })()
+    }
+  }, [autoStart])
 
   // ==========================================
   // CHANNEL MANAGEMENT

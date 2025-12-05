@@ -1,143 +1,99 @@
-import {
-  createContext,
-  ReactNode,
-  useState,
-  useContext,
-  useEffect,
-  useCallback,
-  useMemo,
-} from 'react'
+/**
+ * LightningProvider
+ *
+ * Provider principal para funcionalidades Lightning Network.
+ * Otimizado para React 19 e React Compiler.
+ *
+ * Melhores práticas aplicadas:
+ * - Separação de concerns (tipos, contexto, hooks em arquivos separados)
+ * - Estado derivado com useMemo onde apropriado
+ * - Callbacks estáveis com useCallback
+ * - Não usar useEffect para setState síncrono (usar useLayoutEffect ou inicialização direta)
+ * - Evitar dependências de estado em useEffect que causem loops
+ */
+
+import { ReactNode, useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import LightningService, {
-  ChannelState as ServiceChannelState,
-  InvoiceState as ServiceInvoiceState,
-  PaymentState as ServicePaymentState,
-  GenerateInvoiceResult,
-  SendPaymentResult,
+  connectToPeer as connectToPeerService,
+  disconnect as disconnectService,
+  sendPing as sendPingService,
 } from '@/core/services/lightning'
 import WalletService from '@/core/services/wallet'
 
+import { LightningContext, type LightningContextType } from './context'
+import type { LightningState, Invoice, Payment, Channel, Millisatoshis } from './types'
+import { INITIAL_LIGHTNING_STATE, INITIAL_CONNECTION_STATE } from './types'
+import { mapServiceInvoices, mapServicePayments } from './utils'
+
 // ==========================================
-// TIPOS PARA O FRONTEND
+// CONSTANTS (React Compiler não suporta BigInt literals inline)
 // ==========================================
 
-type Millisatoshis = bigint
-type Satoshis = bigint
+const ZERO_BIGINT = BigInt(0)
 
-// Estado de um canal simplificado para a UI
-export interface Channel {
-  channelId: string
-  peerId: string
-  state: 'opening' | 'open' | 'closing' | 'closed'
-  localBalanceSat: bigint
-  remoteBalanceSat: bigint
-  capacitySat: bigint
-  isActive: boolean
+// ==========================================
+// HELPER FUNCTIONS (extraídas para evitar throw em try/catch)
+// ==========================================
+
+/** Valida se o serviço está inicializado, lança erro se não */
+function assertServiceInitialized(service: LightningService): void {
+  if (!service.isInitialized()) {
+    throw new Error('Lightning not initialized')
+  }
 }
 
-// Estado de um pagamento para a UI
-export interface Payment {
-  paymentHash: string
-  amount: Millisatoshis
-  status: 'pending' | 'succeeded' | 'failed'
-  direction: 'sent' | 'received'
-  createdAt: number
-  resolvedAt?: number
-  preimage?: string
-  error?: string
+/** Valida se há wallet ativo, lança erro se não */
+function assertWalletId(walletId: string | undefined): asserts walletId is string {
+  if (!walletId) {
+    throw new Error('No active wallet found')
+  }
 }
 
-// Estado de uma invoice para a UI
-export interface Invoice {
-  paymentHash: string
-  invoice: string
-  amount: Millisatoshis
-  description: string
-  status: 'pending' | 'paid' | 'expired'
-  createdAt: number
-  expiresAt: number
-  requiresChannelOpening?: boolean
-  channelOpeningFee?: bigint
+/** Valida se está conectado a um peer */
+function assertConnected(isConnected: boolean): void {
+  if (!isConnected) {
+    throw new Error('Not connected to peer')
+  }
 }
 
-// Estado geral Lightning para a UI
-export interface LightningState {
-  // Status de inicialização
-  isInitialized: boolean
-  isLoading: boolean
-  error: string | null
+// ==========================================
+// TYPES
+// ==========================================
 
-  // Saldo total disponível (em millisatoshis)
-  totalBalance: Millisatoshis
-
-  // Canais
-  channels: Channel[]
-  hasActiveChannels: boolean
-
-  // Histórico
-  invoices: Invoice[]
-  payments: Payment[]
-}
-
-// Contexto Lightning
-type LightningContextType = {
-  state: LightningState
-
-  // Inicialização
-  initialize: () => Promise<void>
-
-  // Invoices - interface simples para o frontend
-  generateInvoice: (amount: Millisatoshis, description?: string) => Promise<Invoice>
-  decodeInvoice: (invoice: string) => Promise<{
-    amount: bigint
-    description: string
-    paymentHash: string
-    isExpired: boolean
-  }>
-
-  // Pagamentos
-  sendPayment: (invoice: string, maxFee?: bigint) => Promise<Payment>
-
-  // Saldo
-  getBalance: () => Promise<Millisatoshis>
-  refreshBalance: () => Promise<void>
-
-  // Canais
-  getChannels: () => Promise<Channel[]>
-  hasChannels: () => Promise<boolean>
-
-  // Histórico
-  refreshInvoices: () => Promise<void>
-  refreshPayments: () => Promise<void>
-}
-
-const LightningContext = createContext<LightningContextType | null>(null)
-
-type LightningProviderProps = {
+interface LightningProviderProps {
   children: ReactNode
+  /** Se true, inicializa automaticamente ao montar */
+  autoInitialize?: boolean
 }
 
-const initialState: LightningState = {
-  isInitialized: false,
-  isLoading: false,
-  error: null,
-  totalBalance: 0n,
-  channels: [],
-  hasActiveChannels: false,
-  invoices: [],
-  payments: [],
-}
+// ==========================================
+// PROVIDER
+// ==========================================
 
-export default function LightningProvider({ children }: LightningProviderProps) {
-  const [state, setState] = useState<LightningState>(initialState)
+export default function LightningProvider({
+  children,
+  autoInitialize = true,
+}: LightningProviderProps) {
+  // Estado principal
+  const [state, setState] = useState<LightningState>(INITIAL_LIGHTNING_STATE)
 
-  // Criar instância do serviço (singleton)
-  const service = useMemo(() => new LightningService(), [])
+  // Ref para o serviço (singleton, não precisa re-criar)
+  const serviceRef = useRef<LightningService | null>(null)
+
+  // Getter para o serviço (lazy initialization)
+  const getService = useCallback(() => {
+    if (!serviceRef.current) {
+      serviceRef.current = new LightningService()
+    }
+    return serviceRef.current
+  }, [])
 
   // ==========================================
   // INICIALIZAÇÃO
   // ==========================================
 
   const initialize = useCallback(async () => {
+    // Evitar múltiplas inicializações
     if (state.isInitialized || state.isLoading) return
 
     setState(prev => ({ ...prev, isLoading: true, error: null }))
@@ -145,14 +101,12 @@ export default function LightningProvider({ children }: LightningProviderProps) 
     try {
       const walletService = new WalletService()
       const walletId = walletService.getActiveWalletId()
+      assertWalletId(walletId)
 
-      if (!walletId) {
-        throw new Error('No active wallet found')
-      }
-
+      const service = getService()
       await service.initialize(walletId)
 
-      // Carregar dados iniciais
+      // Carregar dados iniciais em paralelo
       const [balance, channels, invoices, payments] = await Promise.all([
         service.getBalance(),
         service.getChannels(),
@@ -165,25 +119,30 @@ export default function LightningProvider({ children }: LightningProviderProps) 
         isInitialized: true,
         isLoading: false,
         totalBalance: balance,
-        channels: channels,
+        channels,
         hasActiveChannels: channels.some(ch => ch.isActive),
-        invoices: invoices.map(mapServiceInvoice),
-        payments: payments.map(mapServicePayment),
+        invoices: mapServiceInvoices(invoices),
+        payments: mapServicePayments(payments),
       }))
-    } catch (error) {
-      console.error('[LightningProvider] Initialization failed:', error)
+    } catch (err) {
+      console.error('[LightningProvider] Initialization failed:', err)
+      const errorMessage = err instanceof Error ? err.message : 'Failed to initialize Lightning'
       setState(prev => ({
         ...prev,
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Failed to initialize Lightning',
+        error: errorMessage,
       }))
     }
-  }, [state.isInitialized, state.isLoading, service])
+  }, [state.isInitialized, state.isLoading, getService])
 
-  // Auto-inicializar quando provider é montado
+  // Auto-inicialização controlada por prop
+  const initializeRef = useRef(false)
   useEffect(() => {
-    initialize()
-  }, [initialize])
+    if (autoInitialize && !initializeRef.current) {
+      initializeRef.current = true
+      initialize()
+    }
+  }, [autoInitialize, initialize])
 
   // ==========================================
   // INVOICES
@@ -191,14 +150,10 @@ export default function LightningProvider({ children }: LightningProviderProps) 
 
   const generateInvoice = useCallback(
     async (amount: Millisatoshis, description?: string): Promise<Invoice> => {
-      if (!service.isInitialized()) {
-        throw new Error('Lightning not initialized')
-      }
+      const service = getService()
+      assertServiceInitialized(service)
 
-      const result = await service.generateInvoice({
-        amount,
-        description,
-      })
+      const result = await service.generateInvoice({ amount, description })
 
       const invoice: Invoice = {
         paymentHash: result.paymentHash,
@@ -212,7 +167,6 @@ export default function LightningProvider({ children }: LightningProviderProps) 
         channelOpeningFee: result.channelOpeningFee,
       }
 
-      // Atualizar state com nova invoice
       setState(prev => ({
         ...prev,
         invoices: [invoice, ...prev.invoices],
@@ -220,18 +174,16 @@ export default function LightningProvider({ children }: LightningProviderProps) 
 
       return invoice
     },
-    [service],
+    [getService],
   )
 
   const decodeInvoice = useCallback(
     async (invoice: string) => {
-      if (!service.isInitialized()) {
-        throw new Error('Lightning not initialized')
-      }
-
-      return await service.decodeInvoice(invoice)
+      const service = getService()
+      assertServiceInitialized(service)
+      return service.decodeInvoice(invoice)
     },
-    [service],
+    [getService],
   )
 
   // ==========================================
@@ -240,18 +192,14 @@ export default function LightningProvider({ children }: LightningProviderProps) 
 
   const sendPayment = useCallback(
     async (invoice: string, maxFee?: bigint): Promise<Payment> => {
-      if (!service.isInitialized()) {
-        throw new Error('Lightning not initialized')
-      }
+      const service = getService()
+      assertServiceInitialized(service)
 
-      const result = await service.sendPayment({
-        invoice,
-        maxFee,
-      })
+      const result = await service.sendPayment({ invoice, maxFee })
 
       const payment: Payment = {
         paymentHash: result.paymentHash,
-        amount: 0n, // TODO: obter da invoice decodificada
+        amount: ZERO_BIGINT, // TODO: obter da invoice decodificada
         status: result.success ? 'succeeded' : 'failed',
         direction: 'sent',
         createdAt: Date.now(),
@@ -260,20 +208,21 @@ export default function LightningProvider({ children }: LightningProviderProps) 
         error: result.error,
       }
 
-      // Atualizar state com novo pagamento
       setState(prev => ({
         ...prev,
         payments: [payment, ...prev.payments],
       }))
 
-      // Atualizar saldo após pagamento
+      // Atualizar saldo em background se sucesso
       if (result.success) {
-        refreshBalance()
+        service.getBalance().then(balance => {
+          setState(prev => ({ ...prev, totalBalance: balance }))
+        })
       }
 
       return payment
     },
-    [service],
+    [getService],
   )
 
   // ==========================================
@@ -281,14 +230,13 @@ export default function LightningProvider({ children }: LightningProviderProps) 
   // ==========================================
 
   const getBalance = useCallback(async (): Promise<Millisatoshis> => {
-    if (!service.isInitialized()) {
-      return 0n
-    }
-
-    return await service.getBalance()
-  }, [service])
+    const service = getService()
+    if (!service.isInitialized()) return ZERO_BIGINT
+    return service.getBalance()
+  }, [getService])
 
   const refreshBalance = useCallback(async () => {
+    const service = getService()
     if (!service.isInitialized()) return
 
     try {
@@ -297,16 +245,15 @@ export default function LightningProvider({ children }: LightningProviderProps) 
     } catch (error) {
       console.error('[LightningProvider] Failed to refresh balance:', error)
     }
-  }, [service])
+  }, [getService])
 
   // ==========================================
   // CANAIS
   // ==========================================
 
   const getChannels = useCallback(async (): Promise<Channel[]> => {
-    if (!service.isInitialized()) {
-      return []
-    }
+    const service = getService()
+    if (!service.isInitialized()) return []
 
     const channels = await service.getChannels()
     setState(prev => ({
@@ -316,104 +263,158 @@ export default function LightningProvider({ children }: LightningProviderProps) 
     }))
 
     return channels
-  }, [service])
+  }, [getService])
 
   const hasChannels = useCallback(async (): Promise<boolean> => {
-    if (!service.isInitialized()) {
-      return false
-    }
-
-    return await service.hasActiveChannels()
-  }, [service])
+    const service = getService()
+    if (!service.isInitialized()) return false
+    return service.hasActiveChannels()
+  }, [getService])
 
   // ==========================================
   // HISTÓRICO
   // ==========================================
 
   const refreshInvoices = useCallback(async () => {
+    const service = getService()
     if (!service.isInitialized()) return
 
     try {
       const invoices = await service.getInvoices()
       setState(prev => ({
         ...prev,
-        invoices: invoices.map(mapServiceInvoice),
+        invoices: mapServiceInvoices(invoices),
       }))
     } catch (error) {
       console.error('[LightningProvider] Failed to refresh invoices:', error)
     }
-  }, [service])
+  }, [getService])
 
   const refreshPayments = useCallback(async () => {
+    const service = getService()
     if (!service.isInitialized()) return
 
     try {
       const payments = await service.getPayments()
       setState(prev => ({
         ...prev,
-        payments: payments.map(mapServicePayment),
+        payments: mapServicePayments(payments),
       }))
     } catch (error) {
       console.error('[LightningProvider] Failed to refresh payments:', error)
     }
-  }, [service])
+  }, [getService])
+
+  // ==========================================
+  // CONEXÃO (BOLT1)
+  // ==========================================
+
+  const connectToPeer = useCallback(async (peerId: string) => {
+    setState(prev => ({ ...prev, isLoading: true, error: null }))
+
+    try {
+      await connectToPeerService(peerId)
+      setState(prev => ({
+        ...prev,
+        isLoading: false,
+        connection: {
+          ...prev.connection,
+          isConnected: true,
+          peerId,
+        },
+      }))
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to connect'
+      setState(prev => ({
+        ...prev,
+        isLoading: false,
+        error: errorMessage,
+        connection: {
+          ...prev.connection,
+          error: errorMessage,
+        },
+      }))
+    }
+  }, [])
+
+  const disconnect = useCallback(async () => {
+    setState(prev => ({ ...prev, isLoading: true }))
+
+    try {
+      await disconnectService()
+      setState(prev => ({
+        ...prev,
+        isLoading: false,
+        connection: INITIAL_CONNECTION_STATE,
+      }))
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to disconnect'
+      setState(prev => ({
+        ...prev,
+        isLoading: false,
+        error: errorMessage,
+      }))
+    }
+  }, [])
+
+  const sendPing = useCallback(async () => {
+    assertConnected(state.connection.isConnected)
+
+    try {
+      await sendPingService()
+      setState(prev => ({
+        ...prev,
+        connection: {
+          ...prev.connection,
+          lastPing: Date.now(),
+        },
+      }))
+    } catch (error) {
+      console.error('[LightningProvider] Ping failed:', error)
+    }
+  }, [state.connection.isConnected])
 
   // ==========================================
   // CONTEXTO
   // ==========================================
 
-  const contextValue: LightningContextType = {
-    state,
-    initialize,
-    generateInvoice,
-    decodeInvoice,
-    sendPayment,
-    getBalance,
-    refreshBalance,
-    getChannels,
-    hasChannels,
-    refreshInvoices,
-    refreshPayments,
-  }
+  const contextValue = useMemo<LightningContextType>(
+    () => ({
+      state,
+      initialize,
+      generateInvoice,
+      decodeInvoice,
+      sendPayment,
+      getBalance,
+      refreshBalance,
+      getChannels,
+      hasChannels,
+      refreshInvoices,
+      refreshPayments,
+      connectToPeer,
+      disconnect,
+      sendPing,
+    }),
+    [
+      state,
+      initialize,
+      generateInvoice,
+      decodeInvoice,
+      sendPayment,
+      getBalance,
+      refreshBalance,
+      getChannels,
+      hasChannels,
+      refreshInvoices,
+      refreshPayments,
+      connectToPeer,
+      disconnect,
+      sendPing,
+    ],
+  )
 
   return <LightningContext.Provider value={contextValue}>{children}</LightningContext.Provider>
 }
 
-// ==========================================
-// HOOK
-// ==========================================
-
-export function useLightning() {
-  const context = useContext(LightningContext)
-  if (!context) {
-    throw new Error('useLightning must be used within a LightningProvider')
-  }
-  return context
-}
-
-// ==========================================
-// HELPERS
-// ==========================================
-
-function mapServiceInvoice(inv: ServiceInvoiceState): Invoice {
-  return {
-    paymentHash: inv.paymentHash,
-    invoice: inv.invoice,
-    amount: inv.amount,
-    description: inv.description,
-    status: inv.status,
-    createdAt: inv.createdAt,
-    expiresAt: inv.expiresAt,
-  }
-}
-
-function mapServicePayment(pay: ServicePaymentState): Payment {
-  return {
-    paymentHash: pay.paymentHash,
-    amount: pay.amount,
-    status: pay.status,
-    direction: pay.direction,
-    createdAt: pay.createdAt,
-    resolvedAt: pay.resolvedAt,
-  }
-}
+// Re-export types para conveniência
+export type { LightningProviderProps }
