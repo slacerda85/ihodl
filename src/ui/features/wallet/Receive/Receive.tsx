@@ -102,11 +102,11 @@ export default function Receive() {
               >
                 <Button
                   // variant="solid"
-                  tintColor={
+                  /* tintColor={
                     isDark
                       ? alpha(colors.background.light, 0.05)
                       : alpha(colors.background.dark, 0.03)
-                  }
+                  } */
                   style={{ flex: 1 }}
                   color={colors.textSecondary[isDark ? 'dark' : 'light']}
                   startIcon={
@@ -124,7 +124,7 @@ export default function Receive() {
                 <Button
                   style={{ flex: 1 }}
                   // variant="solid"
-                  tintColor={isDark ? alpha(colors.white, 0.05) : alpha(colors.black, 0.03)}
+                  // tintColor={isDark ? alpha(colors.white, 0.05) : alpha(colors.black, 0.03)}
                   color={colors.textSecondary[isDark ? 'dark' : 'light']}
                   startIcon={
                     <IconSymbol

@@ -3,8 +3,8 @@
  * Valida funcionalidades implementadas do cliente Lightning
  */
 
-import LightningWorker, { ChannelInfo, ChannelState } from './worker'
-import { randomBytes } from '../crypto/crypto'
+import LightningWorker, { ChannelInfo, ChannelState } from '../worker'
+import { randomBytes } from '../../crypto/crypto'
 
 // Mock de conexão Lightning
 const createMockConnection = () => {

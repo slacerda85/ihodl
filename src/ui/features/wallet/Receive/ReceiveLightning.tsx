@@ -1,50 +1,264 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  Alert,
-  Share,
   ActivityIndicator,
+  Alert,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
   TextInput,
+  View,
 } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 
 import colors from '@/ui/colors'
-import { alpha } from '@/ui/utils'
+import { BottomSheetTrigger } from '@/ui/components/BottomSheet'
+import Button from '@/ui/components/Button'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 import QRCode from '@/ui/components/QRCode'
-import Button from '@/ui/components/Button'
-import { useSettings } from '@/ui/features/settings'
 import { useLightning, Invoice } from '@/ui/features/lightning/LightningProvider'
+import { useSettings } from '@/ui/features/settings'
+import { alpha } from '@/ui/utils'
 
-// Componente de aviso de taxa on-chain esperada
+// ============================================================================
+// Constants
+// ============================================================================
+
+const MSAT_PER_SAT = 1000n
+const DEFAULT_DESCRIPTION = 'Payment'
+const INVOICE_TRUNCATE_LENGTH = 20
+const INVOICE_TRUNCATE_CHARS = 10
+
+// ============================================================================
+// Types
+// ============================================================================
+
 interface OnChainFeeWarningProps {
   isDark: boolean
   estimatedFee?: bigint
 }
 
+interface LoadingStateProps {
+  isDark: boolean
+  message: string
+}
+
+interface ErrorStateProps {
+  isDark: boolean
+  error: string
+}
+
+interface InvoiceDisplayProps {
+  isDark: boolean
+  invoiceData: Invoice
+  amount: string
+  description: string
+  hasActiveChannels: boolean
+  onAmountChange: (value: string) => void
+  onDescriptionChange: (value: string) => void
+  onCopy: () => void
+  onShare: () => void
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+function reduceInvoiceString(invoice: string): string {
+  if (invoice.length <= INVOICE_TRUNCATE_LENGTH) return invoice
+  return `${invoice.slice(0, INVOICE_TRUNCATE_CHARS)}...${invoice.slice(-INVOICE_TRUNCATE_CHARS)}`
+}
+
+function findExistingInvoice(
+  invoices: Invoice[],
+  amountMsat: bigint,
+  descriptionValue: string,
+): Invoice | undefined {
+  const now = Date.now()
+  return invoices.find(inv => {
+    const isNotExpired = inv.expiresAt > now
+    const isPending = inv.status === 'pending'
+    const sameAmount = inv.amount === amountMsat
+    const sameDescription = inv.description === descriptionValue
+    return isPending && isNotExpired && sameAmount && sameDescription
+  })
+}
+
+// ============================================================================
+// Sub-Components
+// ============================================================================
+
 function OnChainFeeWarning({ isDark, estimatedFee }: OnChainFeeWarningProps) {
+  const feeMessage = estimatedFee
+    ? `A fee of ~${estimatedFee.toString()} sats will be deducted from your first payment.`
+    : 'A small fee will be deducted from your first payment.'
+
+  const sheetContent = (
+    <View style={styles.feeSheetContent}>
+      <Text style={[styles.feeSheetTitle, isDark && styles.feeSheetTitleDark]}>
+        About On-chain Fees
+      </Text>
+      <Text style={[styles.feeSheetMessage, isDark && styles.feeSheetMessageDark]}>
+        {feeMessage}
+      </Text>
+      <Text style={[styles.feeSheetDescription, isDark && styles.feeSheetDescriptionDark]}>
+        When you receive your first Lightning payment, a new payment channel needs to be opened on
+        the Bitcoin blockchain. This requires an on-chain transaction, which incurs a small mining
+        fee. This fee is automatically deducted from your incoming payment.
+      </Text>
+    </View>
+  )
+
   return (
-    <View style={[styles.feeWarningContainer, isDark && styles.feeWarningContainerDark]}>
-      <IconSymbol name="info.circle.fill" size={20} color={colors.info} />
-      <View style={styles.feeWarningTextContainer}>
-        <Text style={[styles.feeWarningTitle, isDark && styles.feeWarningTitleDark]}>
-          Channel opening required
+    <BottomSheetTrigger
+      title="Channel Opening Fee"
+      sheetContent={sheetContent}
+      detents={[0.35, 'medium']}
+    >
+      <View style={[styles.feeWarningContainer, isDark && styles.feeWarningContainerDark]}>
+        <IconSymbol name="info.circle" size={20} color={colors.primary} />
+        <View style={styles.feeWarningTextContainer}>
+          <Text style={[styles.feeWarningTitle, isDark && styles.feeWarningTitleDark]}>
+            On-chain fee expected
+          </Text>
+        </View>
+        {/* <IconSymbol
+          name="chevron.right"
+          size={16}
+          color={colors.textSecondary[isDark ? 'dark' : 'light']}
+        /> */}
+      </View>
+    </BottomSheetTrigger>
+  )
+}
+
+function LoadingState({ isDark, message }: LoadingStateProps) {
+  return (
+    <View style={[styles.contentWrapper, isDark && styles.contentWrapperDark]}>
+      <View style={[styles.sectionBox, isDark && styles.sectionBoxDark]}>
+        <View style={styles.qrContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.subtitle, isDark && styles.subtitleDark, styles.loadingText]}>
+            {message}
+          </Text>
+        </View>
+      </View>
+    </View>
+  )
+}
+
+function ErrorState({ isDark, error }: ErrorStateProps) {
+  return (
+    <View style={[styles.contentWrapper, isDark && styles.contentWrapperDark]}>
+      <View style={[styles.sectionBox, isDark && styles.sectionBoxDark]}>
+        <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
+          Lightning Error
         </Text>
-        <Text style={[styles.feeWarningMessage, isDark && styles.feeWarningMessageDark]}>
-          {estimatedFee
-            ? `A fee of ~${estimatedFee.toString()} sats will be deducted from your first payment.`
-            : 'A small fee will be deducted from your first payment.'}
+        <Text style={[styles.subtitle, isDark && styles.subtitleDark]}>{error}</Text>
+      </View>
+    </View>
+  )
+}
+
+function GeneratingInvoiceState({ isDark }: { isDark: boolean }) {
+  return (
+    <View style={[styles.sectionBox, isDark && styles.sectionBoxDark]}>
+      <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
+        Generating Invoice
+      </Text>
+      <View style={styles.qrContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.subtitle, isDark && styles.subtitleDark, styles.loadingText]}>
+          Creating Lightning invoice...
         </Text>
       </View>
     </View>
   )
 }
 
-// Constante para conversão sat -> msat (fora do componente para o React Compiler)
-const MSAT_PER_SAT = 1000n
+function InvoiceDisplay({
+  isDark,
+  invoiceData,
+  amount,
+  description,
+  hasActiveChannels,
+  onAmountChange,
+  onDescriptionChange,
+  onCopy,
+  onShare,
+}: InvoiceDisplayProps) {
+  const qrColor = isDark ? colors.text.dark : colors.text.light
+  const secondaryColor = colors.textSecondary[isDark ? 'dark' : 'light']
+  const buttonTintColor = isDark
+    ? alpha(colors.background.light, 0.05)
+    : alpha(colors.background.dark, 0.03)
+  const shareTintColor = isDark ? alpha(colors.white, 0.05) : alpha(colors.black, 0.03)
+
+  return (
+    <View style={[styles.sectionBox, isDark && styles.sectionBoxDark, styles.invoiceContainer]}>
+      <View style={styles.qrContainer}>
+        <QRCode
+          value={`lightning:${invoiceData.invoice}`}
+          size={320}
+          color={qrColor}
+          backgroundColor="transparent"
+        />
+      </View>
+
+      {!hasActiveChannels && (
+        <OnChainFeeWarning isDark={isDark} estimatedFee={invoiceData.channelOpeningFee} />
+      )}
+
+      <Text style={[styles.addressText, isDark && styles.addressTextDark]}>
+        {reduceInvoiceString(invoiceData.invoice)}
+      </Text>
+
+      <View style={styles.inputsContainer}>
+        <TextInput
+          style={[styles.input, isDark && styles.inputDark]}
+          placeholder="Amount (sats)"
+          placeholderTextColor={secondaryColor}
+          value={amount}
+          onChangeText={onAmountChange}
+          keyboardType="numeric"
+        />
+        <TextInput
+          style={[styles.input, isDark && styles.inputDark]}
+          placeholder="Description"
+          placeholderTextColor={secondaryColor}
+          value={description}
+          onChangeText={onDescriptionChange}
+        />
+      </View>
+
+      <View style={styles.buttonRow}>
+        <Button
+          tintColor={buttonTintColor}
+          style={styles.actionButton}
+          color={secondaryColor}
+          startIcon={<IconSymbol name="doc.on.doc" size={20} color={secondaryColor} />}
+          onPress={onCopy}
+        >
+          Copy
+        </Button>
+
+        <Button
+          style={styles.actionButton}
+          tintColor={shareTintColor}
+          color={secondaryColor}
+          startIcon={<IconSymbol name="square.and.arrow.up" size={20} color={secondaryColor} />}
+          onPress={onShare}
+        >
+          Share
+        </Button>
+      </View>
+    </View>
+  )
+}
+
+// ============================================================================
+// Main Component
+// ============================================================================
 
 export default function ReceiveLightning() {
   const { isDark } = useSettings()
@@ -55,36 +269,24 @@ export default function ReceiveLightning() {
   const [loading, setLoading] = useState(false)
   const [invoiceData, setInvoiceData] = useState<Invoice | null>(null)
 
-  // Converter satoshis para millisatoshis (1 sat = 1000 msat)
+  // Valores derivados
   const amountValue = amount ? BigInt(amount) : 0n
   const amountMsat = amountValue * MSAT_PER_SAT
-  const descriptionValue = description || 'Payment'
+  const descriptionValue = description || DEFAULT_DESCRIPTION
 
-  // Gerar invoice automaticamente ao inicializar (invoice sem valor)
+  // Gerar invoice automaticamente ao inicializar
   useEffect(() => {
-    const generate = async () => {
-      // Verificar se está inicializado
-      if (!state.isInitialized) return
+    if (!state.isInitialized) return
 
-      // Procurar invoice pendente existente com mesmo amount e description
-      const existingInvoice = state.invoices.find(inv => {
-        const now = Date.now()
-        const isNotExpired = inv.expiresAt > now
-        const isPending = inv.status === 'pending'
-        const sameAmount = inv.amount === amountMsat
-        const sameDescription = inv.description === descriptionValue
+    const existingInvoice = findExistingInvoice(state.invoices, amountMsat, descriptionValue)
 
-        return isPending && isNotExpired && sameAmount && sameDescription
-      })
+    if (existingInvoice) {
+      console.log('[ReceiveLightning] Reusing existing invoice:', existingInvoice.paymentHash)
+      setInvoiceData(existingInvoice)
+      return
+    }
 
-      if (existingInvoice) {
-        // Reutilizar invoice existente
-        console.log('[ReceiveLightning] Reusing existing invoice:', existingInvoice.paymentHash)
-        setInvoiceData(existingInvoice)
-        return
-      }
-
-      // Não encontrou invoice válida, gerar nova
+    const generateNewInvoice = async () => {
       setLoading(true)
       try {
         const invoice = await generateInvoice(amountMsat, descriptionValue)
@@ -97,10 +299,10 @@ export default function ReceiveLightning() {
       }
     }
 
-    generate()
+    generateNewInvoice()
   }, [amountMsat, descriptionValue, state.isInitialized, state.invoices, generateInvoice])
 
-  // Handle share invoice
+  // Handlers
   const handleShareInvoice = async () => {
     if (!invoiceData) {
       Alert.alert('Error', 'Please wait for invoice generation')
@@ -117,7 +319,6 @@ export default function ReceiveLightning() {
     }
   }
 
-  // Handle copy invoice
   const handleCopyInvoice = async () => {
     if (!invoiceData) {
       Alert.alert('Error', 'Please wait for invoice generation')
@@ -133,141 +334,34 @@ export default function ReceiveLightning() {
     }
   }
 
-  function reduceInvoiceString(invoice: string): string {
-    if (invoice.length <= 20) return invoice
-    return `${invoice.slice(0, 10)}...${invoice.slice(-10)}`
-  }
-
-  // Se o serviço não está inicializado, mostrar loading ou erro
+  // Early returns para estados de loading e erro
   if (!state.isInitialized && state.isLoading) {
-    return (
-      <View style={[styles.contentWrapper, isDark && styles.contentWrapperDark]}>
-        <View style={[styles.sectionBox, isDark && styles.sectionBoxDark]}>
-          <View style={styles.qrContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={[styles.subtitle, isDark && styles.subtitleDark, { marginTop: 16 }]}>
-              Initializing Lightning...
-            </Text>
-          </View>
-        </View>
-      </View>
-    )
+    return <LoadingState isDark={isDark} message="Initializing Lightning..." />
   }
 
   if (state.error) {
-    return (
-      <View style={[styles.contentWrapper, isDark && styles.contentWrapperDark]}>
-        <View style={[styles.sectionBox, isDark && styles.sectionBoxDark]}>
-          <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
-            Lightning Error
-          </Text>
-          <Text style={[styles.subtitle, isDark && styles.subtitleDark]}>{state.error}</Text>
-        </View>
-      </View>
-    )
+    return <ErrorState isDark={isDark} error={state.error} />
   }
 
+  // Render principal
   return (
     <View>
       <ScrollView style={[styles.scrollView, isDark && styles.scrollViewDark]}>
         <View style={[styles.contentWrapper, isDark && styles.contentWrapperDark]}>
-          {/* Loading State */}
           {loading ? (
-            <View style={[styles.sectionBox, isDark && styles.sectionBoxDark]}>
-              <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
-                Generating Invoice
-              </Text>
-              <View style={styles.qrContainer}>
-                <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={[styles.subtitle, isDark && styles.subtitleDark, { marginTop: 16 }]}>
-                  Creating Lightning invoice...
-                </Text>
-              </View>
-            </View>
+            <GeneratingInvoiceState isDark={isDark} />
           ) : invoiceData ? (
-            <View
-              style={[styles.sectionBox, isDark && styles.sectionBoxDark, styles.invoiceContainer]}
-            >
-              <View style={styles.qrContainer}>
-                <QRCode
-                  value={`lightning:${invoiceData.invoice}`}
-                  size={320}
-                  color={isDark ? colors.text.dark : colors.text.light}
-                  backgroundColor="transparent"
-                />
-              </View>
-              {/* On-chain fee warning when channel opening is required */}
-              {!state.hasActiveChannels && (
-                <OnChainFeeWarning isDark={isDark} estimatedFee={invoiceData.channelOpeningFee} />
-              )}
-
-              {/* Exibição da invoice */}
-              <Text style={[styles.addressText, isDark && styles.addressTextDark]}>
-                {reduceInvoiceString(invoiceData.invoice)}
-              </Text>
-
-              {/* Inputs abaixo do QRCode */}
-              <View style={styles.inputsContainer}>
-                <TextInput
-                  style={[styles.input, isDark && styles.inputDark]}
-                  placeholder="Amount (sats)"
-                  placeholderTextColor={colors.textSecondary[isDark ? 'dark' : 'light']}
-                  value={amount}
-                  onChangeText={setAmount}
-                  keyboardType="numeric"
-                />
-                <TextInput
-                  style={[styles.input, isDark && styles.inputDark]}
-                  placeholder="Description"
-                  placeholderTextColor={colors.textSecondary[isDark ? 'dark' : 'light']}
-                  value={description}
-                  onChangeText={setDescription}
-                />
-              </View>
-
-              <View
-                style={{
-                  flexDirection: 'row',
-                  gap: 24,
-                }}
-              >
-                <Button
-                  tintColor={
-                    isDark
-                      ? alpha(colors.background.light, 0.05)
-                      : alpha(colors.background.dark, 0.03)
-                  }
-                  style={{ flex: 1 }}
-                  color={colors.textSecondary[isDark ? 'dark' : 'light']}
-                  startIcon={
-                    <IconSymbol
-                      name="doc.on.doc"
-                      size={20}
-                      color={colors.textSecondary[isDark ? 'dark' : 'light']}
-                    />
-                  }
-                  onPress={handleCopyInvoice}
-                >
-                  Copy
-                </Button>
-
-                <Button
-                  style={{ flex: 1 }}
-                  tintColor={isDark ? alpha(colors.white, 0.05) : alpha(colors.black, 0.03)}
-                  color={colors.textSecondary[isDark ? 'dark' : 'light']}
-                  startIcon={
-                    <IconSymbol
-                      name="square.and.arrow.up"
-                      size={20}
-                      color={colors.textSecondary[isDark ? 'dark' : 'light']}
-                    />
-                  }
-                  onPress={handleShareInvoice}
-                >
-                  Share
-                </Button>
-              </View>
-            </View>
+            <InvoiceDisplay
+              isDark={isDark}
+              invoiceData={invoiceData}
+              amount={amount}
+              description={description}
+              hasActiveChannels={state.hasActiveChannels}
+              onAmountChange={setAmount}
+              onDescriptionChange={setDescription}
+              onCopy={handleCopyInvoice}
+              onShare={handleShareInvoice}
+            />
           ) : null}
         </View>
       </ScrollView>
@@ -280,7 +374,7 @@ const styles = StyleSheet.create({
   scrollView: {},
   scrollViewDark: {},
   contentWrapper: {
-    padding: 24,
+    //padding: 24,
     gap: 24,
   },
   contentWrapperDark: {},
@@ -315,11 +409,11 @@ const styles = StyleSheet.create({
 
   // Inputs
   inputsContainer: {
-    gap: 12,
+    gap: 24,
   },
   input: {
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 32,
     backgroundColor: alpha(colors.black, 0.05),
     color: colors.text.light,
     fontSize: 16,
@@ -327,6 +421,20 @@ const styles = StyleSheet.create({
   inputDark: {
     backgroundColor: alpha(colors.white, 0.05),
     color: colors.text.dark,
+  },
+
+  // Buttons
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 24,
+  },
+  actionButton: {
+    flex: 1,
+  },
+
+  // Loading
+  loadingText: {
+    marginTop: 16,
   },
 
   // Invoice
@@ -348,26 +456,34 @@ const styles = StyleSheet.create({
   // On-chain fee warning
   feeWarningContainer: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 12,
     padding: 16,
-    borderRadius: 12,
-    backgroundColor: alpha(colors.info, 0.1),
+    borderRadius: 32,
+    backgroundColor: alpha(colors.primary, 0.05),
   },
   feeWarningContainerDark: {
-    backgroundColor: alpha(colors.info, 0.15),
+    backgroundColor: alpha(colors.primary, 0.05),
   },
   feeWarningTextContainer: {
-    flex: 1,
+    // flex: 1,
     gap: 4,
   },
   feeWarningTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text.light,
+    color: colors.primary,
   },
   feeWarningTitleDark: {
-    color: colors.text.dark,
+    color: colors.primary,
+  },
+  feeWarningHint: {
+    fontSize: 13,
+    color: colors.textSecondary.light,
+  },
+  feeWarningHintDark: {
+    color: colors.textSecondary.dark,
   },
   feeWarningMessage: {
     fontSize: 14,
@@ -375,6 +491,38 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   feeWarningMessageDark: {
+    color: colors.textSecondary.dark,
+  },
+
+  // Fee BottomSheet content
+  feeSheetContent: {
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  feeSheetTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text.light,
+  },
+  feeSheetTitleDark: {
+    color: colors.text.dark,
+  },
+  feeSheetMessage: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: colors.primary,
+    lineHeight: 22,
+  },
+  feeSheetMessageDark: {
+    color: colors.primary,
+  },
+  feeSheetDescription: {
+    fontSize: 14,
+    color: colors.textSecondary.light,
+    lineHeight: 20,
+  },
+  feeSheetDescriptionDark: {
     color: colors.textSecondary.dark,
   },
 })

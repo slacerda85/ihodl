@@ -10,6 +10,8 @@ import {} from 'expo-router'
 import { alpha } from '@/ui/utils'
 import { useWallet } from '@/ui/features/wallet'
 
+const IOS_MODAL_HEADER_HEIGHT = 74
+
 function WalletActions({ colorMode }: { colorMode: 'light' | 'dark' }) {
   return (
     <Link href="/wallet/actions" asChild>
@@ -93,16 +95,22 @@ export default function WalletLayout() {
   const { activeWalletId, wallets } = useWallet()
   const selectedWallet = wallets.find(wallet => wallet.id === activeWalletId)
   const empty = wallets === undefined || wallets?.length === 0
-  /* const
-   */
 
   const { isDark } = useSettings()
   const colorMode = isDark ? 'dark' : 'light'
 
   const modalOptions: StackScreenOptions = {
     presentation: 'modal',
+    headerStyle: {
+      backgroundColor: isDark
+        ? alpha(colors.background.dark, 0.1)
+        : alpha(colors.background.light, 0.1),
+    },
     contentStyle: {
-      paddingTop: Platform.OS === 'ios' ? 64 : 0,
+      paddingTop: Platform.OS === 'ios' ? IOS_MODAL_HEADER_HEIGHT : 0,
+      backgroundColor: isDark
+        ? alpha(colors.background.dark, 0.1)
+        : alpha(colors.background.light, 0.1),
     },
   }
 

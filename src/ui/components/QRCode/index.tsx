@@ -3,6 +3,7 @@ import { View, ActivityIndicator, StyleProp, ViewStyle } from 'react-native'
 import Svg, { Rect } from 'react-native-svg'
 import qrcode from 'qrcode-generator'
 import IHodlLogo from '@/ui/assets/ihodl-logo'
+import colors from '@/ui/colors'
 
 interface QRCodeProps {
   value: string
@@ -134,7 +135,7 @@ export default function QRCode({
   }
 
   const actualSize = size === 'auto' ? containerSize : size
-  const logoDisplaySize = actualSize * 0.22
+  const logoDisplaySize = actualSize * 0.2
 
   return (
     <View style={viewStyle} onLayout={size === 'auto' ? handleLayout : undefined}>
@@ -151,15 +152,15 @@ export default function QRCode({
             position: 'absolute',
             width: logoDisplaySize,
             height: logoDisplaySize,
-            backgroundColor,
+            backgroundColor: colors.black,
             alignItems: 'center',
             justifyContent: 'center',
-            borderRadius: 6,
-            borderWidth: 2,
-            borderColor: color,
+            // borderRadius: 6,
+            // borderWidth: 2,
+            // borderColor: color,
           }}
         >
-          <IHodlLogo width={logoDisplaySize * 0.75} height={logoDisplaySize * 0.75} />
+          <IHodlLogo width={logoDisplaySize} height={logoDisplaySize} />
         </View>
       )}
     </View>

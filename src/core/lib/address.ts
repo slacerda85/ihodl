@@ -1,6 +1,6 @@
 import { publicKeyVerify } from 'secp256k1'
 import { hash160, sha256 } from './crypto'
-import { bech32, bech32m } from 'bech32'
+import { bech32, bech32m } from './bip'
 import { Tx } from '../models/transaction'
 import { createPublicKey, deriveChildKey, splitMasterKey } from './key'
 import { P2WPKH_VERSION, HASH160_LENGTH } from '../models/address'

@@ -100,10 +100,10 @@ describe('Socket Utilities', () => {
   })
 
   describe('createLightningSocket', () => {
-    it('should create a TLS socket and reject on timeout', async () => {
+    it('should create a TCP socket and reject on timeout', async () => {
       const peer = { host: '240.0.0.1', port: 9735, pubkey: 'test' }
 
-      await expect(createLightningSocket(peer, 1000)).rejects.toThrow('TLS connection timeout')
+      await expect(createLightningSocket(peer, 1000)).rejects.toThrow('TCP connection timeout')
     }, 10000)
 
     it('should create a TLS socket and reject on connection error', async () => {

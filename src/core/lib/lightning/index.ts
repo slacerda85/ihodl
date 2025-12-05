@@ -164,3 +164,77 @@ export {
   type MppReceiveResult,
   type TimedOutPayment,
 } from './mpp'
+
+// BOLT #1 - Base Protocol
+export {
+  // BigSize encoding
+  encodeBigSize as encodeBolt1BigSize,
+  decodeBigSize as decodeBolt1BigSize,
+  isValidBigSize,
+  // TLV encoding
+  encodeTlvStream as encodeBolt1TlvStream,
+  decodeTlvStream as decodeBolt1TlvStream,
+  createTlvRecord,
+  findTlv,
+  // Feature bits
+  FEATURE_BITS,
+  hasFeature,
+  setFeature,
+  clearFeature,
+  negotiateFeatures,
+  areFeaturesCompatible,
+  createFeatureVector,
+  listFeatures,
+  // Init message
+  encodeInitMessage,
+  decodeInitMessage,
+  createInitMessage,
+  // Error message
+  encodeErrorMessage,
+  decodeErrorMessage,
+  createErrorMessage,
+  // Warning message
+  encodeWarningMessage,
+  decodeWarningMessage,
+  createWarningMessage,
+  // Ping/Pong
+  encodePingMessage,
+  decodePingMessage,
+  createPingMessage,
+  encodePongMessage,
+  decodePongMessage,
+  createPongMessage,
+  // Message utilities
+  getMessageType,
+  // Chain hashes
+  CHAIN_HASHES,
+  GLOBAL_ERROR_CHANNEL_ID,
+} from './bolt1'
+
+// Re-export types from models
+export type {
+  TlvRecord,
+  TlvStream,
+  InitMessage,
+  ErrorMessage,
+  WarningMessage,
+  PingMessage,
+  PongMessage,
+  ChainHash,
+  ChannelId,
+  LightningMessage,
+} from '@/core/models/lightning/base'
+
+export { LightningMessageType, InitTlvType } from '@/core/models/lightning/base'
+
+// Lightning-Electrum Integration
+export {
+  LightningElectrumManager,
+  getLightningElectrumManager,
+  createLightningElectrumManager,
+  type TxStatus,
+  type Utxo,
+  type TxStatusCallback,
+  type NewTxCallback,
+  type MonitorOptions,
+} from './electrum'

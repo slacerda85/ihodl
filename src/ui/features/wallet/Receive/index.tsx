@@ -7,7 +7,7 @@ import { useSettings } from '../../settings/SettingsProvider'
 
 import Receive from './Receive'
 import ReceiveLightning from './ReceiveLightning'
-import { GlassView } from 'expo-glass-effect'
+// import { GlassView } from 'expo-glass-effect'
 
 type ReceiveMode = 'onchain' | 'lightning'
 
@@ -58,9 +58,9 @@ export default function ReceiveScreen() {
       </View>
 
       {/* Content */}
-      <GlassView style={{ borderRadius: 32 }}>
-        {mode === 'onchain' ? <Receive /> : <ReceiveLightning />}
-      </GlassView>
+      {/* <GlassView style={{ borderRadius: 32 }}> */}
+      {mode === 'onchain' ? <Receive /> : <ReceiveLightning />}
+      {/* </GlassView> */}
     </View>
   )
 }
@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
   selectorContainer: {
     flexDirection: 'row',
     marginHorizontal: 24,
-    marginTop: 24,
+    // marginTop: 24,
     marginBottom: 16,
     backgroundColor: alpha(colors.black, 0.05),
     borderRadius: 32,

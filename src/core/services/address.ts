@@ -145,6 +145,12 @@ export default class AddressService implements AddressServiceInterface {
 
     const transactionsService = new TransactionService()
     while (unusedCount < GAP_LIMIT) {
+      try {
+        this.deriveAddress(receivingAccountKey, addressIndex)
+      } catch (error) {
+        console.error('Error deriving address:', error)
+        break
+      }
       const receivingAddress = this.deriveAddress(receivingAccountKey, addressIndex)
       const txs = await transactionsService.getTransactions(receivingAddress, connection)
       if (txs.length === 0) {
