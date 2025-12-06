@@ -18,7 +18,7 @@ import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 import QRCode from '@/ui/components/QRCode'
 import Button from '@/ui/components/Button'
-import { useSettings } from '@/ui/features/settings'
+import { useIsDark } from '@/ui/features/settings'
 import {
   useAddressLoading,
   useNextAddresses,
@@ -26,7 +26,7 @@ import {
 } from '../../address/AddressProviderV2'
 // import { useAddress } from '../../address/AddressProvider'
 export default function Receive() {
-  const { isDark } = useSettings()
+  const isDark = useIsDark()
   // const { loading, usedChangeAddresses, usedReceivingAddresses, nextReceiveAddress } = useAddress()
   const loading = useAddressLoading()
   const { receive: nextReceiveAddress } = useNextAddresses()

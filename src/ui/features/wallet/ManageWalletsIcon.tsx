@@ -3,7 +3,7 @@ import Ionicons from '@expo/vector-icons/Ionicons'
 import Entypo from '@expo/vector-icons/Entypo'
 import { View } from 'react-native'
 import colors from '@/ui/colors'
-import { useSettings } from '../settings/SettingsProvider'
+import { useIsDark } from '../settings'
 
 export default function ManageWalletsIcon({
   size = 24,
@@ -14,7 +14,7 @@ export default function ManageWalletsIcon({
   color: string
   filled?: boolean
 }) {
-  const { isDark } = useSettings()
+  const isDark = useIsDark()
   const iconBgColor = isDark ? colors.background.dark : colors.background.light
 
   return (

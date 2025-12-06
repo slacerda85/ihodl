@@ -1,10 +1,10 @@
 import { Stack } from 'expo-router'
 import colors from '@/ui/colors'
-import { useSettings } from '@/ui/features/settings'
+import { useIsDark } from '@/ui/features/settings'
 import { Platform } from 'react-native'
 
 export default function TransactionsLayout() {
-  const { isDark } = useSettings()
+  const isDark = useIsDark()
 
   return (
     <Stack

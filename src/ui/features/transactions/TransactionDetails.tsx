@@ -5,17 +5,16 @@ import * as Clipboard from 'expo-clipboard'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
-import { useSettings } from '@/ui/features/settings'
+import { useIsDark } from '@/ui/features/settings'
 import QRCode from '@/ui/components/QRCode'
 import ContentContainer from '@/ui/components/ContentContainer'
-import { useAddress } from '../address/AddressProvider'
 import { transactionService } from '@/core/services'
 import { formatBalance } from '../wallet/utils'
 import { useAddresses } from '../address/AddressProviderV2'
 
 export default function TransactionDetails() {
   const { txid } = useLocalSearchParams<{ txid: string }>()
-  const { isDark } = useSettings()
+  const isDark = useIsDark()
   const addresses = useAddresses()
 
   const transactions = transactionService.getFriendlyTxs(addresses || [])

@@ -17,7 +17,7 @@ import Button from '@/ui/components/Button'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 import QRCode from '@/ui/components/QRCode'
 import { useLightning, Invoice } from '@/ui/features/lightning/LightningProvider'
-import { useSettings } from '@/ui/features/settings'
+import { useIsDark } from '@/ui/features/settings'
 import { alpha } from '@/ui/utils'
 
 // ============================================================================
@@ -261,7 +261,7 @@ function InvoiceDisplay({
 // ============================================================================
 
 export default function ReceiveLightning() {
-  const { isDark } = useSettings()
+  const isDark = useIsDark()
   const { generateInvoice, state } = useLightning()
 
   const [amount, setAmount] = useState('')

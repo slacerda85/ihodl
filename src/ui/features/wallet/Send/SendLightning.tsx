@@ -11,7 +11,7 @@ import {
 import { useRouter } from 'expo-router'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
-import { useSettings } from '../../settings'
+import { useIsDark } from '../../settings'
 import { formatBalance } from '../utils'
 import { useLightning } from '../../lightning/LightningProvider'
 
@@ -26,7 +26,7 @@ import { useLightning } from '../../lightning/LightningProvider'
  */
 export default function SendLightning() {
   const router = useRouter()
-  const { isDark } = useSettings()
+  const isDark = useIsDark()
   const { state: lightningState, sendPayment, decodeInvoice } = useLightning()
 
   const [submitting, setSubmitting] = useState<boolean>(false)

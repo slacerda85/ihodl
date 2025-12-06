@@ -4,12 +4,12 @@ import { useState, useMemo } from 'react'
 import { Text, View, StyleSheet, Pressable, Animated } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import colors from '@/ui/colors'
-import { useSettings } from '@/ui/features/settings'
+import { useIsDark } from '@/ui/features/settings'
 import IHodlLogoBorderLess from '@/ui/assets/ihodl-logo-borderless'
 
 export default function AuthScreen() {
   const { auth, authenticated } = useAuth()
-  const { isDark } = useSettings()
+  const isDark = useIsDark()
   const [isUnlocked, setIsUnlocked] = useState(false)
   const rotateAnim = useMemo(() => new Animated.Value(0), [])
 

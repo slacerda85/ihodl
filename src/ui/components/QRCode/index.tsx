@@ -135,7 +135,7 @@ export default function QRCode({
   }
 
   const actualSize = size === 'auto' ? containerSize : size
-  const logoDisplaySize = actualSize * 0.2
+  const logoDisplaySize = actualSize * 0.25
 
   return (
     <View style={viewStyle} onLayout={size === 'auto' ? handleLayout : undefined}>
@@ -153,6 +153,8 @@ export default function QRCode({
             width: logoDisplaySize,
             height: logoDisplaySize,
             backgroundColor: colors.black,
+            borderWidth: 8,
+            borderColor: 'white',
             alignItems: 'center',
             justifyContent: 'center',
             // borderRadius: 6,
@@ -160,7 +162,7 @@ export default function QRCode({
             // borderColor: color,
           }}
         >
-          <IHodlLogo width={logoDisplaySize} height={logoDisplaySize} />
+          <IHodlLogo width={logoDisplaySize - 16} height={logoDisplaySize - 16} />
         </View>
       )}
     </View>

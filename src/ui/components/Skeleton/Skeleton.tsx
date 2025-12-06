@@ -1,5 +1,8 @@
 import React, { useEffect, useMemo } from 'react'
 import { Animated, ViewStyle, StyleSheet } from 'react-native'
+import { useActiveColorMode } from '@/ui/features/settings'
+import colors from '@/ui/colors'
+import { alpha } from '@/ui/utils'
 
 interface SkeletonProps {
   width?: number | string
@@ -14,6 +17,7 @@ const Skeleton: React.FC<SkeletonProps> = ({
   borderRadius = 4,
   style,
 }) => {
+  const colorMode = useActiveColorMode()
   const opacity = useMemo(() => new Animated.Value(0.3), [])
 
   useEffect(() => {
@@ -39,7 +43,7 @@ const Skeleton: React.FC<SkeletonProps> = ({
   return (
     <Animated.View
       style={[
-        styles.skeleton,
+        styles[colorMode],
         { width: width as any, height: height as any, borderRadius, opacity },
         style,
       ]}
@@ -48,8 +52,11 @@ const Skeleton: React.FC<SkeletonProps> = ({
 }
 
 const styles = StyleSheet.create({
-  skeleton: {
-    backgroundColor: '#e0e0e0',
+  light: {
+    backgroundColor: alpha(colors.black, 0.1),
+  },
+  dark: {
+    backgroundColor: alpha(colors.white, 0.1),
   },
 })
 

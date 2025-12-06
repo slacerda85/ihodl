@@ -4,8 +4,7 @@ import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { useRouter } from 'expo-router'
 import wordlist from 'bip39/src/wordlists/english.json'
-import { useWallet } from './WalletProvider'
-import { useSettings } from '../settings/SettingsProvider'
+import { useIsDark } from '../settings'
 import Button from '@/ui/components/Button'
 import { GlassView } from 'expo-glass-effect'
 import { useWalletActions } from './WalletProviderV2'
@@ -13,12 +12,12 @@ import { useWalletActions } from './WalletProviderV2'
 export default function ImportWallet() {
   const router = useRouter()
   const { createWallet } = useWalletActions()
+  const isDark = useIsDark()
   const [walletName, setWalletName] = useState<string>('')
   const [seedPhrase, setSeedPhrase] = useState<string>('')
   const [currentWord, setCurrentWord] = useState<string>('')
   const [password, setPassword] = useState<string>('')
   const [usePassword, setUsePassword] = useState<boolean>(false)
-  const { isDark } = useSettings()
   const [submitting, setSubmitting] = useState<boolean>(false)
 
   // Derivar suggestions via useMemo ao invés de useEffect + setState

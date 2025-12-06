@@ -4,8 +4,7 @@ import { StyleSheet, Text, View, ActivityIndicator } from 'react-native'
 import { useCallback, useState } from 'react'
 import { useRouter } from 'expo-router'
 import { alpha } from '@/ui/utils'
-import { useWallet } from '@/ui/features/wallet'
-import { useSettings } from '@/ui/features/settings'
+import { useIsDark } from '@/ui/features/settings'
 import Button from '@/ui/components/Button'
 import { useActiveWallet, useWalletActions } from './WalletProviderV2'
 
@@ -14,7 +13,7 @@ export default function DeleteWallet() {
   const activeWallet = useActiveWallet()
 
   const router = useRouter()
-  const { isDark } = useSettings()
+  const isDark = useIsDark()
 
   const [submitting, setSubmitting] = useState<boolean>(false)
 

@@ -261,6 +261,33 @@ export default class AddressService implements AddressServiceInterface {
     return address
   }
 
+  /**
+   * Otimizado: Retorna ambos os próximos endereços (receive e change) derivando as chaves apenas uma vez.
+   * Isso evita a operação pesada de derivação de chaves (PBKDF2) ser executada duas vezes.
+   */
+  getNextAddresses(): { receive: string; change: string } {
+    const walletId = walletService.getActiveWalletId()
+    if (!walletId) {
+      throw new Error('No active wallet for getting next addresses')
+    }
+    const repository = new AddressRepository()
+    let collection = repository.read(walletId)
+    if (!collection) {
+      collection = {
+        walletId,
+        addresses: [],
+        nextReceiveIndex: 0,
+        nextChangeIndex: 0,
+        gapLimit: GAP_LIMIT,
+      }
+    }
+    // Deriva as chaves apenas uma vez (operação pesada)
+    const { receivingAccountKey, changeAccountKey } = this.getAccountKeys()
+    const receive = this.deriveAddress(receivingAccountKey, collection.nextReceiveIndex)
+    const change = this.deriveAddress(changeAccountKey, collection.nextChangeIndex)
+    return { receive, change }
+  }
+
   clearAddresses(): void {
     // const walletService = new WalletService()
     const walletId = walletService.getActiveWalletId()

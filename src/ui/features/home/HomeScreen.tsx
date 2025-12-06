@@ -3,14 +3,14 @@ import { StyleSheet, Text, View } from 'react-native'
 import colors from '@/ui/colors'
 import { router, useSegments } from 'expo-router'
 import { useAuth } from '../auth/AuthProvider'
-import { useSettings } from '@/ui/features/settings'
+import { useIsDark } from '@/ui/features/settings'
 import IHodlLogo from '@/ui/assets/ihodl-logo'
 
 export default function HomeScreen() {
   const { authenticated } = useAuth()
   const segments = useSegments()
   const currentRoute = '/' + segments.join('/')
-  const { isDark } = useSettings()
+  const isDark = useIsDark()
 
   useEffect(() => {
     if (currentRoute === '/' && authenticated) {

@@ -13,7 +13,7 @@ import { useRouter } from 'expo-router'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
-import { useSettings } from '../../settings'
+import { useIsDark } from '../../settings'
 import { formatBalance } from '../utils'
 // import { useAddress } from '../../address/AddressProvider'
 import { useNetwork } from '../../network/NetworkProvider'
@@ -31,7 +31,7 @@ import { useBalance } from '../../address/AddressProviderV2'
  */
 export default function SendOnChain() {
   const router = useRouter()
-  const { isDark } = useSettings()
+  const isDark = useIsDark()
   const { getConnection } = useNetwork()
   const { utxos, balance } = useBalance()
 
@@ -39,7 +39,6 @@ export default function SendOnChain() {
   const [recipientAddress, setRecipientAddress] = useState<string>('')
   const [amountInput, setAmountInput] = useState<string>('')
   const [amount, setAmount] = useState<number>(0)
-  const [feeRate, setFeeRate] = useState<number>(1)
   const [memo, setMemo] = useState<string>('')
   const [autoFeeAdjustment, setAutoFeeAdjustment] = useState<boolean>(true)
   const [feeRates, setFeeRates] = useState<{
@@ -62,37 +61,30 @@ export default function SendOnChain() {
     return addressService.validateAddress(recipientAddress)
   }, [recipientAddress])
 
+  // Fee rate efetivo derivado (sem state duplicado)
+  const feeRate = useMemo(() => {
+    if (feeRates) {
+      return feeRates[selectedFeeRate]
+    }
+    return 1 // fallback
+  }, [feeRates, selectedFeeRate])
+
   // Validação de amount derivada via useMemo
   const amountValid = useMemo(() => {
     if (amount <= 0) return null
 
     const amountInSatoshis = Math.round(amount * 100000000)
     const feeRateInteger = Math.round(feeRate)
-    const estimatedTxSize = autoFeeAdjustment && feeRates ? 200 + Math.random() * 100 : 250
+    const estimatedTxSize = 250
     const estimatedFeeInSatoshis = Math.round(feeRateInteger * estimatedTxSize)
     const balanceInSatoshis = Math.round(balance * 100000000)
 
     return amountInSatoshis + estimatedFeeInSatoshis <= balanceInSatoshis
-  }, [feeRate, amount, autoFeeAdjustment, feeRates, balance])
-
-  // Calcular feeRate efetivo derivado de feeRates e selectedFeeRate
-  const effectiveFeeRate = useMemo(() => {
-    if (feeRates && !autoFeeAdjustment) {
-      return feeRates[selectedFeeRate]
-    }
-    return feeRate
-  }, [feeRates, autoFeeAdjustment, selectedFeeRate, feeRate])
-
-  // Sincronizar effectiveFeeRate com feeRate state quando necessário
-  useEffect(() => {
-    if (feeRates && !autoFeeAdjustment && feeRate !== effectiveFeeRate) {
-      setFeeRate(effectiveFeeRate)
-    }
-  }, [effectiveFeeRate, feeRates, autoFeeAdjustment, feeRate])
+  }, [feeRate, amount, balance])
 
   // Function to fetch recommended fee rates from network
   const fetchRecommendedFeeRates = useCallback(async () => {
-    if (!autoFeeAdjustment || feeRatesFetchedRef.current) return
+    if (feeRatesFetchedRef.current) return
     feeRatesFetchedRef.current = true
 
     setLoadingFeeRates(true)
@@ -101,26 +93,22 @@ export default function SendOnChain() {
       const connection = await getConnection()
       const rates = await transactionService.getFeeRates(connection)
       setFeeRates(rates)
-      setFeeRate(rates.normal)
       setSelectedFeeRate('normal')
       console.log('[SendOnChain] Fee rates updated:', rates)
     } catch (error) {
       console.error('[SendOnChain] Failed to fetch fee rates:', error)
       const fallbackRates = { slow: 1, normal: 2, fast: 5, urgent: 10 }
       setFeeRates(fallbackRates)
-      setFeeRate(fallbackRates.normal)
       setSelectedFeeRate('normal')
     } finally {
       setLoadingFeeRates(false)
     }
-  }, [autoFeeAdjustment, getConnection])
+  }, [getConnection])
 
-  // Effect to fetch fee rates quando componente monta (não chama setState diretamente)
+  // Effect to fetch fee rates quando componente monta
   useEffect(() => {
-    if (autoFeeAdjustment && !feeRates) {
-      fetchRecommendedFeeRates()
-    }
-  }, [autoFeeAdjustment, feeRates, fetchRecommendedFeeRates])
+    fetchRecommendedFeeRates()
+  }, [fetchRecommendedFeeRates])
 
   // Function to normalize amount input (convert commas to dots)
   const normalizeAmount = (text: string): string => {

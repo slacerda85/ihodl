@@ -2,10 +2,10 @@ import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { Link } from 'expo-router'
 import { StyleSheet, Text, View } from 'react-native'
-import { useSettings } from '../settings/SettingsProvider'
+import { useIsDark } from '../settings'
 
 export default function WalletActions() {
-  const { isDark } = useSettings()
+  const isDark = useIsDark()
 
   return (
     <View style={styles.container}>

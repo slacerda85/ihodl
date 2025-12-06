@@ -1,4 +1,4 @@
-import { useSettings } from '@/ui/features/settings'
+import { useIsDark } from '@/ui/features/settings'
 import colors from '@/ui/colors'
 import { Stack } from 'expo-router'
 
@@ -7,7 +7,7 @@ export default function WalletLayout() {
 }
 
 function SettingsScreens() {
-  const { isDark } = useSettings()
+  const isDark = useIsDark()
   return (
     <Stack
       screenOptions={{

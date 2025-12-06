@@ -4,7 +4,7 @@ import { StyleSheet, Text, View } from 'react-native'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 // import { useWallet } from '@/ui/features/wallet'
-import { useSettings } from '@/ui/features/settings'
+import { useIsDark } from '@/ui/features/settings'
 // Components
 import WalletBalance from './WalletBalance'
 import CreateWalletIcon from './CreateWalletIcon'
@@ -18,7 +18,7 @@ import { useActiveWalletId, useWallets } from './WalletProviderV2'
 export default function WalletScreen() {
   const router = useRouter()
   // theme
-  const { isDark } = useSettings()
+  const isDark = useIsDark()
   // const { activeWalletId, wallets } = useWallet()
   const activeWalletId = useActiveWalletId()
   const wallets = useWallets()

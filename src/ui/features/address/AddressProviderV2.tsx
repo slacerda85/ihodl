@@ -26,10 +26,11 @@ import {
   useEffect,
   useSyncExternalStore,
 } from 'react'
+import { InteractionManager } from 'react-native'
 import { AddressDetails } from '@/core/models/address'
 import { useNetwork } from '../network/NetworkProvider'
 import { useActiveWalletId } from '../wallet/WalletProviderV2'
-import { addressService, transactionService } from '@/core/services'
+import { addressService, transactionService, walletService } from '@/core/services'
 import { Utxo } from '@/core/models/transaction'
 
 // ==========================================
@@ -49,6 +50,7 @@ type AddressContextType = {
   // Snapshots para useSyncExternalStore
   getAddressesSnapshot: () => AddressDetails[]
   getBalanceSnapshot: () => { balance: number; utxos: Utxo[] }
+  getNextAddressesSnapshot: () => { receive: string; change: string }
 }
 
 // ==========================================
@@ -65,12 +67,17 @@ class AddressStore {
   // Cache para snapshots - evita loop infinito
   private cachedAddresses: AddressDetails[] = []
   private cachedBalance: { balance: number; utxos: Utxo[] } = { balance: 0, utxos: [] }
+  private cachedNextAddresses: { receive: string; change: string } = { receive: '', change: '' }
 
   constructor() {
     this.refreshCache()
   }
 
-  private refreshCache = (): void => {
+  /**
+   * Refresh leve: apenas lê endereços e balance do MMKV (rápido)
+   * NÃO deriva próximos endereços (operação pesada)
+   */
+  private refreshCacheLight = (): void => {
     try {
       const receiving = addressService.getUsedAddresses('receiving')
       const change = addressService.getUsedAddresses('change')
@@ -90,6 +97,39 @@ class AddressStore {
     }
   }
 
+  /**
+   * Refresh completo: inclui derivação de próximos endereços (pesado)
+   */
+  private refreshCache = (): void => {
+    this.refreshCacheLight()
+
+    // Verifica se há wallet ativa antes de derivar endereços
+    // A derivação de chaves é uma operação pesada (PBKDF2)
+    const activeWalletId = walletService.getActiveWalletId()
+    if (!activeWalletId) {
+      this.cachedNextAddresses = { receive: '', change: '' }
+      return
+    }
+
+    try {
+      // Usa método otimizado que deriva chaves apenas uma vez
+      this.cachedNextAddresses = addressService.getNextAddresses()
+    } catch {
+      this.cachedNextAddresses = { receive: '', change: '' }
+    }
+  }
+
+  /**
+   * Limpa o cache para mostrar estado vazio (skeleton)
+   * Usado quando troca de wallet para dar feedback visual imediato
+   */
+  clear = (): void => {
+    this.cachedAddresses = []
+    this.cachedBalance = { balance: 0, utxos: [] }
+    this.cachedNextAddresses = { receive: '', change: '' }
+    this.subscribers.forEach(callback => callback())
+  }
+
   subscribe = (callback: () => void): (() => void) => {
     this.subscribers.add(callback)
     return () => {
@@ -103,6 +143,14 @@ class AddressStore {
     this.subscribers.forEach(callback => callback())
   }
 
+  /**
+   * Notifica com refresh leve (sem derivação de chaves)
+   */
+  notifyLight = (): void => {
+    this.refreshCacheLight()
+    this.subscribers.forEach(callback => callback())
+  }
+
   // Snapshots retornam referências cacheadas (estáveis)
   getAddressesSnapshot = (): AddressDetails[] => {
     return this.cachedAddresses
@@ -110,6 +158,10 @@ class AddressStore {
 
   getBalanceSnapshot = (): { balance: number; utxos: Utxo[] } => {
     return this.cachedBalance
+  }
+
+  getNextAddressesSnapshot = (): { receive: string; change: string } => {
+    return this.cachedNextAddresses
   }
 }
 
@@ -137,23 +189,21 @@ export default function AddressProvider({ children }: AddressProviderProps) {
   // Tudo mais é lido do MMKV síncronamente
   const [loading, setLoading] = useState(false)
   const isLoadingRef = useRef(false)
-
-  // Quando a carteira ativa muda, atualiza o cache imediatamente
-  useEffect(() => {
-    addressStore.notify()
-  }, [activeWalletId])
+  const previousWalletIdRef = useRef<string | undefined>(activeWalletId)
 
   const refresh = useCallback(async () => {
-    // Guard contra múltiplas chamadas
-    if (isLoadingRef.current) return
-    isLoadingRef.current = true
-    setLoading(true)
+    // Se já tiver loading setado (pelo useEffect de wallet change), não seta novamente
+    // mas continua a execução
+    if (!isLoadingRef.current) {
+      isLoadingRef.current = true
+      setLoading(true)
+    }
 
     try {
       const connection = await getConnection()
       await addressService.discover(connection)
 
-      // Após discover, notifica subscribers
+      // Após discover, notifica subscribers com cache completo
       // Os dados atualizados estão no MMKV
       addressStore.notify()
     } catch (error) {
@@ -164,6 +214,38 @@ export default function AddressProvider({ children }: AddressProviderProps) {
     }
   }, [getConnection])
 
+  // Quando a carteira ativa muda, atualiza o cache e faz refresh
+  useEffect(() => {
+    // Se a carteira mudou
+    if (previousWalletIdRef.current !== activeWalletId) {
+      previousWalletIdRef.current = activeWalletId
+
+      if (activeWalletId) {
+        // Aguarda animação do modal terminar
+        const handle = InteractionManager.runAfterInteractions(() => {
+          // 1. Seta loading PRIMEIRO (mostra skeleton imediatamente)
+          setLoading(true)
+          isLoadingRef.current = true
+
+          // 2. Limpa cache e notifica (UI mostra skeleton com dados vazios)
+          addressStore.clear()
+
+          // 3. Faz refresh leve (lê MMKV, sem derivação pesada) em próximo frame
+          requestAnimationFrame(() => {
+            addressStore.notifyLight()
+
+            // 4. Dispara fetch da rede (async)
+            refresh()
+          })
+        })
+        return () => handle.cancel()
+      } else {
+        // Sem wallet ativa, apenas limpa o cache
+        addressStore.notify()
+      }
+    }
+  }, [activeWalletId, refresh])
+
   const contextValue = useMemo<AddressContextType>(
     () => ({
       loading,
@@ -171,6 +253,7 @@ export default function AddressProvider({ children }: AddressProviderProps) {
       subscribe: addressStore.subscribe,
       getAddressesSnapshot: addressStore.getAddressesSnapshot,
       getBalanceSnapshot: addressStore.getBalanceSnapshot,
+      getNextAddressesSnapshot: addressStore.getNextAddressesSnapshot,
     }),
     [loading, refresh],
   )
@@ -210,19 +293,12 @@ export function useBalance(): { balance: number; utxos: Utxo[] } {
 }
 
 /**
- * Hook para endereços derivados (useMemo local, não precisa de store)
+ * Hook reativo para próximos endereços (receive e change)
+ * Usa snapshot cacheado para evitar re-renders infinitos
  */
 export function useNextAddresses(): { receive: string; change: string } {
-  // Esses são calculados on-the-fly pelo service
-  // Não há necessidade de store subscription pois são derivados
-  try {
-    return {
-      receive: addressService.getNextUnusedAddress(),
-      change: addressService.getNextChangeAddress(),
-    }
-  } catch {
-    return { receive: '', change: '' }
-  }
+  const { subscribe, getNextAddressesSnapshot } = useAddressContext()
+  return useSyncExternalStore(subscribe, getNextAddressesSnapshot, getNextAddressesSnapshot)
 }
 
 /**

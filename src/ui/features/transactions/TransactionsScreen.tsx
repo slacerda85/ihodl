@@ -6,14 +6,13 @@ import BitcoinLogo from '@/ui/assets/bitcoin-logo'
 import { formatBalance } from '../wallet/utils'
 import { alpha } from '@/ui/utils'
 import { useHeaderHeight } from '@react-navigation/elements'
-import { useSettings } from '../settings'
+import { useIsDark } from '../settings'
 // import { useAccount } from '../account/AccountProvider'
 import { iosTabBarHeight } from '@/ui/tokens'
-import { useAddress } from '../address/AddressProvider'
+import { useAddresses, useAddressLoading } from '../address/AddressProviderV2'
 import { FriendlyTx } from '@/core/models/transaction'
 import { transactionService } from '@/core/services'
 import LoadingTransactions from './LoadingTransactions'
-import { useAddresses, useAddressLoading } from '../address/AddressProviderV2'
 // import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
 
 // Define types for our transaction list items
@@ -39,7 +38,7 @@ export default function TransactionsScreen() {
   const segments = useSegments()
   const isTransactionsRoute = segments[segments.length - 1] === 'transactions'
 
-  const { isDark } = useSettings()
+  const isDark = useIsDark()
   const addresses = useAddresses()
   const loading = useAddressLoading()
 
@@ -120,6 +119,9 @@ export default function TransactionsScreen() {
       const isPositive = item.type === 'received'
       const prefix = isPositive ? '+' : '-'
 
+      const isFirst = !item.isDate && (index === 0 || data[index - 1].isDate)
+      const isLast = !item.isDate && (index === data.length - 1 || data[index + 1].isDate)
+
       return (
         <Pressable
           onPress={() => {
@@ -127,7 +129,14 @@ export default function TransactionsScreen() {
             router.push(`/transactions/${item.tx.txid}` as any)
           }}
         >
-          <View style={[styles.transactionPressable, isDark && styles.transactionsPressableDark]}>
+          <View
+            style={[
+              styles.transactionPressable,
+              isDark && styles.transactionsPressableDark,
+              isFirst && styles.first,
+              isLast && styles.last,
+            ]}
+          >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <BitcoinLogo width={32} height={32} />
               <View>
@@ -312,8 +321,8 @@ const styles = StyleSheet.create({
   },
   transactionPressable: {
     // backgroundColor: 'blue',
-    paddingVertical: 16,
-    paddingHorizontal: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     // paddingBottom: 8,
     // paddingLeft: 8,
     // paddingRight: 16,
@@ -323,7 +332,7 @@ const styles = StyleSheet.create({
     // borderRadius: 32,
   },
   transactionsPressableDark: {
-    backgroundColor: alpha(colors.white, 0.1),
+    backgroundColor: alpha(colors.white, 0.08),
   },
   first: {
     borderTopLeftRadius: 32,

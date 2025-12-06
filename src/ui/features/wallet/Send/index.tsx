@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
-import { useSettings } from '../../settings'
+import { useIsDark } from '../../settings'
 import SendOnChain from './SendOnChain'
 import SendLightning from './SendLightning'
 
@@ -16,7 +16,7 @@ type SendMode = 'onchain' | 'lightning'
  * - Lightning: pagamentos Lightning Network instantâneos
  */
 export default function Send() {
-  const { isDark } = useSettings()
+  const isDark = useIsDark()
   const [mode, setMode] = useState<SendMode>('onchain')
 
   return (

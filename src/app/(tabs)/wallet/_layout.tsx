@@ -4,7 +4,7 @@ import colors from '@/ui/colors'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@/ui/features/auth/AuthProvider'
 import { ComponentProps, useCallback, useEffect } from 'react'
-import { useSettings } from '@/ui/features/settings'
+import { useIsDark } from '@/ui/features/settings'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 import {} from 'expo-router'
 import { alpha } from '@/ui/utils'
@@ -98,7 +98,7 @@ export default function WalletLayout() {
   const activeWallet = useActiveWallet()
   const empty = !activeWallet
 
-  const { isDark } = useSettings()
+  const isDark = useIsDark()
   const colorMode = isDark ? 'dark' : 'light'
 
   const modalOptions: StackScreenOptions = {

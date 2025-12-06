@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native'
 
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
-import { useSettings } from '../../settings/SettingsProvider'
+import { useIsDark } from '../../settings'
 
 import Receive from './Receive'
 import ReceiveLightning from './ReceiveLightning'
@@ -12,7 +12,7 @@ import ReceiveLightning from './ReceiveLightning'
 type ReceiveMode = 'onchain' | 'lightning'
 
 export default function ReceiveScreen() {
-  const { isDark } = useSettings()
+  const isDark = useIsDark()
   const [mode, setMode] = useState<ReceiveMode>('onchain')
 
   return (
