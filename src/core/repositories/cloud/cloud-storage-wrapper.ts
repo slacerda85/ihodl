@@ -61,39 +61,12 @@ export class CloudStorageWrapper {
   async getItem<T = any>(key: string): Promise<T | null> {
     try {
       const path = `${key}.json`
-
-      // Verifica se existe, mas trata erros de diretório como arquivo inexistente
-      let exists = false
-      try {
-        exists = await CloudStorage.exists(path, CloudStorageScope.AppData)
-      } catch (existsError: any) {
-        // Se não conseguir verificar existência (ex: diretório não existe), assume que não existe
-        if (existsError?.message?.includes('Directory not found') ||
-            existsError?.message?.includes('No such file')) {
-          exists = false
-        } else {
-          throw existsError
-        }
-      }
-
-      if (!exists) return null
-
       const data = await CloudStorage.readFile(path, CloudStorageScope.AppData)
       return JSON.parse(data) as T
     } catch (error: any) {
-      // Trata erros de arquivo/diretório não encontrado como normal
-      const errorMessage = error?.message || ''
-      console.log(`[DEBUG] CloudStorage error for ${key}:`, errorMessage)
-
-      if (errorMessage.includes('Directory not found') ||
-          errorMessage.includes('No such file') ||
-          errorMessage.includes('does not exist') ||
-          errorMessage.includes('backup_queue.json')) {
-        console.log(`[DEBUG] Treating ${key} error as file not found`)
-        return null
-      }
-      console.error(`Failed to get ${key} from cloud:`, error)
-      throw error
+      // Qualquer erro ao ler é tratado como arquivo inexistente
+      // Isso cobre "Directory not found", "File not found", etc.
+      return null
     }
   }
 
@@ -107,9 +80,11 @@ export class CloudStorageWrapper {
       await CloudStorage.unlink(path, CloudStorageScope.AppData)
     } catch (error: any) {
       // Trata tentativa de remover arquivo inexistente como normal
-      if (error?.message?.includes('Directory not found') ||
-          error?.message?.includes('No such file') ||
-          error?.message?.includes('does not exist')) {
+      if (
+        error?.message?.includes('Directory not found') ||
+        error?.message?.includes('No such file') ||
+        error?.message?.includes('does not exist')
+      ) {
         return
       }
       console.error(`Failed to remove ${key} from cloud:`, error)
@@ -126,8 +101,10 @@ export class CloudStorageWrapper {
       return files.filter(file => file.endsWith('.json')).map(file => file.replace('.json', ''))
     } catch (error: any) {
       // Trata diretório inexistente como lista vazia
-      if (error?.message?.includes('Directory not found') ||
-          error?.message?.includes('No such file')) {
+      if (
+        error?.message?.includes('Directory not found') ||
+        error?.message?.includes('No such file')
+      ) {
         return []
       }
       console.error('Failed to get all keys from cloud:', error)
@@ -145,9 +122,11 @@ export class CloudStorageWrapper {
       return await CloudStorage.exists(path, CloudStorageScope.AppData)
     } catch (error: any) {
       // Trata erros de diretório/arquivo não encontrado como inexistente
-      if (error?.message?.includes('Directory not found') ||
-          error?.message?.includes('No such file') ||
-          error?.message?.includes('does not exist')) {
+      if (
+        error?.message?.includes('Directory not found') ||
+        error?.message?.includes('No such file') ||
+        error?.message?.includes('does not exist')
+      ) {
         return false
       }
       console.error(`Failed to check if ${key} exists in cloud:`, error)
@@ -166,8 +145,10 @@ export class CloudStorageWrapper {
       }
     } catch (error: any) {
       // Trata erros de diretório não encontrado como normal (nada para limpar)
-      if (error?.message?.includes('Directory not found') ||
-          error?.message?.includes('No such file')) {
+      if (
+        error?.message?.includes('Directory not found') ||
+        error?.message?.includes('No such file')
+      ) {
         return
       }
       console.error('Failed to clear cloud storage:', error)
