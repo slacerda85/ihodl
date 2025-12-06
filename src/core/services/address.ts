@@ -99,7 +99,7 @@ export default class AddressService implements AddressServiceInterface {
     if (!walletId) {
       throw new Error('No active wallet for address discovery')
     }
-    const repository = new AddressRepository()
+    const repository = AddressRepository
     let collection = repository.read(walletId)
     if (!collection) {
       collection = {
@@ -205,7 +205,7 @@ export default class AddressService implements AddressServiceInterface {
     if (!walletId) {
       throw new Error('No active wallet for getting used addresses')
     }
-    const repository = new AddressRepository()
+    const repository = AddressRepository
     const collection = repository.read(walletId)
     if (!collection) {
       return []
@@ -222,7 +222,7 @@ export default class AddressService implements AddressServiceInterface {
     if (!walletId) {
       throw new Error('No active wallet for getting next unused address')
     }
-    const repository = new AddressRepository()
+    const repository = AddressRepository
     let collection = repository.read(walletId)
     if (!collection) {
       collection = {
@@ -245,7 +245,7 @@ export default class AddressService implements AddressServiceInterface {
     if (!walletId) {
       throw new Error('No active wallet for getting next change address')
     }
-    const repository = new AddressRepository()
+    const repository = AddressRepository
     let collection = repository.read(walletId)
     if (!collection) {
       collection = {
@@ -271,7 +271,7 @@ export default class AddressService implements AddressServiceInterface {
     if (!walletId) {
       throw new Error('No active wallet for getting next addresses')
     }
-    const repository = new AddressRepository()
+    const repository = AddressRepository
     let collection = repository.read(walletId)
     if (!collection) {
       collection = {
@@ -319,7 +319,7 @@ export default class AddressService implements AddressServiceInterface {
 
     // 2. Adicionar próximos N endereços não usados (receive apenas, para detectar depósitos)
     try {
-      const repository = new AddressRepository()
+      const repository = AddressRepository
       let collection = repository.read(walletId)
       if (!collection) {
         collection = {
@@ -356,7 +356,7 @@ export default class AddressService implements AddressServiceInterface {
     if (!walletId) {
       throw new Error('No active wallet for clearing addresses')
     }
-    const repository = new AddressRepository()
+    const repository = AddressRepository
     repository.deleteByWalletId(walletId)
   }
 

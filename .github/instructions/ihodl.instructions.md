@@ -50,6 +50,8 @@ O projeto utiliza a seguinte convenção de nomenclatura:
 
 NUNCA utilize snake_case ou kebab-case em qualquer parte do código.
 
+Utilize SOMENTE kebab-case para nomes de arquivos e pastas.
+
 ## Comandos de formatação
 
 linter: npm run lint

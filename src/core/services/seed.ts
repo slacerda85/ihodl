@@ -17,8 +17,7 @@ export default class SeedService implements SeedServiceInterface {
   }
 
   getSeed(walletId: string, password?: string): string {
-    const seedRepository = new SeedRepository()
-    const seed = seedRepository.find(walletId, password)
+    const seed = SeedRepository.find(walletId, password)
     if (!seed) {
       throw new Error('Seed not found for the given wallet ID')
     }
@@ -26,12 +25,10 @@ export default class SeedService implements SeedServiceInterface {
   }
   saveSeed(walletId: string, seed: string, password?: string): void {
     // Implementation to save seed for a wallet ID
-    const seedRepository = new SeedRepository()
-    seedRepository.save(walletId, seed, password)
+    SeedRepository.save(walletId, seed, password)
   }
   deleteSeed(walletId: string): void {
     // Implementation to delete seed by wallet ID
-    const seedRepository = new SeedRepository()
-    seedRepository.delete(walletId)
+    SeedRepository.delete(walletId)
   }
 }

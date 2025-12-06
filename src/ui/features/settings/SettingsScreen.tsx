@@ -12,6 +12,7 @@ import { useSettings } from '@/ui/features/app-provider'
 import SeedRepository from '@/core/repositories/seed'
 import { walletService } from '@/core/services'
 import LightningSettingsSection from './LightningSettingsSection'
+import CloudSyncSection from './CloudSyncSection'
 
 export default function SettingsScreen() {
   const colorScheme = useColorScheme()
@@ -45,7 +46,7 @@ export default function SettingsScreen() {
         text: 'Limpar',
         style: 'destructive',
         onPress: () => {
-          const seedRepository = new SeedRepository()
+          const seedRepository = SeedRepository
           seedRepository.clear()
           Alert.alert('Seeds Limpas', 'Todas as seeds foram removidas.')
         },
@@ -83,6 +84,10 @@ export default function SettingsScreen() {
 
       <View style={styles.section}>
         <LightningSettingsSection isDark={isDarkEffective} />
+      </View>
+
+      <View style={styles.section}>
+        <CloudSyncSection isDark={isDarkEffective} />
       </View>
 
       <View style={styles.section}>

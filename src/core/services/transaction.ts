@@ -507,7 +507,7 @@ export default class TransactionService implements TransactionServiceInterface {
     if (!walletId) {
       throw new Error('No active wallet for saving pending transaction')
     }
-    const transactionRepository = new TransactionRepository()
+    const transactionRepository = TransactionRepository
     transactionRepository.savePendingTransaction(walletId, pendingTx)
   }
 
@@ -517,7 +517,7 @@ export default class TransactionService implements TransactionServiceInterface {
     if (!walletId) {
       throw new Error('No active wallet for reading pending transactions')
     }
-    const transactionRepository = new TransactionRepository()
+    const transactionRepository = TransactionRepository
     return transactionRepository.readPendingTransactions(walletId)
   }
 
@@ -527,7 +527,7 @@ export default class TransactionService implements TransactionServiceInterface {
     if (!walletId) {
       throw new Error('No active wallet for deleting pending transaction')
     }
-    const transactionRepository = new TransactionRepository()
+    const transactionRepository = TransactionRepository
     transactionRepository.deletePendingTransaction(walletId, txid)
   }
 

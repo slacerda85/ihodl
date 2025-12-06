@@ -266,7 +266,8 @@ export function useLoading(key: LoadingKey) {
   return useMemo(
     () => ({
       loading: isLoading(key),
-      setLoading: (loading: boolean) => dispatch({ type: 'SET_LOADING', payload: { key, loading } }),
+      setLoading: (loading: boolean) =>
+        dispatch({ type: 'SET_LOADING', payload: { key, loading } }),
     }),
     [key, isLoading, dispatch],
   )
@@ -318,7 +319,7 @@ export function useHasErrors(): boolean {
 export function useAsyncOperation(key: LoadingKey) {
   const { isLoading, getError, dispatch } = useAppState()
 
-  const execute = async <T>(operation: () => Promise<T>): Promise<T | null> => {
+  const execute = async function <T>(operation: () => Promise<T>): Promise<T | null> {
     dispatch({ type: 'SET_LOADING', payload: { key, loading: true } })
     dispatch({ type: 'SET_ERROR', payload: { key, error: null } })
 

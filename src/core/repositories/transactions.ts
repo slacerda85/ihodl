@@ -11,7 +11,7 @@ interface TransactionRepositoryInterface {
   deletePendingTransaction(walletId: string, txid: string): void
 }
 
-export default class TransactionRepository implements TransactionRepositoryInterface {
+class TransactionRepository implements TransactionRepositoryInterface {
   savePendingTransaction(walletId: string, tx: Tx): void {
     const key = `pending_transactions_${walletId}`
     const existingData = transactionStorage.getString(key)
@@ -42,3 +42,7 @@ export default class TransactionRepository implements TransactionRepositoryInter
     }
   }
 }
+
+const transactionRepository = new TransactionRepository()
+
+export default transactionRepository

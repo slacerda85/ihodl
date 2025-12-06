@@ -11,7 +11,7 @@ interface AddressRepositoryInterface {
   deleteByWalletId(walletId: string): void
 }
 
-export default class AddressRepository implements AddressRepositoryInterface {
+class AddressRepository implements AddressRepositoryInterface {
   save(addressCollection: AddressCollection): void {
     const { walletId } = addressCollection
     const key = `address_${walletId}`
@@ -32,3 +32,7 @@ export default class AddressRepository implements AddressRepositoryInterface {
     addressStorage.delete(key)
   }
 }
+
+const addressRepository = new AddressRepository()
+
+export default addressRepository

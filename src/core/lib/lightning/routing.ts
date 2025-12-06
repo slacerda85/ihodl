@@ -401,14 +401,6 @@ export class RoutingGraph {
   }
 
   /**
-   * Get node by ID
-   */
-  getNode(nodeId: Uint8Array): RoutingNode | null {
-    const key = uint8ArrayToHex(nodeId)
-    return this.nodes.get(key) || null
-  }
-
-  /**
    * Get graph statistics
    */
   getStats(): { nodes: number; channels: number } {
