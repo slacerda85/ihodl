@@ -12,6 +12,11 @@ export default function TabsLayout() {
         <Icon sf="arrow.left.arrow.right" />
         <Label>Transactions</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="lightning">
+        <Icon sf="bolt.fill" />
+        <Label>Lightning</Label>
+      </NativeTabs.Trigger>
+      {/*  */}
       <NativeTabs.Trigger name="settings">
         <Icon sf="gearshape.fill" />
         <Label>Settings</Label>
