@@ -46,6 +46,11 @@ function getDirectionLabel(transaction: UnifiedTransaction): string {
 }
 
 function getStatusLabel(transaction: UnifiedTransaction): string | null {
+  // Para transações da mempool, mostrar label especial
+  if (transaction.isMempool) {
+    return 'Na Mempool'
+  }
+
   switch (transaction.status) {
     case 'pending':
       return 'Pendente'
@@ -58,7 +63,12 @@ function getStatusLabel(transaction: UnifiedTransaction): string | null {
   }
 }
 
-function getStatusColor(status: UnifiedTransaction['status']): string {
+function getStatusColor(status: UnifiedTransaction['status'], isMempool?: boolean): string {
+  // Cor especial para mempool (azul/ciano para destacar)
+  if (isMempool) {
+    return '#00BCD4' // Cyan - indica algo "em trânsito"
+  }
+
   switch (status) {
     case 'confirmed':
       return colors.success
@@ -198,10 +208,29 @@ export function UnifiedTransactionCard({
               <View
                 style={[
                   styles.statusBadge,
-                  { backgroundColor: alpha(getStatusColor(transaction.status), 0.15) },
+                  {
+                    backgroundColor: alpha(
+                      getStatusColor(transaction.status, transaction.isMempool),
+                      0.15,
+                    ),
+                  },
+                  transaction.isMempool && styles.mempoolBadge,
                 ]}
               >
-                <Text style={[styles.statusText, { color: getStatusColor(transaction.status) }]}>
+                {transaction.isMempool && (
+                  <IconSymbol
+                    name="clock.arrow.circlepath"
+                    size={10}
+                    color={getStatusColor(transaction.status, transaction.isMempool)}
+                    style={{ marginRight: 4 }}
+                  />
+                )}
+                <Text
+                  style={[
+                    styles.statusText,
+                    { color: getStatusColor(transaction.status, transaction.isMempool) },
+                  ]}
+                >
                   {statusLabel}
                 </Text>
               </View>
@@ -300,6 +329,13 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 4,
     marginLeft: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  } as ViewStyle,
+  mempoolBadge: {
+    borderWidth: 1,
+    borderColor: alpha('#00BCD4', 0.3),
+    borderStyle: 'dashed',
   } as ViewStyle,
   statusText: {
     fontSize: 11,

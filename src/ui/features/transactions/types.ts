@@ -109,6 +109,9 @@ export interface UnifiedTransaction {
   /** Fee pago (em sats para BTC/LN) */
   fee?: number
 
+  /** Flag para transações pendentes na mempool (ainda não confirmadas) */
+  isMempool?: boolean
+
   /** Dados específicos do ativo */
   metadata?: TransactionMetadata
 }

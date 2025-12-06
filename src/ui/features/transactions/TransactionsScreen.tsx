@@ -6,11 +6,17 @@ import BitcoinLogo from '@/ui/assets/bitcoin-logo'
 import { formatBalance } from '../wallet/utils'
 import { alpha } from '@/ui/utils'
 import { useHeaderHeight } from '@react-navigation/elements'
-import { useIsDark, useAddresses, useAddressLoading } from '@/ui/features/app-provider'
+import {
+  useIsDark,
+  useAddresses,
+  useAddressLoading,
+  useActiveWalletId,
+} from '@/ui/features/app-provider'
 import { iosTabBarHeight } from '@/ui/tokens'
 import { FriendlyTx } from '@/core/models/transaction'
 import { transactionService } from '@/core/services'
 import LoadingTransactions from './LoadingTransactions'
+import { useMemo } from 'react'
 // import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
 
 // Define types for our transaction list items
@@ -39,12 +45,17 @@ export default function TransactionsScreen() {
   const isDark = useIsDark()
   const addresses = useAddresses()
   const loading = useAddressLoading()
+  const activeWalletId = useActiveWalletId()
+
+  // Recalcular transações quando addresses OU activeWalletId mudar
+  const transactions = useMemo(() => {
+    if (!activeWalletId) return []
+    return transactionService.getFriendlyTxs(addresses || [])
+  }, [addresses, activeWalletId])
 
   if (loading) {
     return <LoadingTransactions isDark={isDark} showTitle={!isTransactionsRoute} />
   }
-
-  const transactions = transactionService.getFriendlyTxs(addresses || [])
 
   // Agrupar transações por data usando o campo 'date' do UIFriendlyTransaction
   const grouped: Record<string, FriendlyTx[]> = {}

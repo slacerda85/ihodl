@@ -3,12 +3,14 @@
  *
  * Combina transações de múltiplos ativos (BTC on-chain, Lightning, RGB)
  * em uma lista unificada e ordenada com suporte a filtros.
+ * Inclui transações pendentes da mempool.
  */
 
 import { useMemo, useCallback, useState } from 'react'
 import { transactionService } from '@/core/services'
-import { useAddresses } from '@/ui/features/app-provider'
+import { useAddresses, useAddressLoading } from '@/ui/features/app-provider'
 import { useLightningPayments, useLightningInvoices, useLightningActions } from '../lightning/hooks'
+import { useMempoolTransactions, type MempoolTransaction } from './useMempoolTransactions'
 import type { FriendlyTx } from '@/core/models/transaction'
 import type { Payment, Invoice } from '../lightning/types'
 import type {
@@ -110,6 +112,29 @@ function transformLightningInvoice(invoice: Invoice): UnifiedTransaction {
       type: 'lightning',
       paymentHash: invoice.paymentHash,
       invoice: invoice.invoice,
+    },
+  }
+}
+
+/**
+ * Converte transação da mempool para formato unificado
+ */
+function transformMempoolTx(tx: MempoolTransaction): UnifiedTransaction {
+  return {
+    id: `mempool-${tx.txid}`,
+    assetType: 'btc-onchain',
+    direction: tx.direction,
+    amount: tx.amount,
+    status: 'pending',
+    createdAt: tx.detectedAt,
+    displayAddress: tx.displayAddress,
+    nativeId: tx.txid,
+    fee: tx.fee,
+    isMempool: true, // Flag para identificar que veio da mempool
+    metadata: {
+      type: 'btc-onchain',
+      txid: tx.txid,
+      confirmations: 0,
     },
   }
 }
@@ -239,6 +264,10 @@ export interface UseUnifiedTransactionsResult {
   isRefreshing: boolean
   /** Ativos disponíveis com contagem */
   assetCounts: Record<AssetType, number>
+  /** Número de transações pendentes na mempool */
+  mempoolCount: number
+  /** Está carregando mempool */
+  isMempoolLoading: boolean
 }
 
 /**
@@ -255,22 +284,50 @@ export function useUnifiedTransactions(): UseUnifiedTransactionsResult {
 
   // Data sources
   const addresses = useAddresses()
+  const addressLoading = useAddressLoading()
   const lightningPayments = useLightningPayments()
   const lightningInvoices = useLightningInvoices()
   const { refreshPayments, refreshInvoices } = useLightningActions()
 
-  // Loading state
-  const isLoading = addresses === null
+  // Mempool transactions (polling every 30s)
+  const {
+    transactions: mempoolTxs,
+    isLoading: isMempoolLoading,
+    refresh: refreshMempool,
+  } = useMempoolTransactions()
+
+  // Loading state - também considera o loading do addressStore (ex: ao mudar de carteira)
+  const isLoading = addresses === null || addressLoading
+
+  // Set of confirmed txids to avoid duplicates with mempool
+  const confirmedTxIds = useMemo((): Set<string> => {
+    const txIds = new Set<string>()
+    if (addresses) {
+      const onchainTxs = transactionService.getFriendlyTxs(addresses)
+      for (const tx of onchainTxs) {
+        txIds.add(tx.txid)
+      }
+    }
+    return txIds
+  }, [addresses])
 
   // Transform and merge transactions
   const allTransactions = useMemo((): UnifiedTransaction[] => {
     const result: UnifiedTransaction[] = []
 
-    // On-chain transactions
+    // On-chain transactions (confirmed)
     if (addresses) {
       const onchainTxs = transactionService.getFriendlyTxs(addresses)
       for (const tx of onchainTxs) {
         result.push(transformOnchainTx(tx))
+      }
+    }
+
+    // Mempool transactions (pendentes, não duplicadas)
+    for (const tx of mempoolTxs) {
+      // Só adicionar se não está nas confirmadas
+      if (!confirmedTxIds.has(tx.txid)) {
+        result.push(transformMempoolTx(tx))
       }
     }
 
@@ -290,7 +347,12 @@ export function useUnifiedTransactions(): UseUnifiedTransactionsResult {
     result.sort((a, b) => b.createdAt - a.createdAt)
 
     return result
-  }, [addresses, lightningPayments, lightningInvoices])
+  }, [addresses, lightningPayments, lightningInvoices, mempoolTxs, confirmedTxIds])
+
+  // Mempool count (transações pendentes não duplicadas)
+  const mempoolCount = useMemo(() => {
+    return mempoolTxs.filter(tx => !confirmedTxIds.has(tx.txid)).length
+  }, [mempoolTxs, confirmedTxIds])
 
   // Asset counts
   const assetCounts = useMemo((): Record<AssetType, number> => {
@@ -338,12 +400,12 @@ export function useUnifiedTransactions(): UseUnifiedTransactionsResult {
   const refresh = useCallback(async () => {
     setIsRefreshing(true)
     try {
-      await Promise.all([refreshPayments(), refreshInvoices()])
+      await Promise.all([refreshPayments(), refreshInvoices(), refreshMempool()])
       // TODO: Refresh on-chain transactions via address provider
     } finally {
       setIsRefreshing(false)
     }
-  }, [refreshPayments, refreshInvoices])
+  }, [refreshPayments, refreshInvoices, refreshMempool])
 
   return {
     listItems,
@@ -357,6 +419,8 @@ export function useUnifiedTransactions(): UseUnifiedTransactionsResult {
     refresh,
     isRefreshing,
     assetCounts,
+    mempoolCount,
+    isMempoolLoading,
   }
 }
 

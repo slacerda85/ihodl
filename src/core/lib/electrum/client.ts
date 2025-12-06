@@ -791,86 +791,55 @@ async function getMempoolTransactions(addresses: string[], socket?: Connection):
 
     const mempoolTxs: Tx[] = []
 
-    // Filter and validate addresses
-    const validAddresses = addresses.filter(addr => {
-      if (typeof addr !== 'string' || !addr.trim()) {
-        console.warn('[electrum] Skipping invalid address:', addr)
-        return false
-      }
-      return true
-    })
-
-    console.log(
-      `[electrum] Processing ${validAddresses.length} valid addresses out of ${addresses.length} total`,
+    // Filter valid addresses
+    const validAddresses = addresses.filter(
+      addr => typeof addr === 'string' && addr.trim().length > 0,
     )
 
     // Check each valid address for mempool transactions
     for (const address of validAddresses) {
+      let scripthash: string
+
       try {
-        console.log(`[electrum] Checking mempool for address: ${address}`)
+        scripthash = toScriptHash(address)
+      } catch {
+        // Skip addresses that can't be converted to scripthash
+        continue
+      }
 
-        let scripthash: string = ''
-
-        try {
-          // Try toScriptHash first (works with Bech32 addresses)
-          scripthash = toScriptHash(address)
-        } catch (bech32Error) {
-          try {
-            // Fallback to legacyToScriptHash (for legacy P2PKH addresses)
-            // scripthash = legacyToScriptHash(address)
-          } catch (legacyError) {
-            console.warn(
-              `[electrum] Failed to convert address ${address} to scripthash:`,
-              bech32Error,
-              legacyError,
-            )
-            continue
-          }
-        }
-
-        console.log(`[electrum] Using scripthash: ${scripthash}`)
-
-        // Get mempool transactions for this scripthash
+      try {
         const mempoolData = await callElectrumMethod<
           { tx_hash: string; height: number; fee?: number }[]
-        >('blockchain.scripthash.get_mempool', [scripthash], socket)
+        >('blockchain.scripthash.get_mempool', [scripthash], usedSocket)
 
-        if (mempoolData.result && mempoolData.result.length > 0) {
-          console.log(`[electrum] Found ${mempoolData.result.length} mempool txs for ${address}`)
-          // Get full transaction data for each mempool tx
-          for (const mempoolTx of mempoolData.result) {
-            try {
-              const txData = await getTransaction(mempoolTx.tx_hash, true, socket)
-
-              if (txData.result) {
-                const tx = txData.result
-                // Mark as unconfirmed (height = 0 for mempool)
-                tx.confirmations = 0
-                tx.blocktime = Math.floor(Date.now() / 1000) // Current time as blocktime
-                mempoolTxs.push(tx)
-              }
-            } catch (error) {
-              console.warn(`[electrum] Failed to get mempool tx ${mempoolTx.tx_hash}:`, error)
-            }
-          }
-        } else {
-          console.log(`[electrum] No mempool txs found for ${address}`)
+        if (!mempoolData.result?.length) {
+          continue
         }
-      } catch (error) {
-        console.warn(`[electrum] Failed to get mempool for address ${address}:`, error)
+
+        // Get full transaction data for each mempool tx
+        for (const mempoolTx of mempoolData.result) {
+          const txData = await getTransaction(mempoolTx.tx_hash, true, usedSocket)
+
+          if (txData.result) {
+            const tx = txData.result
+            tx.confirmations = 0
+            tx.blocktime = Math.floor(Date.now() / 1000)
+            mempoolTxs.push(tx)
+          }
+        }
+      } catch {
+        // Skip failed address queries silently
+        continue
       }
     }
 
-    console.log(`[electrum] Total mempool transactions found: ${mempoolTxs.length}`)
     return mempoolTxs
   } finally {
-    // Close socket if we created it
     if (managedSocket && usedSocket) {
       try {
-        console.log('[electrum] Closing managed socket connection')
         close(usedSocket)
-      } catch (closeError) {
-        console.error('[electrum] Error closing socket:', closeError)
+      } catch {
+        // Ignore close errors
       }
     }
   }

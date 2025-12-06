@@ -35,6 +35,7 @@ interface AddressServiceInterface {
   createManyAddresses(publicKeys: Uint8Array[]): string[]
   clearAddresses(): void
   validateAddress(address: string): boolean
+  getAddressesForMempoolCheck(gapLimit?: number): string[]
 }
 
 export default class AddressService implements AddressServiceInterface {
@@ -286,6 +287,67 @@ export default class AddressService implements AddressServiceInterface {
     const receive = this.deriveAddress(receivingAccountKey, collection.nextReceiveIndex)
     const change = this.deriveAddress(changeAccountKey, collection.nextChangeIndex)
     return { receive, change }
+  }
+
+  /**
+   * Retorna endereços para verificar na mempool.
+   * Inclui:
+   * - Todos os endereços usados (receive + change) - para detectar novas txs em endereços conhecidos
+   * - Próximos N endereços não usados (receive) - para detectar depósitos em novos endereços
+   * @param gapLimit Número de endereços não usados a verificar (padrão: GAP_LIMIT = 20)
+   * @returns Lista de endereços para verificar na mempool
+   */
+  getAddressesForMempoolCheck(gapLimit: number = GAP_LIMIT): string[] {
+    const walletId = walletService.getActiveWalletId()
+    if (!walletId) {
+      console.warn('[AddressService] No active wallet for mempool check')
+      return []
+    }
+
+    const addresses: string[] = []
+
+    // 1. Adicionar todos os endereços usados (receive + change)
+    const usedReceiving = this.getUsedAddresses('receiving')
+    const usedChange = this.getUsedAddresses('change')
+
+    for (const addr of usedReceiving) {
+      addresses.push(addr.address)
+    }
+    for (const addr of usedChange) {
+      addresses.push(addr.address)
+    }
+
+    // 2. Adicionar próximos N endereços não usados (receive apenas, para detectar depósitos)
+    try {
+      const repository = new AddressRepository()
+      let collection = repository.read(walletId)
+      if (!collection) {
+        collection = {
+          walletId,
+          addresses: [],
+          nextReceiveIndex: 0,
+          nextChangeIndex: 0,
+          gapLimit: GAP_LIMIT,
+        }
+      }
+
+      const { receivingAccountKey } = this.getAccountKeys()
+      const startIndex = collection.nextReceiveIndex
+
+      for (let i = 0; i < gapLimit; i++) {
+        const address = this.deriveAddress(receivingAccountKey, startIndex + i)
+        addresses.push(address)
+      }
+
+      console.log(
+        `[AddressService] Mempool check addresses: ${usedReceiving.length} used receive, ${usedChange.length} used change, ${gapLimit} unused receive`,
+      )
+    } catch (error) {
+      console.error('[AddressService] Error deriving addresses for mempool check:', error)
+    }
+
+    // Remover duplicatas
+    return [...new Set(addresses)]
   }
 
   clearAddresses(): void {

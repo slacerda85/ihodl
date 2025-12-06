@@ -6,6 +6,7 @@ import {
   getBlockHeader,
   getMerkleProof,
   getRecommendedFeeRates,
+  getMempoolTransactions,
 } from '@/core/lib/electrum'
 import { sha256 } from '@noble/hashes/sha2.js'
 import { hexToUint8Array, uint8ArrayToHex, concatUint8Arrays } from '../lib/utils'
@@ -72,6 +73,7 @@ interface TransactionServiceInterface {
   }): Promise<void>
   readPendingTransactions(): Tx[]
   deletePendingTransaction(txid: string): void
+  getMempoolTransactions(addresses: string[], connection?: Connection): Promise<Tx[]>
 }
 
 export default class TransactionService implements TransactionServiceInterface {
@@ -537,6 +539,29 @@ export default class TransactionService implements TransactionServiceInterface {
   }> {
     const feeRate = await getRecommendedFeeRates(connection)
     return feeRate
+  }
+
+  /**
+   * Busca transações pendentes na mempool para uma lista de endereços.
+   * Usado para detectar depósitos recebidos que ainda não foram confirmados.
+   * @param addresses Lista de endereços para verificar na mempool
+   * @param connection Conexão Electrum opcional (será criada se não fornecida)
+   * @returns Lista de transações pendentes na mempool
+   */
+  async getMempoolTransactions(addresses: string[], connection?: Connection): Promise<Tx[]> {
+    try {
+      console.log(`[TransactionService] Checking mempool for ${addresses.length} addresses`)
+      const mempoolTxs = await getMempoolTransactions(addresses, connection)
+
+      // Deduplicar transações da mempool
+      const deduplicated = this.deduplicateTxs(mempoolTxs)
+      console.log(`[TransactionService] Found ${deduplicated.length} mempool transactions`)
+
+      return deduplicated
+    } catch (error) {
+      console.error('[TransactionService] Error fetching mempool transactions:', error)
+      return []
+    }
   }
 }
 

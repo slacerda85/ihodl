@@ -11,6 +11,7 @@ export { UnifiedTransactionCard } from './UnifiedTransactionCard'
 
 // Hooks
 export { useUnifiedTransactions } from './useUnifiedTransactions'
+export { useMempoolTransactions } from './useMempoolTransactions'
 
 // Types
 export * from './types'

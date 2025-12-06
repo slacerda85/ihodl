@@ -9,13 +9,12 @@
 
 import React, { useCallback, useMemo } from 'react'
 import { Text, View, FlatList, StyleSheet, RefreshControl } from 'react-native'
-import { useSegments } from 'expo-router'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { useHeaderHeight } from '@react-navigation/elements'
 import { useIsDark } from '@/ui/features/app-provider'
 import { iosTabBarHeight } from '@/ui/tokens'
-import LoadingTransactions from './LoadingTransactions'
+import UnifiedTransactionsLoading from './UnifiedTransactionsLoading'
 import { AssetFilterChips } from './AssetFilterChips'
 import { UnifiedTransactionCard } from './UnifiedTransactionCard'
 import { useUnifiedTransactions } from './useUnifiedTransactions'
@@ -27,8 +26,6 @@ import type { TransactionListItem } from './types'
 
 export default function TransactionsScreen() {
   const headerHeight = useHeaderHeight()
-  const segments = useSegments()
-  const isTransactionsRoute = segments[segments.length - 1] === 'transactions'
   const isDark = useIsDark()
 
   const {
@@ -94,7 +91,7 @@ export default function TransactionsScreen() {
   // ==========================================
 
   if (isLoading) {
-    return <LoadingTransactions isDark={isDark} showTitle={!isTransactionsRoute} />
+    return <UnifiedTransactionsLoading isDark={isDark} />
   }
 
   // ==========================================
@@ -125,7 +122,6 @@ export default function TransactionsScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={[styles.title, isDark && styles.titleDark]}>Transações</Text>
         <Text style={[styles.subtitle, isDark && styles.subtitleDark]}>
           {totalCount} transação{totalCount !== 1 ? 'ões' : ''}
         </Text>
