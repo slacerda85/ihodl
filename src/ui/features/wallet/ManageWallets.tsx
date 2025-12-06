@@ -6,10 +6,12 @@ import { alpha } from '@/ui/utils'
 import Divider from '@/ui/components/Divider'
 import CreateWalletIcon from './CreateWalletIcon'
 import ImportWalletIcon from './ImportWalletIcon'
-// import { useWallet } from './WalletProvider'
-import { useIsDark } from '../settings'
-// import { useAddress } from '../address/AddressProvider'
-import { useActiveWalletId, useWalletActions, useWallets } from './WalletProviderV2'
+import {
+  useIsDark,
+  useActiveWalletId,
+  useWalletActions,
+  useWallets,
+} from '@/ui/features/app-provider'
 
 export default function ManageWallets() {
   const router = useRouter()

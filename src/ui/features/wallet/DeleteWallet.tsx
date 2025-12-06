@@ -4,9 +4,8 @@ import { StyleSheet, Text, View, ActivityIndicator } from 'react-native'
 import { useCallback, useState } from 'react'
 import { useRouter } from 'expo-router'
 import { alpha } from '@/ui/utils'
-import { useIsDark } from '@/ui/features/settings'
+import { useIsDark, useActiveWallet, useWalletActions } from '@/ui/features/app-provider'
 import Button from '@/ui/components/Button'
-import { useActiveWallet, useWalletActions } from './WalletProviderV2'
 
 export default function DeleteWallet() {
   const { deleteWallet } = useWalletActions()

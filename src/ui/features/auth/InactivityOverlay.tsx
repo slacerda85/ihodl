@@ -1,6 +1,6 @@
 import { StyleSheet, View } from 'react-native'
 import { BlurView } from 'expo-blur'
-import { useAuth } from './AuthProvider'
+import { useAuth } from '@/ui/features/app-provider'
 
 export default function InactivityOverlay() {
   const { inactive } = useAuth()

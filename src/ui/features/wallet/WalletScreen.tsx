@@ -3,8 +3,8 @@ import { Link, useRouter } from 'expo-router'
 import { StyleSheet, Text, View } from 'react-native'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
-// import { useWallet } from '@/ui/features/wallet'
-import { useIsDark } from '@/ui/features/settings'
+// Hooks centralizados
+import { useIsDark, useActiveWalletId, useWallets } from '@/ui/features/app-provider'
 // Components
 import WalletBalance from './WalletBalance'
 import CreateWalletIcon from './CreateWalletIcon'
@@ -12,7 +12,6 @@ import ImportWalletIcon from './ImportWalletIcon'
 import ContentContainer from '@/ui/components/ContentContainer'
 import Button from '@/ui/components/Button'
 import TransactionsScreen from '../transactions/TransactionsScreen'
-import { useActiveWalletId, useWallets } from './WalletProviderV2'
 // import DebugUtxos from '../utxo/DebugUtxos'
 
 export default function WalletScreen() {

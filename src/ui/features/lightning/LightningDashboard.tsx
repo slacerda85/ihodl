@@ -26,11 +26,13 @@ import {
   TextInput,
   RefreshControl,
 } from 'react-native'
+import { useRouter } from 'expo-router'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
-import { useSettings, useActiveColorMode } from '../settings'
+import { useSettings, useActiveColorMode } from '@/ui/features/app-provider'
 import { useLightningState, useLightningActions, useConnectionState } from './hooks'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
+import Button from '@/ui/components/Button'
 import type {
   RoutingStrategy,
   WatchtowerConfig,
@@ -46,9 +48,8 @@ import type {
 
 type ColorMode = 'light' | 'dark'
 
-export interface LightningDashboardProps {
-  onNavigate?: (screen: string) => void
-}
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface LightningDashboardProps {}
 
 interface SectionProps {
   title: string
@@ -149,7 +150,8 @@ const StatusBadge: React.FC<{
 // MAIN COMPONENT
 // ==========================================
 
-export default function LightningDashboard({ onNavigate }: LightningDashboardProps) {
+export default function LightningDashboard() {
+  const router = useRouter()
   const colorMode = useActiveColorMode()
   const { lightning, dispatch, actions } = useSettings()
   const connectionState = useConnectionState()
@@ -284,20 +286,62 @@ export default function LightningDashboard({ onNavigate }: LightningDashboardPro
           </View>
         </View>
 
-        {onNavigate && (
-          <TouchableOpacity
-            style={[
-              styles.actionButton,
-              {
-                backgroundColor: alpha(colors.primary, colorMode === 'dark' ? 0.2 : 0.1),
-              },
-            ]}
-            onPress={() => onNavigate('channels')}
+        <TouchableOpacity
+          style={[
+            styles.actionButton,
+            {
+              backgroundColor: alpha(colors.primary, colorMode === 'dark' ? 0.2 : 0.1),
+            },
+          ]}
+          onPress={() => router.push('/(tabs)/lightning/channels')}
+        >
+          <Text style={styles.actionButtonText}>Ver Todos os Canais</Text>
+          <IconSymbol name="chevron.right" size={16} color={colors.primary} />
+        </TouchableOpacity>
+
+        {/* Quick Actions - Enviar/Receber */}
+        <View style={styles.actionsRow}>
+          <Button
+            onPress={() => router.push('/(tabs)/lightning/paymentSend')}
+            style={{ flex: 1 }}
+            tintColor={alpha(colors.primary, 0.9)}
           >
-            <Text style={styles.actionButtonText}>Ver Todos os Canais</Text>
-            <IconSymbol name="chevron.right" size={16} color={colors.primary} />
-          </TouchableOpacity>
-        )}
+            <Text style={styles.buttonText}>Enviar</Text>
+          </Button>
+
+          <Button
+            onPress={() => router.push('/(tabs)/lightning/paymentReceive')}
+            style={{ flex: 1 }}
+          >
+            <Text
+              style={[
+                styles.buttonTextSecondary,
+                colorMode === 'dark' && styles.buttonTextSecondaryDark,
+              ]}
+            >
+              Receber
+            </Text>
+          </Button>
+        </View>
+
+        {/* Channel Actions */}
+        <View style={styles.actionsRow}>
+          <Button
+            onPress={() => router.push('/(tabs)/lightning/channelCreate')}
+            style={{ flex: 1 }}
+            variant="glass"
+          >
+            <Text style={styles.glassButtonText}>Abrir Canal</Text>
+          </Button>
+
+          <Button
+            onPress={() => router.push('/(tabs)/lightning/dualFunding')}
+            style={{ flex: 1 }}
+            variant="glass"
+          >
+            <Text style={styles.glassButtonText}>Dual Funding</Text>
+          </Button>
+        </View>
       </Section>
 
       {/* ========== SECTION 2: ROUTING & PAYMENTS ========== */}
@@ -525,15 +569,7 @@ export default function LightningDashboard({ onNavigate }: LightningDashboardPro
           </TouchableOpacity>
         ))}
 
-        {onNavigate && (
-          <TouchableOpacity
-            style={[styles.actionButton, styles.actionButtonPrimary]}
-            onPress={() => onNavigate('backup')}
-          >
-            <Text style={styles.actionButtonTextPrimary}>Gerenciar Backups</Text>
-            <IconSymbol name="chevron.right" size={16} color={colors.white} />
-          </TouchableOpacity>
-        )}
+        {/* Backup screen is in settings */}
       </Section>
 
       {/* ========== SECTION 5: WATCHTOWER ========== */}
@@ -599,6 +635,19 @@ export default function LightningDashboard({ onNavigate }: LightningDashboardPro
             thumbColor={colors.white}
           />
         </SettingRow>
+
+        <TouchableOpacity
+          style={[
+            styles.actionButton,
+            {
+              backgroundColor: alpha(colors.primary, colorMode === 'dark' ? 0.2 : 0.1),
+            },
+          ]}
+          onPress={() => router.push('/(tabs)/lightning/watchtower')}
+        >
+          <Text style={styles.actionButtonText}>Gerenciar Watchtowers</Text>
+          <IconSymbol name="chevron.right" size={16} color={colors.primary} />
+        </TouchableOpacity>
       </Section>
 
       {/* ========== SECTION 6: SUBMARINE SWAPS ========== */}
@@ -683,20 +732,18 @@ export default function LightningDashboard({ onNavigate }: LightningDashboardPro
           </View>
         </View>
 
-        {onNavigate && (
-          <TouchableOpacity
-            style={[
-              styles.actionButton,
-              {
-                backgroundColor: alpha(colors.primary, colorMode === 'dark' ? 0.2 : 0.1),
-              },
-            ]}
-            onPress={() => onNavigate('swap')}
-          >
-            <Text style={styles.actionButtonText}>Realizar Swap</Text>
-            <IconSymbol name="chevron.right" size={16} color={colors.primary} />
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={[
+            styles.actionButton,
+            {
+              backgroundColor: alpha(colors.primary, colorMode === 'dark' ? 0.2 : 0.1),
+            },
+          ]}
+          onPress={() => router.push('/(tabs)/lightning/swap')}
+        >
+          <Text style={styles.actionButtonText}>Realizar Swap</Text>
+          <IconSymbol name="chevron.right" size={16} color={colors.primary} />
+        </TouchableOpacity>
       </Section>
 
       {/* ========== SECTION 7: CHANNELS ========== */}
@@ -784,6 +831,33 @@ export default function LightningDashboard({ onNavigate }: LightningDashboardPro
             placeholder="30"
             placeholderTextColor={colors.placeholder}
           />
+        </View>
+
+        <View style={styles.channelActionsGrid}>
+          <TouchableOpacity
+            style={[
+              styles.actionButton,
+              {
+                flex: 1,
+                backgroundColor: alpha(colors.primary, colorMode === 'dark' ? 0.2 : 0.1),
+              },
+            ]}
+            onPress={() => router.push('/(tabs)/lightning/channels')}
+          >
+            <Text style={styles.actionButtonText}>Gerenciar</Text>
+            <IconSymbol name="chevron.right" size={16} color={colors.primary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.actionButton,
+              { flex: 1, backgroundColor: alpha(colors.info, colorMode === 'dark' ? 0.2 : 0.1) },
+            ]}
+            onPress={() => router.push('/(tabs)/lightning/splice')}
+          >
+            <Text style={[styles.actionButtonText, { color: colors.info }]}>Splice</Text>
+            <IconSymbol name="chevron.right" size={16} color={colors.info} />
+          </TouchableOpacity>
         </View>
       </Section>
 
@@ -1092,5 +1166,37 @@ const styles = StyleSheet.create({
   },
   bottomPadding: {
     height: 32,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 12,
+    marginTop: 12,
+  },
+  buttonText: {
+    color: colors.white,
+    textAlign: 'center',
+    fontWeight: '500',
+    fontSize: 16,
+  },
+  buttonTextSecondary: {
+    textAlign: 'center',
+    fontWeight: '500',
+    fontSize: 16,
+    color: colors.textSecondary.light,
+  },
+  buttonTextSecondaryDark: {
+    color: alpha(colors.textSecondary.dark, 0.85),
+  },
+  glassButtonText: {
+    color: colors.primary,
+    textAlign: 'center',
+    fontWeight: '500',
+    fontSize: 16,
+  },
+  channelActionsGrid: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
   },
 })

@@ -4,10 +4,9 @@ import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { useRouter } from 'expo-router'
 import wordlist from 'bip39/src/wordlists/english.json'
-import { useIsDark } from '../settings'
+import { useIsDark, useWalletActions } from '@/ui/features/app-provider'
 import Button from '@/ui/components/Button'
 import { GlassView } from 'expo-glass-effect'
-import { useWalletActions } from './WalletProviderV2'
 
 export default function ImportWallet() {
   const router = useRouter()

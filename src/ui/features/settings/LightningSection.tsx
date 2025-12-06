@@ -10,7 +10,7 @@ import {
   Pressable,
 } from 'react-native'
 import colors from '@/ui/colors'
-import { useSettings } from './SettingsProviderV2'
+import { useSettings } from '@/ui/features/app-provider'
 import { LightningNetwork } from './state'
 
 interface LightningSectionProps {

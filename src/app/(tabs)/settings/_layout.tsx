@@ -1,4 +1,4 @@
-import { useIsDark } from '@/ui/features/settings'
+import { useIsDark } from '@/ui/features/app-provider'
 import colors from '@/ui/colors'
 import { Stack } from 'expo-router'
 

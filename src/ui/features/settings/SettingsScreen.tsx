@@ -8,10 +8,10 @@ import {
   Alert,
   TouchableOpacity,
 } from 'react-native'
-import { useSettings } from '@/ui/features/settings'
+import { useSettings } from '@/ui/features/app-provider'
 import SeedRepository from '@/core/repositories/seed'
 import { walletService } from '@/core/services'
-import LightningSection from './LightningSection'
+import LightningSettingsSection from './LightningSettingsSection'
 
 export default function SettingsScreen() {
   const colorScheme = useColorScheme()
@@ -82,7 +82,7 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.section}>
-        <LightningSection isDark={isDarkEffective} />
+        <LightningSettingsSection isDark={isDarkEffective} />
       </View>
 
       <View style={styles.section}>

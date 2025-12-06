@@ -2,8 +2,7 @@ import { useEffect } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import colors from '@/ui/colors'
 import { router, useSegments } from 'expo-router'
-import { useAuth } from '../auth/AuthProvider'
-import { useIsDark } from '@/ui/features/settings'
+import { useAuth, useIsDark } from '@/ui/features/app-provider'
 import IHodlLogo from '@/ui/assets/ihodl-logo'
 
 export default function HomeScreen() {

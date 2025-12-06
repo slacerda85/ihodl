@@ -3,7 +3,7 @@ import Ionicons from '@expo/vector-icons/Ionicons'
 import Entypo from '@expo/vector-icons/Entypo'
 import { View } from 'react-native'
 import colors from '@/ui/colors'
-import { useIsDark } from '../settings'
+import { useIsDark } from '@/ui/features/app-provider'
 
 export default function ManageWalletsIcon({
   size = 24,

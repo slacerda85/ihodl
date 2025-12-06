@@ -1,8 +1,7 @@
 import { View, StyleSheet, useColorScheme } from 'react-native'
 
 import colors from '@/ui/colors'
-// import { useBlockchain } from '@/ui/features/blockchain'
-import { useSettings } from '@/ui/features/settings'
+import { useSettings } from '@/ui/features/app-provider'
 
 export default function BlockchainScreen() {
   const colorScheme = useColorScheme()

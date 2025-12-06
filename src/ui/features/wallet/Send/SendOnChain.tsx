@@ -13,12 +13,10 @@ import { useRouter } from 'expo-router'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
-import { useIsDark } from '../../settings'
+import { useIsDark, useBalance } from '@/ui/features/app-provider'
 import { formatBalance } from '../utils'
-// import { useAddress } from '../../address/AddressProvider'
 import { useNetwork } from '../../network/NetworkProvider'
 import { addressService, transactionService } from '@/core/services'
-import { useBalance } from '../../address/AddressProviderV2'
 
 /**
  * SendOnChain Component

@@ -34,6 +34,9 @@ export function useLightningActions(): LightningActions {
     refreshBalance: context.refreshBalance,
     getChannels: context.getChannels,
     hasChannels: context.hasChannels,
+    createChannel: context.createChannel,
+    closeChannel: context.closeChannel,
+    forceCloseChannel: context.forceCloseChannel,
     refreshInvoices: context.refreshInvoices,
     refreshPayments: context.refreshPayments,
     connectToPeer: context.connectToPeer,
@@ -70,8 +73,9 @@ export function useBalanceActions() {
  * Hook para ações de canal
  */
 export function useChannelActions() {
-  const { getChannels, hasChannels } = useLightningContext()
-  return { getChannels, hasChannels }
+  const { getChannels, hasChannels, createChannel, closeChannel, forceCloseChannel } =
+    useLightningContext()
+  return { getChannels, hasChannels, createChannel, closeChannel, forceCloseChannel }
 }
 
 /**

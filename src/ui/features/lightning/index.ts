@@ -10,7 +10,7 @@ export type { LightningProviderProps } from './LightningProvider'
 
 // Context
 export { LightningContext } from './context'
-export type { LightningContextType, LightningActions } from './context'
+export type { LightningContextType, LightningActions, CreateChannelParams } from './context'
 
 // Types
 export type {
@@ -176,3 +176,20 @@ export {
   useWatchtowerEvents,
 } from './useWatchtower'
 export type { WatchtowerState } from './useWatchtower'
+
+// Channel Features
+export {
+  ChannelCreateScreen,
+  ChannelManageScreen,
+  DualFundingScreen,
+  ChannelSpliceScreen,
+} from './channel'
+
+// Watchtower Management
+export { WatchtowerManagementScreen } from './watchtower'
+
+// Payment Features
+export { PaymentSendScreen, PaymentReceiveScreen } from './payment'
+
+// Transaction Features
+export { TransactionHistoryScreen } from './transaction'

@@ -24,6 +24,7 @@ export interface AsyncState {
  * Chaves para identificar operações de loading
  */
 export type LoadingKey =
+  | 'addresses'
   | 'addressDiscovery'
   | 'lightningInit'
   | 'transactionBroadcast'

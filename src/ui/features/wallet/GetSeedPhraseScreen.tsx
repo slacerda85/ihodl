@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import { View, Text, StyleSheet, ScrollView } from 'react-native'
-// import { useWallet } from './WalletProvider'
-import { useIsDark } from '../settings'
+import { useIsDark, useActiveWalletId } from '@/ui/features/app-provider'
 import { alpha } from '@/ui/utils'
 import colors from '@/ui/colors'
 import Divider from '@/ui/components/Divider'
 import SeedService from '@/core/services/seed'
-import { useActiveWalletId } from './WalletProviderV2'
 
 export default function GetSeedPhraseScreen() {
   const isDark = useIsDark()

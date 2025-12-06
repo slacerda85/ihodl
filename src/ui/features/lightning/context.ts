@@ -18,6 +18,14 @@ import type {
 // TIPOS DO CONTEXTO
 // ==========================================
 
+/** Parâmetros para abertura de canal */
+export interface CreateChannelParams {
+  peerId: string
+  capacitySat: bigint
+  pushMsat?: bigint
+  feeRatePerKw?: number
+}
+
 /** Ações disponíveis no contexto Lightning */
 export interface LightningActions {
   // Inicialização
@@ -37,6 +45,9 @@ export interface LightningActions {
   // Canais
   getChannels: () => Promise<Channel[]>
   hasChannels: () => Promise<boolean>
+  createChannel: (params: CreateChannelParams) => Promise<Channel>
+  closeChannel: (channelId: string) => Promise<void>
+  forceCloseChannel: (channelId: string) => Promise<void>
 
   // Histórico
   refreshInvoices: () => Promise<void>

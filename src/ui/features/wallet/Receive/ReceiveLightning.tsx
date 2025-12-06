@@ -17,7 +17,7 @@ import Button from '@/ui/components/Button'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 import QRCode from '@/ui/components/QRCode'
 import { useLightning, Invoice } from '@/ui/features/lightning/LightningProvider'
-import { useIsDark } from '@/ui/features/settings'
+import { useIsDark } from '@/ui/features/app-provider'
 import { alpha } from '@/ui/utils'
 
 // ============================================================================

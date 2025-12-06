@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo } from 'react'
 import { Animated, ViewStyle, StyleSheet } from 'react-native'
-import { useActiveColorMode } from '@/ui/features/settings'
+import { useActiveColorMode } from '@/ui/features/app-provider'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 

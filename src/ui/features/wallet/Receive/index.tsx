@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native'
 
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
-import { useIsDark } from '../../settings'
+import { useIsDark } from '@/ui/features/app-provider'
 
 import Receive from './Receive'
 import ReceiveLightning from './ReceiveLightning'

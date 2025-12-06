@@ -2,7 +2,7 @@ import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { Link } from 'expo-router'
 import { StyleSheet, Text, View } from 'react-native'
-import { useIsDark } from '../settings'
+import { useIsDark } from '@/ui/features/app-provider'
 
 export default function WalletActions() {
   const isDark = useIsDark()

@@ -11,7 +11,7 @@ import {
 import { useRouter } from 'expo-router'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
-import { useIsDark } from '../../settings'
+import { useIsDark } from '@/ui/features/app-provider'
 import { formatBalance } from '../utils'
 import { useLightning } from '../../lightning/LightningProvider'
 

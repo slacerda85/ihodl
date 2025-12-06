@@ -1,10 +1,9 @@
-import { useAuth } from '@/ui/features/auth/AuthProvider'
+import { useAuth, useIsDark } from '@/ui/features/app-provider'
 import { Modal } from 'react-native'
 import { useState, useMemo } from 'react'
 import { Text, View, StyleSheet, Pressable, Animated } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import colors from '@/ui/colors'
-import { useIsDark } from '@/ui/features/settings'
 import IHodlLogoBorderLess from '@/ui/assets/ihodl-logo-borderless'
 
 export default function AuthScreen() {

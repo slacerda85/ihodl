@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
-import { useIsDark } from '../../settings'
+import { useIsDark } from '@/ui/features/app-provider'
 import SendOnChain from './SendOnChain'
 import SendLightning from './SendLightning'
 

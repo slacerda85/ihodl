@@ -9,9 +9,7 @@ import Button from '@/ui/components/Button'
 import colors from '@/ui/colors'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 
-import { useIsDark } from '@/ui/features/settings'
-// import { useWallet } from '@/ui/features/wallet'
-import { useWalletActions } from './WalletProviderV2'
+import { useIsDark, useWalletActions } from '@/ui/features/app-provider'
 
 export default function CreateWallet() {
   const isDark = useIsDark()

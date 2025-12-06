@@ -2,14 +2,11 @@ import { Link, Stack, useRouter } from 'expo-router'
 import { Pressable, Platform } from 'react-native'
 import colors from '@/ui/colors'
 import { Ionicons } from '@expo/vector-icons'
-import { useAuth } from '@/ui/features/auth/AuthProvider'
+import { useAuth, useIsDark, useActiveWallet } from '@/ui/features/app-provider'
 import { ComponentProps, useCallback, useEffect } from 'react'
-import { useIsDark } from '@/ui/features/settings'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 import {} from 'expo-router'
 import { alpha } from '@/ui/utils'
-// import { useWallet } from '@/ui/state/'
-import { useActiveWallet } from '@/ui/features/wallet/WalletProviderV2'
 
 const IOS_MODAL_HEADER_HEIGHT = 74
 

@@ -281,6 +281,100 @@ export default function LightningProvider({
     return service.hasActiveChannels()
   }, [getService])
 
+  const createChannel = useCallback(
+    async (params: {
+      peerId: string
+      capacitySat: bigint
+      pushMsat?: bigint
+      feeRatePerKw?: number
+    }): Promise<Channel> => {
+      const service = getService()
+      assertServiceInitialized(service)
+
+      setState(prev => ({ ...prev, isLoading: true, error: null }))
+
+      try {
+        // TODO: Integrar com service.openChannel quando disponível
+        // Por enquanto, simula a criação do canal
+        const newChannel: Channel = {
+          channelId: `channel-${Date.now()}`,
+          peerId: params.peerId,
+          state: 'opening',
+          localBalanceSat: params.capacitySat - (params.pushMsat ? params.pushMsat / 1000n : 0n),
+          remoteBalanceSat: params.pushMsat ? params.pushMsat / 1000n : 0n,
+          capacitySat: params.capacitySat,
+          isActive: false,
+        }
+
+        setState(prev => ({
+          ...prev,
+          isLoading: false,
+          channels: [...prev.channels, newChannel],
+        }))
+
+        return newChannel
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to create channel'
+        setState(prev => ({ ...prev, isLoading: false, error: errorMessage }))
+        throw error
+      }
+    },
+    [getService],
+  )
+
+  const closeChannel = useCallback(
+    async (channelId: string): Promise<void> => {
+      const service = getService()
+      assertServiceInitialized(service)
+
+      setState(prev => ({ ...prev, isLoading: true, error: null }))
+
+      try {
+        // TODO: Integrar com service.closeChannel quando disponível
+        // Atualizar estado do canal para 'closing'
+        setState(prev => ({
+          ...prev,
+          isLoading: false,
+          channels: prev.channels.map(ch =>
+            ch.channelId === channelId ? { ...ch, state: 'closing' as const, isActive: false } : ch,
+          ),
+        }))
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to close channel'
+        setState(prev => ({ ...prev, isLoading: false, error: errorMessage }))
+        throw error
+      }
+    },
+    [getService],
+  )
+
+  const forceCloseChannel = useCallback(
+    async (channelId: string): Promise<void> => {
+      const service = getService()
+      assertServiceInitialized(service)
+
+      setState(prev => ({ ...prev, isLoading: true, error: null }))
+
+      try {
+        // TODO: Integrar com service.forceCloseChannel quando disponível
+        // Atualizar estado do canal para 'closing'
+        setState(prev => ({
+          ...prev,
+          isLoading: false,
+          channels: prev.channels.map(ch =>
+            ch.channelId === channelId ? { ...ch, state: 'closing' as const, isActive: false } : ch,
+          ),
+        }))
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : 'Failed to force close channel'
+        setState(prev => ({ ...prev, isLoading: false, error: errorMessage }))
+        throw error
+      }
+    },
+    [getService],
+  )
+
   // ==========================================
   // HISTÓRICO
   // ==========================================
@@ -399,6 +493,9 @@ export default function LightningProvider({
       refreshBalance,
       getChannels,
       hasChannels,
+      createChannel,
+      closeChannel,
+      forceCloseChannel,
       refreshInvoices,
       refreshPayments,
       connectToPeer,
@@ -415,6 +512,9 @@ export default function LightningProvider({
       refreshBalance,
       getChannels,
       hasChannels,
+      createChannel,
+      closeChannel,
+      forceCloseChannel,
       refreshInvoices,
       refreshPayments,
       connectToPeer,

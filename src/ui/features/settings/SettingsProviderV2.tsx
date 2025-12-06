@@ -13,7 +13,7 @@
  * - useSettings().colorMode → useColorMode() para modo de cor
  */
 
-import React, { createContext, useContext, ReactNode, useMemo, useSyncExternalStore } from 'react'
+import { createContext, useContext, ReactNode, useMemo, useSyncExternalStore } from 'react'
 import { useColorScheme } from 'react-native'
 import { MMKV } from 'react-native-mmkv'
 import {

@@ -1,10 +1,8 @@
 import { View, Text, StyleSheet } from 'react-native'
 import colors from '@/ui/colors'
-import { useIsDark } from '@/ui/features/settings'
+import { useIsDark, useAddressLoading, useBalance } from '@/ui/features/app-provider'
 import { formatBalance } from './utils'
-//import { useAddress } from '../address/AddressProvider'
 import LoadingWalletBalance from './LoadingWalletBalance'
-import { useAddressLoading, useBalance } from '../address/AddressProviderV2'
 
 export default function WalletBalance() {
   const isDark = useIsDark()
