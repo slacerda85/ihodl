@@ -199,7 +199,7 @@ function InvoiceDisplay({
       <View style={styles.qrContainer}>
         <QRCode
           value={`lightning:${invoiceData.invoice}`}
-          size={320}
+          size={300}
           color={qrColor}
           backgroundColor="transparent"
         />

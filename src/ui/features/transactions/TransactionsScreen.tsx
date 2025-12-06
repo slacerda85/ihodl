@@ -11,8 +11,9 @@ import { useSettings } from '../settings'
 import { iosTabBarHeight } from '@/ui/tokens'
 import { useAddress } from '../address/AddressProvider'
 import { FriendlyTx } from '@/core/models/transaction'
-import TransactionService from '@/core/services/transaction'
-import Skeleton from '@/ui/components/Skeleton'
+import { transactionService } from '@/core/services'
+import LoadingTransactions from './LoadingTransactions'
+import { useAddresses, useAddressLoading } from '../address/AddressProviderV2'
 // import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
 
 // Define types for our transaction list items
@@ -39,61 +40,12 @@ export default function TransactionsScreen() {
   const isTransactionsRoute = segments[segments.length - 1] === 'transactions'
 
   const { isDark } = useSettings()
-  const { loading, addresses } = useAddress()
-  // const loading = true
-  const transactionService = new TransactionService()
+  const addresses = useAddresses()
+  const loading = useAddressLoading()
 
-  const LoadingTransactions = () => (
-    <View>
-      <View style={{ paddingBottom: 8 }}>
-        <Text
-          style={{ fontSize: 20, fontWeight: '600', color: alpha(colors.textSecondary.light, 0.7) }}
-        >
-          {isTransactionsRoute ? ' ' : 'Transactions'}
-        </Text>
-      </View>
-      {/* Fake date header */}
-      <View style={[styles.dateContainer, isDark && styles.dateContainerDark]}>
-        <Skeleton width={100} height={20} style={{ marginLeft: 8 }} />
-      </View>
-      {/* Fake transactions */}
-      {Array.from({ length: 5 }).map((_, i) => (
-        <View
-          key={i}
-          style={[styles.transactionPressable, isDark && styles.transactionsPressableDark]}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Skeleton width={32} height={32} borderRadius={16} />
-            <View>
-              <Skeleton width={80} height={16} />
-              <Skeleton width={120} height={14} style={{ marginTop: 4 }} />
-            </View>
-          </View>
-          <Skeleton width={60} height={16} />
-        </View>
-      ))}
-      {/* Another date header */}
-      <View style={[styles.dateContainer, isDark && styles.dateContainerDark]}>
-        <Skeleton width={100} height={20} style={{ marginLeft: 16, marginTop: 16 }} />
-      </View>
-      {/* More fake transactions */}
-      {Array.from({ length: 3 }).map((_, i) => (
-        <View
-          key={`more-${i}`}
-          style={[styles.transactionPressable, isDark && styles.transactionsPressableDark]}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Skeleton width={32} height={32} borderRadius={16} />
-            <View>
-              <Skeleton width={80} height={16} />
-              <Skeleton width={120} height={14} style={{ marginTop: 4 }} />
-            </View>
-          </View>
-          <Skeleton width={60} height={16} />
-        </View>
-      ))}
-    </View>
-  )
+  if (loading) {
+    return <LoadingTransactions isDark={isDark} showTitle={!isTransactionsRoute} />
+  }
 
   const transactions = transactionService.getFriendlyTxs(addresses || [])
 
@@ -207,10 +159,6 @@ export default function TransactionsScreen() {
       dateIndices.push(index)
     }
   })
-
-  if (loading) {
-    return <LoadingTransactions />
-  }
 
   // No transaction data available yet - show loading
   if (transactions.length === 0) {

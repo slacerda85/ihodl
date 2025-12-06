@@ -7,9 +7,24 @@
  * Baseado em: https://github.com/lightning/bolts/blob/master/04-onion-routing.md
  */
 
-import { sha256, randomBytes } from '../crypto/crypto'
+import { sha256, randomBytes, hmacSha256 } from '../crypto/crypto'
+import { chacha20 } from '@noble/ciphers/chacha.js'
 import { constructOnionPacket, decryptOnion } from './routing'
+import { uint8ArrayToHex, hexToUint8Array } from '../utils'
 import type { OnionPacket, PayloadTlv } from '@/core/models/lightning/routing'
+
+// ==========================================
+// BOLT #4: BLINDED PATHS
+// ==========================================
+
+/**
+ * Blinded paths permitem que o destinatário oculte sua identidade
+ * e a estrutura do caminho até ele.
+ *
+ * Referência: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#blinded-paths
+ */
+
+import * as secp from '@noble/secp256k1'
 
 // ==========================================
 // CONSTANTES
@@ -801,21 +816,1300 @@ export function createOnionErrorMessage(
 }
 
 /**
- * Gera stream de cipher para encriptação
+ * Gera stream de cipher para encriptação usando ChaCha20
+ * Conforme BOLT #4, usa nonce de 96 bits zerado
  */
 function generateCipherStream(key: Uint8Array, length: number): Uint8Array {
-  // ChaCha20 stream com nonce zero
-  const stream = new Uint8Array(length)
-  // Usar SHA256 em blocos como aproximação
-  let offset = 0
-  let counter = 0
-  while (offset < length) {
-    const block = sha256(new Uint8Array([...key, counter & 0xff, (counter >> 8) & 0xff]))
-    const remaining = length - offset
-    const toCopy = Math.min(32, remaining)
-    stream.set(block.subarray(0, toCopy), offset)
-    offset += toCopy
-    counter++
+  const nonce = new Uint8Array(12) // 96-bit zero nonce
+  const zeros = new Uint8Array(length)
+  return chacha20(key, nonce, zeros)
+}
+
+// ==========================================
+// BOLT #4: ERROR OBFUSCATION (Completo)
+// ==========================================
+
+/**
+ * Tamanho fixo da mensagem de erro onion (BOLT #4)
+ * A mensagem de erro tem tamanho fixo para evitar análise de tráfego
+ */
+export const ONION_ERROR_SIZE = 292 // 2 + 2 + 256 + 32 (failure + len + pad + hmac)
+
+/**
+ * Tipos de campos opcionais em mensagens de falha
+ */
+export const FailureDataField = {
+  CHANNEL_UPDATE: 'channel_update',
+  SHA256_OF_ONION: 'sha256_of_onion',
+  HTLC_MSAT: 'htlc_msat',
+} as const
+
+/**
+ * Estrutura de uma mensagem de falha decodificada
+ */
+export interface DecodedFailureMessage {
+  failureCode: number
+  failureCodeName: string
+  failureData: Uint8Array
+  channelUpdate?: Uint8Array
+  sha256OfOnion?: Uint8Array
+  htlcMsat?: bigint
+  cltvExpiry?: number
+  flags?: number
+  failingChannelId?: Uint8Array
+}
+
+/**
+ * Resultado da desobfuscação de erro
+ */
+export interface ErrorDeobfuscationResult {
+  failure: DecodedFailureMessage
+  failingNodeIndex: number
+  failingNodePubkey?: Uint8Array
+}
+
+/**
+ * Gera chave 'um' para ofuscação de erros
+ * 'um' = HMAC-SHA256(sharedSecret, "um")
+ */
+export function generateUmKey(sharedSecret: Uint8Array): Uint8Array {
+  return hmacSha256(sharedSecret, new TextEncoder().encode('um'))
+}
+
+/**
+ * Gera chave 'ammag' para MAC de erros
+ * 'ammag' = HMAC-SHA256(sharedSecret, "ammag")
+ */
+export function generateAmmagKey(sharedSecret: Uint8Array): Uint8Array {
+  return hmacSha256(sharedSecret, new TextEncoder().encode('ammag'))
+}
+
+/**
+ * Cria mensagem de erro inicial (no nó que falhou)
+ * Formato: failure_code (2) || data_len (2) || data || pad || hmac (32)
+ *
+ * @param failureCode - Código de falha BOLT #4
+ * @param sharedSecret - Shared secret com o nó originador
+ * @param failureData - Dados adicionais da falha (opcional)
+ * @returns Mensagem de erro ofuscada
+ */
+export function createFailureMessage(
+  failureCode: number,
+  sharedSecret: Uint8Array,
+  failureData?: Uint8Array,
+): Uint8Array {
+  const dataLen = failureData?.length || 0
+  // Payload: failure_code (2) + data_len (2) + data + padding to 256 bytes
+  const payloadSize = 256
+  const payload = new Uint8Array(payloadSize)
+
+  // Failure code (big-endian)
+  payload[0] = (failureCode >> 8) & 0xff
+  payload[1] = failureCode & 0xff
+
+  // Data length (big-endian)
+  payload[2] = (dataLen >> 8) & 0xff
+  payload[3] = dataLen & 0xff
+
+  // Data
+  if (failureData && dataLen > 0) {
+    payload.set(failureData, 4)
   }
-  return stream
+
+  // Rest is zero-padded (já é zero)
+
+  // Calcular HMAC antes de encriptar
+  const ammagKey = generateAmmagKey(sharedSecret)
+  const payloadHmac = hmacSha256(ammagKey, payload)
+
+  // Mensagem completa: payload + hmac
+  const message = new Uint8Array(payloadSize + 32)
+  message.set(payload, 0)
+  message.set(payloadHmac, payloadSize)
+
+  // Encriptar com ChaCha20 usando chave 'um'
+  const umKey = generateUmKey(sharedSecret)
+  const cipherStream = generateCipherStream(umKey, message.length)
+
+  const encrypted = new Uint8Array(message.length)
+  for (let i = 0; i < message.length; i++) {
+    encrypted[i] = message[i] ^ cipherStream[i]
+  }
+
+  return encrypted
+}
+
+/**
+ * Ofusca mensagem de erro em um nó intermediário
+ * Cada nó no caminho de volta XOR com seu cipher stream
+ *
+ * @param errorMessage - Mensagem de erro recebida
+ * @param sharedSecret - Shared secret deste nó
+ * @returns Mensagem de erro re-ofuscada
+ */
+export function obfuscateError(errorMessage: Uint8Array, sharedSecret: Uint8Array): Uint8Array {
+  const umKey = generateUmKey(sharedSecret)
+  const cipherStream = generateCipherStream(umKey, errorMessage.length)
+
+  const obfuscated = new Uint8Array(errorMessage.length)
+  for (let i = 0; i < errorMessage.length; i++) {
+    obfuscated[i] = errorMessage[i] ^ cipherStream[i]
+  }
+
+  return obfuscated
+}
+
+/**
+ * Desobfusca mensagem de erro usando os shared secrets de cada hop
+ * Tenta cada shared secret em ordem até encontrar HMAC válido
+ *
+ * @param errorMessage - Mensagem de erro ofuscada
+ * @param sharedSecrets - Array de shared secrets (do primeiro ao último hop)
+ * @returns Resultado com mensagem decodificada e índice do nó que falhou
+ */
+export function deobfuscateError(
+  errorMessage: Uint8Array,
+  sharedSecrets: Uint8Array[],
+): ErrorDeobfuscationResult | null {
+  let message = new Uint8Array(errorMessage)
+
+  // Tentar cada shared secret em ordem
+  for (let i = 0; i < sharedSecrets.length; i++) {
+    const sharedSecret = sharedSecrets[i]
+    const umKey = generateUmKey(sharedSecret)
+    const cipherStream = generateCipherStream(umKey, message.length)
+
+    // XOR para desobfuscar esta camada
+    const decrypted = new Uint8Array(message.length)
+    for (let j = 0; j < message.length; j++) {
+      decrypted[j] = message[j] ^ cipherStream[j]
+    }
+
+    // Verificar HMAC
+    const payloadSize = decrypted.length - 32
+    const payload = decrypted.subarray(0, payloadSize)
+    const receivedHmac = decrypted.subarray(payloadSize)
+
+    const ammagKey = generateAmmagKey(sharedSecret)
+    const expectedHmac = hmacSha256(ammagKey, payload)
+
+    // Comparar HMACs
+    if (constantTimeEqual(receivedHmac, expectedHmac)) {
+      // HMAC válido - este é o nó que originou o erro
+      const failure = parseFailureMessage(payload)
+      return {
+        failure,
+        failingNodeIndex: i,
+      }
+    }
+
+    // HMAC inválido - continuar desobfuscando para o próximo nó
+    message = decrypted
+  }
+
+  // Não foi possível identificar o nó que falhou
+  return null
+}
+
+/**
+ * Parseia mensagem de falha decodificada
+ *
+ * @param payload - Payload decodificado (256 bytes)
+ * @returns Mensagem de falha estruturada
+ */
+export function parseFailureMessage(payload: Uint8Array): DecodedFailureMessage {
+  const view = new DataView(payload.buffer, payload.byteOffset)
+
+  // Failure code (2 bytes, big-endian)
+  const failureCode = view.getUint16(0, false)
+
+  // Data length (2 bytes, big-endian)
+  const dataLen = view.getUint16(2, false)
+
+  // Data
+  const failureData = payload.subarray(4, 4 + dataLen)
+
+  // Obter nome do código de falha
+  const failureCodeName = getFailureCodeName(failureCode)
+
+  // Parsear dados adicionais baseado no tipo de erro
+  const result: DecodedFailureMessage = {
+    failureCode,
+    failureCodeName,
+    failureData,
+  }
+
+  // Parsear campos específicos baseado no failure code
+  parseFailureData(result, failureCode, failureData)
+
+  return result
+}
+
+/**
+ * Parseia dados adicionais da falha baseado no tipo de erro
+ */
+function parseFailureData(
+  result: DecodedFailureMessage,
+  failureCode: number,
+  data: Uint8Array,
+): void {
+  if (data.length === 0) return
+
+  const view = new DataView(data.buffer, data.byteOffset)
+
+  // Erros que incluem channel_update
+  const channelUpdateErrors: number[] = [
+    FailureCode.AMOUNT_BELOW_MINIMUM,
+    FailureCode.FEE_INSUFFICIENT,
+    FailureCode.INCORRECT_CLTV_EXPIRY,
+    FailureCode.EXPIRY_TOO_SOON,
+    FailureCode.CHANNEL_DISABLED,
+  ]
+
+  if (channelUpdateErrors.includes(failureCode as number)) {
+    // Formato: htlc_msat (8) + len (2) + channel_update
+    if (data.length >= 10) {
+      result.htlcMsat = view.getBigUint64(0, false)
+      const updateLen = view.getUint16(8, false)
+      if (data.length >= 10 + updateLen) {
+        result.channelUpdate = data.subarray(10, 10 + updateLen)
+      }
+    }
+  }
+
+  // Erros com sha256_of_onion
+  if (
+    failureCode === FailureCode.INVALID_ONION_VERSION ||
+    failureCode === FailureCode.INVALID_ONION_HMAC ||
+    failureCode === FailureCode.INVALID_ONION_KEY
+  ) {
+    if (data.length >= 32) {
+      result.sha256OfOnion = data.subarray(0, 32)
+    }
+  }
+
+  // INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS
+  if (failureCode === FailureCode.INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS) {
+    if (data.length >= 12) {
+      result.htlcMsat = view.getBigUint64(0, false)
+      result.cltvExpiry = view.getUint32(8, false)
+    }
+  }
+
+  // FINAL_INCORRECT_CLTV_EXPIRY
+  if (failureCode === FailureCode.FINAL_INCORRECT_CLTV_EXPIRY) {
+    if (data.length >= 4) {
+      result.cltvExpiry = view.getUint32(0, false)
+    }
+  }
+
+  // FINAL_INCORRECT_HTLC_AMOUNT
+  if (failureCode === FailureCode.FINAL_INCORRECT_HTLC_AMOUNT) {
+    if (data.length >= 8) {
+      result.htlcMsat = view.getBigUint64(0, false)
+    }
+  }
+
+  // INVALID_ONION_PAYLOAD
+  if (failureCode === FailureCode.INVALID_ONION_PAYLOAD) {
+    if (data.length >= 3) {
+      // type (bigsize) + offset (2)
+      // Simplificado: assumir type é 1 byte
+      const tlvType = data[0]
+      const offset = view.getUint16(1, false)
+      result.flags = tlvType
+      result.cltvExpiry = offset // Reusing field for offset
+    }
+  }
+}
+
+/**
+ * Obtém nome legível do código de falha
+ */
+export function getFailureCodeName(code: number): string {
+  const names: Record<number, string> = {
+    [FailureCode.INVALID_REALM]: 'invalid_realm',
+    [FailureCode.TEMPORARY_NODE_FAILURE]: 'temporary_node_failure',
+    [FailureCode.PERMANENT_NODE_FAILURE]: 'permanent_node_failure',
+    [FailureCode.REQUIRED_NODE_FEATURE_MISSING]: 'required_node_feature_missing',
+    [FailureCode.INVALID_ONION_VERSION]: 'invalid_onion_version',
+    [FailureCode.INVALID_ONION_HMAC]: 'invalid_onion_hmac',
+    [FailureCode.INVALID_ONION_KEY]: 'invalid_onion_key',
+    [FailureCode.AMOUNT_BELOW_MINIMUM]: 'amount_below_minimum',
+    [FailureCode.FEE_INSUFFICIENT]: 'fee_insufficient',
+    [FailureCode.INCORRECT_CLTV_EXPIRY]: 'incorrect_cltv_expiry',
+    [FailureCode.EXPIRY_TOO_SOON]: 'expiry_too_soon',
+    [FailureCode.INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS]: 'incorrect_or_unknown_payment_details',
+    [FailureCode.FINAL_INCORRECT_CLTV_EXPIRY]: 'final_incorrect_cltv_expiry',
+    [FailureCode.FINAL_INCORRECT_HTLC_AMOUNT]: 'final_incorrect_htlc_amount',
+    [FailureCode.CHANNEL_DISABLED]: 'channel_disabled',
+    [FailureCode.EXPIRY_TOO_FAR]: 'expiry_too_far',
+    [FailureCode.INVALID_ONION_PAYLOAD]: 'invalid_onion_payload',
+    [FailureCode.MPP_TIMEOUT]: 'mpp_timeout',
+    [FailureCode.INVALID_ONION_BLINDING]: 'invalid_onion_blinding',
+  }
+  return names[code] || `unknown_failure_${code.toString(16)}`
+}
+
+/**
+ * Verifica se o erro é permanente (não vale tentar novamente)
+ */
+export function isPermFailure(code: number): boolean {
+  // Bit 14 (PERM) = 0x4000
+  return (code & 0x4000) !== 0
+}
+
+/**
+ * Verifica se o erro inclui update de canal
+ */
+export function hasChannelUpdate(code: number): boolean {
+  // Bit 12 (UPDATE) = 0x1000
+  return (code & 0x1000) !== 0
+}
+
+/**
+ * Verifica se o erro é do nó (não do canal)
+ */
+export function isNodeFailure(code: number): boolean {
+  // Bit 13 (NODE) = 0x2000
+  return (code & 0x2000) !== 0
+}
+
+/**
+ * Comparação em tempo constante para prevenir timing attacks
+ */
+function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false
+
+  let result = 0
+  for (let i = 0; i < a.length; i++) {
+    result |= a[i] ^ b[i]
+  }
+
+  return result === 0
+}
+
+/**
+ * Cria dados de falha para erros que incluem channel_update
+ */
+export function createChannelUpdateFailureData(
+  htlcMsat: bigint,
+  channelUpdate: Uint8Array,
+): Uint8Array {
+  const data = new Uint8Array(8 + 2 + channelUpdate.length)
+  const view = new DataView(data.buffer)
+
+  // htlc_msat (8 bytes, big-endian)
+  view.setBigUint64(0, htlcMsat, false)
+
+  // channel_update length (2 bytes, big-endian)
+  view.setUint16(8, channelUpdate.length, false)
+
+  // channel_update
+  data.set(channelUpdate, 10)
+
+  return data
+}
+
+/**
+ * Cria dados de falha para INCORRECT_OR_UNKNOWN_PAYMENT_DETAILS
+ */
+export function createPaymentDetailsFailureData(htlcMsat: bigint, cltvExpiry: number): Uint8Array {
+  const data = new Uint8Array(12)
+  const view = new DataView(data.buffer)
+
+  view.setBigUint64(0, htlcMsat, false)
+  view.setUint32(8, cltvExpiry, false)
+
+  return data
+}
+
+/**
+ * Atualiza mensagem de erro legada para formato v2 (para compatibilidade)
+ * A mensagem legada usava createOnionErrorMessage com SHA256
+ * Esta função converte para o novo formato
+ */
+export function createOnionErrorMessageV2(
+  failureCode: number,
+  sharedSecret: Uint8Array,
+  failureData?: Uint8Array,
+): Uint8Array {
+  return createFailureMessage(failureCode, sharedSecret, failureData)
+}
+
+/**
+ * Estrutura de um hop em um blinded path
+ */
+export interface BlindedHop {
+  /** Blinded node ID (33 bytes compressed pubkey) */
+  blindedNodeId: Uint8Array
+  /** Encrypted data for this hop */
+  encryptedData: Uint8Array
+}
+
+/**
+ * Blinded path completo
+ */
+export interface BlindedPath {
+  /** Introduction node (primeiro nó do path, não blindado) */
+  introductionNodeId: Uint8Array
+  /** Blinding point (33 bytes) - usado para derivar shared secrets */
+  blindingPoint: Uint8Array
+  /** Hops blindados */
+  blindedHops: BlindedHop[]
+}
+
+/**
+ * Dados encriptados para um hop em blinded path
+ */
+export interface BlindedHopData {
+  /** Short channel ID para forward (8 bytes) - opcional para intermediate */
+  shortChannelId?: Uint8Array
+  /** Padding para uniformizar tamanho */
+  padding?: Uint8Array
+  /** Next blinding override - opcional */
+  nextBlindingOverride?: Uint8Array
+  /** Payment relay info (para payments) */
+  paymentRelay?: {
+    cltvExpiryDelta: number
+    feeProportionalMillionths: number
+    feeBaseMsat: number
+  }
+  /** Payment constraints (para payments) */
+  paymentConstraints?: {
+    maxCltvExpiry: number
+    htlcMinimumMsat: bigint
+  }
+  /** Allowed features */
+  allowedFeatures?: Uint8Array
+}
+
+/**
+ * Dados encriptados para o final hop (recipient)
+ */
+export interface BlindedRecipientData {
+  /** Path ID para correlacionar com invoice */
+  pathId?: Uint8Array
+  /** Payment constraints */
+  paymentConstraints?: {
+    maxCltvExpiry: number
+    htlcMinimumMsat: bigint
+  }
+}
+
+/**
+ * Tipos de TLV para encrypted_data_tlv em blinded paths
+ */
+export const BlindedTlvType = {
+  PADDING: 1,
+  SHORT_CHANNEL_ID: 2,
+  NEXT_BLINDING_OVERRIDE: 8,
+  NEXT_NODE_ID: 4,
+  PATH_ID: 6,
+  PAYMENT_RELAY: 10,
+  PAYMENT_CONSTRAINTS: 12,
+  ALLOWED_FEATURES: 14,
+} as const
+
+/**
+ * Cria um blinded path a partir de uma rota
+ *
+ * @param route - Node IDs do caminho (do introduction node ao recipient)
+ * @param recipientData - Dados para o recipient (path_id, etc)
+ * @param hopDatas - Dados para cada hop intermediário
+ * @returns Blinded path
+ */
+export function createBlindedPath(
+  route: Uint8Array[],
+  recipientData: BlindedRecipientData,
+  hopDatas: BlindedHopData[],
+): BlindedPath {
+  if (route.length < 2) {
+    throw new Error('Blinded path requires at least 2 nodes')
+  }
+
+  if (hopDatas.length !== route.length - 2) {
+    throw new Error('Number of hop datas must equal number of intermediate hops')
+  }
+
+  // Gerar blinding seed aleatório
+  const blindingSeed = randomBytes(32)
+
+  // Primeiro nó é o introduction node (não blindado)
+  const introductionNodeId = route[0]
+
+  // Calcular blinding point inicial: e * G
+  const blindingPoint = secp.getPublicKey(blindingSeed, true)
+
+  // Construir hops blindados
+  const blindedHops: BlindedHop[] = []
+  let currentBlindingKey = blindingSeed
+
+  for (let i = 1; i < route.length; i++) {
+    const nodeId = route[i]
+    const isLastHop = i === route.length - 1
+
+    // Calcular shared secret: SHA256(nodeId * blindingKey)
+    const sharedSecret = calculateBlindedSharedSecret(nodeId, currentBlindingKey)
+
+    // Calcular blinded node ID: nodeId + SHA256(nodeId || sharedSecret) * G
+    const blindedNodeId = blindNodeId(nodeId, sharedSecret)
+
+    // Preparar dados para encriptar
+    let dataToEncrypt: Uint8Array
+    if (isLastHop) {
+      // Último hop: recipient data
+      dataToEncrypt = encodeBlindedRecipientData(recipientData)
+    } else {
+      // Hop intermediário
+      const hopData = hopDatas[i - 1]
+      // Adicionar next_node_id para forwarding
+      const nextNodeId = route[i + 1]
+      dataToEncrypt = encodeBlindedHopData(hopData, nextNodeId)
+    }
+
+    // Encriptar dados com shared secret
+    const encryptedData = encryptBlindedData(dataToEncrypt, sharedSecret)
+
+    blindedHops.push({
+      blindedNodeId,
+      encryptedData,
+    })
+
+    // Calcular próximo blinding key: SHA256(currentBlindingPoint || sharedSecret) * currentBlindingKey
+    if (!isLastHop) {
+      currentBlindingKey = deriveNextBlindingKey(currentBlindingKey, sharedSecret)
+    }
+  }
+
+  return {
+    introductionNodeId,
+    blindingPoint,
+    blindedHops,
+  }
+}
+
+/**
+ * Processa um blinded path recebido (como nó intermediário)
+ *
+ * @param encryptedData - Dados encriptados recebidos
+ * @param blindingPoint - Blinding point atual
+ * @param nodePrivKey - Chave privada do nó
+ * @returns Dados decriptados e próximo blinding point
+ */
+export function processBlindedHop(
+  encryptedData: Uint8Array,
+  blindingPoint: Uint8Array,
+  nodePrivKey: Uint8Array,
+): {
+  decryptedData: BlindedHopData | BlindedRecipientData
+  nextBlindingPoint?: Uint8Array
+  nextNodeId?: Uint8Array
+  isRecipient: boolean
+} {
+  // Calcular shared secret: ECDH(nodePrivKey, blindingPoint)
+  const sharedSecret = calculateBlindedSharedSecretPriv(blindingPoint, nodePrivKey)
+
+  // Decriptar dados
+  const decryptedBytes = decryptBlindedData(encryptedData, sharedSecret)
+
+  // Decodificar TLVs
+  const tlvs = decodeTlvStream(decryptedBytes)
+
+  // Parsear TLVs
+  let nextNodeId: Uint8Array | undefined
+  let nextBlindingOverride: Uint8Array | undefined
+  let shortChannelId: Uint8Array | undefined
+  let pathId: Uint8Array | undefined
+  let paymentRelay: BlindedHopData['paymentRelay']
+  let paymentConstraints: BlindedHopData['paymentConstraints']
+
+  for (const tlv of tlvs) {
+    const typeNum = Number(tlv.type)
+    switch (typeNum) {
+      case BlindedTlvType.NEXT_NODE_ID:
+        nextNodeId = tlv.value
+        break
+      case BlindedTlvType.SHORT_CHANNEL_ID:
+        shortChannelId = tlv.value
+        break
+      case BlindedTlvType.NEXT_BLINDING_OVERRIDE:
+        nextBlindingOverride = tlv.value
+        break
+      case BlindedTlvType.PATH_ID:
+        pathId = tlv.value
+        break
+      case BlindedTlvType.PAYMENT_RELAY:
+        paymentRelay = decodePaymentRelay(tlv.value)
+        break
+      case BlindedTlvType.PAYMENT_CONSTRAINTS:
+        paymentConstraints = decodePaymentConstraints(tlv.value)
+        break
+    }
+  }
+
+  // Determinar se é o recipient (tem path_id e não tem next_node_id)
+  const isRecipient = pathId !== undefined && nextNodeId === undefined
+
+  // Calcular próximo blinding point
+  let nextBlindingPoint: Uint8Array | undefined
+  if (!isRecipient) {
+    if (nextBlindingOverride) {
+      nextBlindingPoint = nextBlindingOverride
+    } else {
+      // Calcular: current_blinding_point * SHA256(current_blinding_point || shared_secret)
+      nextBlindingPoint = deriveNextBlindingPoint(blindingPoint, sharedSecret)
+    }
+  }
+
+  if (isRecipient) {
+    return {
+      decryptedData: { pathId, paymentConstraints } as BlindedRecipientData,
+      isRecipient: true,
+    }
+  } else {
+    return {
+      decryptedData: { shortChannelId, paymentRelay, paymentConstraints } as BlindedHopData,
+      nextBlindingPoint,
+      nextNodeId,
+      isRecipient: false,
+    }
+  }
+}
+
+/**
+ * Calcula shared secret para blinded path (com pubkey)
+ */
+function calculateBlindedSharedSecret(nodeId: Uint8Array, blindingKey: Uint8Array): Uint8Array {
+  // shared_secret = SHA256(nodeId * blindingKey)
+  const sharedPoint = secp.getSharedSecret(blindingKey, nodeId, true)
+  return sha256(sharedPoint.subarray(1)) // Remove prefix byte
+}
+
+/**
+ * Calcula shared secret para blinded path (com privkey)
+ */
+function calculateBlindedSharedSecretPriv(
+  blindingPoint: Uint8Array,
+  nodePrivKey: Uint8Array,
+): Uint8Array {
+  const sharedPoint = secp.getSharedSecret(nodePrivKey, blindingPoint, true)
+  return sha256(sharedPoint.subarray(1))
+}
+
+/**
+ * Blinda um node ID
+ * blinded_node_id = node_id + SHA256(node_id || shared_secret) * G
+ */
+function blindNodeId(nodeId: Uint8Array, sharedSecret: Uint8Array): Uint8Array {
+  // blinding_factor = SHA256(node_id || shared_secret)
+  const blindingFactor = sha256(new Uint8Array([...nodeId, ...sharedSecret]))
+
+  // blinding_point = blinding_factor * G
+  const blindingPointAddition = secp.getPublicKey(blindingFactor, true)
+
+  // blinded_node_id = node_id + blinding_point
+  const nodeIdPoint = secp.Point.fromHex(uint8ArrayToHex(nodeId))
+  const blindingAddPoint = secp.Point.fromHex(uint8ArrayToHex(blindingPointAddition))
+  const blindedPoint = nodeIdPoint.add(blindingAddPoint)
+
+  return hexToUint8Array(blindedPoint.toHex(true))
+}
+
+/**
+ * Deriva próximo blinding key
+ */
+function deriveNextBlindingKey(currentKey: Uint8Array, sharedSecret: Uint8Array): Uint8Array {
+  // next_blinding_key = SHA256(current_blinding_point || shared_secret) * current_key
+  const currentPoint = secp.getPublicKey(currentKey, true)
+  const factor = sha256(new Uint8Array([...currentPoint, ...sharedSecret]))
+
+  // Multiply scalar: next_key = factor * current_key (mod n)
+  // secp256k1 curve order n
+  const n = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n
+  const factorBigInt = bytesToBigInt(factor)
+  const currentBigInt = bytesToBigInt(currentKey)
+  const nextBigInt = (factorBigInt * currentBigInt) % n
+
+  return bigIntToBytes(nextBigInt, 32)
+}
+
+/**
+ * Deriva próximo blinding point
+ */
+function deriveNextBlindingPoint(
+  currentBlindingPoint: Uint8Array,
+  sharedSecret: Uint8Array,
+): Uint8Array {
+  // factor = SHA256(current_blinding_point || shared_secret)
+  const factor = sha256(new Uint8Array([...currentBlindingPoint, ...sharedSecret]))
+
+  // next_blinding_point = current_blinding_point * factor
+  const currentPoint = secp.Point.fromHex(uint8ArrayToHex(currentBlindingPoint))
+  const factorBigInt = bytesToBigInt(factor)
+  const nextPoint = currentPoint.multiply(factorBigInt)
+
+  return hexToUint8Array(nextPoint.toHex(true))
+}
+
+/**
+ * Encripta dados do blinded hop usando ChaCha20-Poly1305
+ */
+function encryptBlindedData(data: Uint8Array, sharedSecret: Uint8Array): Uint8Array {
+  // Derivar chave de encriptação: rho = HMAC-SHA256(sharedSecret, "blinded_node_id")
+  const rhoKey = hmacSha256(sharedSecret, new TextEncoder().encode('blinded_node_id'))
+
+  // Usar ChaCha20 com nonce zero
+  const nonce = new Uint8Array(12)
+  return chacha20(rhoKey, nonce, data)
+}
+
+/**
+ * Decripta dados do blinded hop
+ */
+function decryptBlindedData(encryptedData: Uint8Array, sharedSecret: Uint8Array): Uint8Array {
+  // Mesma operação que encriptar (ChaCha20 é simétrico)
+  return encryptBlindedData(encryptedData, sharedSecret)
+}
+
+/**
+ * Codifica dados do hop intermediário em TLV
+ */
+function encodeBlindedHopData(hopData: BlindedHopData, nextNodeId: Uint8Array): Uint8Array {
+  const tlvs: { type: number; value: Uint8Array }[] = []
+
+  // padding (type 1)
+  if (hopData.padding) {
+    tlvs.push({ type: BlindedTlvType.PADDING, value: hopData.padding })
+  }
+
+  // short_channel_id (type 2)
+  if (hopData.shortChannelId) {
+    tlvs.push({ type: BlindedTlvType.SHORT_CHANNEL_ID, value: hopData.shortChannelId })
+  }
+
+  // next_node_id (type 4) - obrigatório para hops intermediários
+  tlvs.push({ type: BlindedTlvType.NEXT_NODE_ID, value: nextNodeId })
+
+  // next_blinding_override (type 8)
+  if (hopData.nextBlindingOverride) {
+    tlvs.push({ type: BlindedTlvType.NEXT_BLINDING_OVERRIDE, value: hopData.nextBlindingOverride })
+  }
+
+  // payment_relay (type 10)
+  if (hopData.paymentRelay) {
+    tlvs.push({
+      type: BlindedTlvType.PAYMENT_RELAY,
+      value: encodePaymentRelay(hopData.paymentRelay),
+    })
+  }
+
+  // payment_constraints (type 12)
+  if (hopData.paymentConstraints) {
+    tlvs.push({
+      type: BlindedTlvType.PAYMENT_CONSTRAINTS,
+      value: encodePaymentConstraints(hopData.paymentConstraints),
+    })
+  }
+
+  // allowed_features (type 14)
+  if (hopData.allowedFeatures) {
+    tlvs.push({ type: BlindedTlvType.ALLOWED_FEATURES, value: hopData.allowedFeatures })
+  }
+
+  return encodeTlvStream(tlvs)
+}
+
+/**
+ * Codifica dados do recipient em TLV
+ */
+function encodeBlindedRecipientData(recipientData: BlindedRecipientData): Uint8Array {
+  const tlvs: { type: number; value: Uint8Array }[] = []
+
+  // path_id (type 6)
+  if (recipientData.pathId) {
+    tlvs.push({ type: BlindedTlvType.PATH_ID, value: recipientData.pathId })
+  }
+
+  // payment_constraints (type 12)
+  if (recipientData.paymentConstraints) {
+    tlvs.push({
+      type: BlindedTlvType.PAYMENT_CONSTRAINTS,
+      value: encodePaymentConstraints(recipientData.paymentConstraints),
+    })
+  }
+
+  return encodeTlvStream(tlvs)
+}
+
+/**
+ * Codifica payment_relay TLV
+ */
+function encodePaymentRelay(relay: NonNullable<BlindedHopData['paymentRelay']>): Uint8Array {
+  // cltv_expiry_delta (2) + fee_proportional_millionths (4) + fee_base_msat (4)
+  const data = new Uint8Array(10)
+  const view = new DataView(data.buffer)
+
+  view.setUint16(0, relay.cltvExpiryDelta, false)
+  view.setUint32(2, relay.feeProportionalMillionths, false)
+  view.setUint32(6, relay.feeBaseMsat, false)
+
+  return data
+}
+
+/**
+ * Decodifica payment_relay TLV
+ */
+function decodePaymentRelay(data: Uint8Array): BlindedHopData['paymentRelay'] {
+  const view = new DataView(data.buffer, data.byteOffset)
+
+  return {
+    cltvExpiryDelta: view.getUint16(0, false),
+    feeProportionalMillionths: view.getUint32(2, false),
+    feeBaseMsat: view.getUint32(6, false),
+  }
+}
+
+/**
+ * Codifica payment_constraints TLV
+ */
+function encodePaymentConstraints(
+  constraints: NonNullable<BlindedHopData['paymentConstraints']>,
+): Uint8Array {
+  // max_cltv_expiry (4) + htlc_minimum_msat (8)
+  const data = new Uint8Array(12)
+  const view = new DataView(data.buffer)
+
+  view.setUint32(0, constraints.maxCltvExpiry, false)
+  view.setBigUint64(4, constraints.htlcMinimumMsat, false)
+
+  return data
+}
+
+/**
+ * Decodifica payment_constraints TLV
+ */
+function decodePaymentConstraints(data: Uint8Array): BlindedHopData['paymentConstraints'] {
+  const view = new DataView(data.buffer, data.byteOffset)
+
+  return {
+    maxCltvExpiry: view.getUint32(0, false),
+    htlcMinimumMsat: view.getBigUint64(4, false),
+  }
+}
+
+/**
+ * Helpers para conversão BigInt <-> bytes
+ */
+function bytesToBigInt(bytes: Uint8Array): bigint {
+  let result = 0n
+  for (const byte of bytes) {
+    result = (result << 8n) | BigInt(byte)
+  }
+  return result
+}
+
+function bigIntToBytes(value: bigint, length: number): Uint8Array {
+  const bytes = new Uint8Array(length)
+  let v = value
+  for (let i = length - 1; i >= 0; i--) {
+    bytes[i] = Number(v & 0xffn)
+    v >>= 8n
+  }
+  return bytes
+}
+
+// ==========================================
+// BOLT #4/12: ONION MESSAGES
+// ==========================================
+
+/**
+ * Onion messages permitem comunicação privada P2P sem criar canais.
+ * Usados para BOLT #12 Offers/Invoice requests.
+ *
+ * Referência: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#onion-messages
+ */
+
+/**
+ * Tamanho do onion packet para onion messages (diferente de pagamentos)
+ */
+export const ONION_MESSAGE_PACKET_SIZE = 1366
+
+/**
+ * Tipos de mensagem onion
+ */
+export enum OnionMessageType {
+  /** Mensagem de texto simples */
+  TEXT = 1,
+  /** Invoice request (BOLT #12) */
+  INVOICE_REQUEST = 64,
+  /** Invoice (BOLT #12) */
+  INVOICE = 66,
+  /** Invoice error */
+  INVOICE_ERROR = 68,
+}
+
+/**
+ * Estrutura de uma onion message
+ */
+export interface OnionMessage {
+  /** Blinding point (33 bytes) */
+  blindingPoint: Uint8Array
+  /** Onion packet encriptado */
+  onionPacket: Uint8Array
+}
+
+/**
+ * Payload de uma onion message
+ */
+export interface OnionMessagePayload {
+  /** Reply path para resposta (opcional) */
+  replyPath?: BlindedPath
+  /** Encrypted data do blinded path */
+  encryptedData?: Uint8Array
+  /** Conteúdo da mensagem */
+  messageContent?: {
+    type: OnionMessageType
+    data: Uint8Array
+  }
+}
+
+/**
+ * Tipos de TLV para onion message
+ */
+export const OnionMessageTlvType = {
+  REPLY_PATH: 2,
+  ENCRYPTED_DATA: 4,
+  // Message content types (odd = optional)
+  TEXT_MESSAGE: 65535,
+  INVOICE_REQUEST: 64,
+  INVOICE: 66,
+  INVOICE_ERROR: 68,
+} as const
+
+/**
+ * Cria uma onion message para enviar a um destino
+ *
+ * @param route - Rota de node IDs até o destino
+ * @param payload - Conteúdo da mensagem
+ * @param replyPath - Blinded path para resposta (opcional)
+ * @returns Onion message
+ */
+export function createOnionMessage(
+  route: Uint8Array[],
+  payload: OnionMessagePayload,
+  replyPath?: BlindedPath,
+): OnionMessage {
+  if (route.length === 0) {
+    throw new Error('Route must have at least one node')
+  }
+
+  // Gerar session key aleatório
+  const sessionKey = randomBytes(32)
+
+  // Calcular blinding point inicial
+  const blindingPoint = secp.getPublicKey(sessionKey, true)
+
+  // Construir payloads para cada hop
+  const hopsData: { length: bigint; payload: Uint8Array; hmac: Uint8Array }[] = []
+
+  for (let i = 0; i < route.length; i++) {
+    const isLastHop = i === route.length - 1
+
+    let hopPayload: Uint8Array
+    if (isLastHop) {
+      // Final hop: incluir mensagem e reply path
+      hopPayload = encodeOnionMessageFinalPayload(payload, replyPath)
+    } else {
+      // Hop intermediário: apenas forwarding info
+      hopPayload = encodeOnionMessageIntermediatePayload(route[i + 1])
+    }
+
+    hopsData.push({
+      length: BigInt(hopPayload.length),
+      payload: hopPayload,
+      hmac: new Uint8Array(32),
+    })
+  }
+
+  // Construir onion packet
+  const onionPacket = constructOnionPacket(route, sessionKey, hopsData)
+
+  return {
+    blindingPoint,
+    onionPacket: serializeOnionPacket(onionPacket),
+  }
+}
+
+/**
+ * Processa uma onion message recebida
+ *
+ * @param message - Onion message recebida
+ * @param nodePrivKey - Chave privada do nó
+ * @returns Payload decriptado ou informação de forwarding
+ */
+export function processOnionMessage(
+  message: OnionMessage,
+  nodePrivKey: Uint8Array,
+): {
+  isForUs: boolean
+  payload?: OnionMessagePayload
+  nextNodeId?: Uint8Array
+  nextOnionMessage?: OnionMessage
+} {
+  const packet = decodeOnionPacket(message.onionPacket)
+
+  // Calcular shared secret
+  const sharedSecret = calculateBlindedSharedSecretPriv(message.blindingPoint, nodePrivKey)
+
+  // Decriptar payload
+  const result = decryptOnion(packet, new Uint8Array(), sharedSecret, nodePrivKey)
+
+  // Decodificar payload TLV
+  const payloadTlvs = decodeTlvStream(result.payload as unknown as Uint8Array)
+
+  let encryptedData: Uint8Array | undefined
+  let replyPath: BlindedPath | undefined
+  let messageContent: OnionMessagePayload['messageContent']
+
+  for (const tlv of payloadTlvs) {
+    const typeNum = Number(tlv.type)
+
+    switch (typeNum) {
+      case OnionMessageTlvType.ENCRYPTED_DATA:
+        encryptedData = tlv.value
+        break
+      case OnionMessageTlvType.REPLY_PATH:
+        replyPath = decodeBlindedPath(tlv.value)
+        break
+      case OnionMessageTlvType.INVOICE_REQUEST:
+        messageContent = { type: OnionMessageType.INVOICE_REQUEST, data: tlv.value }
+        break
+      case OnionMessageTlvType.INVOICE:
+        messageContent = { type: OnionMessageType.INVOICE, data: tlv.value }
+        break
+      case OnionMessageTlvType.INVOICE_ERROR:
+        messageContent = { type: OnionMessageType.INVOICE_ERROR, data: tlv.value }
+        break
+      case OnionMessageTlvType.TEXT_MESSAGE:
+        messageContent = { type: OnionMessageType.TEXT, data: tlv.value }
+        break
+    }
+  }
+
+  // Se não há próximo onion, a mensagem é para nós
+  if (!result.nextOnion) {
+    return {
+      isForUs: true,
+      payload: {
+        replyPath,
+        encryptedData,
+        messageContent,
+      },
+    }
+  }
+
+  // Caso contrário, fazer forwarding
+  // Calcular próximo blinding point
+  const nextBlindingPoint = deriveNextBlindingPoint(message.blindingPoint, sharedSecret)
+
+  // Processar encrypted_data para obter next_node_id
+  let nextNodeId: Uint8Array | undefined
+  if (encryptedData) {
+    const decryptedData = decryptBlindedData(encryptedData, sharedSecret)
+    const dataTlvs = decodeTlvStream(decryptedData)
+
+    for (const tlv of dataTlvs) {
+      if (Number(tlv.type) === BlindedTlvType.NEXT_NODE_ID) {
+        nextNodeId = tlv.value
+        break
+      }
+    }
+  }
+
+  return {
+    isForUs: false,
+    nextNodeId,
+    nextOnionMessage: {
+      blindingPoint: nextBlindingPoint,
+      onionPacket: serializeOnionPacket(result.nextOnion),
+    },
+  }
+}
+
+/**
+ * Codifica payload final de onion message
+ */
+function encodeOnionMessageFinalPayload(
+  payload: OnionMessagePayload,
+  replyPath?: BlindedPath,
+): Uint8Array {
+  const tlvs: { type: number; value: Uint8Array }[] = []
+
+  // Reply path (type 2)
+  if (replyPath) {
+    tlvs.push({ type: OnionMessageTlvType.REPLY_PATH, value: encodeBlindedPath(replyPath) })
+  }
+
+  // Message content
+  if (payload.messageContent) {
+    let tlvType: number
+    switch (payload.messageContent.type) {
+      case OnionMessageType.INVOICE_REQUEST:
+        tlvType = OnionMessageTlvType.INVOICE_REQUEST
+        break
+      case OnionMessageType.INVOICE:
+        tlvType = OnionMessageTlvType.INVOICE
+        break
+      case OnionMessageType.INVOICE_ERROR:
+        tlvType = OnionMessageTlvType.INVOICE_ERROR
+        break
+      default:
+        tlvType = OnionMessageTlvType.TEXT_MESSAGE
+    }
+    tlvs.push({ type: tlvType, value: payload.messageContent.data })
+  }
+
+  return encodeTlvStream(tlvs)
+}
+
+/**
+ * Codifica payload intermediário de onion message
+ */
+function encodeOnionMessageIntermediatePayload(nextNodeId: Uint8Array): Uint8Array {
+  const tlvs: { type: number; value: Uint8Array }[] = []
+
+  // Encrypted data com next_node_id
+  const encryptedDataTlvs: { type: number; value: Uint8Array }[] = [
+    { type: BlindedTlvType.NEXT_NODE_ID, value: nextNodeId },
+  ]
+
+  tlvs.push({
+    type: OnionMessageTlvType.ENCRYPTED_DATA,
+    value: encodeTlvStream(encryptedDataTlvs),
+  })
+
+  return encodeTlvStream(tlvs)
+}
+
+/**
+ * Codifica um blinded path para serialização
+ */
+export function encodeBlindedPath(path: BlindedPath): Uint8Array {
+  const parts: Uint8Array[] = []
+
+  // Introduction node ID (33 bytes)
+  parts.push(path.introductionNodeId)
+
+  // Blinding point (33 bytes)
+  parts.push(path.blindingPoint)
+
+  // Number of hops (1 byte)
+  parts.push(new Uint8Array([path.blindedHops.length]))
+
+  // Hops
+  for (const hop of path.blindedHops) {
+    // Blinded node ID (33 bytes)
+    parts.push(hop.blindedNodeId)
+
+    // Encrypted data length (2 bytes big-endian)
+    const lenBuf = new Uint8Array(2)
+    new DataView(lenBuf.buffer).setUint16(0, hop.encryptedData.length, false)
+    parts.push(lenBuf)
+
+    // Encrypted data
+    parts.push(hop.encryptedData)
+  }
+
+  // Concatenar
+  const totalLen = parts.reduce((sum, p) => sum + p.length, 0)
+  const result = new Uint8Array(totalLen)
+  let offset = 0
+  for (const part of parts) {
+    result.set(part, offset)
+    offset += part.length
+  }
+
+  return result
+}
+
+/**
+ * Decodifica um blinded path serializado
+ */
+export function decodeBlindedPath(data: Uint8Array): BlindedPath {
+  let offset = 0
+
+  // Introduction node ID (33 bytes)
+  const introductionNodeId = data.subarray(offset, offset + 33)
+  offset += 33
+
+  // Blinding point (33 bytes)
+  const blindingPoint = data.subarray(offset, offset + 33)
+  offset += 33
+
+  // Number of hops (1 byte)
+  const numHops = data[offset]
+  offset += 1
+
+  // Hops
+  const blindedHops: BlindedHop[] = []
+  for (let i = 0; i < numHops; i++) {
+    // Blinded node ID (33 bytes)
+    const blindedNodeId = data.subarray(offset, offset + 33)
+    offset += 33
+
+    // Encrypted data length (2 bytes)
+    const encryptedDataLen = new DataView(data.buffer, data.byteOffset + offset).getUint16(0, false)
+    offset += 2
+
+    // Encrypted data
+    const encryptedData = data.subarray(offset, offset + encryptedDataLen)
+    offset += encryptedDataLen
+
+    blindedHops.push({ blindedNodeId, encryptedData })
+  }
+
+  return {
+    introductionNodeId,
+    blindingPoint,
+    blindedHops,
+  }
+}
+
+/**
+ * Cria um reply path blindado para responder a uma onion message
+ *
+ * @param route - Caminho de volta (do responder ao originador)
+ * @param pathId - ID único para correlacionar respostas
+ * @returns Blinded path para respostas
+ */
+export function createReplyPath(route: Uint8Array[], pathId: Uint8Array): BlindedPath {
+  const recipientData: BlindedRecipientData = {
+    pathId,
+  }
+
+  // Criar hop datas vazios para intermediários
+  const hopDatas: BlindedHopData[] = Array(Math.max(0, route.length - 2)).fill({})
+
+  return createBlindedPath(route, recipientData, hopDatas)
+}
+
+/**
+ * Envia resposta usando reply path
+ *
+ * @param replyPath - Reply path recebido na mensagem original
+ * @param payload - Conteúdo da resposta
+ * @returns Onion message de resposta
+ */
+export function createReplyMessage(
+  replyPath: BlindedPath,
+  payload: OnionMessagePayload,
+): OnionMessage {
+  // Construir rota a partir do blinded path
+  const route: Uint8Array[] = [replyPath.introductionNodeId]
+  for (const hop of replyPath.blindedHops) {
+    route.push(hop.blindedNodeId)
+  }
+
+  return createOnionMessage(route, payload)
 }

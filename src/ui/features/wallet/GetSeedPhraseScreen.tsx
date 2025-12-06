@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react'
 import { View, Text, StyleSheet, ScrollView } from 'react-native'
-import { useWallet } from './WalletProvider'
+// import { useWallet } from './WalletProvider'
 import { useSettings } from '../settings/SettingsProvider'
 import { alpha } from '@/ui/utils'
 import colors from '@/ui/colors'
 import Divider from '@/ui/components/Divider'
 import SeedService from '@/core/services/seed'
+import { useActiveWalletId } from './WalletProviderV2'
 
 export default function GetSeedPhraseScreen() {
   const { isDark } = useSettings()
-  const { activeWalletId } = useWallet()
+  const activeWalletId = useActiveWalletId()
   const [seedPhrase, setSeedPhrase] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -26,9 +27,9 @@ export default function GetSeedPhraseScreen() {
         const seedService = new SeedService()
         const phrase = seedService.getSeed(activeWalletId, password)
         setSeedPhrase(phrase)
+        setLoading(false)
       } catch (error) {
         console.error('Error loading seed phrase:', error)
-      } finally {
         setLoading(false)
       }
     }

@@ -9,15 +9,15 @@ import { useSettings } from '@/ui/features/settings'
 import QRCode from '@/ui/components/QRCode'
 import ContentContainer from '@/ui/components/ContentContainer'
 import { useAddress } from '../address/AddressProvider'
-import TransactionService from '@/core/services/transaction'
+import { transactionService } from '@/core/services'
 import { formatBalance } from '../wallet/utils'
+import { useAddresses } from '../address/AddressProviderV2'
 
 export default function TransactionDetails() {
   const { txid } = useLocalSearchParams<{ txid: string }>()
   const { isDark } = useSettings()
-  const { addresses } = useAddress()
+  const addresses = useAddresses()
 
-  const transactionService = new TransactionService()
   const transactions = transactionService.getFriendlyTxs(addresses || [])
 
   const tx = transactions.find(t => t.txid === txid)

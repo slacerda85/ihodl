@@ -41,3 +41,9 @@ export {
   useCanLoopIn,
   useCanLoopOut,
 } from './useSubmarineSwap'
+
+// CPFP (Fee Bumping) hooks
+export { useCpfp } from './useCpfp'
+
+// HTLC Monitor hooks
+export { useHtlcMonitor } from './useHtlcMonitor'

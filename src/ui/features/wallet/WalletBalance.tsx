@@ -2,30 +2,14 @@ import { View, Text, StyleSheet } from 'react-native'
 import colors from '@/ui/colors'
 import { useSettings } from '@/ui/features/settings'
 import { formatBalance } from './utils'
-import { useAddress } from '../address/AddressProvider'
-import Skeleton from '@/ui/components/Skeleton'
+//import { useAddress } from '../address/AddressProvider'
+import LoadingWalletBalance from './LoadingWalletBalance'
+import { useAddressLoading, useBalance } from '../address/AddressProviderV2'
 
 export default function WalletBalance() {
   const { isDark } = useSettings()
-  const { balance, loading } = useAddress()
-  // const loading = true
-
-  const LoadingWalletBalance = () => (
-    <View style={styles.balanceSection}>
-      <View
-        style={{
-          width: '100%',
-          // backgroundColor: 'blue',
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 16,
-        }}
-      >
-        <Skeleton height={30} width="50%" />
-      </View>
-    </View>
-  )
+  const { balance } = useBalance()
+  const loading = useAddressLoading()
 
   if (loading) {
     return <LoadingWalletBalance />

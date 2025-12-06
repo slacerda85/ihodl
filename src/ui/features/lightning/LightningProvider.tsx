@@ -12,13 +12,21 @@
  * - Evitar dependências de estado em useEffect que causem loops
  */
 
-import { ReactNode, useState, useCallback, useMemo, useRef, useEffect } from 'react'
+import React, {
+  ReactNode,
+  useState,
+  useCallback,
+  useMemo,
+  useRef,
+  useEffect,
+  useContext,
+} from 'react'
 import LightningService, {
   connectToPeer as connectToPeerService,
   disconnect as disconnectService,
   sendPing as sendPingService,
 } from '@/core/services/lightning'
-import WalletService from '@/core/services/wallet'
+import { walletService } from '@/core/services'
 
 import { LightningContext, type LightningContextType } from './context'
 import type { LightningState, Invoice, Payment, Channel, Millisatoshis } from './types'
@@ -99,7 +107,6 @@ export default function LightningProvider({
     setState(prev => ({ ...prev, isLoading: true, error: null }))
 
     try {
-      const walletService = new WalletService()
       const walletId = walletService.getActiveWalletId()
       assertWalletId(walletId)
 
@@ -136,11 +143,14 @@ export default function LightningProvider({
   }, [state.isInitialized, state.isLoading, getService])
 
   // Auto-inicialização controlada por prop
+  // O initialize() é chamado apenas uma vez devido ao guard initializeRef
+  // e aos guards internos (state.isInitialized, state.isLoading)
   const initializeRef = useRef(false)
   useEffect(() => {
     if (autoInitialize && !initializeRef.current) {
       initializeRef.current = true
-      initialize()
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      void initialize()
     }
   }, [autoInitialize, initialize])
 
@@ -416,5 +426,22 @@ export default function LightningProvider({
   return <LightningContext.Provider value={contextValue}>{children}</LightningContext.Provider>
 }
 
+// ==========================================
+// HOOK useLightning
+// ==========================================
+
+/**
+ * Hook para acessar o contexto Lightning
+ * Alias conveniente para useLightningContext
+ */
+export function useLightning(): LightningContextType {
+  const context = useContext(LightningContext)
+  if (!context) {
+    throw new Error('useLightning must be used within a LightningProvider')
+  }
+  return context
+}
+
 // Re-export types para conveniência
 export type { LightningProviderProps }
+export type { Invoice, Payment, Channel, Millisatoshis, DecodedInvoice } from './types'

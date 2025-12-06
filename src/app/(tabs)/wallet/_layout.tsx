@@ -8,7 +8,8 @@ import { useSettings } from '@/ui/features/settings'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 import {} from 'expo-router'
 import { alpha } from '@/ui/utils'
-import { useWallet } from '@/ui/features/wallet'
+// import { useWallet } from '@/ui/state/'
+import { useActiveWallet } from '@/ui/features/wallet/WalletProviderV2'
 
 const IOS_MODAL_HEADER_HEIGHT = 74
 
@@ -92,9 +93,10 @@ const CloseModalButton = ({ colorMode }: { colorMode: 'light' | 'dark' }) => {
 type StackScreenOptions = ComponentProps<typeof Stack.Screen>['options']
 
 export default function WalletLayout() {
-  const { activeWalletId, wallets } = useWallet()
-  const selectedWallet = wallets.find(wallet => wallet.id === activeWalletId)
-  const empty = wallets === undefined || wallets?.length === 0
+  // const { activeWalletId, wallets } = useWallet()
+
+  const activeWallet = useActiveWallet()
+  const empty = !activeWallet
 
   const { isDark } = useSettings()
   const colorMode = isDark ? 'dark' : 'light'
@@ -131,7 +133,7 @@ export default function WalletLayout() {
           headerLeft: () => (empty ? null : <ManageWallets colorMode={colorMode} />),
           headerRight: () => (empty ? null : <WalletActions colorMode={colorMode} />),
           headerTitleAlign: 'center',
-          title: selectedWallet?.name || (empty ? 'No wallets' : 'Select wallet'),
+          title: activeWallet?.name || (empty ? 'No wallets' : 'Select wallet'),
         }}
       />
       <Stack.Screen

@@ -2,9 +2,16 @@ import { randomUUID } from '@/core/lib/crypto'
 import { Wallet } from '@/core/models/wallet'
 import SeedService from './seed'
 import { WalletRepository } from '@/core/repositories/wallet'
-import AddressService from './address'
 import { fromMnemonic, createMasterKey } from '../lib/key'
 // import { AccountService } from './account'
+
+// Lazy import to avoid circular dependency
+type AddressServiceType = import('./address').default
+
+function getAddressService(): AddressServiceType {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return new (require('./address').default)()
+}
 
 export type CreateWalletParams = Omit<Wallet, 'id'> & {
   seed?: string
@@ -76,7 +83,7 @@ export default class WalletService implements WalletServiceInterface {
     const seedService = new SeedService()
     seedService.deleteSeed(walletId)
 
-    const addressService = new AddressService()
+    const addressService = getAddressService()
     addressService.clearAddresses()
 
     // check active id
@@ -109,3 +116,6 @@ export default class WalletService implements WalletServiceInterface {
     walletRepository.clear()
   }
 }
+
+/** Singleton instance for stateless operations */
+export const walletService = new WalletService()

@@ -1,4 +1,12 @@
-import React, { createContext, useContext, useReducer, ReactNode, useEffect, Dispatch } from 'react'
+import React, {
+  createContext,
+  useContext,
+  useReducer,
+  ReactNode,
+  useEffect,
+  Dispatch,
+  useMemo,
+} from 'react'
 import {
   settingsReducer,
   initialSettingsState,
@@ -56,18 +64,17 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     }
   }, [state])
 
-  return (
-    <SettingsContext.Provider
-      value={{
-        ...state,
-        isDark,
-        dispatch,
-        actions,
-      }}
-    >
-      {children}
-    </SettingsContext.Provider>
+  const value = useMemo(
+    () => ({
+      ...state,
+      isDark,
+      dispatch,
+      actions,
+    }),
+    [state, isDark, dispatch, actions],
   )
+
+  return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>
 }
 
 // Hook that provides settings with derived values

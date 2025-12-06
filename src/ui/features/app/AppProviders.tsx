@@ -1,9 +1,9 @@
 import { ReactNode } from 'react'
 import { SettingsProvider } from '@/ui/features/settings'
-import { WalletProvider } from '@/ui/features/wallet'
+import WalletProviderV2 from '@/ui/features/wallet/WalletProviderV2'
 import AuthProvider from '@/ui/features/auth/AuthProvider'
 import NetworkProvider from '../network/NetworkProvider'
-import AddressProvider from '../address/AddressProvider'
+import AddressProviderV2 from '../address/AddressProviderV2'
 import LightningProvider from '../lightning/LightningProvider'
 import { WatchtowerProvider } from '../lightning/useWatchtower'
 
@@ -27,15 +27,15 @@ export function AppProviders({ children }: AppProvidersProps) {
   return (
     <SettingsProvider>
       <AuthProvider>
-        <WalletProvider>
+        <WalletProviderV2>
           <NetworkProvider>
             <LightningProvider>
               <WatchtowerProvider>
-                <AddressProvider>{children}</AddressProvider>
+                <AddressProviderV2>{children}</AddressProviderV2>
               </WatchtowerProvider>
             </LightningProvider>
           </NetworkProvider>
-        </WalletProvider>
+        </WalletProviderV2>
       </AuthProvider>
     </SettingsProvider>
   )

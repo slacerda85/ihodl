@@ -13,9 +13,16 @@ import { AddressDetails, Change } from '../models/address'
 import { buildTransaction, signTransaction, sendTransaction } from '../lib/transactions'
 import SeedService from './seed'
 import KeyService from './key'
-import WalletService from './wallet'
 import TransactionRepository from '../repositories/transactions'
 import { hash256 } from '../lib/crypto'
+
+// Lazy import to avoid circular dependency
+type WalletServiceType = import('./wallet').default
+
+function getWalletService(): WalletServiceType {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return new (require('./wallet').default)()
+}
 
 interface TransactionServiceInterface {
   deduplicateTxs(txs: Tx[]): Tx[]
@@ -414,7 +421,7 @@ export default class TransactionService implements TransactionServiceInterface {
     signedTransaction: any
     txHex: string
   }> {
-    const walletService = new WalletService()
+    const walletService = getWalletService()
     const walletId = walletService.getActiveWalletId()
     if (!walletId) {
       throw new Error('No active wallet for signing transaction')
@@ -493,7 +500,7 @@ export default class TransactionService implements TransactionServiceInterface {
         },
       ],
     }
-    const walletService = new WalletService()
+    const walletService = getWalletService()
     const walletId = walletService.getActiveWalletId()
     if (!walletId) {
       throw new Error('No active wallet for saving pending transaction')
@@ -503,7 +510,7 @@ export default class TransactionService implements TransactionServiceInterface {
   }
 
   readPendingTransactions(): Tx[] {
-    const walletService = new WalletService()
+    const walletService = getWalletService()
     const walletId = walletService.getActiveWalletId()
     if (!walletId) {
       throw new Error('No active wallet for reading pending transactions')
@@ -513,7 +520,7 @@ export default class TransactionService implements TransactionServiceInterface {
   }
 
   deletePendingTransaction(txid: string): void {
-    const walletService = new WalletService()
+    const walletService = getWalletService()
     const walletId = walletService.getActiveWalletId()
     if (!walletId) {
       throw new Error('No active wallet for deleting pending transaction')
@@ -532,3 +539,6 @@ export default class TransactionService implements TransactionServiceInterface {
     return feeRate
   }
 }
+
+/** Singleton instance for stateless operations */
+export const transactionService = new TransactionService()

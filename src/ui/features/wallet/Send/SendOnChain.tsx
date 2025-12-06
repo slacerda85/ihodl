@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   View,
   Text,
@@ -15,10 +15,10 @@ import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 import { useSettings } from '../../settings'
 import { formatBalance } from '../utils'
-import { useAddress } from '../../address/AddressProvider'
+// import { useAddress } from '../../address/AddressProvider'
 import { useNetwork } from '../../network/NetworkProvider'
-import AddressService from '@/core/services/address'
-import TransactionService from '@/core/services/transaction'
+import { addressService, transactionService } from '@/core/services'
+import { useBalance } from '../../address/AddressProviderV2'
 
 /**
  * SendOnChain Component
@@ -33,7 +33,7 @@ export default function SendOnChain() {
   const router = useRouter()
   const { isDark } = useSettings()
   const { getConnection } = useNetwork()
-  const { utxos, balance } = useAddress()
+  const { utxos, balance } = useBalance()
 
   const [submitting, setSubmitting] = useState<boolean>(false)
   const [recipientAddress, setRecipientAddress] = useState<string>('')
@@ -42,8 +42,6 @@ export default function SendOnChain() {
   const [feeRate, setFeeRate] = useState<number>(1)
   const [memo, setMemo] = useState<string>('')
   const [autoFeeAdjustment, setAutoFeeAdjustment] = useState<boolean>(true)
-  const [addressValid, setAddressValid] = useState<boolean | null>(null)
-  const [amountValid, setAmountValid] = useState<boolean | null>(null)
   const [feeRates, setFeeRates] = useState<{
     slow: number
     normal: number
@@ -55,82 +53,74 @@ export default function SendOnChain() {
     'normal',
   )
 
-  // Effect to validate address when it changes
-  useEffect(() => {
-    if (recipientAddress.trim()) {
-      const addressService = new AddressService()
-      const isValid = addressService.validateAddress(recipientAddress)
-      setAddressValid(isValid)
-    } else {
-      setAddressValid(null)
-    }
+  // Refs para evitar múltiplas chamadas
+  const feeRatesFetchedRef = useRef(false)
+
+  // Validação de endereço derivada via useMemo (não causa re-render extra)
+  const addressValid = useMemo(() => {
+    if (!recipientAddress.trim()) return null
+    return addressService.validateAddress(recipientAddress)
   }, [recipientAddress])
 
-  // Effect to validate amount when feeRate, balance, or amount changes
-  useEffect(() => {
-    if (amount > 0) {
-      const amountInSatoshis = Math.round(amount * 100000000)
-      const feeRateInteger = Math.round(feeRate)
-      const estimatedTxSize = autoFeeAdjustment && feeRates ? 200 + Math.random() * 100 : 250
-      const estimatedFeeInSatoshis = Math.round(feeRateInteger * estimatedTxSize)
-      const balanceInSatoshis = Math.round(balance * 100000000)
+  // Validação de amount derivada via useMemo
+  const amountValid = useMemo(() => {
+    if (amount <= 0) return null
 
-      if (amountInSatoshis + estimatedFeeInSatoshis > balanceInSatoshis) {
-        setAmountValid(false)
-      } else {
-        setAmountValid(true)
-      }
-    } else {
-      setAmountValid(null)
-    }
+    const amountInSatoshis = Math.round(amount * 100000000)
+    const feeRateInteger = Math.round(feeRate)
+    const estimatedTxSize = autoFeeAdjustment && feeRates ? 200 + Math.random() * 100 : 250
+    const estimatedFeeInSatoshis = Math.round(feeRateInteger * estimatedTxSize)
+    const balanceInSatoshis = Math.round(balance * 100000000)
+
+    return amountInSatoshis + estimatedFeeInSatoshis <= balanceInSatoshis
   }, [feeRate, amount, autoFeeAdjustment, feeRates, balance])
+
+  // Calcular feeRate efetivo derivado de feeRates e selectedFeeRate
+  const effectiveFeeRate = useMemo(() => {
+    if (feeRates && !autoFeeAdjustment) {
+      return feeRates[selectedFeeRate]
+    }
+    return feeRate
+  }, [feeRates, autoFeeAdjustment, selectedFeeRate, feeRate])
+
+  // Sincronizar effectiveFeeRate com feeRate state quando necessário
+  useEffect(() => {
+    if (feeRates && !autoFeeAdjustment && feeRate !== effectiveFeeRate) {
+      setFeeRate(effectiveFeeRate)
+    }
+  }, [effectiveFeeRate, feeRates, autoFeeAdjustment, feeRate])
 
   // Function to fetch recommended fee rates from network
   const fetchRecommendedFeeRates = useCallback(async () => {
-    if (!autoFeeAdjustment) return
+    if (!autoFeeAdjustment || feeRatesFetchedRef.current) return
+    feeRatesFetchedRef.current = true
 
     setLoadingFeeRates(true)
     try {
       console.log('[SendOnChain] Fetching recommended fee rates from network...')
-      const transactionService = new TransactionService()
       const connection = await getConnection()
       const rates = await transactionService.getFeeRates(connection)
       setFeeRates(rates)
-
-      if (autoFeeAdjustment) {
-        setFeeRate(rates.normal)
-        setSelectedFeeRate('normal')
-      }
-
+      setFeeRate(rates.normal)
+      setSelectedFeeRate('normal')
       console.log('[SendOnChain] Fee rates updated:', rates)
-      setLoadingFeeRates(false)
     } catch (error) {
       console.error('[SendOnChain] Failed to fetch fee rates:', error)
-      if (!feeRates) {
-        const fallbackRates = { slow: 1, normal: 2, fast: 5, urgent: 10 }
-        setFeeRates(fallbackRates)
-        if (autoFeeAdjustment) {
-          setFeeRate(fallbackRates.normal)
-          setSelectedFeeRate('normal')
-        }
-      }
+      const fallbackRates = { slow: 1, normal: 2, fast: 5, urgent: 10 }
+      setFeeRates(fallbackRates)
+      setFeeRate(fallbackRates.normal)
+      setSelectedFeeRate('normal')
+    } finally {
       setLoadingFeeRates(false)
     }
-  }, [autoFeeAdjustment, feeRates, getConnection])
+  }, [autoFeeAdjustment, getConnection])
 
-  // Effect to fetch fee rates when auto-adjustment is enabled
+  // Effect to fetch fee rates quando componente monta (não chama setState diretamente)
   useEffect(() => {
     if (autoFeeAdjustment && !feeRates) {
       fetchRecommendedFeeRates()
     }
   }, [autoFeeAdjustment, feeRates, fetchRecommendedFeeRates])
-
-  // Effect to update fee rate when selectedFeeRate changes
-  useEffect(() => {
-    if (feeRates && !autoFeeAdjustment) {
-      setFeeRate(feeRates[selectedFeeRate])
-    }
-  }, [selectedFeeRate, feeRates, autoFeeAdjustment])
 
   // Function to normalize amount input (convert commas to dots)
   const normalizeAmount = (text: string): string => {
@@ -192,8 +182,6 @@ export default function SendOnChain() {
     try {
       console.log('[SendOnChain] Retrieving wallet data...')
 
-      const transactionService = new TransactionService()
-      const addressService = new AddressService()
       const changeAddress = addressService.getNextChangeAddress()
 
       const feeRateInteger = Math.round(feeRate)

@@ -1,14 +1,22 @@
 import { AddressDetails } from '@/core/models/address'
-import { createContext, ReactNode, useState, useEffect, useCallback, useContext } from 'react'
+import {
+  createContext,
+  ReactNode,
+  useState,
+  useEffect,
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+} from 'react'
 import { useWallet } from '../wallet'
 import { useNetwork } from '../network/NetworkProvider'
-import AddressService from '@/core/services/address'
+import { addressService, transactionService } from '@/core/services'
 import { Utxo } from '@/core/models/transaction'
-import TransactionService from '@/core/services/transaction'
+import { useActiveWalletId } from '../wallet/WalletProviderV2'
 
 type AddressContextType = {
   loading: boolean
-  setLoading: (loading: boolean) => void
   addresses: AddressDetails[]
   nextReceiveAddress: string
   nextChangeAddress: string
@@ -16,6 +24,7 @@ type AddressContextType = {
   utxos: Utxo[]
   usedReceivingAddresses: AddressDetails[]
   usedChangeAddresses: AddressDetails[]
+  refresh: () => Promise<void>
 }
 
 const AddressContext = createContext<AddressContextType | null>(null)
@@ -24,83 +33,111 @@ type AddressProviderProps = {
   children: ReactNode
 }
 
+/** Estado consolidado para evitar múltiplos re-renders */
+type AddressState = {
+  loading: boolean
+  addresses: AddressDetails[]
+  nextReceiveAddress: string
+  nextChangeAddress: string
+}
+
+const initialState: AddressState = {
+  loading: true,
+  addresses: [],
+  nextReceiveAddress: '',
+  nextChangeAddress: '',
+}
+
 export default function AddressProvider({ children }: AddressProviderProps) {
-  const { activeWalletId } = useWallet()
+  const activeWalletId = useActiveWalletId()
   const { getConnection } = useNetwork()
-  const [loading, setLoading] = useState<boolean>(true)
 
-  // onchain address states
-  const [addresses, setAddresses] = useState<AddressDetails[]>([])
-  const [usedReceivingAddresses, setUsedReceivingAddresses] = useState<AddressDetails[]>([])
-  const [usedChangeAddresses, setUsedChangeAddresses] = useState<AddressDetails[]>([])
-  const [nextReceiveAddress, setNextReceiveAddress] = useState<string>('')
-  const [nextChangeAddress, setNextChangeAddress] = useState<string>('')
-  const [balance, setBalance] = useState<number>(0)
-  const [utxos, setUtxos] = useState<Utxo[]>([])
+  // Estado consolidado para reduzir re-renders
+  const [state, setState] = useState<AddressState>(initialState)
+  const isLoadingRef = useRef(false)
 
-  // fetch and load address collection
+  // Derivar balance e utxos de addresses via useMemo (não causa re-render extra)
+  const { balance, utxos } = useMemo(() => {
+    if (state.addresses.length === 0) {
+      return { balance: 0, utxos: [] as Utxo[] }
+    }
+    return transactionService.calculateBalance(state.addresses)
+  }, [state.addresses])
+
+  // Derivar used addresses via useMemo
+  const usedReceivingAddresses = useMemo(
+    () => state.addresses.filter(addr => addr.derivationPath.change === 0 && addr.txs.length > 0),
+    [state.addresses],
+  )
+
+  const usedChangeAddresses = useMemo(
+    () => state.addresses.filter(addr => addr.derivationPath.change === 1 && addr.txs.length > 0),
+    [state.addresses],
+  )
+
+  // Função de carregamento que atualiza estado de uma vez
   const load = useCallback(async () => {
-    // check if walletId changed
-    if (!activeWalletId) return
-    const addressService = new AddressService()
-    let nextReceiveAddr: string = ''
-    let nextChangeAddr: string = ''
+    if (!activeWalletId || isLoadingRef.current) return
+    isLoadingRef.current = true
+
+    // Marcar loading no início
+    setState(prev => ({ ...prev, loading: true }))
+
     try {
       const connection = await getConnection()
       const addressCollection = await addressService.discover(connection)
-      setAddresses(addressCollection.addresses)
-      const usedReceiving = addressCollection.addresses.filter(
-        addr => addr.derivationPath.change === 0 && addr.txs.length > 0,
-      )
-      const usedChange = addressCollection.addresses.filter(
-        addr => addr.derivationPath.change === 1 && addr.txs.length > 0,
-      )
-      setUsedReceivingAddresses(usedReceiving)
-      setUsedChangeAddresses(usedChange)
 
-      nextReceiveAddr = addressService.getNextUnusedAddress()
-      nextChangeAddr = addressService.getNextChangeAddress()
+      const nextReceiveAddr = addressService.getNextUnusedAddress()
+      const nextChangeAddr = addressService.getNextChangeAddress()
+
+      // Atualizar tudo de uma vez
+      setState({
+        loading: false,
+        addresses: addressCollection.addresses,
+        nextReceiveAddress: nextReceiveAddr,
+        nextChangeAddress: nextChangeAddr,
+      })
+      isLoadingRef.current = false
     } catch (error) {
       console.error('Error loading address collection:', error)
+      setState(prev => ({ ...prev, loading: false }))
+      isLoadingRef.current = false
     }
-    setNextReceiveAddress(nextReceiveAddr)
-    setNextChangeAddress(nextChangeAddr)
   }, [activeWalletId, getConnection])
 
+  // Effect apenas para disparar o load inicial
   useEffect(() => {
-    console.log('useEffect: load')
-    setLoading(true)
-    load().then(() => {
-      console.log('Address collection loaded')
-      setLoading(false)
-    })
+    void (async () => {
+      await load()
+    })()
   }, [load])
 
-  useEffect(() => {
-    if (!addresses) return
-    const transactionService = new TransactionService()
-    const { balance, utxos } = transactionService.calculateBalance(addresses)
-    setBalance(balance)
-    setUtxos(utxos)
-  }, [addresses])
-
-  return (
-    <AddressContext
-      value={{
-        loading,
-        setLoading,
-        addresses,
-        usedReceivingAddresses,
-        usedChangeAddresses,
-        nextReceiveAddress,
-        nextChangeAddress,
-        balance,
-        utxos,
-      }}
-    >
-      {children}
-    </AddressContext>
+  const value = useMemo(
+    () => ({
+      loading: state.loading,
+      addresses: state.addresses,
+      usedReceivingAddresses,
+      usedChangeAddresses,
+      nextReceiveAddress: state.nextReceiveAddress,
+      nextChangeAddress: state.nextChangeAddress,
+      balance,
+      utxos,
+      refresh: load,
+    }),
+    [
+      state.loading,
+      state.addresses,
+      usedReceivingAddresses,
+      usedChangeAddresses,
+      state.nextReceiveAddress,
+      state.nextChangeAddress,
+      balance,
+      utxos,
+      load,
+    ],
   )
+
+  return <AddressContext value={value}>{children}</AddressContext>
 }
 
 export function useAddress() {

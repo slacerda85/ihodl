@@ -128,6 +128,28 @@ export {
   type ChannelInfo as WatchtowerChannelInfo,
 } from './watchtower'
 
+// Remote Watchtower
+export {
+  RemoteWatchtowerClient,
+  RemoteWatchtowerManager,
+  createRemoteWatchtowerClient,
+  createRemoteWatchtowerManager,
+  RemoteWatchtowerStatus,
+  AppointmentType,
+  AppointmentStatus,
+  KNOWN_WATCHTOWERS,
+  KNOWN_WATCHTOWERS_TESTNET,
+  PROTOCOL_VERSION as WATCHTOWER_PROTOCOL_VERSION,
+  type RemoteWatchtowerInfo,
+  type Appointment,
+  type AppointmentData,
+  type AppointmentResponse,
+  type RegisterResponse,
+  type RemoteWatchtowerClientConfig,
+  type RemoteWatchtowerEvent,
+  type RemoteWatchtowerEventCallback,
+} from './remoteWatchtower'
+
 // Channel Manager (BOLT #2)
 export {
   ChannelManager,
@@ -279,3 +301,157 @@ export {
   calculateSweepAddress,
   createRestoreSummary,
 } from './backup'
+
+// Submarine Swaps (Loop In/Out)
+export {
+  // Types
+  SwapType,
+  SwapState,
+  type SwapData,
+  type SwapFees,
+  type SwapOffer,
+  type CreateForwardSwapParams,
+  type CreateReverseSwapParams,
+  type SwapServerResponse,
+  // Script utilities
+  constructSwapScript,
+  validateSwapScript,
+  extractSwapScriptParams,
+  scriptToP2wshAddress,
+  // Key/Preimage generation
+  generateSwapKeyPair,
+  generatePreimage,
+  // Fee calculation
+  calculateSwapFee,
+  // SwapManager
+  SwapManager,
+  // Constants
+  MIN_SWAP_AMOUNT_SAT,
+  MIN_LOCKTIME_DELTA,
+  MAX_LOCKTIME_DELTA,
+  MIN_FINAL_CLTV_DELTA_FOR_CLIENT,
+} from './submarineSwap'
+
+// Boltz Exchange Integration
+export {
+  // Client
+  BoltzClient,
+  BoltzSwapManager,
+  // API Types
+  type BoltzPairsResponse,
+  type BoltzCreateSwapRequest,
+  type BoltzSwapResponse,
+  type BoltzCreateReverseSwapRequest,
+  type BoltzReverseSwapResponse,
+  type BoltzSwapStatus,
+  type BoltzSwapStatusType,
+  // Constants
+  BOLTZ_API_MAINNET,
+  BOLTZ_API_TESTNET,
+  BTC_PAIR,
+  REQUEST_TIMEOUT,
+  STATUS_POLL_INTERVAL,
+} from './boltz'
+
+// On-chain Operations (BOLT #5)
+export {
+  // CPFP Support
+  type CpfpConfig,
+  type CpfpResult,
+  calculateCpfpFee,
+  createCpfpTransaction,
+  // HTLC Monitor
+  HtlcMonitor,
+  HtlcMonitorState,
+  HtlcAction,
+  type PendingHtlc,
+  type HtlcCheckResult,
+} from './onchain'
+
+// BOLT #12 - Offers & Invoice Negotiation
+export {
+  // Offer creation and parsing
+  createOffer,
+  decodeOffer,
+  validateOffer,
+  getOfferExpiryStatus,
+  offerToTlvStream,
+  tlvStreamToOffer,
+  // Invoice Request validation
+  validateInvoiceRequest,
+  // Invoice validation
+  validateInvoice,
+  getInvoiceExpiryStatus,
+  // TLV utilities (renamed to avoid conflicts with onion.ts)
+  encodeBigSize as encodeBolt12BigSize,
+  decodeBigSize as decodeBolt12BigSize,
+  encodeTlvRecord as encodeBolt12TlvRecord,
+  encodeTlvStream as encodeBolt12TlvStream,
+  decodeTlvStream as decodeBolt12TlvStream,
+  // Bech32 encoding
+  encodeBolt12,
+  decodeBolt12,
+  // Merkle tree for signatures
+  buildMerkleTree,
+  getMerkleRoot,
+  // Utility functions
+  extractTlvRange,
+  hasUnknownEvenFeatures,
+  getPaymentFlowType,
+  // Types
+  type CreateOfferParams,
+} from './negotiation'
+
+// BOLT #12 Types from models
+export type {
+  Offer,
+  InvoiceRequest,
+  Invoice,
+  InvoiceError,
+  OfferValidation,
+  InvoiceRequestValidation,
+  InvoiceValidation,
+  OfferExpiryStatus,
+  InvoiceExpiryStatus,
+  Bolt12TlvRecord,
+  Bolt12TlvStream,
+} from '@/core/models/lightning/negotiation'
+
+export {
+  OFFER_PREFIX,
+  INVOICE_REQUEST_PREFIX,
+  INVOICE_PREFIX,
+  OfferTlvType,
+  InvoiceRequestTlvType,
+  InvoiceTlvType,
+} from '@/core/models/lightning/negotiation'
+
+// Splice (Channel Resizing)
+export {
+  SpliceManager,
+  createSpliceManager,
+  SpliceState,
+  SpliceType,
+  MSG_SPLICE_INIT,
+  MSG_SPLICE_ACK,
+  MSG_SPLICE_LOCKED,
+  SPLICE_MIN_DEPTH,
+  SPLICE_FEATURE_BIT,
+  encodeSpliceInitMessage,
+  decodeSpliceInitMessage,
+  encodeSpliceAckMessage,
+  decodeSpliceAckMessage,
+  encodeSpliceLockedMessage,
+  decodeSpliceLockedMessage,
+  isSpliceSupported,
+  calculateSpliceFee,
+  validateSpliceParams,
+  type SpliceInitMessage,
+  type SpliceAckMessage,
+  type SpliceLockedMessage,
+  type SpliceData,
+  type SpliceConfig,
+  type SpliceResult,
+  type SpliceEvent,
+  type SpliceEventCallback,
+} from './splice'

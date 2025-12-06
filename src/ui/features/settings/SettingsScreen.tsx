@@ -10,7 +10,7 @@ import {
 } from 'react-native'
 import { useSettings } from '@/ui/features/settings'
 import SeedRepository from '@/core/repositories/seed'
-import WalletService from '@/core/services/wallet'
+import { walletService } from '@/core/services'
 import LightningSection from './LightningSection'
 
 export default function SettingsScreen() {
@@ -30,7 +30,6 @@ export default function SettingsScreen() {
           text: 'Limpar',
           style: 'destructive',
           onPress: () => {
-            const walletService = new WalletService()
             walletService.clear()
             Alert.alert('Carteiras Limpas', 'Todas as carteiras foram removidas.')
           },

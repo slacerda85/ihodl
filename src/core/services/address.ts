@@ -13,8 +13,17 @@ import { Tx, Utxo } from '../models/transaction'
 import AddressRepository from '../repositories/address'
 import KeyService from './key'
 import SeedService from './seed'
-import TransactionService from './transaction'
-import WalletService from './wallet'
+import { walletService } from './wallet'
+
+// Lazy imports to avoid circular dependency
+// TransactionService and WalletService are imported dynamically where needed
+type TransactionServiceType = import('./transaction').default
+type WalletServiceType = import('./wallet').default
+
+function getTransactionService(): TransactionServiceType {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return new (require('./transaction').default)()
+}
 
 interface AddressServiceInterface {
   getBalance(addresses: AddressDetails[]): { balance: number; utxos: Utxo[] }
@@ -44,7 +53,7 @@ export default class AddressService implements AddressServiceInterface {
     receivingAccountKey: Uint8Array
     changeAccountKey: Uint8Array
   } {
-    const walletService = new WalletService()
+    // const walletService = getWalletService()
     const walletId = walletService.getActiveWalletId()
     if (!walletId) {
       throw new Error('No active wallet for deriving account keys')
@@ -67,7 +76,7 @@ export default class AddressService implements AddressServiceInterface {
   }
 
   getBalance(addresses: AddressDetails[]): { balance: number; utxos: Utxo[] } {
-    const transactionService = new TransactionService()
+    const transactionService = getTransactionService()
     const allTxs: Tx[] = []
     const allAddresses: string[] = []
 
@@ -84,7 +93,7 @@ export default class AddressService implements AddressServiceInterface {
   }
 
   async discover(connection: Connection): Promise<AddressCollection> {
-    const walletService = new WalletService()
+    // const walletService = getWalletService()
     const walletId = walletService.getActiveWalletId()
     if (!walletId) {
       throw new Error('No active wallet for address discovery')
@@ -143,7 +152,7 @@ export default class AddressService implements AddressServiceInterface {
     let unusedCount = 0
     let addressIndex = startIndex
 
-    const transactionsService = new TransactionService()
+    const transactionsService = getTransactionService()
     while (unusedCount < GAP_LIMIT) {
       try {
         this.deriveAddress(receivingAccountKey, addressIndex)
@@ -190,7 +199,7 @@ export default class AddressService implements AddressServiceInterface {
   }
 
   getUsedAddresses(type: 'receiving' | 'change'): AddressDetails[] {
-    const walletService = new WalletService()
+    // const walletService = new WalletService()
     const walletId = walletService.getActiveWalletId()
     if (!walletId) {
       throw new Error('No active wallet for getting used addresses')
@@ -207,7 +216,7 @@ export default class AddressService implements AddressServiceInterface {
   }
 
   getNextUnusedAddress(): string {
-    const walletService = new WalletService()
+    // const walletService = new WalletService()
     const walletId = walletService.getActiveWalletId()
     if (!walletId) {
       throw new Error('No active wallet for getting next unused address')
@@ -230,7 +239,7 @@ export default class AddressService implements AddressServiceInterface {
   }
 
   getNextChangeAddress(): string {
-    const walletService = new WalletService()
+    /// const walletService = new WalletService()
     const walletId = walletService.getActiveWalletId()
     if (!walletId) {
       throw new Error('No active wallet for getting next change address')
@@ -253,7 +262,7 @@ export default class AddressService implements AddressServiceInterface {
   }
 
   clearAddresses(): void {
-    const walletService = new WalletService()
+    // const walletService = new WalletService()
     const walletId = walletService.getActiveWalletId()
     if (!walletId) {
       throw new Error('No active wallet for clearing addresses')
@@ -292,3 +301,6 @@ export default class AddressService implements AddressServiceInterface {
     return false
   }
 }
+
+/** Singleton instance for stateless operations */
+export const addressService = new AddressService()

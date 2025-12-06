@@ -19,10 +19,19 @@ import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 import QRCode from '@/ui/components/QRCode'
 import Button from '@/ui/components/Button'
 import { useSettings } from '@/ui/features/settings'
-import { useAddress } from '../../address/AddressProvider'
+import {
+  useAddressLoading,
+  useNextAddresses,
+  useAddressesByType,
+} from '../../address/AddressProviderV2'
+// import { useAddress } from '../../address/AddressProvider'
 export default function Receive() {
   const { isDark } = useSettings()
-  const { loading, usedChangeAddresses, usedReceivingAddresses, nextReceiveAddress } = useAddress()
+  // const { loading, usedChangeAddresses, usedReceivingAddresses, nextReceiveAddress } = useAddress()
+  const loading = useAddressLoading()
+  const { receive: nextReceiveAddress } = useNextAddresses()
+  const usedChangeAddresses = useAddressesByType('change')
+  const usedReceivingAddresses = useAddressesByType('receiving')
 
   const [showAddressDetails, setShowAddressDetails] = useState(false)
   const [activeTab, setActiveTab] = useState<'receiving' | 'change'>('receiving')
@@ -84,7 +93,7 @@ export default function Receive() {
               <View style={styles.qrContainer}>
                 <QRCode
                   value={`${nextReceiveAddress}`}
-                  size={320}
+                  size={300}
                   color={isDark ? colors.text.dark : colors.text.light}
                   backgroundColor="transparent"
                 />

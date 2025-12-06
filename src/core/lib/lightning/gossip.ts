@@ -6,6 +6,7 @@
  * - query_channel_range: Solicita canais por range de blocos
  * - reply_channel_range: Responde com canais no range
  * - query_short_channel_ids: Solicita info de canais específicos
+ * - Verificação de assinaturas para mensagens gossip (BOLT #7)
  *
  * Referência: https://github.com/lightning/bolts/blob/master/07-routing-gossip.md
  */
@@ -25,6 +26,7 @@ import {
 } from '@/core/models/lightning/p2p'
 import { ShortChannelId, ChainHash } from '@/core/models/lightning/base'
 import { uint8ArrayToHex } from '@/core/lib/utils'
+import { sha256, verifyMessage } from '@/core/lib/crypto/crypto'
 
 // Constantes de sincronização
 const SYNC_BATCH_SIZE = 8000 // Número máximo de canais por batch
@@ -85,6 +87,412 @@ export interface GossipPeerInterface {
 }
 
 /**
+ * Resultado da verificação de assinatura
+ */
+export interface SignatureVerificationResult {
+  valid: boolean
+  error?: string
+}
+
+// ============================================================================
+// BOLT #7 - Signature Verification Functions
+// ============================================================================
+
+/**
+ * Verifica as 4 assinaturas de uma mensagem channel_announcement
+ *
+ * Conforme BOLT #7, a mensagem assinada é o double-SHA256 de:
+ * - features + chainHash + shortChannelId + nodeId1 + nodeId2 + bitcoinKey1 + bitcoinKey2
+ *
+ * As assinaturas são:
+ * - nodeSignature1: assinado por nodeId1
+ * - nodeSignature2: assinado por nodeId2
+ * - bitcoinSignature1: assinado por bitcoinKey1
+ * - bitcoinSignature2: assinado por bitcoinKey2
+ *
+ * @param message - Mensagem de channel_announcement decodificada
+ * @returns Resultado da verificação com status e erro opcional
+ */
+export function verifyChannelAnnouncement(
+  message: ChannelAnnouncementMessage,
+): SignatureVerificationResult {
+  try {
+    // Construir a mensagem que foi assinada (campos após as assinaturas)
+    // Formato: featuresLen (2) + features + chainHash (32) + shortChannelId (8) +
+    //          nodeId1 (33) + nodeId2 (33) + bitcoinKey1 (33) + bitcoinKey2 (33)
+    const signedDataLength = 2 + message.features.length + 32 + 8 + 33 + 33 + 33 + 33
+
+    const signedData = new Uint8Array(signedDataLength)
+    const view = new DataView(signedData.buffer)
+    let offset = 0
+
+    // featuresLen (2 bytes, big-endian)
+    view.setUint16(offset, message.featuresLen, false)
+    offset += 2
+
+    // features
+    signedData.set(message.features, offset)
+    offset += message.features.length
+
+    // chainHash (32 bytes)
+    signedData.set(message.chainHash, offset)
+    offset += 32
+
+    // shortChannelId (8 bytes)
+    signedData.set(message.shortChannelId, offset)
+    offset += 8
+
+    // nodeId1 (33 bytes)
+    signedData.set(message.nodeId1, offset)
+    offset += 33
+
+    // nodeId2 (33 bytes)
+    signedData.set(message.nodeId2, offset)
+    offset += 33
+
+    // bitcoinKey1 (33 bytes)
+    signedData.set(message.bitcoinKey1, offset)
+    offset += 33
+
+    // bitcoinKey2 (33 bytes)
+    signedData.set(message.bitcoinKey2, offset)
+
+    // Double SHA256 da mensagem
+    const messageHash = sha256(sha256(signedData))
+
+    // Verificar nodeSignature1 com nodeId1
+    if (!verifyMessage(messageHash, message.nodeSignature1, message.nodeId1)) {
+      return {
+        valid: false,
+        error: 'Invalid nodeSignature1: signature does not match nodeId1',
+      }
+    }
+
+    // Verificar nodeSignature2 com nodeId2
+    if (!verifyMessage(messageHash, message.nodeSignature2, message.nodeId2)) {
+      return {
+        valid: false,
+        error: 'Invalid nodeSignature2: signature does not match nodeId2',
+      }
+    }
+
+    // Verificar bitcoinSignature1 com bitcoinKey1
+    if (!verifyMessage(messageHash, message.bitcoinSignature1, message.bitcoinKey1)) {
+      return {
+        valid: false,
+        error: 'Invalid bitcoinSignature1: signature does not match bitcoinKey1',
+      }
+    }
+
+    // Verificar bitcoinSignature2 com bitcoinKey2
+    if (!verifyMessage(messageHash, message.bitcoinSignature2, message.bitcoinKey2)) {
+      return {
+        valid: false,
+        error: 'Invalid bitcoinSignature2: signature does not match bitcoinKey2',
+      }
+    }
+
+    return { valid: true }
+  } catch (error) {
+    return {
+      valid: false,
+      error: `Signature verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    }
+  }
+}
+
+/**
+ * Verifica a assinatura de uma mensagem node_announcement
+ *
+ * Conforme BOLT #7, a mensagem assinada é o double-SHA256 de:
+ * - featuresLen + features + timestamp + nodeId + rgbColor + alias + addrLen + addresses
+ *
+ * A assinatura é verificada contra o nodeId
+ *
+ * @param message - Mensagem de node_announcement decodificada
+ * @param rawData - Dados brutos da mensagem (opcional, para reconstruir addresses)
+ * @returns Resultado da verificação com status e erro opcional
+ */
+export function verifyNodeAnnouncement(
+  message: NodeAnnouncementMessage,
+  rawData?: Uint8Array,
+): SignatureVerificationResult {
+  try {
+    // Se temos os dados brutos, usamos diretamente (mais preciso)
+    if (rawData && rawData.length > 66) {
+      // A mensagem assinada começa após type (2) + signature (64)
+      const signedData = rawData.slice(66)
+      const messageHash = sha256(sha256(signedData))
+
+      if (!verifyMessage(messageHash, message.signature, message.nodeId)) {
+        return {
+          valid: false,
+          error: 'Invalid node_announcement signature',
+        }
+      }
+
+      return { valid: true }
+    }
+
+    // Reconstruir a mensagem a partir dos campos
+    // Formato: featuresLen (2) + features + timestamp (4) + nodeId (33) +
+    //          rgbColor (3) + alias (32) + addrLen (2) + addresses
+    const addressesData = serializeAddresses(message.addresses)
+    const signedDataLength =
+      2 + message.features.length + 4 + 33 + 3 + 32 + 2 + addressesData.length
+
+    const signedData = new Uint8Array(signedDataLength)
+    const view = new DataView(signedData.buffer)
+    let offset = 0
+
+    // featuresLen (2 bytes, big-endian)
+    view.setUint16(offset, message.featuresLen, false)
+    offset += 2
+
+    // features
+    signedData.set(message.features, offset)
+    offset += message.features.length
+
+    // timestamp (4 bytes, big-endian)
+    view.setUint32(offset, message.timestamp, false)
+    offset += 4
+
+    // nodeId (33 bytes)
+    signedData.set(message.nodeId, offset)
+    offset += 33
+
+    // rgbColor (3 bytes)
+    signedData.set(message.rgbColor, offset)
+    offset += 3
+
+    // alias (32 bytes)
+    signedData.set(message.alias, offset)
+    offset += 32
+
+    // addrLen (2 bytes, big-endian)
+    view.setUint16(offset, message.addrLen, false)
+    offset += 2
+
+    // addresses
+    signedData.set(addressesData, offset)
+
+    // Double SHA256 da mensagem
+    const messageHash = sha256(sha256(signedData))
+
+    // Verificar assinatura com nodeId
+    if (!verifyMessage(messageHash, message.signature, message.nodeId)) {
+      return {
+        valid: false,
+        error: 'Invalid node_announcement signature',
+      }
+    }
+
+    return { valid: true }
+  } catch (error) {
+    return {
+      valid: false,
+      error: `Signature verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    }
+  }
+}
+
+/**
+ * Verifica a assinatura de uma mensagem channel_update
+ *
+ * Conforme BOLT #7, a mensagem assinada é o double-SHA256 de:
+ * - chainHash + shortChannelId + timestamp + messageFlags + channelFlags +
+ *   cltvExpiryDelta + htlcMinimumMsat + feeBaseMsat + feeProportionalMillionths +
+ *   htlcMaximumMsat (se messageFlags & 1)
+ *
+ * A assinatura é verificada contra a chave do nó correspondente (baseado em channelFlags & 1)
+ * Como não temos acesso direto ao channel_announcement aqui, precisamos do nodeId como parâmetro
+ *
+ * @param message - Mensagem de channel_update decodificada
+ * @param nodeId - Public key do nó que assinou (do channel_announcement correspondente)
+ * @returns Resultado da verificação com status e erro opcional
+ */
+export function verifyChannelUpdate(
+  message: ChannelUpdateMessage,
+  nodeId: Uint8Array,
+): SignatureVerificationResult {
+  try {
+    // Verificar se htlcMaximumMsat deve ser incluído
+    const includeHtlcMax = (message.messageFlags & 1) !== 0
+
+    // Formato: chainHash (32) + shortChannelId (8) + timestamp (4) +
+    //          messageFlags (1) + channelFlags (1) + cltvExpiryDelta (2) +
+    //          htlcMinimumMsat (8) + feeBaseMsat (4) + feeProportionalMillionths (4) +
+    //          [htlcMaximumMsat (8) se messageFlags & 1]
+    const signedDataLength = 32 + 8 + 4 + 1 + 1 + 2 + 8 + 4 + 4 + (includeHtlcMax ? 8 : 0)
+
+    const signedData = new Uint8Array(signedDataLength)
+    const view = new DataView(signedData.buffer)
+    let offset = 0
+
+    // chainHash (32 bytes)
+    signedData.set(message.chainHash, offset)
+    offset += 32
+
+    // shortChannelId (8 bytes)
+    signedData.set(message.shortChannelId, offset)
+    offset += 8
+
+    // timestamp (4 bytes, big-endian)
+    view.setUint32(offset, message.timestamp, false)
+    offset += 4
+
+    // messageFlags (1 byte)
+    signedData[offset] = message.messageFlags
+    offset += 1
+
+    // channelFlags (1 byte)
+    signedData[offset] = message.channelFlags
+    offset += 1
+
+    // cltvExpiryDelta (2 bytes, big-endian)
+    view.setUint16(offset, message.cltvExpiryDelta, false)
+    offset += 2
+
+    // htlcMinimumMsat (8 bytes, big-endian)
+    view.setBigUint64(offset, message.htlcMinimumMsat, false)
+    offset += 8
+
+    // feeBaseMsat (4 bytes, big-endian)
+    view.setUint32(offset, message.feeBaseMsat, false)
+    offset += 4
+
+    // feeProportionalMillionths (4 bytes, big-endian)
+    view.setUint32(offset, message.feeProportionalMillionths, false)
+    offset += 4
+
+    // htlcMaximumMsat (8 bytes, big-endian) - opcional
+    if (includeHtlcMax) {
+      view.setBigUint64(offset, message.htlcMaximumMsat, false)
+    }
+
+    // Double SHA256 da mensagem
+    const messageHash = sha256(sha256(signedData))
+
+    // Verificar assinatura com nodeId
+    if (!verifyMessage(messageHash, message.signature, nodeId)) {
+      return {
+        valid: false,
+        error: 'Invalid channel_update signature',
+      }
+    }
+
+    return { valid: true }
+  } catch (error) {
+    return {
+      valid: false,
+      error: `Signature verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    }
+  }
+}
+
+/**
+ * Verifica channel_update usando dados brutos da mensagem
+ * Mais preciso que reconstruir a mensagem
+ *
+ * @param rawData - Dados brutos da mensagem channel_update
+ * @param nodeId - Public key do nó que assinou
+ * @returns Resultado da verificação
+ */
+export function verifyChannelUpdateRaw(
+  rawData: Uint8Array,
+  nodeId: Uint8Array,
+): SignatureVerificationResult {
+  try {
+    if (rawData.length < 130) {
+      return {
+        valid: false,
+        error: 'Invalid channel_update: message too short',
+      }
+    }
+
+    // Extrair signature (bytes 2-66, após o type)
+    const signature = rawData.slice(2, 66)
+
+    // A mensagem assinada é tudo após a signature (bytes 66+)
+    const signedData = rawData.slice(66)
+
+    // Double SHA256 da mensagem
+    const messageHash = sha256(sha256(signedData))
+
+    // Verificar assinatura com nodeId
+    if (!verifyMessage(messageHash, signature, nodeId)) {
+      return {
+        valid: false,
+        error: 'Invalid channel_update signature',
+      }
+    }
+
+    return { valid: true }
+  } catch (error) {
+    return {
+      valid: false,
+      error: `Signature verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    }
+  }
+}
+
+/**
+ * Serializa addresses para bytes conforme BOLT #7
+ */
+function serializeAddresses(addresses: NodeAnnouncementMessage['addresses']): Uint8Array {
+  const parts: Uint8Array[] = []
+
+  for (const addr of addresses) {
+    switch (addr.type) {
+      case 1: // IPv4
+        {
+          const ipv4 = new Uint8Array(7) // type (1) + addr (4) + port (2)
+          ipv4[0] = 1
+          ipv4.set(addr.addr, 1)
+          const v4 = new DataView(ipv4.buffer)
+          v4.setUint16(5, addr.port, false)
+          parts.push(ipv4)
+        }
+        break
+      case 2: // IPv6
+        {
+          const ipv6 = new Uint8Array(19) // type (1) + addr (16) + port (2)
+          ipv6[0] = 2
+          ipv6.set(addr.addr, 1)
+          const v6 = new DataView(ipv6.buffer)
+          v6.setUint16(17, addr.port, false)
+          parts.push(ipv6)
+        }
+        break
+      case 4: // Tor v3
+        {
+          const tor = new Uint8Array(38) // type (1) + addr (35) + port (2)
+          tor[0] = 4
+          tor.set(addr.addr, 1)
+          const vt = new DataView(tor.buffer)
+          vt.setUint16(36, addr.port, false)
+          parts.push(tor)
+        }
+        break
+      default:
+        // Ignorar tipos desconhecidos
+        break
+    }
+  }
+
+  // Concatenar todas as partes
+  const totalLength = parts.reduce((acc, p) => acc + p.length, 0)
+  const result = new Uint8Array(totalLength)
+  let offset = 0
+  for (const part of parts) {
+    result.set(part, offset)
+    offset += part.length
+  }
+
+  return result
+}
+
+/**
  * Classe principal de sincronização de Gossip
  */
 export class GossipSync {
@@ -98,6 +506,9 @@ export class GossipSync {
 
   // Canais conhecidos por shortChannelId
   private knownChannels: Set<string> = new Set()
+
+  // Mapa de nodeIds por canal para verificação de channel_updates
+  private channelNodeKeys: Map<string, { nodeId1: Uint8Array; nodeId2: Uint8Array }> = new Map()
 
   // Buffer de mensagens pendentes para processar
   private messageBuffer: (
@@ -441,11 +852,24 @@ export class GossipSync {
     const message = this.decodeChannelAnnouncement(data)
     if (!message) return
 
+    // Verificar assinaturas antes de aceitar a mensagem
+    const verification = verifyChannelAnnouncement(message)
+    if (!verification.valid) {
+      console.warn(`[gossip] Rejected channel_announcement: ${verification.error}`)
+      return
+    }
+
     this.stats.channelAnnouncementsReceived++
 
     // Registrar canal conhecido
     const scidHex = uint8ArrayToHex(message.shortChannelId)
     this.knownChannels.add(scidHex)
+
+    // Armazenar informações do canal para verificação futura de channel_updates
+    this.channelNodeKeys.set(scidHex, {
+      nodeId1: message.nodeId1,
+      nodeId2: message.nodeId2,
+    })
 
     // Chamar callback
     if (this.messageCallback) {
@@ -453,7 +877,7 @@ export class GossipSync {
     }
 
     console.log(
-      `[gossip] Received channel_announcement: ${formatShortChannelId(message.shortChannelId)}`,
+      `[gossip] Received verified channel_announcement: ${formatShortChannelId(message.shortChannelId)}`,
     )
   }
 
@@ -518,6 +942,13 @@ export class GossipSync {
     const message = this.decodeNodeAnnouncement(data)
     if (!message) return
 
+    // Verificar assinatura antes de aceitar a mensagem
+    const verification = verifyNodeAnnouncement(message, data)
+    if (!verification.valid) {
+      console.warn(`[gossip] Rejected node_announcement: ${verification.error}`)
+      return
+    }
+
     this.stats.nodeAnnouncementsReceived++
 
     // Atualizar timestamp
@@ -532,7 +963,7 @@ export class GossipSync {
     }
 
     console.log(
-      `[gossip] Received node_announcement: ${uint8ArrayToHex(message.nodeId).slice(0, 16)}...`,
+      `[gossip] Received verified node_announcement: ${uint8ArrayToHex(message.nodeId).slice(0, 16)}...`,
     )
   }
 
@@ -621,6 +1052,25 @@ export class GossipSync {
     const message = this.decodeChannelUpdate(data)
     if (!message) return
 
+    // Verificar assinatura se tivermos o nodeId do canal
+    const scidHex = uint8ArrayToHex(message.shortChannelId)
+    const channelKeys = this.channelNodeKeys.get(scidHex)
+
+    if (channelKeys) {
+      // Determinar qual nodeId baseado no channelFlags bit 0
+      // bit 0 = 0: assinado por nodeId1, bit 0 = 1: assinado por nodeId2
+      const direction = message.channelFlags & 1
+      const nodeId = direction === 0 ? channelKeys.nodeId1 : channelKeys.nodeId2
+
+      const verification = verifyChannelUpdateRaw(data, nodeId)
+      if (!verification.valid) {
+        console.warn(`[gossip] Rejected channel_update: ${verification.error}`)
+        return
+      }
+    }
+    // Se não temos o channel_announcement ainda, aceitamos o update
+    // mas marcamos para verificar depois quando recebermos o announcement
+
     this.stats.channelUpdatesReceived++
 
     // Atualizar timestamp
@@ -634,7 +1084,9 @@ export class GossipSync {
       await this.messageCallback(message)
     }
 
-    console.log(`[gossip] Received channel_update: ${formatShortChannelId(message.shortChannelId)}`)
+    console.log(
+      `[gossip] Received ${channelKeys ? 'verified ' : ''}channel_update: ${formatShortChannelId(message.shortChannelId)}`,
+    )
   }
 
   /**
@@ -842,6 +1294,7 @@ export class GossipSync {
   reset(): void {
     this.stop()
     this.knownChannels.clear()
+    this.channelNodeKeys.clear()
     this.messageBuffer = []
     this.lastTimestamp = 0
     this.stats = {

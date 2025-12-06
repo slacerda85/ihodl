@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useMemo } from 'react'
 import { View, Text, TextInput, Pressable, StyleSheet, FlatList, Switch } from 'react-native'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
@@ -8,34 +8,26 @@ import { useWallet } from './WalletProvider'
 import { useSettings } from '../settings/SettingsProvider'
 import Button from '@/ui/components/Button'
 import { GlassView } from 'expo-glass-effect'
+import { useWalletActions } from './WalletProviderV2'
 
 export default function ImportWallet() {
   const router = useRouter()
-  const { createWallet } = useWallet()
+  const { createWallet } = useWalletActions()
   const [walletName, setWalletName] = useState<string>('')
   const [seedPhrase, setSeedPhrase] = useState<string>('')
   const [currentWord, setCurrentWord] = useState<string>('')
-  const [suggestions, setSuggestions] = useState<string[]>([])
-  const [showSuggestions, setShowSuggestions] = useState<boolean>(false)
   const [password, setPassword] = useState<string>('')
   const [usePassword, setUsePassword] = useState<boolean>(false)
   const { isDark } = useSettings()
   const [submitting, setSubmitting] = useState<boolean>(false)
 
-  useEffect(() => {
-    if (currentWord.length > 0) {
-      // Filter wordlist for suggestions that start with the current word
-      const filteredSuggestions = wordlist
-        .filter(word => word.startsWith(currentWord.toLowerCase()))
-        .slice(0, 5) // Limit to 5 suggestions for better UX
-
-      setSuggestions(filteredSuggestions)
-      setShowSuggestions(filteredSuggestions.length > 0)
-    } else {
-      setSuggestions([])
-      setShowSuggestions(false)
-    }
+  // Derivar suggestions via useMemo ao invés de useEffect + setState
+  const suggestions = useMemo(() => {
+    if (currentWord.length === 0) return []
+    return wordlist.filter(word => word.startsWith(currentWord.toLowerCase())).slice(0, 5)
   }, [currentWord])
+
+  const showSuggestions = suggestions.length > 0
 
   const handleSeedPhraseChange = (text: string) => {
     setSeedPhrase(text)
@@ -56,7 +48,6 @@ export default function ImportWallet() {
 
     setSeedPhrase(newSeedPhrase)
     setCurrentWord('')
-    setShowSuggestions(false)
   }
 
   const isValidSeedPhrase = () => {

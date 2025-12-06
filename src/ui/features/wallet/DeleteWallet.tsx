@@ -7,10 +7,11 @@ import { alpha } from '@/ui/utils'
 import { useWallet } from '@/ui/features/wallet'
 import { useSettings } from '@/ui/features/settings'
 import Button from '@/ui/components/Button'
+import { useActiveWallet, useWalletActions } from './WalletProviderV2'
 
 export default function DeleteWallet() {
-  const { activeWalletId, wallets, unlinkWallet } = useWallet()
-  const walletName = wallets.find(w => w.id === activeWalletId)?.name
+  const { deleteWallet } = useWalletActions()
+  const activeWallet = useActiveWallet()
 
   const router = useRouter()
   const { isDark } = useSettings()
@@ -19,24 +20,24 @@ export default function DeleteWallet() {
 
   const handleDeleteWallet = useCallback(() => {
     setSubmitting(true)
-    if (activeWalletId) {
-      unlinkWallet(activeWalletId)
+    if (activeWallet?.id) {
+      deleteWallet(activeWallet.id)
     }
     setSubmitting(false)
     router.dismiss(2)
-  }, [unlinkWallet, router, activeWalletId])
+  }, [deleteWallet, router, activeWallet])
 
-  if (!activeWalletId) return null
+  if (!activeWallet) return null
 
   return (
     <View style={styles.modalContainer}>
       <Text style={[styles.modalText, isDark && styles.modalTextDark]}>
-        {`Unlink wallet "${walletName}" from this app?`}
+        {`Unlink wallet "${activeWallet.name}" from this app?`}
       </Text>
       <Button
         variant="solid"
         onPress={handleDeleteWallet}
-        disabled={activeWalletId == null || submitting}
+        disabled={activeWallet == null || submitting}
         backgroundColor={colors.error}
 
         // style={[styles.button, isDark && styles.buttonDark]}

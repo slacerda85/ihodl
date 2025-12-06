@@ -1,14 +1,14 @@
-import { createContext, ReactNode, useContext, useState } from 'react'
+import { createContext, ReactNode, useContext, useMemo, useState } from 'react'
 import { Wallet } from '@/core/models/wallet'
-import WalletService from '@/core/services/wallet'
+import { walletService } from '@/core/services'
 
 type WalletContextType = {
   activeWalletId: string | undefined
   wallets: Wallet[]
-  createWallet: typeof WalletService.prototype.createWallet
-  unlinkWallet: typeof WalletService.prototype.deleteWallet
-  toggleActiveWallet: typeof WalletService.prototype.toggleActiveWallet
-  getMasterKey: typeof WalletService.prototype.getMasterKey
+  createWallet: (params: Parameters<typeof walletService.createWallet>[0]) => Wallet
+  unlinkWallet: (walletId: string) => void
+  toggleActiveWallet: (walletId: string) => void
+  getMasterKey: (walletId: string, password?: string) => Uint8Array
 }
 
 const WalletContext = createContext<WalletContextType | null>(null)
@@ -18,50 +18,46 @@ interface WalletProviderProps {
 }
 
 export default function WalletProvider({ children }: WalletProviderProps) {
-  const walletService = new WalletService()
-  const {
-    getAllWallets,
-    createWallet: create,
-    deleteWallet: unlink,
-    toggleActiveWallet: toggleActive,
-    getActiveWalletId,
-  } = walletService
-
-  const [wallets, setWallets] = useState<Wallet[]>(getAllWallets)
-  const [activeWalletId, setActiveWalletId] = useState<string | undefined>(getActiveWalletId)
-
-  function createWallet(...args: Parameters<typeof create>) {
-    const newWallet = create(...args)
-    setWallets(getAllWallets())
-    setActiveWalletId(getActiveWalletId())
-    return newWallet
-  }
-
-  function toggleActiveWallet(...args: Parameters<typeof toggleActive>) {
-    toggleActive(...args)
-    setActiveWalletId(getActiveWalletId())
-  }
-
-  function unlinkWallet(...args: Parameters<typeof unlink>) {
-    unlink(...args)
-    setWallets(getAllWallets())
-    setActiveWalletId(getActiveWalletId())
-  }
-
-  return (
-    <WalletContext
-      value={{
-        activeWalletId,
-        wallets,
-        toggleActiveWallet,
-        createWallet,
-        unlinkWallet,
-        getMasterKey: walletService.getMasterKey.bind(walletService),
-      }}
-    >
-      {children}
-    </WalletContext>
+  const [wallets, setWallets] = useState<Wallet[]>(() => walletService.getAllWallets())
+  const [activeWalletId, setActiveWalletId] = useState<string | undefined>(() =>
+    walletService.getActiveWalletId(),
   )
+
+  // Funções estáveis via useMemo para evitar conflitos com React Compiler
+  const actions = useMemo(
+    () => ({
+      createWallet: (params: Parameters<typeof walletService.createWallet>[0]) => {
+        const newWallet = walletService.createWallet(params)
+        setWallets(walletService.getAllWallets())
+        setActiveWalletId(walletService.getActiveWalletId())
+        return newWallet
+      },
+      toggleActiveWallet: (walletId: string) => {
+        walletService.toggleActiveWallet(walletId)
+        setActiveWalletId(walletService.getActiveWalletId())
+      },
+      unlinkWallet: (walletId: string) => {
+        walletService.deleteWallet(walletId)
+        setWallets(walletService.getAllWallets())
+        setActiveWalletId(walletService.getActiveWalletId())
+      },
+      getMasterKey: (walletId: string, password?: string) => {
+        return walletService.getMasterKey(walletId, password)
+      },
+    }),
+    [],
+  )
+
+  const value = useMemo(
+    () => ({
+      activeWalletId,
+      wallets,
+      ...actions,
+    }),
+    [activeWalletId, wallets, actions],
+  )
+
+  return <WalletContext value={value}>{children}</WalletContext>
 }
 
 export function useWallet() {

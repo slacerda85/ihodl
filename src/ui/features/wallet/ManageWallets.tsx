@@ -6,15 +6,19 @@ import { alpha } from '@/ui/utils'
 import Divider from '@/ui/components/Divider'
 import CreateWalletIcon from './CreateWalletIcon'
 import ImportWalletIcon from './ImportWalletIcon'
-import { useWallet } from './WalletProvider'
+// import { useWallet } from './WalletProvider'
 import { useSettings } from '../settings/SettingsProvider'
-import { useAddress } from '../address/AddressProvider'
+// import { useAddress } from '../address/AddressProvider'
+import { useActiveWalletId, useWalletActions, useWallets } from './WalletProviderV2'
 
 export default function ManageWallets() {
   const router = useRouter()
   const { isDark } = useSettings()
-  const { setLoading } = useAddress()
-  const { wallets, activeWalletId, toggleActiveWallet } = useWallet()
+  // const { refresh } = useAddress()
+  // const { wallets, activeWalletId, toggleActiveWallet } = useWallet()
+  const wallets = useWallets()
+  const activeWalletId = useActiveWalletId()
+  const { setActiveWallet } = useWalletActions()
 
   function handleCreateWallet() {
     router.push('/wallet/create')
@@ -25,8 +29,7 @@ export default function ManageWallets() {
   }
 
   function handleSelectWallet(walletId: string) {
-    setLoading(true)
-    setTimeout(() => toggleActiveWallet(walletId), 0) // Delay para permitir animação do modal
+    setTimeout(() => setActiveWallet(walletId), 0) // Delay para permitir animação do modal
     router.dismiss()
   }
 

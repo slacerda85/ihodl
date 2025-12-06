@@ -10,13 +10,14 @@ import colors from '@/ui/colors'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 
 import { useSettings } from '@/ui/features/settings'
-import { useWallet } from '@/ui/features/wallet'
+// import { useWallet } from '@/ui/features/wallet'
+import { useWalletActions } from './WalletProviderV2'
 
 export default function CreateWallet() {
   const { isDark } = useSettings()
 
   const router = useRouter()
-  const { createWallet } = useWallet()
+  const { createWallet } = useWalletActions()
 
   const [cold, setCold] = useState<boolean>(false)
   const [walletName, setWalletName] = useState<string>('')
