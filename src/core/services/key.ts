@@ -1,4 +1,4 @@
-import { mnemonicToSeedSync } from '@/core/lib/bip/bip39'
+import { mnemonicToSeedSync } from '@/core/lib/bips/bip39'
 import { hmacSeed } from '@/core/lib/crypto'
 import { createPublicKey, deriveChildKey, splitMasterKey } from '@/core/lib/key'
 import { AccountIndex, Change, CoinType, DerivationPath, Purpose } from '@/core/models/address'

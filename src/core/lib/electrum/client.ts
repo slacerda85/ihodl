@@ -1,4 +1,3 @@
-// import { TLSSocket, ConnectionOptions } from 'tls'
 import {
   ElectrumMethod,
   ElectrumResponse,

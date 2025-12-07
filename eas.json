@@ -11,18 +11,21 @@
       "developmentClient": true,
       "env": {
         "APP_VARIANT": "development"
-      }
+      },
+      "channel": "development"
     },
     "preview": {
       "environment": "development",
       "distribution": "internal",
-      "credentialsSource": "local",
+      "credentialsSource": "remote",
       "env": {
         "APP_VARIANT": "preview"
-      }
+      },
+      "channel": "preview"
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "channel": "production"
     }
   },
   "submit": {

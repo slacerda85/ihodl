@@ -41,9 +41,9 @@ Barrel export - facilita importações centralizadas de todas as funcionalidades
 
 ```typescript
 // Import individual
-import { toWords, fromWords } from '@/core/lib/bip/bech32'
-import { entropyToMnemonic } from '@/core/lib/bip/bip39'
-import { signBolt12Message } from '@/core/lib/bip/bip340'
+import { toWords, fromWords } from '@/core/lib/bips/bech32'
+import { entropyToMnemonic } from '@/core/lib/bips/bip39'
+import { signBolt12Message } from '@/core/lib/bips/bip340'
 
 // Import via barrel (index.ts)
 import { toWords, entropyToMnemonic, signBolt12Message } from '@/core/lib/bip'

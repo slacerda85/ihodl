@@ -7,7 +7,7 @@ import {
   toBase58,
   uint8ArrayToHex,
 } from '@/core/lib/crypto'
-import { entropyToMnemonic, mnemonicToSeedSync } from './bip/bip39'
+import { entropyToMnemonic, mnemonicToSeedSync } from './bips/bip39'
 import wordList from 'bip39/src/wordlists/english.json'
 import { CURVE_ORDER } from '../models/key'
 

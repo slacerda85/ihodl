@@ -31,7 +31,7 @@ O projeto ihodl é um aplicativo React Native/Expo de carteira Bitcoin com foco 
 - `src/core/lib/address.ts` - Geração de endereços
 - `src/core/lib/transactions/transactions.ts` - Construção e assinatura de transações
 - `src/core/lib/transactions/utxo.ts` - Gerenciamento de UTXOs
-- `src/core/lib/bip/bip39.ts` - Mnemônicos BIP-39
+- `src/core/lib/bips/bip39.ts` - Mnemônicos BIP-39
 - `src/core/lib/crypto/` - Funções criptográficas
 
 ### Electrum

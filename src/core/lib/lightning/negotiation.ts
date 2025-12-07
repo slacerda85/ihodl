@@ -47,8 +47,8 @@ import {
   verifyBolt12Signature,
   SchnorrPublicKey,
   SchnorrPrivateKey,
-} from '../bip/bip340'
-import { toWords, fromWords } from '../bip/bech32'
+} from '../bips/bip340'
+import { toWords, fromWords } from '../bips/bech32'
 import { concatUint8Arrays } from '../utils'
 
 // ============================================================================

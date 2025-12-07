@@ -1,5 +1,5 @@
 import base58 from 'bs58'
-import { bech32, bech32m } from 'bech32'
+import { bech32, bech32m } from '@/core/lib/bips'
 import * as Crypto from 'expo-crypto'
 import { hmac } from '@noble/hashes/hmac.js'
 import { sha512 } from '@noble/hashes/sha2.js'
@@ -68,7 +68,7 @@ function fromBase58(base58String: string): Uint8Array {
 
 // Função para codificar em Bech32 ou Bech32m
 function encode(data: Uint8Array, prefix: string, version: number): string {
-  const dataArray = bech32.toWords(Array.from(data))
+  const dataArray = bech32.toWords(data)
 
   // Escolhe o método de codificação com base na versão
   if (version === 0) {

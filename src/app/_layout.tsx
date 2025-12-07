@@ -5,6 +5,7 @@ import * as SplashScreen from 'expo-splash-screen'
 import { AppProviders } from '@/ui/features/app/AppProviders'
 import InactivityOverlay from '@/ui/features/auth/InactivityOverlay'
 import AuthScreen from '@/ui/features/auth/AuthScreen'
+import ErrorBoundary from '@/ui/components/ErrorBoundary'
 
 SplashScreen.preventAutoHideAsync()
 
@@ -38,12 +39,14 @@ export default function RootLayout() {
 
   return (
     <StrictMode>
-      <AppProviders>
-        <AppContent />
-        <InactivityOverlay />
-        <AuthScreen />
-        <StatusBar style="auto" />
-      </AppProviders>
+      <ErrorBoundary>
+        <AppProviders>
+          <AppContent />
+          <InactivityOverlay />
+          <AuthScreen />
+          <StatusBar style="auto" />
+        </AppProviders>
+      </ErrorBoundary>
     </StrictMode>
   )
 }

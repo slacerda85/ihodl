@@ -1,0 +1,6 @@
+{
+  "react-native": {
+    "net": "react-native-tcp-socket",
+    "tls": "react-native-tcp-socket"
+  }
+}
