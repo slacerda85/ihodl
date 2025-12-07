@@ -2,6 +2,8 @@ import { publicKeyVerify } from 'secp256k1'
 import base58 from 'bs58'
 import { hash160, sha256, taggedHash } from './crypto'
 import { bech32, bech32m } from './bips'
+import { Point } from '@noble/secp256k1'
+import { uint8ArrayToHex } from './utils'
 import { Tx } from '../models/transaction'
 import { createPublicKey, deriveChildKey, splitMasterKey } from './key'
 import { P2WPKH_VERSION, HASH160_LENGTH } from '../models/address'
@@ -424,53 +426,205 @@ function taprootTweakPrivateKey(
 
 /**
  * Tweaks a public key for Taproot (BIP-341)
- * @param publicKey - Original public key (32 or 33 bytes)
+ * @param publicKey - Original public key (32 bytes, x-only)
  * @param tweak - Tweak value (32 bytes)
- * @param isXOnly - Whether the tweak is for x-only pubkey
  * @returns Tweaked public key (32 bytes, x-only)
  */
-function taprootTweakPublicKey(
-  publicKey: Uint8Array,
-  tweak: Uint8Array,
-  isXOnly: boolean = true,
-): Uint8Array {
+function taprootTweakPublicKey(publicKey: Uint8Array, tweak: Uint8Array): Uint8Array {
+  if (publicKey.length !== 32) {
+    throw new Error('Public key must be 32 bytes (x-only)')
+  }
   if (tweak.length !== 32) {
     throw new Error('Tweak must be 32 bytes')
   }
 
-  const xOnlyPubkey = pubkeyToXOnly(publicKey)
-
   try {
-    // Use secp256k1's public key tweaking if available
-    // For now, we'll return the x-only pubkey as a placeholder
-    // Proper implementation would use secp256k1.ecdh or similar
-    return xOnlyPubkey
+    // Convert tweak to bigint
+    const tweakBigInt = BigInt('0x' + uint8ArrayToHex(tweak))
+
+    // Create point from x-only public key (assume even parity)
+    const point = Point.fromHex(uint8ArrayToHex(publicKey))
+
+    // Create tweak point: t * G
+    const tweakPoint = Point.BASE.multiply(tweakBigInt)
+
+    // Add the points: P + t*G
+    const tweakedPoint = point.add(tweakPoint)
+
+    // Return x-only (32 bytes) - take x coordinate
+    return tweakedPoint.toBytes().slice(1, 33)
   } catch (error) {
     throw new Error(`Public key tweaking failed: ${error}`)
   }
 }
 
 /**
- * Creates a Taproot output key from an internal key and optional script tree
+ * Script tree leaf for Taproot
+ */
+interface TaprootScriptTree {
+  script: Uint8Array
+  controlBlock?: Uint8Array
+}
+
+/**
+ * Builds a Taproot script tree and calculates the merkle root
+ * @param scripts - Array of scripts for the tree leaves
+ * @returns Merkle root hash (32 bytes)
+ */
+function buildTaprootScriptTree(scripts: Uint8Array[]): Uint8Array {
+  if (scripts.length === 0) {
+    throw new Error('Script tree must have at least one script')
+  }
+
+  if (scripts.length === 1) {
+    // Single script - leaf hash
+    return taggedHash('TapLeaf', new Uint8Array([0xc0, ...scripts[0]]))
+  }
+
+  // Build binary tree
+  const leaves = scripts.map(script => taggedHash('TapLeaf', new Uint8Array([0xc0, ...script])))
+
+  // Sort leaves lexicographically as per BIP-341
+  leaves.sort((a, b) => {
+    for (let i = 0; i < 32; i++) {
+      if (a[i] !== b[i]) return a[i] - b[i]
+    }
+    return 0
+  })
+
+  // Build merkle tree
+  let currentLevel = leaves
+  while (currentLevel.length > 1) {
+    const nextLevel: Uint8Array[] = []
+
+    for (let i = 0; i < currentLevel.length; i += 2) {
+      const left = currentLevel[i]
+      const right = i + 1 < currentLevel.length ? currentLevel[i + 1] : left
+
+      // Sort the pair lexicographically
+      const [a, b] = left < right ? [left, right] : [right, left]
+
+      // Hash the branch
+      nextLevel.push(taggedHash('TapBranch', new Uint8Array([...a, ...b])))
+    }
+
+    currentLevel = nextLevel
+  }
+
+  return currentLevel[0]
+}
+
+/**
+ * Creates a Taproot output key from an internal key and script tree
  * @param internalKey - Internal public key (32 or 33 bytes)
- * @param scriptTree - Optional script tree for complex Taproot
+ * @param scriptTree - Optional array of scripts for complex Taproot
  * @returns Taproot output key (32 bytes, x-only)
  */
-function createTaprootOutputKey(internalKey: Uint8Array, scriptTree?: any): Uint8Array {
+function createTaprootOutputKey(internalKey: Uint8Array, scriptTree?: Uint8Array[]): Uint8Array {
   const xOnlyInternalKey = pubkeyToXOnly(internalKey)
 
-  if (!scriptTree) {
+  if (!scriptTree || scriptTree.length === 0) {
     // No script tree - output key is just the internal key
     return xOnlyInternalKey
   }
 
-  // With script tree, we need to calculate the merkle root and tweak
-  // This is a simplified implementation
-  // Proper implementation would build the script tree and calculate the tweak
-  const scriptTreeHash = taggedHash('TapBranch', new Uint8Array(0)) // Placeholder
-  const tweak = taggedHash('TapTweak', new Uint8Array([...xOnlyInternalKey, ...scriptTreeHash]))
+  // Build script tree and calculate merkle root
+  const merkleRoot = buildTaprootScriptTree(scriptTree)
 
+  // Calculate tweak: t = H_TapTweak(internal_key || merkle_root)
+  const tweak = taggedHash('TapTweak', new Uint8Array([...xOnlyInternalKey, ...merkleRoot]))
+
+  // Apply tweak to public key
   return taprootTweakPublicKey(xOnlyInternalKey, tweak)
+}
+
+/**
+ * Creates a control block for Taproot script path spending
+ * @param internalKey - Internal public key (32 bytes, x-only)
+ * @param script - The script being spent
+ * @param merkleProof - Merkle proof for the script
+ * @param parity - Parity bit (0x02 or 0x03)
+ * @returns Control block (33 bytes + proof)
+ */
+function createTaprootControlBlock(
+  internalKey: Uint8Array,
+  script: Uint8Array,
+  merkleProof: Uint8Array[],
+  parity: number = 0x02,
+): Uint8Array {
+  // Control block format: [parity_bit + internal_key + merkle_proof]
+  const parts: Uint8Array[] = []
+
+  // Parity bit (1 byte)
+  parts.push(new Uint8Array([parity]))
+
+  // Internal key (32 bytes)
+  parts.push(internalKey)
+
+  // Merkle proof (reversed order)
+  for (const proof of merkleProof.reverse()) {
+    parts.push(proof)
+  }
+
+  return concatUint8Arrays(parts)
+}
+
+/**
+ * Validates a Taproot script path spend
+ * @param controlBlock - Control block from the witness
+ * @param script - Script being executed
+ * @param outputKey - Taproot output key
+ * @returns True if valid
+ */
+function validateTaprootScriptPath(
+  controlBlock: Uint8Array,
+  script: Uint8Array,
+  outputKey: Uint8Array,
+): boolean {
+  try {
+    if (controlBlock.length < 33) {
+      return false
+    }
+
+    const parity = controlBlock[0]
+    const internalKey = controlBlock.subarray(1, 33)
+    const merkleProof = controlBlock.subarray(33)
+
+    // Reconstruct the merkle root
+    const scriptHash = taggedHash('TapLeaf', new Uint8Array([0xc0, ...script]))
+    let currentHash = scriptHash
+
+    // Apply merkle proof
+    for (let i = 0; i < merkleProof.length; i += 32) {
+      const sibling = merkleProof.subarray(i, i + 32)
+      // Sort lexicographically
+      const [left, right] = currentHash < sibling ? [currentHash, sibling] : [sibling, currentHash]
+      currentHash = taggedHash('TapBranch', new Uint8Array([...left, ...right]))
+    }
+
+    // Calculate expected output key
+    const tweak = taggedHash('TapTweak', new Uint8Array([...internalKey, ...currentHash]))
+    const expectedOutputKey = taprootTweakPublicKey(internalKey, tweak)
+
+    // Check if it matches
+    return uint8ArrayToHex(expectedOutputKey) === uint8ArrayToHex(outputKey)
+  } catch (error) {
+    return false
+  }
+}
+
+/**
+ * Helper function to concatenate Uint8Arrays
+ */
+function concatUint8Arrays(arrays: Uint8Array[]): Uint8Array {
+  const totalLength = arrays.reduce((sum, arr) => sum + arr.length, 0)
+  const result = new Uint8Array(totalLength)
+  let offset = 0
+  for (const arr of arrays) {
+    result.set(arr, offset)
+    offset += arr.length
+  }
+  return result
 }
 
 export {
@@ -494,6 +648,9 @@ export {
   taprootTweakPrivateKey,
   taprootTweakPublicKey,
   createTaprootOutputKey,
+  buildTaprootScriptTree,
+  createTaprootControlBlock,
+  validateTaprootScriptPath,
   //
   isValidAddress,
   addressToScript,

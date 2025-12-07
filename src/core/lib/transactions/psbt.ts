@@ -196,12 +196,115 @@ export class PartialTransaction {
    * Get the unsigned transaction from global map.
    */
   getUnsignedTx(): any {
-    // Should return a Transaction object, placeholder
     const txData = this.globalMap.get(PSBT_GLOBAL_TYPES.UNSIGNED_TX)
     if (!txData) return null
-    // Parse transaction from txData
-    // Placeholder: return parsed transaction
-    return null
+
+    // Parse the raw transaction bytes
+    return this.parseUnsignedTransaction(txData)
+  }
+
+  private parseUnsignedTransaction(txData: Uint8Array): any {
+    let offset = 0
+
+    // Version (4 bytes, little endian)
+    if (offset + 4 > txData.length) throw new Error('Invalid transaction: missing version')
+    const version = new DataView(txData.buffer, txData.byteOffset + offset, 4).getUint32(0, true)
+    offset += 4
+
+    // Check for SegWit marker
+    let isSegWit = false
+    if (offset + 2 <= txData.length && txData[offset] === 0x00 && txData[offset + 1] === 0x01) {
+      isSegWit = true
+      offset += 2 // Skip marker and flag
+    }
+
+    // Input count (varint)
+    const inputCountResult = this.readCompactSize(txData, offset)
+    const inputCount = inputCountResult.size
+    offset = inputCountResult.newOffset
+
+    // Parse inputs
+    const inputs = []
+    for (let i = 0; i < inputCount; i++) {
+      if (offset + 36 > txData.length) throw new Error(`Invalid transaction: input ${i} too short`)
+
+      // Previous txid (32 bytes, reverse for display)
+      const txid = uint8ArrayToHex(txData.subarray(offset, offset + 32).reverse())
+      offset += 32
+
+      // Previous vout (4 bytes, little endian)
+      const vout = new DataView(txData.buffer, txData.byteOffset + offset, 4).getUint32(0, true)
+      offset += 4
+
+      // ScriptSig length (varint)
+      const scriptSigLenResult = this.readCompactSize(txData, offset)
+      const scriptSigLen = scriptSigLenResult.size
+      offset = scriptSigLenResult.newOffset
+
+      if (offset + scriptSigLen > txData.length)
+        throw new Error(`Invalid transaction: input ${i} scriptSig too short`)
+      const scriptSig = txData.subarray(offset, offset + scriptSigLen)
+      offset += scriptSigLen
+
+      // Sequence (4 bytes, little endian)
+      if (offset + 4 > txData.length)
+        throw new Error(`Invalid transaction: input ${i} missing sequence`)
+      const sequence = new DataView(txData.buffer, txData.byteOffset + offset, 4).getUint32(0, true)
+      offset += 4
+
+      inputs.push({ txid, vout, scriptSig, sequence })
+    }
+
+    // Output count (varint)
+    const outputCountResult = this.readCompactSize(txData, offset)
+    const outputCount = outputCountResult.size
+    offset = outputCountResult.newOffset
+
+    // Parse outputs
+    const outputs = []
+    for (let i = 0; i < outputCount; i++) {
+      if (offset + 8 > txData.length) throw new Error(`Invalid transaction: output ${i} too short`)
+
+      // Value (8 bytes, little endian)
+      const value = Number(
+        new DataView(txData.buffer, txData.byteOffset + offset, 8).getBigUint64(0, true),
+      )
+      offset += 8
+
+      // ScriptPubKey length (varint)
+      const scriptPubKeyLenResult = this.readCompactSize(txData, offset)
+      const scriptPubKeyLen = scriptPubKeyLenResult.size
+      offset = scriptPubKeyLenResult.newOffset
+
+      if (offset + scriptPubKeyLen > txData.length)
+        throw new Error(`Invalid transaction: output ${i} scriptPubKey too short`)
+      const scriptPubKey = txData.subarray(offset, offset + scriptPubKeyLen)
+      offset += scriptPubKeyLen
+
+      outputs.push({ value, scriptPubKey })
+    }
+
+    // Skip witnesses if present (they shouldn't be in unsigned tx)
+    if (isSegWit) {
+      for (let i = 0; i < inputCount; i++) {
+        if (offset >= txData.length) break
+        const witnessLenResult = this.readCompactSize(txData, offset)
+        offset = witnessLenResult.newOffset
+        for (let j = 0; j < witnessLenResult.size; j++) {
+          const itemLenResult = this.readCompactSize(txData, offset)
+          offset = itemLenResult.newOffset + itemLenResult.size
+        }
+      }
+    }
+
+    // Locktime (4 bytes, little endian)
+    if (offset + 4 > txData.length) throw new Error('Invalid transaction: missing locktime')
+    const locktime = new DataView(txData.buffer, txData.byteOffset + offset, 4).getUint32(0, true)
+    offset += 4
+
+    if (offset !== txData.length) throw new Error('Invalid transaction: extra data after locktime')
+
+    return { version, inputs, outputs, locktime }
   }
 
   /**
@@ -219,31 +322,280 @@ export class PartialTransaction {
   }
 
   /**
-   * Combine with another PSBT.
+   * Finalize the PSBT by moving partial signatures to final fields.
+   * This prepares the PSBT for extraction of the final transaction.
    */
-  combine(other: PartialTransaction): void {
-    // Merge global maps (simple merge, assuming no conflicts)
-    for (const [key, value] of other.globalMap) {
-      this.globalMap.set(key, value)
+  finalize(): void {
+    for (let i = 0; i < this.inputs.length; i++) {
+      this.finalizeInput(i)
+    }
+  }
+
+  /**
+   * Finalize a specific input by moving partial signatures to final fields.
+   */
+  private finalizeInput(inputIndex: number): void {
+    const input = this.inputs[inputIndex]
+    if (!input.partialSig || input.partialSig.size === 0) {
+      throw new Error(`Input ${inputIndex} has no partial signatures to finalize`)
     }
 
-    // Merge inputs
-    for (let i = 0; i < Math.max(this.inputs.length, other.inputs.length); i++) {
-      if (i >= this.inputs.length) {
-        this.inputs.push(other.inputs[i])
-      } else if (i < other.inputs.length) {
-        this.mergeInput(this.inputs[i], other.inputs[i])
+    // For P2WPKH, P2TR key path spend, and other single-sig scenarios
+    // We'll use the first available signature
+    const [pubkey, signature] = input.partialSig.entries().next().value
+
+    // Determine the script type and create appropriate final scripts
+    if (input.witnessScript) {
+      // P2WSH or P2SH-P2WSH
+      this.finalizeWitnessInput(input, pubkey, signature)
+    } else if (input.redeemScript) {
+      // P2SH
+      this.finalizeScriptSigInput(input, pubkey, signature)
+    } else {
+      // P2WPKH, P2PKH, or P2TR key path spend
+      this.finalizeSimpleInput(input, pubkey, signature)
+    }
+  }
+
+  private finalizeWitnessInput(input: PsbtInput, pubkey: Uint8Array, signature: Uint8Array): void {
+    // For witness inputs, set the final script witness
+    input.finalScriptWitness = this.createWitness(signature, pubkey)
+  }
+
+  private finalizeScriptSigInput(
+    input: PsbtInput,
+    pubkey: Uint8Array,
+    signature: Uint8Array,
+  ): void {
+    // For P2SH inputs, set the final script sig
+    // This is a simplified implementation - full implementation would handle various script types
+    const scriptSig = this.createScriptSig(signature, pubkey)
+    input.finalScriptSig = scriptSig
+  }
+
+  private finalizeSimpleInput(input: PsbtInput, pubkey: Uint8Array, signature: Uint8Array): void {
+    // For simple inputs (P2WPKH, P2TR key spend)
+    if (input.witnessUtxo) {
+      // SegWit input
+      input.finalScriptWitness = this.createWitness(signature, pubkey)
+    } else {
+      // Legacy input
+      input.finalScriptSig = this.createScriptSig(signature, pubkey)
+    }
+  }
+
+  private createWitness(signature: Uint8Array, pubkey: Uint8Array): Uint8Array {
+    // Create witness stack: [signature, pubkey]
+    const witnessItems = [signature, pubkey]
+    return this.serializeWitness(witnessItems)
+  }
+
+  private createScriptSig(signature: Uint8Array, pubkey: Uint8Array): Uint8Array {
+    // Create script sig for P2PKH: [signature, pubkey]
+    const scriptSigItems = [signature, pubkey]
+    return this.serializeScript(scriptSigItems)
+  }
+
+  private serializeWitness(items: Uint8Array[]): Uint8Array {
+    const parts: Uint8Array[] = []
+    // Witness stack size
+    parts.push(this.writeCompactSize(items.length))
+    // Witness items
+    for (const item of items) {
+      parts.push(this.writeCompactSize(item.length))
+      parts.push(item)
+    }
+    return this.concatUint8Arrays(parts)
+  }
+
+  private serializeScript(items: Uint8Array[]): Uint8Array {
+    const parts: Uint8Array[] = []
+    for (const item of items) {
+      parts.push(this.writeCompactSize(item.length))
+      parts.push(item)
+    }
+    return this.concatUint8Arrays(parts)
+  }
+
+  private concatUint8Arrays(arrays: Uint8Array[]): Uint8Array {
+    const totalLength = arrays.reduce((sum, arr) => sum + arr.length, 0)
+    const result = new Uint8Array(totalLength)
+    let offset = 0
+    for (const arr of arrays) {
+      result.set(arr, offset)
+      offset += arr.length
+    }
+    return result
+  }
+
+  /**
+   * Extract the final signed transaction from the finalized PSBT.
+   * @returns Hex-encoded final transaction
+   */
+  extractTransaction(): string {
+    // Get the unsigned transaction
+    const unsignedTx = this.getUnsignedTx()
+    if (!unsignedTx) {
+      throw new Error('No unsigned transaction in PSBT')
+    }
+
+    // Create the final transaction by combining unsigned tx with final scripts
+    const finalTx = this.buildFinalTransaction(unsignedTx)
+    return finalTx
+  }
+
+  private buildFinalTransaction(unsignedTx: any): string {
+    // The unsignedTx should be a SimpleTransaction-like object
+    // We need to create a final transaction with the scripts from PSBT inputs
+
+    const finalTx: any = {
+      version: unsignedTx.version || 2,
+      inputs: [],
+      outputs: unsignedTx.outputs || [],
+      locktime: unsignedTx.locktime || 0,
+      witnesses: [],
+    }
+
+    // Process each input
+    for (let i = 0; i < this.inputs.length; i++) {
+      const psbtInput = this.inputs[i]
+      const unsignedInput = unsignedTx.inputs[i]
+
+      const finalInput = {
+        txid: unsignedInput.txid,
+        vout: unsignedInput.vout,
+        scriptSig: psbtInput.finalScriptSig || new Uint8Array(0),
+        sequence: unsignedInput.sequence,
+      }
+
+      finalTx.inputs.push(finalInput)
+
+      // Handle witnesses
+      if (psbtInput.finalScriptWitness) {
+        // Parse the witness data
+        const witness = this.parseWitness(psbtInput.finalScriptWitness)
+        finalTx.witnesses.push(witness)
+      } else {
+        finalTx.witnesses.push([]) // Empty witness for non-SegWit
       }
     }
 
-    // Merge outputs
-    for (let i = 0; i < Math.max(this.outputs.length, other.outputs.length); i++) {
-      if (i >= this.outputs.length) {
-        this.outputs.push(other.outputs[i])
-      } else if (i < other.outputs.length) {
-        this.mergeOutput(this.outputs[i], other.outputs[i])
+    // Serialize the final transaction
+    const txBytes = this.serializeFinalTransaction(finalTx)
+    return uint8ArrayToHex(txBytes)
+  }
+
+  private parseWitness(witnessData: Uint8Array): Uint8Array[] {
+    const witness: Uint8Array[] = []
+    let offset = 0
+
+    // Witness stack size
+    const stackSizeResult = this.readCompactSize(witnessData, offset)
+    const stackSize = stackSizeResult.size
+    offset = stackSizeResult.newOffset
+
+    // Parse witness items
+    for (let i = 0; i < stackSize; i++) {
+      const itemLenResult = this.readCompactSize(witnessData, offset)
+      const itemLen = itemLenResult.size
+      offset = itemLenResult.newOffset
+
+      const item = witnessData.subarray(offset, offset + itemLen)
+      offset += itemLen
+      witness.push(item)
+    }
+
+    return witness
+  }
+
+  private serializeFinalTransaction(tx: any): Uint8Array {
+    const parts: Uint8Array[] = []
+
+    // Version (4 bytes, little endian)
+    const versionBytes = new Uint8Array(4)
+    new DataView(versionBytes.buffer).setUint32(0, tx.version, true)
+    parts.push(versionBytes)
+
+    // Check if we have any witnesses
+    const hasWitnesses = tx.witnesses.some((w: Uint8Array[]) => w.length > 0)
+
+    if (hasWitnesses) {
+      // SegWit marker (0x00) and flag (0x01)
+      parts.push(new Uint8Array([0x00, 0x01]))
+    }
+
+    // Input count (varint)
+    parts.push(this.writeCompactSize(tx.inputs.length))
+
+    // Inputs
+    for (const input of tx.inputs) {
+      // Previous txid (32 bytes, little endian)
+      parts.push(hexToUint8Array(input.txid).reverse())
+
+      // Previous vout (4 bytes, little endian)
+      const voutBytes = new Uint8Array(4)
+      new DataView(voutBytes.buffer).setUint32(0, input.vout, true)
+      parts.push(voutBytes)
+
+      // ScriptSig length (varint)
+      parts.push(this.writeCompactSize(input.scriptSig.length))
+
+      // ScriptSig
+      parts.push(input.scriptSig)
+
+      // Sequence (4 bytes, little endian)
+      const sequenceBytes = new Uint8Array(4)
+      new DataView(sequenceBytes.buffer).setUint32(0, input.sequence, true)
+      parts.push(sequenceBytes)
+    }
+
+    // Output count (varint)
+    parts.push(this.writeCompactSize(tx.outputs.length))
+
+    // Outputs
+    for (const output of tx.outputs) {
+      // Value (8 bytes, little endian)
+      const valueBytes = new Uint8Array(8)
+      new DataView(valueBytes.buffer).setBigUint64(0, BigInt(output.value), true)
+      parts.push(valueBytes)
+
+      // ScriptPubKey length (varint)
+      parts.push(this.writeCompactSize(output.scriptPubKey.length))
+
+      // ScriptPubKey
+      parts.push(output.scriptPubKey)
+    }
+
+    // Witnesses (for SegWit)
+    if (hasWitnesses) {
+      for (const witness of tx.witnesses) {
+        if (witness.length > 0) {
+          parts.push(this.writeCompactSize(witness.length))
+          for (const item of witness) {
+            parts.push(this.writeCompactSize(item.length))
+            parts.push(item)
+          }
+        } else {
+          parts.push(new Uint8Array([0])) // Empty witness
+        }
       }
     }
+
+    // Locktime (4 bytes, little endian)
+    const locktimeBytes = new Uint8Array(4)
+    new DataView(locktimeBytes.buffer).setUint32(0, tx.locktime, true)
+    parts.push(locktimeBytes)
+
+    // Combine all parts
+    const totalLength = parts.reduce((sum, part) => sum + part.length, 0)
+    const result = new Uint8Array(totalLength)
+    let offset = 0
+    for (const part of parts) {
+      result.set(part, offset)
+      offset += part.length
+    }
+
+    return result
   }
 
   private parseKeyValueMap(

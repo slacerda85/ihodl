@@ -193,7 +193,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 16,
     backgroundColor: alpha(colors.black, 0.05),
-    borderRadius: 12,
+    borderRadius: 32,
   },
   headerDark: {
     backgroundColor: alpha(colors.white, 0.1),

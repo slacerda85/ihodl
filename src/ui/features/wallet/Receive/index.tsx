@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { View, Text, StyleSheet, Pressable } from 'react-native'
+import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native'
 
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
@@ -16,7 +16,7 @@ export default function ReceiveScreen() {
   const [mode, setMode] = useState<ReceiveMode>('onchain')
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container}>
       {/* Mode Selector */}
       <View style={[styles.selectorContainer, isDark && styles.selectorContainerDark]}>
         <Pressable
@@ -61,7 +61,7 @@ export default function ReceiveScreen() {
       {/* <GlassView style={{ borderRadius: 32 }}> */}
       {mode === 'onchain' ? <Receive /> : <ReceiveLightning />}
       {/* </GlassView> */}
-    </View>
+    </ScrollView>
   )
 }
 

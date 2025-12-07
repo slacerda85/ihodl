@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { View, Text, Pressable, StyleSheet } from 'react-native'
+import { View, Text, Pressable, StyleSheet, TextInput } from 'react-native'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
@@ -10,6 +10,10 @@ interface AdvancedTransactionOptionsProps {
   onEnableRBFChange: (enable: boolean) => void
   selectedSighashType: 'ALL' | 'NONE' | 'SINGLE' | 'ANYONECANPAY'
   onSighashTypeChange: (type: 'ALL' | 'NONE' | 'SINGLE' | 'ANYONECANPAY') => void
+  enableCPFP: boolean
+  onEnableCPFPChange: (enable: boolean) => void
+  cpfpTargetFeeRate: number
+  onCpfpTargetFeeRateChange: (rate: number) => void
 }
 
 export default function AdvancedTransactionOptions({
@@ -17,6 +21,10 @@ export default function AdvancedTransactionOptions({
   onEnableRBFChange,
   selectedSighashType,
   onSighashTypeChange,
+  enableCPFP,
+  onEnableCPFPChange,
+  cpfpTargetFeeRate,
+  onCpfpTargetFeeRateChange,
 }: AdvancedTransactionOptionsProps) {
   const isDark = useIsDark()
   const [showOptions, setShowOptions] = useState(false)
@@ -25,12 +33,12 @@ export default function AdvancedTransactionOptions({
     {
       key: 'ALL' as const,
       label: 'SIGHASH_ALL',
-      description: 'Signs all inputs and outputs (default, most secure)',
+      description: 'Signs all inputs and outputs (most secure)',
     },
     {
       key: 'NONE' as const,
       label: 'SIGHASH_NONE',
-      description: 'Signs no outputs (allows output modification)',
+      description: 'Signs no outputs (allows output editing)',
     },
     {
       key: 'SINGLE' as const,
@@ -69,10 +77,6 @@ export default function AdvancedTransactionOptions({
 
       {showOptions && (
         <View style={[styles.optionsContainer, isDark && styles.optionsContainerDark]}>
-          <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
-            Transaction Features
-          </Text>
-
           <Pressable
             style={[styles.optionRow, isDark && styles.optionRowDark]}
             onPress={() => onEnableRBFChange(!enableRBF)}
@@ -95,6 +99,48 @@ export default function AdvancedTransactionOptions({
               {enableRBF && <IconSymbol name="checkmark" size={12} color={colors.white} />}
             </View>
           </Pressable>
+
+          <Pressable
+            style={[styles.optionRow, isDark && styles.optionRowDark]}
+            onPress={() => onEnableCPFPChange(!enableCPFP)}
+          >
+            <View style={styles.optionContent}>
+              <Text style={[styles.optionLabel, isDark && styles.optionLabelDark]}>
+                Child Pays For Parent (CPFP)
+              </Text>
+              <Text style={[styles.optionDescription, isDark && styles.optionDescriptionDark]}>
+                Create a child transaction to accelerate this one
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.checkbox,
+                enableCPFP && styles.checkboxChecked,
+                isDark && styles.checkboxDark,
+              ]}
+            >
+              {enableCPFP && <IconSymbol name="checkmark" size={12} color={colors.white} />}
+            </View>
+          </Pressable>
+
+          {enableCPFP && (
+            <View style={[styles.cpfpContainer, isDark && styles.cpfpContainerDark]}>
+              <Text style={[styles.cpfpLabel, isDark && styles.cpfpLabelDark]}>
+                Target Fee Rate (sat/vB)
+              </Text>
+              <TextInput
+                style={[styles.cpfpInput, isDark && styles.cpfpInputDark]}
+                value={cpfpTargetFeeRate.toString()}
+                onChangeText={text => {
+                  const rate = parseFloat(text) || 0
+                  onCpfpTargetFeeRateChange(rate)
+                }}
+                keyboardType="numeric"
+                placeholder="10"
+                placeholderTextColor={colors.textSecondary[isDark ? 'dark' : 'light']}
+              />
+            </View>
+          )}
 
           <View style={styles.separator} />
 
@@ -158,7 +204,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 16,
     backgroundColor: alpha(colors.black, 0.05),
-    borderRadius: 12,
+    borderRadius: 32,
   },
   headerDark: {
     backgroundColor: alpha(colors.white, 0.1),
@@ -180,7 +226,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     padding: 16,
     backgroundColor: alpha(colors.black, 0.03),
-    borderRadius: 12,
+    borderRadius: 32,
   },
   optionsContainerDark: {
     backgroundColor: alpha(colors.white, 0.05),
@@ -201,7 +247,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 12,
     marginVertical: 4,
-    borderRadius: 8,
+    borderRadius: 32,
     backgroundColor: 'transparent',
   },
   optionRowDark: {
@@ -251,9 +297,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 12,
-    marginVertical: 4,
-    borderRadius: 8,
+    gap: 2,
+    padding: 16,
+    marginVertical: 6,
+    borderRadius: 24,
     backgroundColor: 'transparent',
   },
   sighashOptionSelected: {
@@ -306,5 +353,37 @@ const styles = StyleSheet.create({
   },
   warningTextDark: {
     color: alpha(colors.warning, 0.9),
+  },
+  cpfpContainer: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: alpha(colors.background.light, 0.5),
+    borderRadius: 8,
+  },
+  cpfpContainerDark: {
+    backgroundColor: alpha(colors.background.dark, 0.3),
+  },
+  cpfpLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.text.light,
+    marginBottom: 8,
+  },
+  cpfpLabelDark: {
+    color: colors.text.dark,
+  },
+  cpfpInput: {
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    borderRadius: 6,
+    padding: 8,
+    fontSize: 14,
+    color: colors.text.light,
+    backgroundColor: colors.white,
+  },
+  cpfpInputDark: {
+    borderColor: colors.border.dark,
+    color: colors.text.dark,
+    backgroundColor: alpha(colors.background.dark, 0.5),
   },
 })

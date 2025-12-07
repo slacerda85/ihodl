@@ -131,8 +131,32 @@ export interface SendTransactionParams {
   getConnectionFn?: () => Promise<any>
 }
 
-export interface SendTransactionResult {
-  txid: string
-  success: boolean
-  error?: string
+export interface BuildBatchTransactionParams {
+  transactions: Array<{
+    recipientAddress: string
+    amount: number // in satoshis
+  }>
+  feeRate: number // sat/vB
+  utxos: Utxo[]
+  changeAddress: string
+  coinSelectionAlgorithm?: CoinSelectionAlgorithm
+  avoidAddressReuse?: boolean
+  consolidateSmallUtxos?: boolean
+  enableRBF?: boolean
+}
+
+export interface BuildBatchTransactionResult {
+  transaction: any // bitcoinjs-lib Transaction
+  inputs: {
+    txid: string
+    vout: number
+    amount: number
+    address: string
+  }[]
+  outputs: {
+    address: string
+    amount: number
+  }[]
+  fee: number
+  changeAmount: number
 }

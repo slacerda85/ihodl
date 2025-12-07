@@ -12,7 +12,17 @@ import {
   SignTransactionResult,
   SendTransactionParams,
   SendTransactionResult,
+  BuildBatchTransactionParams,
+  BuildBatchTransactionResult,
 } from './types'
+
+/**
+ * Sighash type constants
+ */
+const SIGHASH_ALL = 0x01
+const SIGHASH_NONE = 0x02
+const SIGHASH_SINGLE = 0x03
+const SIGHASH_ANYONECANPAY = 0x80
 
 /**
  * Simple Bitcoin transaction structure
@@ -201,6 +211,159 @@ async function buildTransaction({
     }
   } catch (error) {
     throw new Error(`Failed to build transaction: ${(error as Error).message}`)
+  }
+}
+
+/**
+ * Builds a batch Bitcoin transaction with multiple recipients
+ * @param params - Batch transaction building parameters
+ * @returns Batch transaction building result
+ */
+async function buildBatchTransaction({
+  transactions,
+  feeRate,
+  utxos,
+  changeAddress,
+  coinSelectionAlgorithm = CoinSelectionAlgorithm.BRANCH_AND_BOUND,
+  avoidAddressReuse = false,
+  consolidateSmallUtxos = false,
+  enableRBF = false,
+}: BuildBatchTransactionParams): Promise<BuildBatchTransactionResult> {
+  try {
+    // Validate input parameters
+    if (!transactions || transactions.length === 0) {
+      throw new Error('At least one transaction is required')
+    }
+
+    const totalAmount = transactions.reduce((sum, tx) => sum + tx.amount, 0)
+    if (totalAmount <= 0) {
+      throw new Error(`Total amount must be positive, got: ${totalAmount}`)
+    }
+
+    for (const tx of transactions) {
+      if (tx.amount <= 0) {
+        throw new Error(`Individual transaction amount must be positive, got: ${tx.amount}`)
+      }
+    }
+
+    if (!Number.isInteger(feeRate) && feeRate !== Math.floor(feeRate)) {
+      throw new Error(`Fee rate must be an integer, got: ${feeRate}`)
+    }
+    if (feeRate <= 0) {
+      throw new Error(`Fee rate must be positive, got: ${feeRate}`)
+    }
+
+    // Filter UTXOs with sufficient confirmations
+    const confirmedUtxos = utxos.filter(utxo => utxo.confirmations >= 2)
+    console.log(`Filtered to ${confirmedUtxos.length} confirmed UTXOs`)
+
+    if (confirmedUtxos.length === 0) {
+      throw new Error('No confirmed UTXOs available')
+    }
+
+    // Select UTXOs using advanced coin selection algorithm
+    console.log(`Using ${coinSelectionAlgorithm} coin selection algorithm for batch transaction`)
+    const coinSelectionResult = selectCoinsAdvanced(confirmedUtxos, {
+      targetAmount: totalAmount,
+      feeRate,
+      algorithm: coinSelectionAlgorithm,
+      avoidAddressReuse,
+      consolidateSmallUtxos,
+    })
+
+    const selectedUtxos = coinSelectionResult.selectedUtxos
+    console.log(
+      `Selected ${selectedUtxos.length} UTXOs with efficiency: ${coinSelectionResult.efficiency.toFixed(3)}`,
+    )
+    console.log(
+      `Estimated fee: ${coinSelectionResult.fee} sat, change: ${coinSelectionResult.changeAmount} sat`,
+    )
+
+    const totalInputAmountSat = coinSelectionResult.totalAmount
+    const estimatedFeeSat = coinSelectionResult.fee
+    let changeAmountSat = coinSelectionResult.changeAmount
+
+    // Create transaction
+    const tx: SimpleTransaction = {
+      version: 2,
+      inputs: [],
+      outputs: [],
+      locktime: 0,
+      witnesses: [],
+    }
+
+    // Add RBF flag if enabled
+    if (enableRBF) {
+      tx.inputs.forEach(input => {
+        input.sequence = 0xfffffffd // RBF sequence number
+      })
+    }
+
+    // Add inputs
+    const inputs = []
+    for (const utxo of selectedUtxos) {
+      tx.inputs.push({
+        txid: utxo.txid,
+        vout: utxo.vout,
+        scriptSig: new Uint8Array(0), // Empty scriptSig for now
+        sequence: enableRBF ? 0xfffffffd : 0xffffffff,
+      })
+
+      inputs.push({
+        txid: utxo.txid,
+        vout: utxo.vout,
+        amount: Math.round(utxo.amount * 100000000), // Convert BTC to satoshis
+        address: utxo.address,
+      })
+    }
+    console.log(`Batch transaction now has ${tx.inputs.length} inputs`)
+
+    // Add outputs for each transaction
+    const outputs = []
+
+    for (const transaction of transactions) {
+      const recipientAmount = transaction.amount
+
+      // Validate that recipient amount is not dust
+      if (recipientAmount <= 546) {
+        throw new Error(
+          `Recipient amount ${recipientAmount} satoshis is below dust threshold (546 satoshis)`,
+        )
+      }
+
+      tx.outputs.push({
+        value: recipientAmount,
+        scriptPubKey: createScriptPubKey(transaction.recipientAddress),
+      })
+
+      outputs.push({
+        address: transaction.recipientAddress,
+        amount: recipientAmount / 1e8, // Convert back to BTC for display
+      })
+    }
+
+    // Add change output if change amount is significant
+    if (changeAmountSat > 546) {
+      // 546 sat = dust threshold
+      tx.outputs.push({
+        value: changeAmountSat,
+        scriptPubKey: createScriptPubKey(changeAddress),
+      })
+      outputs.push({
+        address: changeAddress,
+        amount: changeAmountSat / 1e8, // Convert back to BTC for display
+      })
+    }
+
+    return {
+      transaction: tx,
+      inputs,
+      outputs,
+      fee: estimatedFeeSat,
+      changeAmount: changeAmountSat > 546 ? changeAmountSat / 1e8 : 0,
+    }
+  } catch (error) {
+    throw new Error(`Failed to build batch transaction: ${(error as Error).message}`)
   }
 }
 
@@ -446,12 +609,324 @@ function isRBFEnabled(tx: SimpleTransaction): boolean {
 }
 
 /**
- * Sighash type constants
+ * Checks if a transaction can be RBF'd (fee bumped)
+ * @param txHex - Transaction hex string
+ * @returns True if the transaction can be replaced
  */
-const SIGHASH_ALL = 0x01
-const SIGHASH_NONE = 0x02
-const SIGHASH_SINGLE = 0x03
-const SIGHASH_ANYONECANPAY = 0x80
+function canBumpFee(txHex: string): boolean {
+  try {
+    const tx = parseUnsignedTransaction(txHex)
+    return isRBFEnabled(tx)
+  } catch (error) {
+    console.error('Error checking RBF capability:', error)
+    return false
+  }
+}
+
+/**
+ * Creates a replacement transaction with higher fees (RBF)
+ * Note: This is a simplified implementation. In practice, the original transaction
+ * intent (recipients and amounts) should be stored when creating the transaction.
+ * @param params - RBF fee bumping parameters
+ * @returns Replacement transaction with higher fees
+ */
+async function bumpRBFFee(params: {
+  originalTxHex: string
+  newFeeRate: number
+  utxos: Utxo[]
+  changeAddress: string
+  recipientAddress: string // Required: the original recipient
+  amount: number // Required: the original amount
+}): Promise<{
+  replacementTransaction: any
+  inputs: any
+  outputs: any
+  newFee: number
+  changeAmount: number
+  isRBFEnabled: boolean
+}> {
+  try {
+    // Parse the original transaction
+    const originalTx = parseUnsignedTransaction(params.originalTxHex)
+
+    // Verify RBF is enabled
+    if (!isRBFEnabled(originalTx)) {
+      throw new Error('Transaction does not have RBF enabled')
+    }
+
+    // Build a replacement transaction with the same recipient and amount but higher fees
+    const result = await buildTransaction({
+      recipientAddress: params.recipientAddress,
+      amount: params.amount,
+      feeRate: params.newFeeRate,
+      utxos: params.utxos,
+      changeAddress: params.changeAddress,
+      enableRBF: true,
+    })
+
+    return {
+      replacementTransaction: result.transaction,
+      inputs: result.inputs,
+      outputs: result.outputs,
+      newFee: result.fee,
+      changeAmount: result.changeAmount,
+      isRBFEnabled: true,
+    }
+  } catch (error) {
+    console.error('Error bumping RBF fee:', error)
+    throw error
+  }
+}
+
+/**
+ * Calculates the fee of a transaction
+ * @param tx - Parsed transaction
+ * @returns Fee in satoshis
+ */
+function calculateTransactionFee(tx: SimpleTransaction): number {
+  // Simplified: assume inputs have value, but we don't have input values here
+  // In practice, this would need input values from UTXOs
+  // For now, return 0 as placeholder
+  return 0
+}
+
+/**
+ * Calculates the effective fee rate for a transaction considering its children (CPFP)
+ * @param parentFee - Fee of parent transaction
+ * @param parentSize - Size of parent transaction
+ * @param childFees - Fees of child transactions
+ * @param childSizes - Sizes of child transactions
+ * @returns Effective fee rate in sat/vB
+ */
+function calculateEffectiveFeeRate(
+  parentFee: number,
+  parentSize: number,
+  childFees: number[] = [],
+  childSizes: number[] = [],
+): number {
+  let totalFee = parentFee
+  let totalSize = parentSize
+
+  for (let i = 0; i < childFees.length; i++) {
+    totalFee += childFees[i]
+    totalSize += childSizes[i]
+  }
+
+  if (totalSize === 0) return 0
+  return totalFee / totalSize
+}
+
+/**
+ * Checks if CPFP can be used for a transaction (has unspent outputs)
+ * @param txHex - Transaction hex
+ * @param utxos - Available UTXOs
+ * @returns True if CPFP can be used
+ */
+function canUseCPFP(txHex: string, utxos: Utxo[]): boolean {
+  try {
+    const tx = parseUnsignedTransaction(txHex)
+    // Check if any output can be spent (simplified: assume all outputs are spendable if UTXOs available)
+    return tx.outputs.length > 0 && utxos.length > 0
+  } catch (error) {
+    console.error('Error checking CPFP capability:', error)
+    return false
+  }
+}
+
+/**
+ * Suggests a CPFP transaction to accelerate a parent transaction
+ * @param params - CPFP suggestion parameters
+ * @returns Suggested CPFP transaction details
+ */
+async function suggestCPFP(params: {
+  parentTxHex: string
+  targetFeeRate: number
+  utxos: Utxo[]
+  changeAddress: string
+  recipientAddress?: string // Optional: where to send the CPFP output, defaults to change
+}): Promise<{
+  cpfpTransaction: any
+  inputs: any
+  outputs: any
+  cpfpFee: number
+  effectiveFeeRate: number
+}> {
+  try {
+    const parentTx = parseUnsignedTransaction(params.parentTxHex)
+    const parentFee = calculateTransactionFee(parentTx)
+    const parentSize = estimateTransactionSize(parentTx.inputs.length, parentTx.outputs.length)
+    const currentEffectiveRate = parentFee / parentSize
+
+    if (params.targetFeeRate <= currentEffectiveRate) {
+      throw new Error('Target fee rate must be higher than current effective rate')
+    }
+
+    // Calculate required additional fee
+    const requiredTotalFee = params.targetFeeRate * parentSize
+    const additionalFee = requiredTotalFee - parentFee
+
+    // Build CPFP transaction spending from parent output
+    // Simplified: assume first output is spendable
+    const cpfpUtxo: Utxo = {
+      txid: parentTx.inputs[0]?.txid || '00'.repeat(32), // Already a hex string
+      vout: 0,
+      address: '', // Will be derived from scriptPubKey
+      scriptPubKey: {
+        asm: '',
+        hex: uint8ArrayToHex(parentTx.outputs[0]?.scriptPubKey || new Uint8Array()),
+        reqSigs: 1,
+        type: 'pubkeyhash',
+        address: '',
+      },
+      amount: parentTx.outputs[0]?.value || 0,
+      confirmations: 0, // Unconfirmed
+      blocktime: 0,
+      isSpent: false,
+    }
+
+    const cpfpAmount = Math.max(546, additionalFee + 1000) // Minimum output + fee buffer
+
+    const result = await buildTransaction({
+      recipientAddress: params.recipientAddress || params.changeAddress,
+      amount: cpfpAmount,
+      feeRate: params.targetFeeRate,
+      utxos: [cpfpUtxo],
+      changeAddress: params.changeAddress,
+      enableRBF: true,
+    })
+
+    const newEffectiveRate = params.targetFeeRate // Approximation: effective rate equals target when CPFP is used
+
+    return {
+      cpfpTransaction: result.transaction,
+      inputs: result.inputs,
+      outputs: result.outputs,
+      cpfpFee: result.fee,
+      effectiveFeeRate: newEffectiveRate,
+    }
+  } catch (error) {
+    console.error('Error suggesting CPFP:', error)
+    throw error
+  }
+}
+
+/**
+ * Builds multiple transactions in a batch
+ * @param batchParams - Array of transaction parameters
+ * @returns Array of built transactions
+ */
+async function buildBatchTransactions(
+  batchParams: {
+    recipientAddress: string
+    amount: number
+    feeRate: number
+    utxos: Utxo[]
+    changeAddress: string
+    coinSelectionAlgorithm?: CoinSelectionAlgorithm
+    avoidAddressReuse?: boolean
+    consolidateSmallUtxos?: boolean
+    enableRBF?: boolean
+  }[],
+): Promise<{
+  transactions: any[]
+  totalFee: number
+  totalSize: number
+}> {
+  const transactions: any[] = []
+  let totalFee = 0
+  let totalSize = 0
+
+  for (const params of batchParams) {
+    const result = await buildTransaction(params)
+    transactions.push(result.transaction)
+    totalFee += result.fee
+    totalSize += estimateTransactionSize(result.inputs.length, result.outputs.length)
+  }
+
+  return {
+    transactions,
+    totalFee,
+    totalSize,
+  }
+}
+
+/**
+ * Sends multiple transactions in a batch
+ * @param batchParams - Array of send parameters
+ * @returns Array of send results
+ */
+async function sendBatchTransactions(
+  batchParams: {
+    transaction: any
+    connection: any
+  }[],
+): Promise<{
+  results: any[]
+  totalFee: number
+}> {
+  const results: any[] = []
+  let totalFee = 0
+
+  for (const params of batchParams) {
+    const result = await sendTransaction({
+      signedTransaction: params.transaction,
+      txHex: '', // TODO: generate txHex from transaction
+    })
+    results.push(result)
+    // Note: fee calculation would need to be added to sendTransaction result
+  }
+
+  return {
+    results,
+    totalFee,
+  }
+}
+
+/**
+ * Estimates transaction fee based on size and fee rate
+ * @param txSize - Transaction size in bytes
+ * @param feeRate - Fee rate in sat/vB
+ * @returns Estimated fee in satoshis
+ */
+function estimateTransactionFee(txSize: number, feeRate: number): number {
+  return Math.ceil(txSize * feeRate)
+}
+
+/**
+ * Estimates optimal fee rate for target confirmation time
+ * @param targetBlocks - Target blocks for confirmation (e.g., 1 for fast, 6 for normal)
+ * @param currentFeeRates - Current fee rates from mempool
+ * @returns Recommended fee rate in sat/vB
+ */
+function estimateOptimalFeeRate(
+  targetBlocks: number,
+  currentFeeRates: { slow: number; normal: number; fast: number; urgent: number },
+): number {
+  // Simple estimation based on target blocks
+  if (targetBlocks <= 1) return currentFeeRates.urgent
+  if (targetBlocks <= 3) return currentFeeRates.fast
+  if (targetBlocks <= 6) return currentFeeRates.normal
+  return currentFeeRates.slow
+}
+
+function parseUnsignedTransaction(txHex: string): SimpleTransaction {
+  const decoded = decodeTransaction(txHex)
+  return {
+    version: decoded.version,
+    inputs: decoded.inputs.map(input => ({
+      txid: input.txid,
+      vout: input.vout,
+      scriptSig: hexToUint8Array(input.scriptSig),
+      sequence: input.sequence,
+    })),
+    outputs: decoded.outputs.map(output => ({
+      value: output.value,
+      scriptPubKey: hexToUint8Array(output.scriptPubKey),
+    })),
+    locktime: decoded.locktime,
+    witnesses: decoded.witnesses,
+  }
+}
 
 /**
  * Creates a sighash for SegWit transaction
@@ -1077,6 +1552,7 @@ function selectCoinsAdvanced(utxos: Utxo[], options: CoinSelectionOptions): Coin
 
 /**
  * Branch and Bound coin selection (optimal for exact matches)
+ * Improved implementation with proper bounds and fee consideration
  */
 function selectCoinsBnB(
   utxos: Utxo[],
@@ -1084,40 +1560,86 @@ function selectCoinsBnB(
   feeRate: number,
   maxInputs: number,
 ): CoinSelectionResult {
-  // Sort by amount ascending for BnB
+  // Sort by amount ascending for BnB (required for effective bounds)
   const sortedUtxos = [...utxos].sort((a, b) => a.amount - b.amount)
 
-  // Try to find exact match with minimal waste
+  // Pre-calculate transaction size estimates for different input counts
+  const baseTxSize = 10 + 34 * 2 // overhead + 2 outputs
+  const inputSizeIncrement = 148 // ~148 vB per input
+
+  // Track best solution found
   let bestSelection: Utxo[] = []
-  let bestWaste = Infinity
+  let bestCost = Infinity // Total cost (waste + fees)
+
+  function calculateCost(selection: Utxo[], target: number): number {
+    const totalInput = selection.reduce((sum, utxo) => sum + utxo.amount, 0)
+    const inputCount = selection.length
+    const txSize = baseTxSize + inputCount * inputSizeIncrement
+    const fee = Math.ceil((txSize * feeRate) / 1000)
+
+    // Cost is the difference between what we spend and what we need to spend
+    // Lower cost is better (less waste)
+    const waste = Math.max(0, totalInput - target - fee)
+    return waste
+  }
 
   function search(index: number, currentSelection: Utxo[], currentSum: number): void {
+    // Check input count limit
     if (currentSelection.length > maxInputs) return
-    if (currentSum > targetAmount + bestWaste) return // Upper bound pruning
 
+    // Calculate current cost and compare with best
     if (currentSum >= targetAmount) {
-      const waste = currentSum - targetAmount
-      if (waste < bestWaste) {
+      const cost = calculateCost(currentSelection, targetAmount)
+      if (cost < bestCost) {
         bestSelection = [...currentSelection]
-        bestWaste = waste
+        bestCost = cost
       }
-      return
+      // Continue searching for potentially better solutions
+      // (don't return here as BnB explores all possibilities)
     }
 
+    // Upper bound pruning: if current cost already exceeds best, stop exploring
+    const currentCost = calculateCost(currentSelection, targetAmount)
+    if (currentCost >= bestCost) return
+
+    // Lower bound pruning: calculate minimum possible additional cost
+    // If adding all remaining UTXOs still gives worse cost, prune
+    const remainingUtxos = sortedUtxos.slice(index)
+    const maxAdditionalInputs = Math.min(remainingUtxos.length, maxInputs - currentSelection.length)
+
+    if (maxAdditionalInputs > 0) {
+      const hypotheticalSelection = [
+        ...currentSelection,
+        ...remainingUtxos.slice(0, maxAdditionalInputs),
+      ]
+      const hypotheticalCost = calculateCost(hypotheticalSelection, targetAmount)
+      if (hypotheticalCost >= bestCost) return
+    }
+
+    // Recursively explore adding each subsequent UTXO
     for (let i = index; i < sortedUtxos.length; i++) {
+      // Optimization: skip UTXOs that are too large if we already have enough
+      if (currentSum + sortedUtxos[i].amount > targetAmount * 2) continue
+
       currentSelection.push(sortedUtxos[i])
       search(i + 1, currentSelection, currentSum + sortedUtxos[i].amount)
       currentSelection.pop()
+
+      // Early termination if we've found a very good solution
+      if (bestCost === 0) break
     }
   }
 
+  // Start the search
   search(0, [], 0)
 
-  // If no exact match found, fall back to largest first
+  // If no solution found with BnB, fall back to largest first
   if (bestSelection.length === 0) {
+    console.log('BnB found no solution, falling back to largest first')
     return selectCoinsLargestFirst(utxos, targetAmount, feeRate, maxInputs)
   }
 
+  console.log(`BnB found solution with ${bestSelection.length} inputs, cost: ${bestCost}`)
   return calculateSelectionResult(bestSelection, targetAmount, feeRate)
 }
 
@@ -1192,6 +1714,7 @@ function selectCoinsRandom(
 
 /**
  * Privacy-focused coin selection
+ * Prioritizes address diversity and avoids common input heuristics
  */
 function selectCoinsPrivacyFocused(
   utxos: Utxo[],
@@ -1200,36 +1723,68 @@ function selectCoinsPrivacyFocused(
   maxInputs: number,
   avoidAddressReuse: boolean,
 ): CoinSelectionResult {
-  let candidates = [...utxos]
+  // Group UTXOs by address
+  const addressGroups = new Map<string, Utxo[]>()
+  for (const utxo of utxos) {
+    const address = utxo.address
+    if (!addressGroups.has(address)) {
+      addressGroups.set(address, [])
+    }
+    addressGroups.get(address)!.push(utxo)
+  }
+
+  let candidates: Utxo[] = []
 
   if (avoidAddressReuse) {
-    // Group by address and prefer diverse addresses
-    const addressGroups = new Map<string, Utxo[]>()
-    for (const utxo of candidates) {
-      const address = utxo.address
-      if (!addressGroups.has(address)) {
-        addressGroups.set(address, [])
-      }
-      addressGroups.get(address)!.push(utxo)
-    }
-
-    // Sort groups by size (prefer addresses with fewer UTXOs)
+    // Prioritize addresses with fewer UTXOs to maximize address diversity
     const sortedGroups = Array.from(addressGroups.entries()).sort(
       (a, b) => a[1].length - b[1].length,
     )
 
-    candidates = []
+    // Take at most one UTXO per address, preferring smaller amounts
     for (const [, groupUtxos] of sortedGroups) {
-      candidates.push(...groupUtxos)
+      const sortedByAmount = groupUtxos.sort((a, b) => a.amount - b.amount)
+      candidates.push(sortedByAmount[0]) // Take smallest UTXO from each address
     }
+  } else {
+    // Allow address reuse but prefer diverse amounts
+    candidates = [...utxos]
   }
 
-  // Use largest first but with privacy considerations
-  return selectCoinsLargestFirst(candidates, targetAmount, feeRate, maxInputs)
+  // Sort by amount diversity (avoid clustering similar amounts)
+  candidates.sort((a, b) => {
+    // Prefer amounts that are different from each other
+    const aDiff = Math.abs(a.amount - targetAmount)
+    const bDiff = Math.abs(b.amount - targetAmount)
+    return aDiff - bDiff
+  })
+
+  // Select UTXOs using a mixed strategy
+  const selected: Utxo[] = []
+  let total = 0
+  const usedAddresses = new Set<string>()
+
+  for (const candidate of candidates) {
+    if (selected.length >= maxInputs) break
+
+    // Skip if we already used this address and avoiding reuse
+    if (avoidAddressReuse && usedAddresses.has(candidate.address)) continue
+
+    selected.push(candidate)
+    total += candidate.amount
+    usedAddresses.add(candidate.address)
+
+    // Stop if we have enough (with some buffer for fees)
+    const estimatedFee = Math.ceil(((selected.length * 148 + 100) * feeRate) / 1000)
+    if (total >= targetAmount + estimatedFee) break
+  }
+
+  return calculateSelectionResult(selected, targetAmount, feeRate)
 }
 
 /**
  * Calculate selection result with fees and efficiency
+ * Improved fee calculation with more accurate transaction size estimation
  */
 function calculateSelectionResult(
   selectedUtxos: Utxo[],
@@ -1238,21 +1793,54 @@ function calculateSelectionResult(
 ): CoinSelectionResult {
   const totalAmount = selectedUtxos.reduce((sum, utxo) => sum + utxo.amount, 0)
 
-  // Estimate transaction size (rough calculation)
-  const inputSize = selectedUtxos.length * 148 // ~148 vB per input
-  const outputSize = 2 * 34 // 2 outputs (recipient + change)
-  const overhead = 10 // Transaction overhead
-  const txSize = inputSize + outputSize + overhead
+  // More accurate transaction size calculation
+  // Base transaction: version (4) + locktime (4) + input/output count varints
+  let txSize = 4 + 4 + 1 + 1 // version, locktime, vin count, vout count
 
-  const fee = Math.ceil((txSize * feeRate) / 1000) // Convert to sat/vB
+  // Add input sizes (more accurate breakdown)
+  for (let i = 0; i < selectedUtxos.length; i++) {
+    // prevout hash (32) + prevout index (4) + script length (1) + sequence (4)
+    // For P2WPKH/P2TR inputs, scriptSig is empty, witness is separate
+    txSize += 32 + 4 + 1 + 4
+    // Witness: stack items count (1) + signature (64-65) + pubkey (32-33)
+    txSize += 1 + 65 + 33
+  }
+
+  // Add output sizes (recipient + change if any)
+  const hasChange = totalAmount > targetAmount
+  const outputCount = hasChange ? 2 : 1
+
+  for (let i = 0; i < outputCount; i++) {
+    // value (8) + script length varint (1) + script (22-34 bytes for addresses)
+    txSize += 8 + 1 + 25 // average script size
+  }
+
+  // SegWit marker and flag add 2 bytes
+  txSize += 2
+
+  // Calculate fee (convert from sat/vB to total sats)
+  const fee = Math.ceil((txSize * feeRate) / 1000)
+
+  // Recalculate change after accurate fee
   const changeAmount = Math.max(0, totalAmount - targetAmount - fee)
-  const efficiency = targetAmount / totalAmount
+
+  // If change would be dust, add it to fee instead
+  const dustThreshold = 546
+  let finalFee = fee
+  let finalChangeAmount = changeAmount
+
+  if (changeAmount > 0 && changeAmount < dustThreshold) {
+    finalFee += changeAmount
+    finalChangeAmount = 0
+  }
+
+  const efficiency = targetAmount / (targetAmount + finalFee)
 
   return {
     selectedUtxos,
     totalAmount,
-    fee,
-    changeAmount,
+    fee: finalFee,
+    changeAmount: finalChangeAmount,
     efficiency,
     privacyScore: 0, // Will be calculated separately
   }
@@ -1674,25 +2262,35 @@ function testTransactionDecode(txHex: string): {
 }
 
 export {
+  buildBatchTransactions,
   buildTransaction,
+  bumpRBFFee,
+  calculateEffectiveFeeRate,
   calculateSelectionResult,
+  canBumpFee,
+  canUseCPFP,
   CoinSelectionAlgorithm,
   createRBFTransaction,
   createSegWitSignature,
   createSighash,
   decodeTransaction,
   deriveAddress,
+  estimateOptimalFeeRate,
+  estimateTransactionFee,
   estimateTransactionSize,
   flattenArrays,
   isRBFEnabled,
+  parseUnsignedTransaction,
   SIGHASH_ALL,
   SIGHASH_NONE,
   SIGHASH_SINGLE,
   SIGHASH_ANYONECANPAY,
   selectCoinsAdvanced,
   selectUtxos,
+  sendBatchTransactions,
   sendTransaction,
   signTransaction,
+  suggestCPFP,
   testTransactionDecode,
   verifySegWitSignature,
 }

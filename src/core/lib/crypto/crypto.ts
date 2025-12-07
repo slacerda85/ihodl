@@ -5,6 +5,7 @@ import { sha256 as nobleSha256 } from '@noble/hashes/sha2.js'
 import { ripemd160 } from '@noble/hashes/legacy.js'
 import { randomUUID as expoRandomUUID } from 'expo-crypto'
 import secp256k1 from 'secp256k1'
+import { schnorr } from '@noble/secp256k1'
 import { pbkdf2 } from '@noble/hashes/pbkdf2.js'
 import { gcm } from '@noble/ciphers/aes.js'
 import { hexToUint8Array, toBytes, uint8ArrayToHex } from '../utils'
@@ -213,21 +214,13 @@ function schnorrSign(message: Uint8Array, privateKey: Uint8Array): Uint8Array {
   if (message.length !== 32) {
     throw new Error('Message must be 32 bytes for Schnorr signing')
   }
-  if (!secp256k1.privateKeyVerify(privateKey)) {
-    throw new Error('Invalid private key')
+  if (privateKey.length !== 32) {
+    throw new Error('Private key must be 32 bytes')
   }
 
-  // Use secp256k1's Schnorr signing if available, otherwise fallback to ECDSA
-  // Note: secp256k1 library may not have Schnorr, so we'll use a basic implementation
   try {
-    // For now, we'll use ECDSA and convert to Schnorr-like format
-    // This is a placeholder - proper Schnorr implementation would require
-    // a library that supports BIP-340 Schnorr signatures
-    const { signature } = secp256k1.ecdsaSign(message, privateKey)
-
-    // Convert ECDSA signature to a 64-byte format (r + s)
-    // This is not a true Schnorr signature but maintains compatibility
-    return signature
+    // Use noble-secp256k1's BIP-340 Schnorr signing
+    return schnorr.sign(message, privateKey)
   } catch (error) {
     throw new Error(`Schnorr signing failed: ${error}`)
   }
@@ -252,13 +245,8 @@ function schnorrVerify(message: Uint8Array, signature: Uint8Array, publicKey: Ui
   }
 
   try {
-    // For now, convert x-only pubkey to compressed format and use ECDSA verification
-    // This is a placeholder - proper Schnorr verification would require BIP-340 support
-    const compressedPubkey = new Uint8Array(33)
-    compressedPubkey[0] = 0x02 // Even parity (placeholder)
-    compressedPubkey.set(publicKey, 1)
-
-    return secp256k1.ecdsaVerify(signature, message, compressedPubkey)
+    // Use noble-secp256k1's BIP-340 Schnorr verification
+    return schnorr.verify(signature, message, publicKey)
   } catch (error) {
     console.error('Schnorr verification failed:', error)
     return false

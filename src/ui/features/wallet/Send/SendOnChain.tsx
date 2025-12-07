@@ -19,6 +19,7 @@ import { useNetwork } from '../../network/NetworkProvider'
 import { addressService, transactionService } from '@/core/services'
 import CoinSelectionOptions from './CoinSelectionOptions'
 import AdvancedTransactionOptions from './AdvancedTransactionOptions'
+import AdvancedFeeEstimation from './AdvancedFeeEstimation'
 
 /**
  * SendOnChain Component
@@ -52,6 +53,17 @@ export default function SendOnChain() {
     'normal',
   )
 
+  // Batch transactions state
+  const [isBatchMode, setIsBatchMode] = useState<boolean>(false)
+  const [batchTransactions, setBatchTransactions] = useState<
+    Array<{
+      id: string
+      recipientAddress: string
+      amount: number
+      memo?: string
+    }>
+  >([])
+
   // Advanced options state
   const [coinSelectionAlgorithm, setCoinSelectionAlgorithm] = useState<
     'largest_first' | 'smallest_first' | 'branch_and_bound' | 'random' | 'privacy_focused'
@@ -60,6 +72,8 @@ export default function SendOnChain() {
   const [consolidateSmallUtxos, setConsolidateSmallUtxos] = useState<boolean>(false)
   const [enableRBF, setEnableRBF] = useState<boolean>(false)
   const [sighashType, setSighashType] = useState<'ALL' | 'NONE' | 'SINGLE' | 'ANYONECANPAY'>('ALL')
+  const [enableCPFP, setEnableCPFP] = useState<boolean>(false)
+  const [cpfpTargetFeeRate, setCpfpTargetFeeRate] = useState<number>(10)
 
   // Refs para evitar múltiplas chamadas
   const feeRatesFetchedRef = useRef(false)
@@ -119,10 +133,52 @@ export default function SendOnChain() {
     fetchRecommendedFeeRates()
   }, [fetchRecommendedFeeRates])
 
+  // Function to add transaction to batch
+  const addToBatch = useCallback(() => {
+    if (!recipientAddress.trim() || addressValid !== true || amount <= 0 || amountValid !== true) {
+      Alert.alert(
+        'Error',
+        'Please fill in valid recipient address and amount before adding to batch',
+      )
+      return
+    }
+
+    const newTransaction = {
+      id: Date.now().toString(),
+      recipientAddress,
+      amount,
+      memo: memo.trim() || undefined,
+    }
+
+    setBatchTransactions(prev => [...prev, newTransaction])
+    // Clear current inputs
+    setRecipientAddress('')
+    setAmountInput('')
+    setAmount(0)
+    setMemo('')
+  }, [recipientAddress, addressValid, amount, amountValid, memo])
+
+  // Function to remove transaction from batch
+  const removeFromBatch = useCallback((id: string) => {
+    setBatchTransactions(prev => prev.filter(tx => tx.id !== id))
+  }, [])
+
   // Function to normalize amount input (convert commas to dots)
   const normalizeAmount = (text: string): string => {
     return text.replace(/,/g, '.')
   }
+  const validateBatchTransactions = useCallback(() => {
+    if (batchTransactions.length === 0) return false
+
+    const totalAmount = batchTransactions.reduce((sum, tx) => sum + tx.amount, 0)
+    const totalAmountInSatoshis = Math.round(totalAmount * 100000000)
+    const feeRateInteger = Math.round(feeRate)
+    const estimatedTxSize = 250 + (batchTransactions.length - 1) * 150 // Base tx + additional outputs
+    const estimatedFeeInSatoshis = Math.round(feeRateInteger * estimatedTxSize)
+    const balanceInSatoshis = Math.round(balance * 100000000)
+
+    return totalAmountInSatoshis + estimatedFeeInSatoshis <= balanceInSatoshis
+  }, [batchTransactions, feeRate, balance])
 
   // Function to handle amount input changes
   const handleAmountChange = (text: string) => {
@@ -132,7 +188,108 @@ export default function SendOnChain() {
     setAmount(isNaN(num) ? 0 : num)
   }
 
+  async function handleSendBatch() {
+    if (batchTransactions.length === 0) {
+      Alert.alert('Error', 'No transactions in batch')
+      return
+    }
+
+    if (!validateBatchTransactions()) {
+      Alert.alert('Error', 'Insufficient balance for batch transaction')
+      return
+    }
+
+    setSubmitting(true)
+
+    try {
+      console.log('[SendOnChain] Starting batch transaction assembly...')
+
+      const confirmedUtxos = utxos.filter(utxo => utxo.confirmations >= 2)
+
+      if (confirmedUtxos.length === 0) {
+        Alert.alert('Error', 'No confirmed UTXOs available for transaction')
+        setSubmitting(false)
+        return
+      }
+
+      const changeAddress = addressService.getNextChangeAddress()
+      const feeRateInteger = Math.round(feeRate)
+
+      // Build batch transaction
+      const buildResult = await transactionService.buildBatchTransaction({
+        transactions: batchTransactions.map(tx => ({
+          recipientAddress: tx.recipientAddress,
+          amount: Math.round(tx.amount * 100000000),
+        })),
+        feeRate: feeRateInteger,
+        utxos: confirmedUtxos,
+        changeAddress,
+        coinSelectionAlgorithm,
+        avoidAddressReuse,
+        consolidateSmallUtxos,
+        enableRBF,
+      })
+
+      console.log('[SendOnChain] Signing batch transaction...')
+      const signResult = await transactionService.signTransaction({
+        transaction: buildResult.transaction,
+        inputs: buildResult.inputs,
+      })
+
+      console.log('[SendOnChain] Sending batch transaction...')
+      const sendResult = await transactionService.sendTransaction({
+        signedTransaction: signResult.signedTransaction,
+        txHex: signResult.txHex,
+      })
+
+      if (sendResult.success) {
+        console.log('[SendOnChain] Batch transaction sent successfully...')
+
+        // Save each transaction in batch
+        for (const tx of batchTransactions) {
+          await transactionService.savePendingTransaction({
+            txid: sendResult.txid!,
+            recipientAddress: tx.recipientAddress,
+            amount: Math.round(tx.amount * 100000000),
+            fee: Math.round(buildResult.fee / batchTransactions.length), // Distribute fee evenly
+            txHex: signResult.txHex,
+            memo: tx.memo,
+          })
+        }
+
+        setSubmitting(false)
+        Alert.alert(
+          'Batch Transaction Sent',
+          `Batch transaction successfully sent!\n\nTXID: ${sendResult.txid}\nRecipients: ${batchTransactions.length}\nTotal Amount: ${batchTransactions.reduce((sum, tx) => sum + tx.amount, 0).toFixed(8)} BTC\nTotal Fee: ${(buildResult.fee / 100000000).toFixed(8)} BTC`,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                setBatchTransactions([])
+                setIsBatchMode(false)
+                router.back()
+              },
+            },
+          ],
+        )
+      } else {
+        console.log('[SendOnChain] Failed to send batch transaction:', sendResult.error)
+        Alert.alert('Error', `Failed to send batch transaction: ${sendResult.error}`)
+        setSubmitting(false)
+      }
+    } catch (error) {
+      console.log('[SendOnChain] Batch transaction failed:', error)
+      Alert.alert('Error', `Batch transaction failed: ${(error as Error).message}`)
+      setSubmitting(false)
+    }
+  }
+
   async function handleSend() {
+    if (isBatchMode) {
+      await handleSendBatch()
+      return
+    }
+
     setSubmitting(true)
 
     if (!recipientAddress.trim()) {
@@ -217,6 +374,7 @@ export default function SendOnChain() {
           amount: amountInSatoshis,
           fee: buildResult.fee,
           txHex: signResult.txHex,
+          memo,
         })
         console.log('[SendOnChain] Pending transaction saved to storage')
 
@@ -305,126 +463,10 @@ export default function SendOnChain() {
         </View>
       </View>
 
-      <View style={styles.section}>
-        <Text style={[styles.label, isDark && styles.labelDark]}>Fee Rate (sat/vB)</Text>
-        <View style={styles.feeHeader}>
-          <Text style={[styles.autoFeeLabel, isDark && styles.autoFeeLabelDark]}>Auto-adjust</Text>
-          <Switch
-            value={autoFeeAdjustment}
-            onValueChange={setAutoFeeAdjustment}
-            trackColor={{ false: '#767577', true: colors.primary }}
-            thumbColor={autoFeeAdjustment ? colors.white : '#f4f3f4'}
-          />
-        </View>
-        {loadingFeeRates ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color={colors.primary} />
-            <Text style={[styles.loadingText, isDark && styles.loadingTextDark]}>
-              Fetching network fee rates...
-            </Text>
-          </View>
-        ) : (
-          <View style={[styles.feeRatesSelector, isDark && styles.feeRatesSelectorDark]}>
-            {autoFeeAdjustment ? (
-              <View style={styles.feeRatesGrid}>
-                <View
-                  style={[
-                    styles.feeRateOption,
-                    styles.feeRateOptionSelected,
-                    isDark && styles.feeRateOptionDark,
-                  ]}
-                >
-                  <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
-                    Normal
-                  </Text>
-                  <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
-                    {feeRates?.normal} sat/vB
-                  </Text>
-                </View>
-              </View>
-            ) : (
-              <View style={styles.feeRatesGrid}>
-                <Pressable
-                  style={[
-                    styles.feeRateOption,
-                    selectedFeeRate === 'slow' && styles.feeRateOptionSelected,
-                    isDark && styles.feeRateOptionDark,
-                  ]}
-                  onPress={() => setSelectedFeeRate('slow')}
-                >
-                  <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>Slow</Text>
-                  <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
-                    {feeRates?.slow} sat/vB
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[
-                    styles.feeRateOption,
-                    selectedFeeRate === 'normal' && styles.feeRateOptionSelected,
-                    isDark && styles.feeRateOptionDark,
-                  ]}
-                  onPress={() => setSelectedFeeRate('normal')}
-                >
-                  <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
-                    Normal
-                  </Text>
-                  <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
-                    {feeRates?.normal} sat/vB
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[
-                    styles.feeRateOption,
-                    selectedFeeRate === 'fast' && styles.feeRateOptionSelected,
-                    isDark && styles.feeRateOptionDark,
-                  ]}
-                  onPress={() => setSelectedFeeRate('fast')}
-                >
-                  <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>Fast</Text>
-                  <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
-                    {feeRates?.fast} sat/vB
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[
-                    styles.feeRateOption,
-                    selectedFeeRate === 'urgent' && styles.feeRateOptionSelected,
-                    isDark && styles.feeRateOptionDark,
-                  ]}
-                  onPress={() => setSelectedFeeRate('urgent')}
-                >
-                  <Text style={[styles.feeRateLabel, isDark && styles.feeRateLabelDark]}>
-                    Urgent
-                  </Text>
-                  <Text style={[styles.feeRateValue, isDark && styles.feeRateValueDark]}>
-                    {feeRates?.urgent} sat/vB
-                  </Text>
-                </Pressable>
-              </View>
-            )}
-          </View>
-        )}
-
-        <View style={styles.infoBox}>
-          <IconSymbol
-            name="info.circle.fill"
-            size={16}
-            style={styles.infoIcon}
-            color={
-              isDark
-                ? alpha(colors.textSecondary.dark, 0.7)
-                : alpha(colors.textSecondary.light, 0.7)
-            }
-          />
-          <Text style={[styles.infoText, isDark && styles.infoTextDark]}>
-            {autoFeeAdjustment
-              ? loadingFeeRates
-                ? 'Loading current network conditions...'
-                : 'Fee rate is automatically adjusted based on network conditions.'
-              : 'Higher fee rates result in faster confirmation times.'}
-          </Text>
-        </View>
-      </View>
+      <AdvancedFeeEstimation
+        selectedFeeRate={selectedFeeRate}
+        onFeeRateChange={setSelectedFeeRate}
+      />
 
       <View style={styles.section}>
         <Text style={[styles.label, isDark && styles.labelDark]}>Memo (Optional)</Text>
@@ -437,6 +479,81 @@ export default function SendOnChain() {
           multiline
           numberOfLines={3}
         />
+      </View>
+
+      <View style={styles.section}>
+        <View style={styles.batchToggleContainer}>
+          <Text style={[styles.label, isDark && styles.labelDark]}>Batch Mode</Text>
+          <Switch
+            value={isBatchMode}
+            onValueChange={setIsBatchMode}
+            trackColor={{ false: '#767577', true: colors.primary }}
+            thumbColor={isBatchMode ? colors.white : '#f4f3f4'}
+          />
+        </View>
+        <Text style={[styles.batchInfo, isDark && styles.batchInfoDark]}>
+          {isBatchMode
+            ? 'Add multiple recipients to send in a single transaction'
+            : 'Send to a single recipient'}
+        </Text>
+
+        {isBatchMode && (
+          <>
+            <Pressable
+              onPress={addToBatch}
+              disabled={
+                !recipientAddress.trim() ||
+                addressValid !== true ||
+                amount <= 0 ||
+                amountValid !== true
+              }
+              style={[
+                styles.button,
+                styles.secondaryButton,
+                (!recipientAddress.trim() ||
+                  addressValid !== true ||
+                  amount <= 0 ||
+                  amountValid !== true) &&
+                  styles.disabledButton,
+              ]}
+            >
+              <Text style={styles.secondaryButtonText}>Add to Batch</Text>
+            </Pressable>
+
+            {batchTransactions.length > 0 && (
+              <View style={styles.section}>
+                <Text style={[styles.label, isDark && styles.labelDark]}>
+                  Batch Transactions ({batchTransactions.length})
+                </Text>
+                {batchTransactions.map((tx, index) => (
+                  <View key={tx.id} style={[styles.batchItem, isDark && styles.batchItemDark]}>
+                    <View style={styles.batchItemContent}>
+                      <Text
+                        style={[styles.batchItemAddress, isDark && styles.batchItemAddressDark]}
+                      >
+                        {index + 1}. {tx.recipientAddress}
+                      </Text>
+                      <Text style={[styles.batchItemAmount, isDark && styles.batchItemAmountDark]}>
+                        {tx.amount.toFixed(8)} BTC
+                      </Text>
+                      {tx.memo && (
+                        <Text style={[styles.batchItemMemo, isDark && styles.batchItemMemoDark]}>
+                          {tx.memo}
+                        </Text>
+                      )}
+                    </View>
+                    <Pressable onPress={() => removeFromBatch(tx.id)} style={styles.removeButton}>
+                      <IconSymbol name="minus.circle.fill" size={20} color={colors.error} />
+                    </Pressable>
+                  </View>
+                ))}
+                <Text style={[styles.batchTotal, isDark && styles.batchTotalDark]}>
+                  Total: {batchTransactions.reduce((sum, tx) => sum + tx.amount, 0).toFixed(8)} BTC
+                </Text>
+              </View>
+            )}
+          </>
+        )}
       </View>
 
       <CoinSelectionOptions
@@ -453,6 +570,10 @@ export default function SendOnChain() {
         onEnableRBFChange={setEnableRBF}
         selectedSighashType={sighashType}
         onSighashTypeChange={setSighashType}
+        enableCPFP={enableCPFP}
+        onEnableCPFPChange={setEnableCPFP}
+        cpfpTargetFeeRate={cpfpTargetFeeRate}
+        onCpfpTargetFeeRateChange={setCpfpTargetFeeRate}
       />
 
       <Pressable
@@ -642,6 +763,82 @@ const styles = StyleSheet.create({
     color: colors.text.light,
   },
   feeRateValueDark: {
+    color: colors.text.dark,
+  },
+  batchToggleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  batchInfo: {
+    fontSize: 12,
+    color: colors.textSecondary.light,
+    marginTop: 4,
+  },
+  batchInfoDark: {
+    color: colors.textSecondary.dark,
+  },
+  secondaryButton: {
+    backgroundColor: alpha(colors.primary, 0.1),
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  secondaryButtonText: {
+    color: colors.primary,
+    textAlign: 'center',
+    fontWeight: '500',
+    fontSize: 16,
+  },
+  batchItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    marginVertical: 4,
+    backgroundColor: alpha(colors.black, 0.05),
+    borderRadius: 8,
+  },
+  batchItemDark: {
+    backgroundColor: alpha(colors.white, 0.05),
+  },
+  batchItemContent: {
+    flex: 1,
+  },
+  batchItemAddress: {
+    fontSize: 14,
+    color: colors.text.light,
+    fontWeight: '500',
+  },
+  batchItemAddressDark: {
+    color: colors.text.dark,
+  },
+  batchItemAmount: {
+    fontSize: 12,
+    color: colors.primary,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  batchItemAmountDark: {
+    color: colors.primary,
+  },
+  batchItemMemo: {
+    fontSize: 12,
+    color: colors.textSecondary.light,
+    marginTop: 2,
+  },
+  batchItemMemoDark: {
+    color: colors.textSecondary.dark,
+  },
+  removeButton: {
+    padding: 4,
+  },
+  batchTotal: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.text.light,
+    textAlign: 'right',
+    marginTop: 8,
+  },
+  batchTotalDark: {
     color: colors.text.dark,
   },
 })

@@ -88,7 +88,7 @@ export default function Receive() {
 
   return (
     <View>
-      <ScrollView style={[styles.scrollView, isDark && styles.scrollViewDark]}>
+      <View style={[styles.scrollView, isDark && styles.scrollViewDark]}>
         <View style={[styles.contentWrapper, isDark && styles.contentWrapperDark]}>
           {/* Loading State */}
           {loading ? (
@@ -189,7 +189,7 @@ export default function Receive() {
             </View>
           )}
         </View>
-      </ScrollView>
+      </View>
 
       {/* Used Addresses Modal */}
       <Modal

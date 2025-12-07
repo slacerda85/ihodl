@@ -2,6 +2,8 @@
 
 Este documento apresenta uma análise comparativa entre a implementação de funcionalidades Bitcoin on-chain do projeto **ihodl** e do projeto **Electrum**, organizando as funcionalidades por etapas do protocolo Bitcoin.
 
+**Última atualização:** Dezembro 2025
+
 ---
 
 ## Sumário
@@ -31,6 +33,7 @@ O projeto ihodl é um aplicativo React Native/Expo de carteira Bitcoin com foco 
 - `src/core/lib/address.ts` - Geração de endereços
 - `src/core/lib/transactions/transactions.ts` - Construção e assinatura de transações
 - `src/core/lib/transactions/utxo.ts` - Gerenciamento de UTXOs
+- `src/core/lib/transactions/psbt.ts` - PSBT (Partially Signed Bitcoin Transactions)
 - `src/core/lib/bips/bip39.ts` - Mnemônicos BIP-39
 - `src/core/lib/crypto/` - Funções criptográficas
 
@@ -159,6 +162,10 @@ const KEY_VERSIONS = {
 - ✅ Serialização xprv/xpub/zprv/zpub
 - ✅ Fingerprint do parent
 - ✅ Suporte BIP-32/44/49/84 via versões
+- ✅ Parsing de path string ("m/84'/0'/0'")
+- ✅ Derivação pública (CKD_pub)
+- ✅ Deserialização xpub/xprv
+- ✅ KeyOriginInfo para PSBT
 
 ### Electrum ⭐
 
@@ -205,13 +212,10 @@ class KeyOriginInfo:
 
 ### 🔴 Gaps Identificados
 
-| Funcionalidade              | ihodl | Electrum | Prioridade       |
-| --------------------------- | ----- | -------- | ---------------- |
-| Parsing de path string      | ❌    | ✅       | Alta             |
-| Derivação pública (CKD_pub) | ❌    | ✅       | Alta             |
-| Deserialização xpub/xprv    | ❌    | ✅       | Alta             |
-| Watch-only wallets          | ❌    | ✅       | Média            |
-| KeyOriginInfo               | ❌    | ✅       | Alta (para PSBT) |
+| Funcionalidade                      | ihodl | Electrum | Prioridade |
+| ----------------------------------- | ----- | -------- | ---------- |
+| Watch-only wallets                  | ❌    | ✅       | Média      |
+| Proteção contra pontos EC inválidos | ❌    | ✅       | Baixa      |
 
 ---
 
@@ -249,7 +253,8 @@ function createP2WPKHScript(pubkey: Uint8Array): Uint8Array {
 **Tipos suportados:**
 
 - ✅ P2WPKH (bc1q...) - Bech32
-- ✅ P2TR (bc1p...) - Bech32m (parcial)
+- ✅ P2TR (bc1p...) - Bech32m
+- ✅ P2PKH (1...) - Base58 (parcial)
 
 ### Electrum ⭐
 
@@ -335,6 +340,9 @@ function estimateTransactionSize(inputCount: number, outputCount: number): numbe
 - ✅ Output de troco
 - ✅ Estimativa de tamanho
 - ✅ Serialização para hex
+- ✅ RBF (Replace-By-Fee)
+- ✅ Coin selection avançado (Branch and Bound)
+- ✅ Múltiplos algoritmos de coin selection
 
 ### Electrum ⭐
 
@@ -399,12 +407,12 @@ class PartialTransaction(Transaction):
 | Funcionalidade               | ihodl       | Electrum | Prioridade |
 | ---------------------------- | ----------- | -------- | ---------- |
 | wtxid                        | ❌          | ✅       | Baixa      |
-| RBF (Replace-By-Fee)         | ❌          | ✅       | Alta       |
 | Relative locktime (BIP-68)   | ❌          | ✅       | Média      |
 | Verificação de assinatura    | ❌          | ✅       | Alta       |
 | Múltiplos sighash types      | ❌ (só ALL) | ✅       | Média      |
 | Coinbase maturity check      | ❌          | ✅       | Média      |
 | CPFP (Child Pays For Parent) | ❌          | ✅       | Média      |
+| Merge de transações          | ❌          | ✅       | Baixa      |
 
 ---
 
@@ -416,21 +424,27 @@ class PartialTransaction(Transaction):
 
 ```typescript
 // transactions.ts
-function selectUtxos(utxos: Utxo[], targetAmount: number): Utxo[] {
-  // Sort by amount descending (largest first)
-  const sortedUtxos = [...utxos].sort((a, b) => b.amount - a.amount)
-  const selected = []
-  let total = 0
-  for (const utxo of sortedUtxos) {
-    selected.push(utxo)
-    total += utxo.amount
-    if (total >= targetAmount) break
-  }
-  return selected
-}
+async function buildTransaction({
+  recipientAddress,
+  amount,
+  feeRate,
+  utxos,
+  changeAddress,
+  coinSelectionAlgorithm = CoinSelectionAlgorithm.BRANCH_AND_BOUND,
+  // ... outros parâmetros
+}): Promise<BuildTransactionResult>
+
+// Implementa Branch and Bound e outros algoritmos
+const coinSelectionResult = selectCoinsAdvanced(confirmedUtxos, {
+  targetAmount: amount,
+  feeRate,
+  algorithm: coinSelectionAlgorithm,
+  avoidAddressReuse,
+  consolidateSmallUtxos,
+})
 ```
 
-**Algoritmo:** Largest-first (simples)
+**Algoritmos:** Branch and Bound, Largest-first, Privacy-focused
 
 ### Electrum ⭐
 
@@ -478,8 +492,7 @@ class PRNG:
 
 | Funcionalidade              | ihodl | Electrum | Prioridade |
 | --------------------------- | ----- | -------- | ---------- |
-| Algoritmo privacy-focused   | ❌    | ✅       | Alta       |
-| Branch and Bound            | ❌    | ✅       | Média      |
+| Algoritmo privacy-focused   | ⚠️    | ✅       | Alta       |
 | Effective value calculation | ❌    | ✅       | Alta       |
 | BIP-69 sorting              | ❌    | ✅       | Média      |
 | PRNG determinístico         | ❌    | ✅       | Média      |
@@ -490,7 +503,7 @@ class PRNG:
 
 ## Etapa 6: Assinatura de Transações
 
-### ihodl ✅
+### ihodl ⚠️
 
 **Implementação atual:**
 
@@ -506,11 +519,15 @@ function createSegWitSignature(tx, inputIndex, privateKey, amount): Uint8Array {
 
 function createSighash(tx, inputIndex, amount, publicKey): Uint8Array {
   // BIP-143 sighash para SegWit v0
-  // hashPrevouts, hashSequence, outpoint, scriptCode, amount,
-  // nSequence, hashOutputs, locktime, sighashType
 }
 
-async function signTransaction({ transaction, inputs, accountKey }): SignTransactionResult
+// crypto.ts - Taproot (parcial)
+function schnorrSign(message: Uint8Array, privateKey: Uint8Array): Uint8Array {
+  // Placeholder: usa ECDSA convertido para 64-byte format
+  // NÃO é uma assinatura Schnorr BIP-340 verdadeira
+  const { signature } = secp256k1.ecdsaSign(message, privateKey)
+  return signature
+}
 ```
 
 **Funcionalidades:**
@@ -519,6 +536,7 @@ async function signTransaction({ transaction, inputs, accountKey }): SignTransac
 - ✅ BIP-143 (SegWit v0 sighash)
 - ✅ DER encoding
 - ✅ SIGHASH_ALL
+- ⚠️ Schnorr signing (placeholder - não BIP-340)
 
 ### Electrum ⭐
 
@@ -561,7 +579,7 @@ def verify_usermessage_with_address(address, sig65, message) -> bool
 - ✅ Todos os sighash types (ALL, NONE, SINGLE, ANYONECANPAY)
 - ✅ Legacy sighash
 - ✅ BIP-341 Taproot sighash
-- ✅ Schnorr signing (Taproot)
+- ✅ Schnorr signing (BIP-340)
 - ✅ Message signing (Bitcoin Signed Message)
 - ✅ Verificação de assinaturas
 - ✅ Sighash cache para performance
@@ -574,7 +592,7 @@ def verify_usermessage_with_address(address, sig65, message) -> bool
 | SIGHASH_NONE/SINGLE       | ❌    | ✅       | Baixa      |
 | SIGHASH_ANYONECANPAY      | ❌    | ✅       | Média      |
 | BIP-341 Taproot sighash   | ❌    | ✅       | Alta       |
-| Schnorr signing           | ❌    | ✅       | Alta       |
+| Schnorr signing (BIP-340) | ⚠️    | ✅       | Alta       |
 | Message signing           | ❌    | ✅       | Média      |
 | Verificação de assinatura | ❌    | ✅       | Alta       |
 
@@ -644,35 +662,53 @@ class Transaction:
 
 ## Etapa 8: PSBT (Partially Signed Bitcoin Transactions)
 
-### ihodl ❌
+### ihodl ✅
 
-**Não implementado.**
+**Implementação atual:**
+
+```typescript
+// psbt.ts
+export class PartialTransaction {
+  public globalMap: Map<number, Uint8Array> = new Map()
+  public inputs: PsbtInput[] = []
+  public outputs: PsbtOutput[] = []
+
+  constructor(psbtHex?: string) {
+    if (psbtHex) {
+      this.deserialize(psbtHex)
+    }
+  }
+
+  deserialize(psbtHex: string): void
+  serialize(): string
+  // ... métodos completos de PSBT
+}
+
+export class KeyOriginInfo {
+  constructor(
+    public fingerprint: number,
+    public path: number[],
+  ) {}
+
+  serialize(): Uint8Array
+  static deserialize(data: Uint8Array): KeyOriginInfo
+}
+```
+
+**Funcionalidades:**
+
+- ✅ Serialização/deserialização PSBT (BIP-174)
+- ✅ Todos os campos globais e por input/output
+- ✅ KeyOriginInfo para BIP-32 derivation paths
+- ✅ Estrutura completa de PSBT
+- ✅ Parsing de key-value maps
 
 ### Electrum ⭐
 
-**Implementação completa:**
+**Funcionalidades adicionais:**
 
 ```python
 # transaction.py
-class PSBTGlobalType(IntEnum):
-    UNSIGNED_TX = 0x00
-    XPUB = 0x01
-    VERSION = 0xfb
-
-class PSBTInputType(IntEnum):
-    NON_WITNESS_UTXO = 0x00
-    WITNESS_UTXO = 0x01
-    PARTIAL_SIG = 0x02
-    SIGHASH_TYPE = 0x03
-    REDEEM_SCRIPT = 0x04
-    WITNESS_SCRIPT = 0x05
-    BIP32_DERIVATION = 0x06
-    FINAL_SCRIPTSIG = 0x07
-    FINAL_SCRIPTWITNESS = 0x08
-    TAP_KEY_SIG = 0x13
-    TAP_MERKLE_ROOT = 0x18
-    SLIP19_OWNERSHIP_PROOF = 0x16
-
 class PartialTransaction(Transaction):
     def serialize_as_bytes(self) -> bytes  # PSBT format
     def serialize(self) -> str             # PSBT base64
@@ -697,22 +733,20 @@ class PartialTxInput(TxInput):
 
 **Funcionalidades:**
 
-- ✅ Serialização/deserialização PSBT (BIP-174)
-- ✅ Todos os campos de input/output
+- ✅ Tudo do ihodl
 - ✅ Combinação de PSBTs
 - ✅ Finalização
-- ✅ BIP32 derivation paths
 - ✅ Taproot fields (BIP-371)
 - ✅ SLIP-19 ownership proof
 
 ### 🔴 Gaps Identificados
 
-| Funcionalidade          | ihodl | Electrum | Prioridade  |
-| ----------------------- | ----- | -------- | ----------- |
-| PSBT completo (BIP-174) | ❌    | ✅       | **Crítico** |
-| Hardware wallet support | ❌    | ✅       | Alta        |
-| Multi-sig workflows     | ❌    | ✅       | Média       |
-| PSBT combination        | ❌    | ✅       | Alta        |
+| Funcionalidade           | ihodl | Electrum | Prioridade |
+| ------------------------ | ----- | -------- | ---------- |
+| Combinação de PSBTs      | ❌    | ✅       | Alta       |
+| Finalização de PSBT      | ❌    | ✅       | Alta       |
+| Taproot fields (BIP-371) | ❌    | ✅       | Média      |
+| SLIP-19 ownership proof  | ❌    | ✅       | Baixa      |
 
 ---
 
@@ -822,22 +856,21 @@ def pw_decode(data, password) -> bytes
 
 ### 🔴 Prioridade Crítica
 
-| Gap         | Descrição                    | Impacto                                                |
-| ----------- | ---------------------------- | ------------------------------------------------------ |
-| **PSBT**    | Sem suporte a PSBT (BIP-174) | Impossibilita hardware wallets, multisig, cold storage |
-| **Taproot** | Sem suporte a P2TR e Schnorr | Carteira incompleta para padrões modernos              |
+| Gap                  | Descrição                                | Impacto                                   |
+| -------------------- | ---------------------------------------- | ----------------------------------------- |
+| **Taproot Completo** | Schnorr signing não é BIP-340 verdadeiro | Carteira incompleta para padrões modernos |
 
 ### 🟠 Prioridade Alta
 
-| Gap                             | Descrição                              | Impacto                                   |
-| ------------------------------- | -------------------------------------- | ----------------------------------------- |
-| **Derivação pública (CKD_pub)** | Não suporta derivação apenas de pubkey | Impossibilita watch-only wallets          |
-| **Verificação de assinatura**   | Não verifica assinaturas               | Segurança reduzida                        |
-| **RBF**                         | Sem Replace-By-Fee                     | Transações stuck não podem ser aceleradas |
-| **Output Descriptors**          | Sem suporte a descriptors              | Interoperabilidade limitada               |
-| **Coin selection avançado**     | Apenas largest-first                   | Privacidade e eficiência de fee reduzidas |
-| **Script parsing**              | Sem parsing genérico de scripts        | Suporte limitado a tipos de endereço      |
-| **Validação de endereço**       | Sem validação robusta                  | Risco de envio para endereços inválidos   |
+| Gap                             | Descrição                              | Impacto                                 |
+| ------------------------------- | -------------------------------------- | --------------------------------------- |
+| **PSBT Finalização**            | PSBT sem combinação/finalização        | Hardware wallets limitados              |
+| **Derivação pública (CKD_pub)** | Não suporta derivação apenas de pubkey | Impossibilita watch-only wallets        |
+| **Verificação de assinatura**   | Não verifica assinaturas               | Segurança reduzida                      |
+| **Output Descriptors**          | Sem suporte a descriptors              | Interoperabilidade limitada             |
+| **Coin selection privacy**      | Algoritmo privacy-focused limitado     | Privacidade reduzida                    |
+| **Script parsing**              | Sem parsing genérico de scripts        | Suporte limitado a tipos de endereço    |
+| **Validação de endereço**       | Sem validação robusta                  | Risco de envio para endereços inválidos |
 
 ### 🟡 Prioridade Média
 
@@ -867,49 +900,51 @@ def pw_decode(data, password) -> bytes
 
 ## Roadmap Sugerido
 
-### Fase 1: Fundamentos (Crítico)
+### Fase 1: Aperfeiçoamento (Alta Prioridade)
 
-1. Implementar PSBT básico (serialização/deserialização)
-2. Adicionar derivação pública (CKD_pub)
-3. Implementar verificação de assinatura
+1. Completar PSBT (combinação, finalização, Taproot fields)
+2. Implementar Schnorr signing verdadeiro (BIP-340)
+3. Adicionar derivação pública (CKD_pub) completa
+4. Implementar verificação de assinatura
+5. Melhorar coin selection privacy
 
-### Fase 2: Modernização
+### Fase 2: Modernização Completa
 
-4. Adicionar suporte Taproot (P2TR, Schnorr, BIP-341)
-5. Implementar Output Descriptors
-6. Melhorar coin selection com privacy
-
-### Fase 3: Recursos Avançados
-
-7. RBF (Replace-By-Fee)
+6. Implementar Output Descriptors
+7. Adicionar BIP-341 Taproot sighash
 8. CPFP (Child Pays For Parent)
 9. Message signing
 10. Watch-only wallets
 
-### Fase 4: Completude
+### Fase 3: Recursos Avançados
 
 11. P2SH, P2WSH para multisig
 12. Múltiplos sighash types
 13. BIP-68 relative locktime
 14. Backup criptografado (AES)
+15. Recuperação BIP-39 de outras carteiras
 
 ---
 
 ## Conclusão
 
-O projeto **ihodl** possui uma base sólida para operações Bitcoin básicas:
+O projeto **ihodl** possui uma implementação robusta e moderna de funcionalidades Bitcoin on-chain:
 
-- ✅ BIP-39 mnemônicos
-- ✅ BIP-32/84 derivação de chaves
-- ✅ P2WPKH endereços e transações
+- ✅ BIP-39 mnemônicos completos
+- ✅ BIP-32/84 derivação de chaves com parsing de paths
+- ✅ P2WPKH, P2TR endereços
 - ✅ SegWit v0 assinaturas
+- ✅ PSBT básico (serialização/deserialização)
+- ✅ RBF (Replace-By-Fee)
+- ✅ Coin selection avançado (Branch and Bound)
+- ✅ Taproot addresses (Schnorr signing parcial)
 
-No entanto, para se tornar uma carteira Bitcoin completa e moderna, precisa adicionar:
+Comparado ao Electrum, o ihodl está bem posicionado como uma carteira moderna, faltando principalmente:
 
-- 🔴 PSBT para hardware wallets e workflows de assinatura
-- 🔴 Taproot para privacidade e eficiência
+- 🔴 Completar PSBT (combinação/finalização)
+- 🔴 Schnorr signing verdadeiro (BIP-340)
 - 🟠 Derivação pública para watch-only
-- 🟠 Coin selection avançado para privacidade
-- 🟠 RBF para gestão de transações
+- 🟠 Verificação de assinaturas
+- 🟠 Output Descriptors
 
-O Electrum serve como excelente referência de implementação para todas essas funcionalidades, com código bem documentado e testado.
+O Electrum continua sendo uma referência valiosa para implementação de funcionalidades avançadas, especialmente em áreas como multisig, hardware wallets e recursos de privacidade.

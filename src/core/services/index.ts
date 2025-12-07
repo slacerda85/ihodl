@@ -2,6 +2,7 @@
 export { addressService } from './address'
 export { transactionService } from './transaction'
 export { walletService } from './wallet'
+export { networkService } from './network'
 
 // Services - Class exports (for cases needing new instances)
 export { default as AddressService } from './address'

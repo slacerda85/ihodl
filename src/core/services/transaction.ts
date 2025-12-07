@@ -2,6 +2,7 @@ import { Connection } from '../models/network'
 import { FriendlyTx, MerkleProof, Tx, Utxo } from '../models/transaction'
 import {
   getTransactions,
+  getTransaction,
   getBlockHash,
   getBlockHeader,
   getMerkleProof,
@@ -12,10 +13,20 @@ import {
 import { hexToUint8Array, uint8ArrayToHex, concatUint8Arrays } from '../lib/utils'
 import { AddressDetails, Change } from '../models/address'
 import {
+  buildBatchTransactions,
   buildTransaction,
   signTransaction,
   sendTransaction,
   selectCoinsAdvanced,
+  bumpRBFFee,
+  canBumpFee,
+  calculateEffectiveFeeRate,
+  canUseCPFP,
+  suggestCPFP,
+  sendBatchTransactions,
+  estimateTransactionFee,
+  estimateOptimalFeeRate,
+  buildBatchTransaction,
 } from '../lib/transactions'
 import { createP2TRAddress } from '../lib/address'
 import SeedService from './seed'
@@ -35,6 +46,7 @@ function getWalletService(): WalletServiceType {
 interface TransactionServiceInterface {
   deduplicateTxs(txs: Tx[]): Tx[]
   getTransactions(address: string, connection: Connection): Promise<Tx[]>
+  getTransaction(txid: string, connection: Connection): Promise<Tx | null>
   getUtxos(addresses: string[], txs: Tx[]): Utxo[]
   buildTransaction({
     recipientAddress,
@@ -77,6 +89,7 @@ interface TransactionServiceInterface {
     amount: number
     fee: number
     txHex: string
+    memo?: string
   }): Promise<void>
   readPendingTransactions(): Tx[]
   deletePendingTransaction(txid: string): void
@@ -123,6 +136,102 @@ interface TransactionServiceInterface {
     changeAmount: number
     isRBFEnabled: boolean
   }>
+  // RBF fee bumping
+  bumpRBFFee(params: {
+    originalTxHex: string
+    newFeeRate: number
+    utxos: Utxo[]
+    changeAddress: string
+    recipientAddress: string
+    amount: number
+  }): Promise<{
+    replacementTransaction: any
+    inputs: any
+    outputs: any
+    newFee: number
+    changeAmount: number
+    isRBFEnabled: boolean
+  }>
+  // Check if transaction can be RBF'd
+  canBumpFee(txHex: string): boolean
+  // CPFP effective fee rate calculation
+  calculateEffectiveFeeRate(
+    parentFee: number,
+    parentSize: number,
+    childFees?: number[],
+    childSizes?: number[],
+  ): number
+  // Check if CPFP can be used
+  canUseCPFP(txHex: string, utxos: Utxo[]): boolean
+  // Suggest CPFP transaction
+  suggestCPFP(params: {
+    parentTxHex: string
+    targetFeeRate: number
+    utxos: Utxo[]
+    changeAddress: string
+    recipientAddress?: string
+  }): Promise<{
+    cpfpTransaction: any
+    inputs: any
+    outputs: any
+    cpfpFee: number
+    effectiveFeeRate: number
+  }>
+  // Batch transaction building
+  buildBatchTransactions(
+    batchParams: {
+      recipientAddress: string
+      amount: number
+      feeRate: number
+      utxos: Utxo[]
+      changeAddress: string
+      coinSelectionAlgorithm?: any
+      avoidAddressReuse?: boolean
+      consolidateSmallUtxos?: boolean
+      enableRBF?: boolean
+    }[],
+  ): Promise<{
+    transactions: any[]
+    totalFee: number
+    totalSize: number
+  }>
+  // Single batch transaction building (combines multiple outputs in one tx)
+  buildBatchTransaction(params: {
+    transactions: Array<{
+      recipientAddress: string
+      amount: number
+    }>
+    feeRate: number
+    utxos: Utxo[]
+    changeAddress: string
+    coinSelectionAlgorithm?: any
+    avoidAddressReuse?: boolean
+    consolidateSmallUtxos?: boolean
+    enableRBF?: boolean
+  }): Promise<{
+    transaction: any
+    inputs: any
+    outputs: any
+    fee: number
+    changeAmount: number
+  }>
+  // Batch transaction sending
+  sendBatchTransactions(
+    batchParams: {
+      transaction: any
+      connection: any
+    }[],
+  ): Promise<{
+    results: any[]
+    totalFee: number
+  }>
+  // Fee estimation
+  estimateTransactionFee(txSize: number, feeRate: number): number
+  // Optimal fee rate estimation
+  estimateOptimalFeeRate(
+    targetBlocks: number,
+    currentFeeRates: { slow: number; normal: number; fast: number; urgent: number },
+  ): number
 }
 
 export default class TransactionService implements TransactionServiceInterface {
@@ -156,6 +265,21 @@ export default class TransactionService implements TransactionServiceInterface {
       }
     }
     return validatedTransactions
+  }
+
+  async getTransaction(txid: string, connection: Connection): Promise<Tx | null> {
+    try {
+      const { result: tx } = await getTransaction(txid, true, connection)
+      const verification = await this.verifyTransaction(tx, connection)
+      if (verification.valid) {
+        tx.proof = verification.proof
+        return tx
+      }
+      return null
+    } catch (error) {
+      console.error(`Error fetching transaction ${txid}:`, error)
+      return null
+    }
   }
 
   getUtxos(addresses: string[], txs: Tx[]): Utxo[] {
@@ -228,6 +352,53 @@ export default class TransactionService implements TransactionServiceInterface {
     const transaction = await buildTransaction({
       recipientAddress,
       amount,
+      feeRate,
+      utxos,
+      changeAddress,
+      coinSelectionAlgorithm: coinSelectionAlgorithm as any,
+      avoidAddressReuse,
+      consolidateSmallUtxos,
+      enableRBF,
+    })
+
+    return transaction
+  }
+
+  async buildBatchTransaction({
+    transactions,
+    feeRate,
+    utxos,
+    changeAddress,
+    coinSelectionAlgorithm,
+    avoidAddressReuse,
+    consolidateSmallUtxos,
+    enableRBF,
+  }: {
+    transactions: Array<{
+      recipientAddress: string
+      amount: number
+    }>
+    feeRate: number
+    utxos: Utxo[]
+    changeAddress: string
+    coinSelectionAlgorithm?:
+      | 'largest_first'
+      | 'smallest_first'
+      | 'branch_and_bound'
+      | 'random'
+      | 'privacy_focused'
+    avoidAddressReuse?: boolean
+    consolidateSmallUtxos?: boolean
+    enableRBF?: boolean
+  }): Promise<{
+    transaction: any
+    inputs: any
+    outputs: any
+    fee: number
+    changeAmount: number
+  }> {
+    const transaction = await buildBatchTransaction({
+      transactions,
       feeRate,
       utxos,
       changeAddress,
@@ -525,18 +696,18 @@ export default class TransactionService implements TransactionServiceInterface {
 
   async savePendingTransaction({
     txid,
-
     recipientAddress,
     amount,
     fee,
     txHex,
+    memo,
   }: {
     txid: string
-
     recipientAddress: string
     amount: number
     fee: number
     txHex: string
+    memo?: string
   }): Promise<void> {
     const pendingTx: Tx = {
       txid,
@@ -710,6 +881,134 @@ export default class TransactionService implements TransactionServiceInterface {
       ...result,
       isRBFEnabled: true,
     }
+  }
+
+  /**
+   * Aumenta a taxa de uma transação RBF existente
+   */
+  async bumpRBFFee(params: {
+    originalTxHex: string
+    newFeeRate: number
+    utxos: Utxo[]
+    changeAddress: string
+    recipientAddress: string
+    amount: number
+  }): Promise<{
+    replacementTransaction: any
+    inputs: any
+    outputs: any
+    newFee: number
+    changeAmount: number
+    isRBFEnabled: boolean
+  }> {
+    return await bumpRBFFee({
+      originalTxHex: params.originalTxHex,
+      newFeeRate: params.newFeeRate,
+      utxos: params.utxos,
+      changeAddress: params.changeAddress,
+      recipientAddress: params.recipientAddress,
+      amount: params.amount,
+    })
+  }
+
+  /**
+   * Verifica se uma transação pode ter sua taxa aumentada (RBF)
+   */
+  canBumpFee(txHex: string): boolean {
+    return canBumpFee(txHex)
+  }
+
+  /**
+   * Calcula a taxa efetiva de uma transação considerando filhos (CPFP)
+   */
+  calculateEffectiveFeeRate(
+    parentFee: number,
+    parentSize: number,
+    childFees: number[] = [],
+    childSizes: number[] = [],
+  ): number {
+    return calculateEffectiveFeeRate(parentFee, parentSize, childFees, childSizes)
+  }
+
+  /**
+   * Verifica se CPFP pode ser usado para uma transação
+   */
+  canUseCPFP(txHex: string, utxos: Utxo[]): boolean {
+    return canUseCPFP(txHex, utxos)
+  }
+
+  /**
+   * Sugere uma transação CPFP para acelerar uma transação pai
+   */
+  async suggestCPFP(params: {
+    parentTxHex: string
+    targetFeeRate: number
+    utxos: Utxo[]
+    changeAddress: string
+    recipientAddress?: string
+  }): Promise<{
+    cpfpTransaction: any
+    inputs: any
+    outputs: any
+    cpfpFee: number
+    effectiveFeeRate: number
+  }> {
+    return await suggestCPFP(params)
+  }
+
+  /**
+   * Constrói múltiplas transações em lote
+   */
+  async buildBatchTransactions(
+    batchParams: {
+      recipientAddress: string
+      amount: number
+      feeRate: number
+      utxos: Utxo[]
+      changeAddress: string
+      coinSelectionAlgorithm?: any
+      avoidAddressReuse?: boolean
+      consolidateSmallUtxos?: boolean
+      enableRBF?: boolean
+    }[],
+  ): Promise<{
+    transactions: any[]
+    totalFee: number
+    totalSize: number
+  }> {
+    return await buildBatchTransactions(batchParams)
+  }
+
+  /**
+   * Envia múltiplas transações em lote
+   */
+  async sendBatchTransactions(
+    batchParams: {
+      transaction: any
+      connection: any
+    }[],
+  ): Promise<{
+    results: any[]
+    totalFee: number
+  }> {
+    return await sendBatchTransactions(batchParams)
+  }
+
+  /**
+   * Estima taxa de transação baseada no tamanho e taxa
+   */
+  estimateTransactionFee(txSize: number, feeRate: number): number {
+    return estimateTransactionFee(txSize, feeRate)
+  }
+
+  /**
+   * Estima taxa ótima para tempo alvo de confirmação
+   */
+  estimateOptimalFeeRate(
+    targetBlocks: number,
+    currentFeeRates: { slow: number; normal: number; fast: number; urgent: number },
+  ): number {
+    return estimateOptimalFeeRate(targetBlocks, currentFeeRates)
   }
 }
 
