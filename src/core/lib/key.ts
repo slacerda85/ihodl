@@ -1,12 +1,9 @@
 import secp256k1 from 'secp256k1'
+import { createChecksum, hash160, hmacSeed, hmacSHA512, uint8ArrayToHex } from '@/core/lib/crypto'
 import {
-  createChecksum,
-  hash160,
-  hmacSeed,
-  hmacSHA512,
-  toBase58,
-  uint8ArrayToHex,
-} from '@/core/lib/crypto'
+  encodeBase58 as encodeBase58Address,
+  decodeBase58 as decodeBase58Address,
+} from '@/core/lib/address'
 import { entropyToMnemonic, mnemonicToSeedSync } from './bips/bip39'
 import wordList from 'bip39/src/wordlists/english.json'
 import { CURVE_ORDER } from '../models/key'
@@ -308,12 +305,170 @@ function privateKeyToWIF(privateKey: Uint8Array, compressed: boolean = true): st
   wifBuffer.set(keyWithVersion)
   wifBuffer.set(checksum, keyWithVersion.length)
 
-  return toBase58(wifBuffer)
+  return encodeBase58Address(wifBuffer)
 }
 
 function toPublicKeyHash(serializedPublicKey: Uint8Array): Uint8Array {
   const hash = hash160(serializedPublicKey.subarray(0, 33))
   return hash
+}
+
+/**
+ * Converts a BIP-32 path string to an array of integers.
+ * @param path - The path string, e.g., "m/84'/0'/0'".
+ * @returns An array of integers representing the path.
+ */
+function convertBip32StrPathToIntPath(path: string): number[] {
+  if (!path.startsWith('m/') && !path.startsWith('M/')) {
+    throw new Error('Invalid path: must start with m/ or M/')
+  }
+  const parts = path.slice(2).split('/')
+  const intPath: number[] = []
+  for (const part of parts) {
+    let index: number
+    if (part.endsWith("'")) {
+      index = parseInt(part.slice(0, -1), 10) + 0x80000000
+    } else {
+      index = parseInt(part, 10)
+    }
+    if (isNaN(index)) {
+      throw new Error(`Invalid path component: ${part}`)
+    }
+    intPath.push(index)
+  }
+  return intPath
+}
+
+/**
+ * Converts an array of integers to a BIP-32 path string.
+ * @param path - An array of integers representing the path.
+ * @returns The path string, e.g., "m/84'/0'/0'".
+ */
+function convertBip32IntPathToStrPath(path: number[]): string {
+  const parts: string[] = []
+  for (const index of path) {
+    if (index >= 0x80000000) {
+      parts.push(`${index - 0x80000000}'`)
+    } else {
+      parts.push(index.toString())
+    }
+  }
+  return 'm/' + parts.join('/')
+}
+
+/**
+ * Derives a child public key from a parent public key and chain code (CKD_pub).
+ * @param publicKey - The parent public key (33 bytes, compressed).
+ * @param chainCode - The parent chain code (32 bytes).
+ * @param index - The child index.
+ * @returns An object containing the child public key and chain code.
+ */
+function deriveChildPublicKey(
+  publicKey: Uint8Array,
+  chainCode: Uint8Array,
+  index: number,
+): { publicKey: Uint8Array; chainCode: Uint8Array } {
+  if (!secp256k1.publicKeyVerify(publicKey)) {
+    throw new Error('Invalid public key')
+  }
+
+  const isHardened = index >= 0x80000000
+  if (isHardened) {
+    throw new Error('Cannot derive hardened child from public key')
+  }
+
+  const indexBuffer = new Uint8Array(4)
+  const indexView = new DataView(indexBuffer.buffer)
+  indexView.setUint32(0, index, false) // big-endian
+
+  const data = new Uint8Array(publicKey.length + indexBuffer.length)
+  data.set(publicKey)
+  data.set(indexBuffer, publicKey.length)
+
+  const hmac = hmacSHA512(chainCode, data)
+  const tweak = hmac.subarray(0, 32)
+  const childChainCode = hmac.subarray(32)
+
+  // Add tweak to public key
+  const childPublicKey = secp256k1.publicKeyTweakAdd(publicKey, tweak)
+
+  return { publicKey: childPublicKey, chainCode: childChainCode }
+}
+
+/**
+ * Deserializes a base58-encoded extended private key.
+ * @param base58Key - The base58-encoded key.
+ * @returns An object with version, depth, parentFingerprint, childIndex, chainCode, and privateKey.
+ */
+function deserializePrivateKey(base58Key: string): {
+  version: Uint8Array
+  depth: number
+  parentFingerprint: number
+  childIndex: number
+  chainCode: Uint8Array
+  privateKey: Uint8Array
+} {
+  const decoded = decodeBase58Address(base58Key)
+  if (decoded.length !== 82) {
+    throw new Error('Invalid key length')
+  }
+
+  const view = new DataView(decoded.buffer)
+  const version = decoded.subarray(0, 4)
+  const depth = decoded[4]
+  const parentFingerprint = view.getUint32(5, false)
+  const childIndex = view.getUint32(9, false)
+  const chainCode = decoded.subarray(13, 45)
+  const privateKey = decoded.subarray(46, 78)
+
+  // Verify checksum
+  const checksum = decoded.subarray(78, 82)
+  const expectedChecksum = createChecksum(decoded.subarray(0, 78))
+  if (!expectedChecksum.every((byte, i) => byte === checksum[i])) {
+    throw new Error('Invalid checksum')
+  }
+
+  return { version, depth, parentFingerprint, childIndex, chainCode, privateKey }
+}
+
+/**
+ * Deserializes a base58-encoded extended public key.
+ * @param base58Key - The base58-encoded key.
+ * @returns An object with version, depth, parentFingerprint, childIndex, chainCode, and publicKey.
+ */
+function deserializePublicKey(base58Key: string): {
+  version: Uint8Array
+  depth: number
+  parentFingerprint: number
+  childIndex: number
+  chainCode: Uint8Array
+  publicKey: Uint8Array
+} {
+  const decoded = decodeBase58Address(base58Key)
+  if (decoded.length !== 82) {
+    throw new Error('Invalid key length')
+  }
+
+  const view = new DataView(decoded.buffer)
+  const version = decoded.subarray(0, 4)
+  const depth = decoded[4]
+  const parentFingerprint = view.getUint32(5, false)
+  const childIndex = view.getUint32(9, false)
+  const chainCode = decoded.subarray(13, 45)
+  const publicKey = decoded.subarray(45, 78)
+
+  // Verify checksum
+  const checksum = decoded.subarray(78, 82)
+  const expectedChecksum = createChecksum(decoded.subarray(0, 78))
+  if (!expectedChecksum.every((byte, i) => byte === checksum[i])) {
+    throw new Error('Invalid checksum')
+  }
+
+  if (!secp256k1.publicKeyVerify(publicKey)) {
+    throw new Error('Invalid public key')
+  }
+
+  return { version, depth, parentFingerprint, childIndex, chainCode, publicKey }
 }
 
 export const KEY_VERSIONS = {
@@ -366,13 +521,18 @@ export {
   splitMasterKey,
   createHardenedIndex,
   deriveChildKey,
+  deriveChildPublicKey,
   createPublicKey,
   getParentFingerprint,
   serializePrivateKey,
   serializePublicKey,
+  deserializePrivateKey,
+  deserializePublicKey,
   privateKeyToWIF,
   toMnemonic,
   fromMnemonic,
   verifyMasterKey,
   toPublicKeyHash,
+  convertBip32StrPathToIntPath,
+  convertBip32IntPathToStrPath,
 }

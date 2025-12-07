@@ -20,7 +20,7 @@ export default function Send() {
   const [mode, setMode] = useState<SendMode>('onchain')
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container}>
       {/* Mode Selector */}
       <View style={[styles.selectorContainer, isDark && styles.selectorContainerDark]}>
         <Pressable
@@ -62,12 +62,12 @@ export default function Send() {
       </View>
 
       {/* Content */}
-      <ScrollView style={[styles.scrollView, isDark && styles.scrollViewDark]}>
+      <View style={[styles.scrollView, isDark && styles.scrollViewDark]}>
         <View style={[styles.contentContainer, isDark && styles.contentContainerDark]}>
           {mode === 'lightning' ? <SendLightning /> : <SendOnChain />}
         </View>
-      </ScrollView>
-    </View>
+      </View>
+    </ScrollView>
   )
 }
 

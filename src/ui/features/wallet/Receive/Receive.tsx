@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import {
   View,
   Text,
@@ -18,35 +18,51 @@ import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 import QRCode from '@/ui/components/QRCode'
 import Button from '@/ui/components/Button'
-import {
-  useIsDark,
-  useAddressLoading,
-  useNextAddresses,
-  useAddressesByType,
-} from '@/ui/features/app-provider'
+import { useIsDark, useAddressLoading, useAddressesByType } from '@/ui/features/app-provider'
+import { addressService } from '@/core/services'
+
+import TaprootAddressSelector from './TaprootAddressSelector'
 
 export default function Receive() {
   const isDark = useIsDark()
   // const { loading, usedChangeAddresses, usedReceivingAddresses, nextReceiveAddress } = useAddress()
   const loading = useAddressLoading()
-  const { receive: nextReceiveAddress } = useNextAddresses()
   const usedChangeAddresses = useAddressesByType('change')
   const usedReceivingAddresses = useAddressesByType('receiving')
 
   const [showAddressDetails, setShowAddressDetails] = useState(false)
   const [activeTab, setActiveTab] = useState<'receiving' | 'change'>('receiving')
+  const [selectedAddressType, setSelectedAddressType] = useState<'legacy' | 'segwit' | 'taproot'>(
+    'segwit',
+  )
+
+  // Get address based on selected type using useMemo for performance
+  const currentAddress = useMemo(() => {
+    try {
+      return addressService.getNextAddressByType(selectedAddressType)
+    } catch (error) {
+      console.error(`Failed to get ${selectedAddressType} address:`, error)
+      return ''
+    }
+  }, [selectedAddressType])
+
+  // Get current address based on selected type
+  const getCurrentAddress = () => {
+    return currentAddress
+  }
 
   // Handle share address
   const handleShareAddress = async () => {
-    if (!nextReceiveAddress) {
+    const addressToUse = getCurrentAddress()
+    if (!addressToUse) {
       Alert.alert('Error', 'Please select an address first')
       return
     }
 
     try {
       await Share.share({
-        message: `My Bitcoin address: ${nextReceiveAddress}`,
-        url: `bitcoin:${nextReceiveAddress}`,
+        message: `My Bitcoin address: ${addressToUse}`,
+        url: `bitcoin:${addressToUse}`,
       })
     } catch (error) {
       console.error('Error sharing address:', error)
@@ -55,13 +71,14 @@ export default function Receive() {
 
   // Handle copy address
   const handleCopyAddress = async () => {
-    if (!nextReceiveAddress) {
+    const addressToUse = getCurrentAddress()
+    if (!addressToUse) {
       Alert.alert('Error', 'Please select an address first')
       return
     }
 
     try {
-      await Clipboard.setStringAsync(nextReceiveAddress)
+      await Clipboard.setStringAsync(addressToUse)
       Alert.alert('Copied!', 'Address copied to clipboard')
     } catch (error) {
       console.error('Error copying to clipboard:', error)
@@ -92,7 +109,7 @@ export default function Receive() {
             <View style={[styles.sectionBox, isDark && styles.sectionBoxDark]}>
               <View style={styles.qrContainer}>
                 <QRCode
-                  value={`${nextReceiveAddress}`}
+                  value={getCurrentAddress()}
                   size={300}
                   color={isDark ? colors.text.dark : colors.text.light}
                   backgroundColor="transparent"
@@ -100,8 +117,14 @@ export default function Receive() {
               </View>
               {/* Exibição do endereço */}
               <Text style={[styles.addressText, isDark && styles.addressTextDark]}>
-                {nextReceiveAddress}
+                {getCurrentAddress()}
               </Text>
+
+              <TaprootAddressSelector
+                selectedAddressType={selectedAddressType}
+                onAddressTypeChange={setSelectedAddressType}
+              />
+
               <View
                 style={{
                   // backgroundColor: 'red',

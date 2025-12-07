@@ -1,4 +1,5 @@
 import { Utxo } from '@/core/models/transaction'
+import { CoinSelectionAlgorithm } from './transactions'
 
 export type { Utxo }
 
@@ -81,6 +82,10 @@ export interface BuildTransactionParams {
   feeRate: number // sat/vB
   utxos: Utxo[]
   changeAddress: string
+  coinSelectionAlgorithm?: CoinSelectionAlgorithm
+  avoidAddressReuse?: boolean
+  consolidateSmallUtxos?: boolean
+  enableRBF?: boolean
   // extendedKey: Uint8Array
   // purpose?: number
   // coinType?: number

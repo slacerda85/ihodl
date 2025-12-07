@@ -32,6 +32,7 @@ export type DerivationPath = {
   change: Change
   addressIndex: number
 }
+
 export type AddressCollection = {
   walletId: string
   addresses: AddressDetails[]
@@ -43,7 +44,25 @@ export type AddressCollection = {
 export type AddressDetails = {
   derivationPath: DerivationPath
   address: string
+  addressType: 'legacy' | 'segwit' | 'taproot'
   txs: Tx[]
+}
+
+/**
+ * Helper function to get address type from derivation path purpose
+ */
+export function getAddressTypeFromPurpose(purpose: Purpose): 'legacy' | 'segwit' | 'taproot' {
+  switch (purpose) {
+    case Purpose.BIP44:
+      return 'legacy'
+    case Purpose.BIP49:
+    case Purpose.BIP84:
+      return 'segwit'
+    case Purpose.BIP86:
+      return 'taproot'
+    default:
+      return 'segwit' // fallback
+  }
 }
 
 // Script opcodes and constants

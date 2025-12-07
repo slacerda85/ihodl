@@ -45,6 +45,10 @@ async function buildTransaction({
   feeRate,
   utxos,
   changeAddress,
+  coinSelectionAlgorithm = CoinSelectionAlgorithm.BRANCH_AND_BOUND,
+  avoidAddressReuse = false,
+  consolidateSmallUtxos = false,
+  enableRBF = false,
 }: BuildTransactionParams): Promise<BuildTransactionResult> {
   try {
     // Validate input parameters
@@ -66,26 +70,40 @@ async function buildTransaction({
       throw new Error('No confirmed UTXOs available')
     }
 
-    // Select UTXOs using a simple selection algorithm (largest first)
-    const targetAmountBtc = amount / 1e8
-    console.log(`Selecting UTXOs for target amount: ${targetAmountBtc} BTC`)
-    const selectedUtxos = selectUtxos(confirmedUtxos, targetAmountBtc) // Convert amount to BTC for UTXO selection
-    console.log(`Selected ${selectedUtxos.length} UTXOs`)
-    const totalInputAmountBtc = selectedUtxos.reduce((sum, utxo) => sum + utxo.amount, 0)
-    const totalInputAmountSat = Math.round(totalInputAmountBtc * 1e8)
+    // Select UTXOs using advanced coin selection algorithm
+    console.log(`Using ${coinSelectionAlgorithm} coin selection algorithm`)
+    const coinSelectionResult = selectCoinsAdvanced(confirmedUtxos, {
+      targetAmount: amount,
+      feeRate,
+      algorithm: coinSelectionAlgorithm,
+      avoidAddressReuse,
+      consolidateSmallUtxos,
+    })
 
-    if (totalInputAmountSat < amount) {
-      throw new Error('Insufficient funds')
+    const selectedUtxos = coinSelectionResult.selectedUtxos
+    console.log(
+      `Selected ${selectedUtxos.length} UTXOs with efficiency: ${coinSelectionResult.efficiency.toFixed(3)}`,
+    )
+    console.log(
+      `Estimated fee: ${coinSelectionResult.fee} sat, change: ${coinSelectionResult.changeAmount} sat`,
+    )
+
+    const totalInputAmountSat = coinSelectionResult.totalAmount
+
+    if (totalInputAmountSat < amount + coinSelectionResult.fee) {
+      throw new Error('Insufficient funds (including fees)')
     }
 
-    // Estimate transaction size for fee calculation
-    const estimatedTxSize = estimateTransactionSize(selectedUtxos.length, 2) // 2 outputs: recipient + change
-    const estimatedFeeSat = Math.ceil(estimatedTxSize * feeRate)
-    console.log('Estimated transaction size (bytes):', estimatedTxSize)
-    console.log('Estimated fee (satoshis):', estimatedFeeSat)
+    // Use the calculated fee and change from coin selection
+    const estimatedFeeSat = coinSelectionResult.fee
+    let changeAmountSat = coinSelectionResult.changeAmount
 
-    // Calculate change amount in satoshis
-    let changeAmountSat = totalInputAmountSat - amount - estimatedFeeSat
+    console.log(
+      `Selected ${selectedUtxos.length} UTXOs with efficiency: ${coinSelectionResult.efficiency.toFixed(3)}`,
+    )
+    console.log(
+      `Estimated fee: ${coinSelectionResult.fee} sat, change: ${coinSelectionResult.changeAmount} sat`,
+    )
 
     if (changeAmountSat < 0) {
       throw new Error(
@@ -94,12 +112,17 @@ async function buildTransaction({
     }
 
     // Create transaction
-    const tx: SimpleTransaction = {
-      version: 2,
-      inputs: [],
-      outputs: [],
-      locktime: 0,
-      witnesses: [],
+    let tx: SimpleTransaction
+    if (enableRBF) {
+      tx = createRBFTransaction([], [], 0)
+    } else {
+      tx = {
+        version: 2,
+        inputs: [],
+        outputs: [],
+        locktime: 0,
+        witnesses: [],
+      }
     }
 
     // Add inputs
@@ -111,7 +134,7 @@ async function buildTransaction({
         txid: utxo.txid,
         vout: utxo.vout,
         scriptSig: new Uint8Array(0), // Empty for SegWit
-        sequence: 0xffffffff,
+        sequence: enableRBF ? 0xfffffffe - 1 : 0xffffffff, // Enable RBF by setting sequence < 0xFFFFFFFF - 1
       })
 
       tx.witnesses.push([]) // Empty witness to be filled during signing
@@ -248,6 +271,7 @@ function createScriptPubKey(address: string): Uint8Array {
  * @param inputIndex - Index of the input to sign
  * @param privateKey - Private key for signing
  * @param amount - Amount of the input
+ * @param sighashType - Sighash type (default SIGHASH_ALL)
  * @returns Signature as Uint8Array
  */
 function createSegWitSignature(
@@ -255,6 +279,7 @@ function createSegWitSignature(
   inputIndex: number,
   privateKey: Uint8Array,
   amount: number,
+  sighashType: number = SIGHASH_ALL,
 ): Uint8Array {
   console.log(`createSegWitSignature called with amount: ${amount} (type: ${typeof amount})`)
 
@@ -288,7 +313,7 @@ function createSegWitSignature(
   const publicKey = createPublicKey(privateKey)
 
   // Create sighash for SegWit
-  const sighash = createSighash(tx, inputIndex, amount, publicKey)
+  const sighash = createSighash(tx, inputIndex, amount, publicKey, sighashType)
 
   // Sign the sighash using ECDSA
   const { signature } = secp256k1.ecdsaSign(sighash, privateKey)
@@ -296,13 +321,137 @@ function createSegWitSignature(
   // Convert signature to DER format
   const derSignature = compactSignatureToDER(signature)
 
-  // Add sighash type (SIGHASH_ALL = 0x01)
+  // Add sighash type
   const signatureWithType = new Uint8Array(derSignature.length + 1)
   signatureWithType.set(derSignature, 0)
-  signatureWithType[derSignature.length] = 0x01
+  signatureWithType[derSignature.length] = sighashType
 
   return signatureWithType
 }
+
+/**
+ * Verifies a SegWit signature for a transaction input
+ * @param tx - Transaction to verify
+ * @param inputIndex - Index of the input to verify
+ * @param publicKey - Public key for verification
+ * @param signature - Signature to verify (with sighash type)
+ * @param amount - Amount of the input
+ * @returns True if signature is valid
+ */
+function verifySegWitSignature(
+  tx: SimpleTransaction,
+  inputIndex: number,
+  publicKey: Uint8Array,
+  signature: Uint8Array,
+  amount: number,
+): boolean {
+  try {
+    // Extract sighash type from signature
+    const sighashType = signature[signature.length - 1]
+    const derSignature = signature.slice(0, -1)
+
+    // Convert DER signature to compact format for secp256k1
+    const compactSignature = derSignatureToCompact(derSignature)
+
+    // Create sighash for verification
+    const sighash = createSighash(tx, inputIndex, amount, publicKey, sighashType)
+
+    // Verify the signature
+    return secp256k1.ecdsaVerify(compactSignature, sighash, publicKey)
+  } catch (error) {
+    console.error('Signature verification failed:', error)
+    return false
+  }
+}
+
+/**
+ * Converts DER signature to compact format (64 bytes: r + s)
+ * @param derSignature - DER encoded signature
+ * @returns Compact signature as Uint8Array
+ */
+function derSignatureToCompact(derSignature: Uint8Array): Uint8Array {
+  // DER format: 0x30 [total_len] 0x02 [r_len] [r] 0x02 [s_len] [s]
+  if (derSignature.length < 8 || derSignature[0] !== 0x30) {
+    throw new Error('Invalid DER signature format')
+  }
+
+  let pos = 2 // Skip sequence header
+
+  // Parse r
+  if (derSignature[pos] !== 0x02) {
+    throw new Error('Invalid r component in DER signature')
+  }
+  const rLen = derSignature[pos + 1]
+  pos += 2
+  const r = derSignature.slice(pos, pos + rLen)
+  pos += rLen
+
+  // Parse s
+  if (derSignature[pos] !== 0x02) {
+    throw new Error('Invalid s component in DER signature')
+  }
+  const sLen = derSignature[pos + 1]
+  pos += 2
+  const s = derSignature.slice(pos, pos + sLen)
+
+  // Convert to 32-byte components (pad with zeros if needed)
+  const r32 = new Uint8Array(32)
+  const s32 = new Uint8Array(32)
+
+  // Copy r (right-aligned)
+  r32.set(r.slice(-32), 32 - Math.min(32, r.length))
+
+  // Copy s (right-aligned)
+  s32.set(s.slice(-32), 32 - Math.min(32, s.length))
+
+  return new Uint8Array([...r32, ...s32])
+}
+
+/**
+ * Creates a transaction with RBF (Replace-By-Fee) enabled
+ * @param inputs - Transaction inputs
+ * @param outputs - Transaction outputs
+ * @param locktime - Locktime (default 0)
+ * @returns RBF-enabled transaction
+ */
+function createRBFTransaction(
+  inputs: SimpleTransaction['inputs'],
+  outputs: SimpleTransaction['outputs'],
+  locktime: number = 0,
+): SimpleTransaction {
+  // For RBF, set sequence numbers to less than 0xFFFFFFFF - 1
+  // This allows the transaction to be replaced
+  const rbfInputs = inputs.map(input => ({
+    ...input,
+    sequence: input.sequence < 0xfffffffe ? input.sequence : 0xfffffffe - 1,
+  }))
+
+  return {
+    version: 2, // Version 2 for RBF support
+    inputs: rbfInputs,
+    outputs,
+    locktime,
+    witnesses: [], // Empty witnesses array
+  }
+}
+
+/**
+ * Checks if a transaction has RBF enabled
+ * @param tx - Transaction to check
+ * @returns True if RBF is enabled
+ */
+function isRBFEnabled(tx: SimpleTransaction): boolean {
+  // RBF is enabled if any input has sequence < 0xFFFFFFFF - 1
+  return tx.inputs.some(input => input.sequence < 0xfffffffe)
+}
+
+/**
+ * Sighash type constants
+ */
+const SIGHASH_ALL = 0x01
+const SIGHASH_NONE = 0x02
+const SIGHASH_SINGLE = 0x03
+const SIGHASH_ANYONECANPAY = 0x80
 
 /**
  * Creates a sighash for SegWit transaction
@@ -310,6 +459,7 @@ function createSegWitSignature(
  * @param inputIndex - Input index
  * @param amount - Input amount
  * @param publicKey - Public key for the input being signed
+ * @param sighashType - Sighash type (default SIGHASH_ALL)
  * @returns Sighash as Uint8Array
  */
 function createSighash(
@@ -317,6 +467,7 @@ function createSighash(
   inputIndex: number,
   amount: number,
   publicKey: Uint8Array,
+  sighashType: number = SIGHASH_ALL,
 ): Uint8Array {
   // Validate amount is an integer and within valid range
   if (typeof amount !== 'number' || isNaN(amount)) {
@@ -338,6 +489,11 @@ function createSighash(
     // More than total Bitcoin supply in satoshis
     throw new Error(`Amount exceeds maximum possible Bitcoin amount, got: ${amount}`)
   }
+
+  // Extract base sighash type (remove ANYONECANPAY flag)
+  const baseSighashType = sighashType & 0x1f
+  const anyoneCanPay = (sighashType & SIGHASH_ANYONECANPAY) !== 0
+
   const sighashPreimage: Uint8Array[] = []
 
   // Version (4 bytes, little endian)
@@ -346,24 +502,34 @@ function createSighash(
   sighashPreimage.push(versionBytes)
 
   // Hash of all inputs (hashPrevouts)
-  const prevouts = tx.inputs.map(input => {
-    const txid = hexToUint8Array(input.txid).reverse()
-    const vout = new Uint8Array(4)
-    new DataView(vout.buffer).setUint32(0, input.vout, true)
-    return new Uint8Array([...txid, ...vout])
-  })
-
-  const hashPrevouts = hash256(flattenArrays(prevouts))
+  let hashPrevouts: Uint8Array
+  if (anyoneCanPay) {
+    // For ANYONECANPAY, hashPrevouts is all zeros
+    hashPrevouts = new Uint8Array(32)
+  } else {
+    const prevouts = tx.inputs.map(input => {
+      const txid = hexToUint8Array(input.txid).reverse()
+      const vout = new Uint8Array(4)
+      new DataView(vout.buffer).setUint32(0, input.vout, true)
+      return new Uint8Array([...txid, ...vout])
+    })
+    hashPrevouts = hash256(flattenArrays(prevouts))
+  }
   sighashPreimage.push(hashPrevouts)
 
   // Hash of all sequences (hashSequence)
-  const sequences = tx.inputs.map(input => {
-    const seq = new Uint8Array(4)
-    new DataView(seq.buffer).setUint32(0, input.sequence, true)
-    return seq
-  })
-
-  const hashSequence = hash256(flattenArrays(sequences))
+  let hashSequence: Uint8Array
+  if (anyoneCanPay || baseSighashType === SIGHASH_SINGLE || baseSighashType === SIGHASH_NONE) {
+    // For ANYONECANPAY, SINGLE, or NONE, hashSequence is all zeros
+    hashSequence = new Uint8Array(32)
+  } else {
+    const sequences = tx.inputs.map(input => {
+      const seq = new Uint8Array(4)
+      new DataView(seq.buffer).setUint32(0, input.sequence, true)
+      return seq
+    })
+    hashSequence = hash256(flattenArrays(sequences))
+  }
   sighashPreimage.push(hashSequence)
 
   // Outpoint of the input being signed
@@ -399,14 +565,33 @@ function createSighash(
   sighashPreimage.push(sequenceBytes)
 
   // Hash of all outputs (hashOutputs)
-  const outputs = tx.outputs.map(output => {
-    const value = new Uint8Array(8)
-    new DataView(value.buffer).setBigUint64(0, BigInt(output.value), true)
-    const scriptLen = encodeVarint(output.scriptPubKey.length)
-    return new Uint8Array([...value, ...scriptLen, ...output.scriptPubKey])
-  })
-
-  const hashOutputs = hash256(flattenArrays(outputs))
+  let hashOutputs: Uint8Array
+  if (baseSighashType === SIGHASH_NONE) {
+    // For SIGHASH_NONE, hashOutputs is all zeros
+    hashOutputs = new Uint8Array(32)
+  } else if (baseSighashType === SIGHASH_SINGLE) {
+    // For SIGHASH_SINGLE, hash only the corresponding output
+    if (inputIndex >= tx.outputs.length) {
+      // If no corresponding output, hashOutputs is all zeros
+      hashOutputs = new Uint8Array(32)
+    } else {
+      const output = tx.outputs[inputIndex]
+      const value = new Uint8Array(8)
+      new DataView(value.buffer).setBigUint64(0, BigInt(output.value), true)
+      const scriptLen = encodeVarint(output.scriptPubKey.length)
+      const outputBytes = new Uint8Array([...value, ...scriptLen, ...output.scriptPubKey])
+      hashOutputs = hash256(outputBytes)
+    }
+  } else {
+    // For SIGHASH_ALL (and ANYONECANPAY variants), hash all outputs
+    const outputs = tx.outputs.map(output => {
+      const value = new Uint8Array(8)
+      new DataView(value.buffer).setBigUint64(0, BigInt(output.value), true)
+      const scriptLen = encodeVarint(output.scriptPubKey.length)
+      return new Uint8Array([...value, ...scriptLen, ...output.scriptPubKey])
+    })
+    hashOutputs = hash256(flattenArrays(outputs))
+  }
   sighashPreimage.push(hashOutputs)
 
   // Locktime (4 bytes, little endian)
@@ -415,9 +600,9 @@ function createSighash(
   sighashPreimage.push(locktimeBytes)
 
   // Sighash type (4 bytes, little endian)
-  const sighashType = new Uint8Array(4)
-  new DataView(sighashType.buffer).setUint32(0, 0x01, true) // SIGHASH_ALL
-  sighashPreimage.push(sighashType)
+  const sighashTypeBytes = new Uint8Array(4)
+  new DataView(sighashTypeBytes.buffer).setUint32(0, sighashType, true)
+  sighashPreimage.push(sighashTypeBytes)
 
   // Combine all parts and hash
   const preimage = flattenArrays(sighashPreimage)
@@ -791,6 +976,303 @@ function flattenArrays(arrays: Uint8Array[]): Uint8Array {
     offset += arr.length
   }
   return result
+}
+
+/**
+ * Coin selection algorithm options
+ */
+enum CoinSelectionAlgorithm {
+  LARGEST_FIRST = 'largest_first',
+  SMALLEST_FIRST = 'smallest_first',
+  BRANCH_AND_BOUND = 'branch_and_bound',
+  RANDOM = 'random',
+  PRIVACY_FOCUSED = 'privacy_focused',
+}
+
+/**
+ * Coin selection options
+ */
+interface CoinSelectionOptions {
+  algorithm?: CoinSelectionAlgorithm
+  targetAmount: number
+  feeRate: number // sat/vB
+  dustThreshold?: number // Minimum UTXO value to avoid dust
+  maxInputs?: number // Maximum number of inputs
+  avoidAddressReuse?: boolean // Prefer UTXOs from different addresses
+  consolidateSmallUtxos?: boolean // Consolidate small UTXOs when beneficial
+}
+
+/**
+ * Coin selection result
+ */
+interface CoinSelectionResult {
+  selectedUtxos: Utxo[]
+  totalAmount: number
+  fee: number
+  changeAmount: number
+  efficiency: number // Ratio of target to total selected
+  privacyScore: number // Score based on address diversity
+}
+
+/**
+ * Advanced coin selection with multiple algorithms
+ * @param utxos - Available UTXOs
+ * @param options - Selection options
+ * @returns Selection result with metadata
+ */
+function selectCoinsAdvanced(utxos: Utxo[], options: CoinSelectionOptions): CoinSelectionResult {
+  const {
+    algorithm = CoinSelectionAlgorithm.BRANCH_AND_BOUND,
+    targetAmount,
+    feeRate,
+    dustThreshold = 546, // 546 sat = 0.00000546 BTC
+    maxInputs = 50,
+    avoidAddressReuse = false,
+    consolidateSmallUtxos = false,
+  } = options
+
+  console.log(
+    `Advanced coin selection: ${algorithm}, target: ${targetAmount} sat, feeRate: ${feeRate} sat/vB`,
+  )
+
+  // Filter out dust UTXOs unless we're consolidating
+  let availableUtxos = utxos.filter(utxo => utxo.amount >= dustThreshold)
+  if (consolidateSmallUtxos) {
+    availableUtxos = utxos // Include dust for consolidation
+  }
+
+  let result: CoinSelectionResult
+
+  switch (algorithm) {
+    case CoinSelectionAlgorithm.BRANCH_AND_BOUND:
+      result = selectCoinsBnB(availableUtxos, targetAmount, feeRate, maxInputs)
+      break
+    case CoinSelectionAlgorithm.LARGEST_FIRST:
+      result = selectCoinsLargestFirst(availableUtxos, targetAmount, feeRate, maxInputs)
+      break
+    case CoinSelectionAlgorithm.SMALLEST_FIRST:
+      result = selectCoinsSmallestFirst(availableUtxos, targetAmount, feeRate, maxInputs)
+      break
+    case CoinSelectionAlgorithm.RANDOM:
+      result = selectCoinsRandom(availableUtxos, targetAmount, feeRate, maxInputs)
+      break
+    case CoinSelectionAlgorithm.PRIVACY_FOCUSED:
+      result = selectCoinsPrivacyFocused(
+        availableUtxos,
+        targetAmount,
+        feeRate,
+        maxInputs,
+        avoidAddressReuse,
+      )
+      break
+    default:
+      result = selectCoinsLargestFirst(availableUtxos, targetAmount, feeRate, maxInputs)
+  }
+
+  // Calculate privacy score
+  result.privacyScore = calculatePrivacyScore(result.selectedUtxos)
+
+  return result
+}
+
+/**
+ * Branch and Bound coin selection (optimal for exact matches)
+ */
+function selectCoinsBnB(
+  utxos: Utxo[],
+  targetAmount: number,
+  feeRate: number,
+  maxInputs: number,
+): CoinSelectionResult {
+  // Sort by amount ascending for BnB
+  const sortedUtxos = [...utxos].sort((a, b) => a.amount - b.amount)
+
+  // Try to find exact match with minimal waste
+  let bestSelection: Utxo[] = []
+  let bestWaste = Infinity
+
+  function search(index: number, currentSelection: Utxo[], currentSum: number): void {
+    if (currentSelection.length > maxInputs) return
+    if (currentSum > targetAmount + bestWaste) return // Upper bound pruning
+
+    if (currentSum >= targetAmount) {
+      const waste = currentSum - targetAmount
+      if (waste < bestWaste) {
+        bestSelection = [...currentSelection]
+        bestWaste = waste
+      }
+      return
+    }
+
+    for (let i = index; i < sortedUtxos.length; i++) {
+      currentSelection.push(sortedUtxos[i])
+      search(i + 1, currentSelection, currentSum + sortedUtxos[i].amount)
+      currentSelection.pop()
+    }
+  }
+
+  search(0, [], 0)
+
+  // If no exact match found, fall back to largest first
+  if (bestSelection.length === 0) {
+    return selectCoinsLargestFirst(utxos, targetAmount, feeRate, maxInputs)
+  }
+
+  return calculateSelectionResult(bestSelection, targetAmount, feeRate)
+}
+
+/**
+ * Largest first coin selection
+ */
+function selectCoinsLargestFirst(
+  utxos: Utxo[],
+  targetAmount: number,
+  feeRate: number,
+  maxInputs: number,
+): CoinSelectionResult {
+  const sortedUtxos = [...utxos].sort((a, b) => b.amount - a.amount)
+  const selected: Utxo[] = []
+  let total = 0
+
+  for (const utxo of sortedUtxos) {
+    if (selected.length >= maxInputs) break
+    selected.push(utxo)
+    total += utxo.amount
+    if (total >= targetAmount) break
+  }
+
+  return calculateSelectionResult(selected, targetAmount, feeRate)
+}
+
+/**
+ * Smallest first coin selection (for consolidation)
+ */
+function selectCoinsSmallestFirst(
+  utxos: Utxo[],
+  targetAmount: number,
+  feeRate: number,
+  maxInputs: number,
+): CoinSelectionResult {
+  const sortedUtxos = [...utxos].sort((a, b) => a.amount - b.amount)
+  const selected: Utxo[] = []
+  let total = 0
+
+  for (const utxo of sortedUtxos) {
+    if (selected.length >= maxInputs) break
+    selected.push(utxo)
+    total += utxo.amount
+    if (total >= targetAmount) break
+  }
+
+  return calculateSelectionResult(selected, targetAmount, feeRate)
+}
+
+/**
+ * Random coin selection (for privacy)
+ */
+function selectCoinsRandom(
+  utxos: Utxo[],
+  targetAmount: number,
+  feeRate: number,
+  maxInputs: number,
+): CoinSelectionResult {
+  const shuffled = [...utxos].sort(() => Math.random() - 0.5)
+  const selected: Utxo[] = []
+  let total = 0
+
+  for (const utxo of shuffled) {
+    if (selected.length >= maxInputs) break
+    selected.push(utxo)
+    total += utxo.amount
+    if (total >= targetAmount) break
+  }
+
+  return calculateSelectionResult(selected, targetAmount, feeRate)
+}
+
+/**
+ * Privacy-focused coin selection
+ */
+function selectCoinsPrivacyFocused(
+  utxos: Utxo[],
+  targetAmount: number,
+  feeRate: number,
+  maxInputs: number,
+  avoidAddressReuse: boolean,
+): CoinSelectionResult {
+  let candidates = [...utxos]
+
+  if (avoidAddressReuse) {
+    // Group by address and prefer diverse addresses
+    const addressGroups = new Map<string, Utxo[]>()
+    for (const utxo of candidates) {
+      const address = utxo.address
+      if (!addressGroups.has(address)) {
+        addressGroups.set(address, [])
+      }
+      addressGroups.get(address)!.push(utxo)
+    }
+
+    // Sort groups by size (prefer addresses with fewer UTXOs)
+    const sortedGroups = Array.from(addressGroups.entries()).sort(
+      (a, b) => a[1].length - b[1].length,
+    )
+
+    candidates = []
+    for (const [, groupUtxos] of sortedGroups) {
+      candidates.push(...groupUtxos)
+    }
+  }
+
+  // Use largest first but with privacy considerations
+  return selectCoinsLargestFirst(candidates, targetAmount, feeRate, maxInputs)
+}
+
+/**
+ * Calculate selection result with fees and efficiency
+ */
+function calculateSelectionResult(
+  selectedUtxos: Utxo[],
+  targetAmount: number,
+  feeRate: number,
+): CoinSelectionResult {
+  const totalAmount = selectedUtxos.reduce((sum, utxo) => sum + utxo.amount, 0)
+
+  // Estimate transaction size (rough calculation)
+  const inputSize = selectedUtxos.length * 148 // ~148 vB per input
+  const outputSize = 2 * 34 // 2 outputs (recipient + change)
+  const overhead = 10 // Transaction overhead
+  const txSize = inputSize + outputSize + overhead
+
+  const fee = Math.ceil((txSize * feeRate) / 1000) // Convert to sat/vB
+  const changeAmount = Math.max(0, totalAmount - targetAmount - fee)
+  const efficiency = targetAmount / totalAmount
+
+  return {
+    selectedUtxos,
+    totalAmount,
+    fee,
+    changeAmount,
+    efficiency,
+    privacyScore: 0, // Will be calculated separately
+  }
+}
+
+/**
+ * Calculate privacy score based on address diversity
+ */
+function calculatePrivacyScore(selectedUtxos: Utxo[]): number {
+  if (selectedUtxos.length === 0) return 0
+
+  const addresses = new Set(selectedUtxos.map(utxo => utxo.address))
+  const addressDiversity = addresses.size / selectedUtxos.length
+
+  // Additional factors could include:
+  // - Age diversity of UTXOs
+  // - Amount clustering
+  // - Previous transaction patterns
+
+  return addressDiversity
 }
 
 /**
@@ -1193,12 +1675,27 @@ function testTransactionDecode(txHex: string): {
 
 export {
   buildTransaction,
+  calculateSelectionResult,
+  CoinSelectionAlgorithm,
+  createRBFTransaction,
+  createSegWitSignature,
+  createSighash,
   decodeTransaction,
   deriveAddress,
   estimateTransactionSize,
   flattenArrays,
+  isRBFEnabled,
+  SIGHASH_ALL,
+  SIGHASH_NONE,
+  SIGHASH_SINGLE,
+  SIGHASH_ANYONECANPAY,
+  selectCoinsAdvanced,
   selectUtxos,
   sendTransaction,
   signTransaction,
   testTransactionDecode,
+  verifySegWitSignature,
 }
+
+export { CoinSelectionAlgorithm as CoinSelectionAlgorithmType }
+export type { CoinSelectionOptions, CoinSelectionResult }

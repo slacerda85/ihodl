@@ -8,14 +8,21 @@ import {
   getRecommendedFeeRates,
   getMempoolTransactions,
 } from '@/core/lib/electrum'
-import { sha256 } from '@noble/hashes/sha2.js'
+// import { sha256 } from '@noble/hashes/sha2.js'
 import { hexToUint8Array, uint8ArrayToHex, concatUint8Arrays } from '../lib/utils'
 import { AddressDetails, Change } from '../models/address'
-import { buildTransaction, signTransaction, sendTransaction } from '../lib/transactions'
+import {
+  buildTransaction,
+  signTransaction,
+  sendTransaction,
+  selectCoinsAdvanced,
+} from '../lib/transactions'
+import { createP2TRAddress } from '../lib/address'
 import SeedService from './seed'
 import KeyService from './key'
 import TransactionRepository from '../repositories/transactions'
 import { hash256 } from '../lib/crypto'
+import { createEntropy } from '../lib/crypto'
 
 // Lazy import to avoid circular dependency
 type WalletServiceType = import('./wallet').default
@@ -74,6 +81,48 @@ interface TransactionServiceInterface {
   readPendingTransactions(): Tx[]
   deletePendingTransaction(txid: string): void
   getMempoolTransactions(addresses: string[], connection?: Connection): Promise<Tx[]>
+  // Advanced coin selection
+  selectCoinsAdvanced(
+    utxos: Utxo[],
+    options: {
+      targetAmount: number
+      feeRate: number
+      algorithm?:
+        | 'largest_first'
+        | 'smallest_first'
+        | 'branch_and_bound'
+        | 'random'
+        | 'privacy_focused'
+      dustThreshold?: number
+      maxInputs?: number
+      avoidAddressReuse?: boolean
+      consolidateSmallUtxos?: boolean
+    },
+  ): {
+    selectedUtxos: Utxo[]
+    totalAmount: number
+    fee: number
+    changeAmount: number
+    efficiency: number
+    privacyScore: number
+  }
+  // Taproot address generation
+  generateTaprootAddress(internalKey?: Uint8Array): string
+  // RBF transaction building
+  buildRBFTransaction(params: {
+    recipientAddress: string
+    amount: number
+    feeRate: number
+    utxos: Utxo[]
+    changeAddress: string
+  }): Promise<{
+    transaction: any
+    inputs: any
+    outputs: any
+    fee: number
+    changeAmount: number
+    isRBFEnabled: boolean
+  }>
 }
 
 export default class TransactionService implements TransactionServiceInterface {
@@ -150,12 +199,25 @@ export default class TransactionService implements TransactionServiceInterface {
     feeRate,
     utxos,
     changeAddress,
+    coinSelectionAlgorithm,
+    avoidAddressReuse,
+    consolidateSmallUtxos,
+    enableRBF,
   }: {
     recipientAddress: string
     amount: number
     feeRate: number
     utxos: Utxo[]
     changeAddress: string
+    coinSelectionAlgorithm?:
+      | 'largest_first'
+      | 'smallest_first'
+      | 'branch_and_bound'
+      | 'random'
+      | 'privacy_focused'
+    avoidAddressReuse?: boolean
+    consolidateSmallUtxos?: boolean
+    enableRBF?: boolean
   }): Promise<{
     transaction: any
     inputs: any
@@ -169,6 +231,10 @@ export default class TransactionService implements TransactionServiceInterface {
       feeRate,
       utxos,
       changeAddress,
+      coinSelectionAlgorithm: coinSelectionAlgorithm as any,
+      avoidAddressReuse,
+      consolidateSmallUtxos,
+      enableRBF,
     })
 
     return transaction
@@ -561,6 +627,88 @@ export default class TransactionService implements TransactionServiceInterface {
     } catch (error) {
       console.error('[TransactionService] Error fetching mempool transactions:', error)
       return []
+    }
+  }
+
+  /**
+   * Seleção avançada de coins com múltiplos algoritmos
+   */
+  selectCoinsAdvanced(
+    utxos: Utxo[],
+    options: {
+      targetAmount: number
+      feeRate: number
+      algorithm?:
+        | 'largest_first'
+        | 'smallest_first'
+        | 'branch_and_bound'
+        | 'random'
+        | 'privacy_focused'
+      dustThreshold?: number
+      maxInputs?: number
+      avoidAddressReuse?: boolean
+      consolidateSmallUtxos?: boolean
+    },
+  ): {
+    selectedUtxos: Utxo[]
+    totalAmount: number
+    fee: number
+    changeAmount: number
+    efficiency: number
+    privacyScore: number
+  } {
+    return selectCoinsAdvanced(utxos, {
+      targetAmount: options.targetAmount,
+      feeRate: options.feeRate,
+      algorithm: options.algorithm as any,
+      dustThreshold: options.dustThreshold,
+      maxInputs: options.maxInputs,
+      avoidAddressReuse: options.avoidAddressReuse,
+      consolidateSmallUtxos: options.consolidateSmallUtxos,
+    })
+  }
+
+  /**
+   * Gera um endereço Taproot
+   */
+  generateTaprootAddress(internalKey?: Uint8Array): string {
+    if (!internalKey) {
+      // Gera uma chave aleatória usando a função existente
+      const randomKey = createEntropy(32)
+      return createP2TRAddress(randomKey)
+    }
+    return createP2TRAddress(internalKey)
+  }
+
+  /**
+   * Constrói uma transação com RBF (Replace-By-Fee) habilitado
+   */
+  async buildRBFTransaction(params: {
+    recipientAddress: string
+    amount: number
+    feeRate: number
+    utxos: Utxo[]
+    changeAddress: string
+  }): Promise<{
+    transaction: any
+    inputs: any
+    outputs: any
+    fee: number
+    changeAmount: number
+    isRBFEnabled: boolean
+  }> {
+    const result = await buildTransaction({
+      recipientAddress: params.recipientAddress,
+      amount: params.amount,
+      feeRate: params.feeRate,
+      utxos: params.utxos,
+      changeAddress: params.changeAddress,
+      enableRBF: true,
+    })
+
+    return {
+      ...result,
+      isRBFEnabled: true,
     }
   }
 }

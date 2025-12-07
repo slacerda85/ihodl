@@ -17,6 +17,8 @@ import { useIsDark, useBalance } from '@/ui/features/app-provider'
 import { formatBalance } from '../utils'
 import { useNetwork } from '../../network/NetworkProvider'
 import { addressService, transactionService } from '@/core/services'
+import CoinSelectionOptions from './CoinSelectionOptions'
+import AdvancedTransactionOptions from './AdvancedTransactionOptions'
 
 /**
  * SendOnChain Component
@@ -49,6 +51,15 @@ export default function SendOnChain() {
   const [selectedFeeRate, setSelectedFeeRate] = useState<'slow' | 'normal' | 'fast' | 'urgent'>(
     'normal',
   )
+
+  // Advanced options state
+  const [coinSelectionAlgorithm, setCoinSelectionAlgorithm] = useState<
+    'largest_first' | 'smallest_first' | 'branch_and_bound' | 'random' | 'privacy_focused'
+  >('branch_and_bound')
+  const [avoidAddressReuse, setAvoidAddressReuse] = useState<boolean>(false)
+  const [consolidateSmallUtxos, setConsolidateSmallUtxos] = useState<boolean>(false)
+  const [enableRBF, setEnableRBF] = useState<boolean>(false)
+  const [sighashType, setSighashType] = useState<'ALL' | 'NONE' | 'SINGLE' | 'ANYONECANPAY'>('ALL')
 
   // Refs para evitar múltiplas chamadas
   const feeRatesFetchedRef = useRef(false)
@@ -179,6 +190,10 @@ export default function SendOnChain() {
         feeRate: feeRateInteger,
         utxos: confirmedUtxos,
         changeAddress,
+        coinSelectionAlgorithm,
+        avoidAddressReuse,
+        consolidateSmallUtxos,
+        enableRBF,
       })
 
       console.log('[SendOnChain] Signing transaction...')
@@ -423,6 +438,22 @@ export default function SendOnChain() {
           numberOfLines={3}
         />
       </View>
+
+      <CoinSelectionOptions
+        selectedAlgorithm={coinSelectionAlgorithm}
+        onAlgorithmChange={setCoinSelectionAlgorithm}
+        avoidAddressReuse={avoidAddressReuse}
+        onAvoidAddressReuseChange={setAvoidAddressReuse}
+        consolidateSmallUtxos={consolidateSmallUtxos}
+        onConsolidateSmallUtxosChange={setConsolidateSmallUtxos}
+      />
+
+      <AdvancedTransactionOptions
+        enableRBF={enableRBF}
+        onEnableRBFChange={setEnableRBF}
+        selectedSighashType={sighashType}
+        onSighashTypeChange={setSighashType}
+      />
 
       <Pressable
         onPress={handleSend}

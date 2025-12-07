@@ -1,4 +1,5 @@
-import { createAddress, /* fromBase58check */ fromBech32 } from '../lib/address'
+import { createAddress, createP2PKHAddress, createP2TRAddress, fromBech32 } from '../lib/address'
+import { getAddressTypeFromPurpose } from '../models/address'
 import { Connection } from '../models/network'
 import {
   AccountIndex,
@@ -31,7 +32,10 @@ interface AddressServiceInterface {
   getUsedAddresses(type: 'receiving' | 'change'): AddressDetails[]
   getNextUnusedAddress(): string
   getNextChangeAddress(): string
+  getNextAddressByType(addressType: 'legacy' | 'segwit' | 'taproot'): string
   createAddress(publicKey: Uint8Array): string
+  createP2PKHAddress(publicKey: Uint8Array): string
+  createP2TRAddress(publicKey: Uint8Array): string
   createManyAddresses(publicKeys: Uint8Array[]): string[]
   clearAddresses(): void
   validateAddress(address: string): boolean
@@ -39,10 +43,24 @@ interface AddressServiceInterface {
 }
 
 export default class AddressService implements AddressServiceInterface {
+  private cachedAccountKeys: {
+    receivingAccountKey: Uint8Array
+    changeAccountKey: Uint8Array
+  } | null = null
+  private cachedWalletId: string | null = null
+
   createAddress(publicKey: Uint8Array): string {
     // Implementation to create a single address
     const address = createAddress(publicKey)
     return address
+  }
+
+  createP2PKHAddress(publicKey: Uint8Array): string {
+    return createP2PKHAddress(publicKey)
+  }
+
+  createP2TRAddress(publicKey: Uint8Array): string {
+    return createP2TRAddress(publicKey)
   }
 
   createManyAddresses(publicKeys: Uint8Array[]): string[] {
@@ -54,26 +72,49 @@ export default class AddressService implements AddressServiceInterface {
     receivingAccountKey: Uint8Array
     changeAccountKey: Uint8Array
   } {
-    // const walletService = getWalletService()
     const walletId = walletService.getActiveWalletId()
     if (!walletId) {
       throw new Error('No active wallet for deriving account keys')
     }
+
+    // Return cached keys if wallet hasn't changed
+    if (this.cachedAccountKeys && this.cachedWalletId === walletId) {
+      return this.cachedAccountKeys
+    }
+
     const seed = new SeedService().getSeed(walletId)
     const keyService = new KeyService()
     const masterKey = keyService.createMasterKey(seed)
     const { receivingAccountKey, changeAccountKey } = keyService.deriveAccountKeys({
       masterKey,
     })
-    return { receivingAccountKey, changeAccountKey }
+
+    // Cache the keys
+    this.cachedAccountKeys = { receivingAccountKey, changeAccountKey }
+    this.cachedWalletId = walletId
+
+    return this.cachedAccountKeys
   }
 
-  private deriveAddress(accountKey: Uint8Array, addressIndex: number): string {
+  private deriveAddress(
+    accountKey: Uint8Array,
+    addressIndex: number,
+    addressType: 'legacy' | 'segwit' | 'taproot' = 'segwit',
+  ): string {
     const keyService = new KeyService()
     const { addressKey } = keyService.deriveAddressKeys(accountKey, addressIndex)
     const addressPublicKey = keyService.deriveAddressPublicKey(addressKey)
-    const address = this.createAddress(addressPublicKey)
-    return address
+
+    switch (addressType) {
+      case 'legacy':
+        return this.createP2PKHAddress(addressPublicKey)
+      case 'segwit':
+        return this.createAddress(addressPublicKey)
+      case 'taproot':
+        return this.createP2TRAddress(addressPublicKey)
+      default:
+        return this.createAddress(addressPublicKey)
+    }
   }
 
   getBalance(addresses: AddressDetails[]): { balance: number; utxos: Utxo[] } {
@@ -161,38 +202,58 @@ export default class AddressService implements AddressServiceInterface {
         console.error('Error deriving address:', error)
         break
       }
-      const receivingAddress = this.deriveAddress(receivingAccountKey, addressIndex)
-      const txs = await transactionsService.getTransactions(receivingAddress, connection)
-      if (txs.length === 0) {
+
+      // Check all address types for transactions
+      const addressTypes: ('segwit' | 'taproot')[] = ['segwit', 'taproot']
+      let hasTransactions = false
+
+      for (const addressType of addressTypes) {
+        const receivingAddress = this.deriveAddress(receivingAccountKey, addressIndex, addressType)
+        const txs = await transactionsService.getTransactions(receivingAddress, connection)
+
+        if (txs.length > 0) {
+          hasTransactions = true
+          // Add receiving address with transactions
+          addresses.push({
+            derivationPath: {
+              purpose: addressType === 'segwit' ? Purpose.BIP84 : Purpose.BIP86,
+              coinType: CoinType.Bitcoin,
+              accountIndex: AccountIndex.Main,
+              change: Change.Receiving,
+              addressIndex,
+            },
+            address: receivingAddress,
+            addressType,
+            txs,
+          })
+
+          // Also check change address for this type
+          const changeAddress = this.deriveAddress(changeAccountKey, addressIndex, addressType)
+          const changeTxs = await transactionsService.getTransactions(changeAddress, connection)
+
+          if (changeTxs.length > 0) {
+            addresses.push({
+              derivationPath: {
+                purpose: addressType === 'segwit' ? Purpose.BIP84 : Purpose.BIP86,
+                coinType: CoinType.Bitcoin,
+                accountIndex: AccountIndex.Main,
+                change: Change.Change,
+                addressIndex,
+              },
+              address: changeAddress,
+              addressType,
+              txs: changeTxs,
+            })
+          }
+        }
+      }
+
+      if (!hasTransactions) {
         unusedCount++
       } else {
         unusedCount = 0
-        // fetch change addresses as well to include in address details
-        const changeAddress = this.deriveAddress(changeAccountKey, addressIndex)
-        const changeTxs = await transactionsService.getTransactions(changeAddress, connection)
-        addresses.push({
-          derivationPath: {
-            purpose: Purpose.BIP84,
-            coinType: CoinType.Bitcoin,
-            accountIndex: AccountIndex.Main,
-            change: Change.Receiving,
-            addressIndex,
-          },
-          address: receivingAddress,
-          txs,
-        })
-        addresses.push({
-          derivationPath: {
-            purpose: Purpose.BIP84,
-            coinType: CoinType.Bitcoin,
-            accountIndex: AccountIndex.Main,
-            change: Change.Change,
-            addressIndex,
-          },
-          address: changeAddress,
-          txs: changeTxs,
-        })
       }
+
       addressIndex++
     }
 
@@ -211,9 +272,15 @@ export default class AddressService implements AddressServiceInterface {
       return []
     }
     const changeType = type === 'receiving' ? Change.Receiving : Change.Change
-    return collection.addresses.filter(
+    const filteredAddresses = collection.addresses.filter(
       addr => addr.derivationPath.change === changeType && addr.txs.length > 0,
     )
+
+    // Ensure all addresses have addressType property (for backward compatibility)
+    return filteredAddresses.map(addr => ({
+      ...addr,
+      addressType: addr.addressType || getAddressTypeFromPurpose(addr.derivationPath.purpose),
+    }))
   }
 
   getNextUnusedAddress(): string {
@@ -258,6 +325,32 @@ export default class AddressService implements AddressServiceInterface {
     }
     const { changeAccountKey } = this.getAccountKeys()
     const address = this.deriveAddress(changeAccountKey, collection.nextChangeIndex)
+    // don't save the address yet (only address with txs are saved)
+    return address
+  }
+
+  getNextAddressByType(addressType: 'legacy' | 'segwit' | 'taproot'): string {
+    const walletId = walletService.getActiveWalletId()
+    if (!walletId) {
+      throw new Error('No active wallet for getting next address')
+    }
+    const repository = AddressRepository
+    let collection = repository.read(walletId)
+    if (!collection) {
+      collection = {
+        walletId,
+        addresses: [],
+        nextReceiveIndex: 0,
+        nextChangeIndex: 0,
+        gapLimit: GAP_LIMIT,
+      }
+    }
+    const { receivingAccountKey } = this.getAccountKeys()
+    const address = this.deriveAddress(
+      receivingAccountKey,
+      collection.nextReceiveIndex,
+      addressType,
+    )
     // don't save the address yet (only address with txs are saved)
     return address
   }
@@ -351,7 +444,10 @@ export default class AddressService implements AddressServiceInterface {
   }
 
   clearAddresses(): void {
-    // const walletService = new WalletService()
+    // Clear cached account keys when addresses are cleared
+    this.cachedAccountKeys = null
+    this.cachedWalletId = null
+
     const walletId = walletService.getActiveWalletId()
     if (!walletId) {
       throw new Error('No active wallet for clearing addresses')
