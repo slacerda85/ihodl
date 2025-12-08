@@ -30,7 +30,7 @@ import {
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
-import { useSettings } from '@/ui/features/app-provider'
+import { useLightningSettings, useSettingsActions } from '@/ui/features/app-provider'
 import { useLightningState, useConnectionState } from '../lightning/hooks'
 import type {
   LightningNetwork,
@@ -211,7 +211,8 @@ const NetworkSelector: React.FC<NetworkSelectorProps> = ({ value, onChange, isDa
 // ==========================================
 
 export default function LightningSettingsSection({ isDark }: LightningSettingsSectionProps) {
-  const { lightning, dispatch, actions } = useSettings()
+  const lightning = useLightningSettings()
+  const { dispatch, actions } = useSettingsActions()
   const connectionState = useConnectionState()
   const lightningState = useLightningState()
 

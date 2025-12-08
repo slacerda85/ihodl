@@ -1521,5 +1521,101 @@ Contínuo:  TCP Bridge, Remote Watchtower
 
 ---
 
-_Documento atualizado em 06/12/2025 - Novos recursos descobertos_
+## 🔍 **COMPARAÇÃO COM PHOENIX WALLET** (Dezembro 2025)
+
+### 📱 **Análise da UI - Phoenix vs iHODL**
+
+#### **Funcionalidades Core (✅ IMPLEMENTADAS EM AMBAS)**
+
+| Feature                  | Phoenix (SwiftUI)      | iHODL (React Native)   | Status       |
+| ------------------------ | ---------------------- | ---------------------- | ------------ |
+| **Liquidity Policy**     | ✅ Completo            | ✅ Completo            | **PARIDADE** |
+| - Max Absolute Fee       | ✅ (5000 sats default) | ✅ (5000 sats default) | ✅           |
+| - Max Relative Fee       | ✅ (50% default)       | ✅ (50% default)       | ✅           |
+| - Skip Absolute Check    | ✅ Toggle              | ✅ Toggle              | ✅           |
+| **Auto Channel Opening** | ✅ LSP Integration     | ✅ LSP Integration     | **PARIDADE** |
+| **Auto Swap-In**         | ✅ Conditional         | ✅ Conditional         | **PARIDADE** |
+
+#### **UI Components (❌ GAP IDENTIFICADO)**
+
+| Component                  | Phoenix                    | iHODL           | Status          | Impacto |
+| -------------------------- | -------------------------- | --------------- | --------------- | ------- |
+| **IncomingBalancePopover** | ✅ Completo                | ❌ **FALTANDO** | **GAP CRÍTICO** | Alto    |
+| - Estados visuais          | Confirming/Waiting/Expired | -               | ❌              |         |
+| - Auto-convert indicator   | ✅ Dinâmico                | -               | ❌              |         |
+| - Fee explanations         | ✅ Detalhado               | -               | ❌              |         |
+| **LiquidityAdsView**       | ✅ Completo                | ❌ **FALTANDO** | **GAP**         | Médio   |
+| - Amount slider            | ✅ 100k-10M sats           | -               | ❌              |         |
+| - Fee estimation           | ✅ Real-time               | -               | ❌              |         |
+| - LSP integration          | ✅ Múltiplos providers     | ⚠️ Básico       | ⚠️              |         |
+| **ChannelsWatcher**        | ✅ Background service      | ❌ **FALTANDO** | **GAP**         | Alto    |
+| - Breach detection         | ✅ iOS/Android             | -               | ❌              |         |
+| - Push notifications       | ✅ Rich                    | -               | ❌              |         |
+
+#### **Arquitetura de UI**
+
+| Aspecto          | Phoenix                | iHODL                    |
+| ---------------- | ---------------------- | ------------------------ |
+| **Framework**    | SwiftUI (nativo)       | React Native + Expo      |
+| **Estado**       | Biz.business (KMP)     | Zustand/Redux + Hooks    |
+| **Navegação**    | SwiftUI Navigation     | Expo Router              |
+| **Background**   | iOS Background Tasks   | ⚠️ Limitado no RN        |
+| **Notificações** | Rich iOS notifications | Basic push notifications |
+
+### 🎯 **Recomendações para Paridade com Phoenix**
+
+#### **Prioridade 1: UX Crítica (2-3 semanas)**
+
+1. **IncomingBalancePopover** - Implementar componente completo
+   - Estados visuais para saldo pendente
+   - Indicador de conversão automática
+   - Explicações de taxas transparentes
+
+#### **Prioridade 2: Funcionalidade Core (2-4 semanas)**
+
+2. **LiquidityAdsView** - Interface de compra de liquidez
+   - Slider de valores com opções pré-definidas
+   - Estimativas de custo em tempo real
+   - Integração LSP aprimorada
+
+#### **Prioridade 3: Segurança (3-4 semanas)**
+
+3. **ChannelsWatcher Service** - Monitoramento em background
+   - Detecção de breaches
+   - Notificações push
+   - Sincronização cross-platform
+
+#### **Estimativa Total**: 7-11 semanas para paridade completa
+
+---
+
+## 📈 **Métricas de Progresso Atualizadas**
+
+### **Status Atual (Dezembro 2025):**
+
+- **TypeScript Core**: ~95% completo ✅ **AUMENTOU**
+- **RN UI**: ~75% completo ⚠️ **AJUSTADO APÓS COMPARAÇÃO**
+- **Paridade com Phoenix**: ~70% ⚠️ **GAP IDENTIFICADO**
+
+### **vs Electrum (Core Library)**
+
+- **Compatibilidade**: 95% 📈
+- **Features Avançadas**: 100% das especificações BOLT ✅
+- **Performance**: Otimizado para mobile 📱
+
+### **vs Phoenix (UI/UX)**
+
+- **Funcionalidades Core**: 100% paridade ✅
+- **Componentes Visuais**: 60% paridade ⚠️
+- **Experiência**: 70% paridade 📊
+
+### **Próximos Marcos**
+
+1. **Q1 2026**: Paridade visual completa com Phoenix
+2. **Q2 2026**: Background services e notificações
+3. **Q3 2026**: Otimizações de performance e acessibilidade
+
+---
+
+_Documento atualizado em 06/12/2025 - Comparação com Phoenix Wallet adicionada_
 _Última atualização: 06/12/2025_

@@ -10,7 +10,7 @@ import {
   Pressable,
 } from 'react-native'
 import colors from '@/ui/colors'
-import { useSettings } from '@/ui/features/app-provider'
+import { useLightningSettings, useSettingsActions } from '@/ui/features/app-provider'
 import { LightningNetwork } from './state'
 
 interface LightningSectionProps {
@@ -109,7 +109,8 @@ const NetworkSelector: React.FC<NetworkSelectorProps> = ({ value, onChange, isDa
 }
 
 export default function LightningSection({ isDark }: LightningSectionProps) {
-  const { lightning, dispatch, actions } = useSettings()
+  const lightning = useLightningSettings()
+  const { dispatch, actions } = useSettingsActions()
 
   const handleNetworkChange = (network: LightningNetwork) => {
     dispatch(actions.setLightningNetwork(network))

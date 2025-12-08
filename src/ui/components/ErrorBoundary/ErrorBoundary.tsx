@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { View, Text, StyleSheet } from 'react-native'
 
 type ErrorBoundaryProps = {
   children: React.ReactNode
@@ -32,15 +33,35 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     if (this.state.hasError) {
       return (
         this.props.fallback || (
-          <div style={{ padding: 16, textAlign: 'center' }}>
-            <h2>Ocorreu um erro inesperado.</h2>
-            <p>Tente recarregar a página ou entrar em contato com o suporte.</p>
-          </div>
+          <View style={styles.container}>
+            <Text style={styles.title}>Ocorreu um erro inesperado.</Text>
+            <Text style={styles.message}>
+              Tente recarregar a página ou entrar em contato com o suporte.
+            </Text>
+          </View>
         )
       )
     }
     return this.props.children
   }
 }
+
+const styles = StyleSheet.create({
+  container: {
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  message: {
+    fontSize: 14,
+    textAlign: 'center',
+  },
+})
 
 export default ErrorBoundary

@@ -1,25 +1,13 @@
 import colors from '@/ui/colors'
-import {
-  StyleSheet,
-  useColorScheme,
-  ScrollView,
-  Text,
-  View,
-  Alert,
-  TouchableOpacity,
-} from 'react-native'
-import { useSettings } from '@/ui/features/app-provider'
+import { StyleSheet, ScrollView, Text, View, Alert, TouchableOpacity } from 'react-native'
+import { useActiveColorMode } from '@/ui/features/app-provider'
 import SeedRepository from '@/core/repositories/seed'
 import { walletService } from '@/core/services'
 import LightningSettingsSection from './LightningSettingsSection'
 import CloudSyncSection from './CloudSyncSection'
 
 export default function SettingsScreen() {
-  const colorScheme = useColorScheme()
-  const { colorMode } = useSettings()
-
-  const effectiveColorMode = colorMode === 'auto' ? (colorScheme ?? 'light') : colorMode
-  const isDarkEffective = effectiveColorMode === 'dark'
+  const colorMode = useActiveColorMode()
 
   const handleClearWallets = () => {
     Alert.alert(
@@ -55,10 +43,10 @@ export default function SettingsScreen() {
   }
 
   return (
-    <ScrollView style={[styles.container, isDarkEffective && styles.containerDark]}>
-      <View style={styles.section}>
-        <Text style={[styles.subtitle, isDarkEffective && styles.subtitleDark]}>Tema</Text>
-        <View style={styles.settingRow}>
+    <ScrollView style={styles[colorMode].container}>
+      <View style={styles[colorMode].section}>
+        <Text style={styles[colorMode].subtitle}>Tema</Text>
+        <View style={styles[colorMode].settingRow}>
           {/* <Picker
             options={['Claro', 'Escuro', 'Automático']}
             selectedIndex={selectedThemeIndex}
@@ -68,11 +56,9 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      <View style={styles.section}>
-        <Text style={[styles.subtitle, isDarkEffective && styles.subtitleDark]}>
-          Tamanho máximo da Blockchain
-        </Text>
-        <View style={styles.settingRow}>
+      <View style={styles[colorMode].section}>
+        <Text style={styles[colorMode].subtitle}>Tamanho máximo da Blockchain</Text>
+        <View style={styles[colorMode].settingRow}>
           {/* <Picker
             options={['0.5 GB', '1 GB', '2 GB', '5 GB']}
             selectedIndex={selectedSizeIndex}
@@ -82,33 +68,21 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      <View style={styles.section}>
-        <LightningSettingsSection isDark={isDarkEffective} />
+      <View style={styles[colorMode].section}>
+        <LightningSettingsSection isDark={colorMode === 'dark'} />
       </View>
 
-      <View style={styles.section}>
-        <CloudSyncSection isDark={isDarkEffective} />
+      <View style={styles[colorMode].section}>
+        <CloudSyncSection isDark={colorMode === 'dark'} />
       </View>
 
-      <View style={styles.section}>
-        <Text style={[styles.subtitle, isDarkEffective && styles.subtitleDark]}>
-          Dados da Aplicação
-        </Text>
-        <TouchableOpacity
-          style={[styles.clearButton, isDarkEffective && styles.clearButtonDark]}
-          onPress={handleClearWallets}
-        >
-          <Text style={[styles.clearButtonText, isDarkEffective && styles.clearButtonTextDark]}>
-            Limpar Carteiras
-          </Text>
+      <View style={styles[colorMode].section}>
+        <Text style={styles[colorMode].subtitle}>Dados da Aplicação</Text>
+        <TouchableOpacity style={styles[colorMode].clearButton} onPress={handleClearWallets}>
+          <Text style={styles[colorMode].clearButtonText}>Limpar Carteiras</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.clearButton, isDarkEffective && styles.clearButtonDark]}
-          onPress={handleClearSeeds}
-        >
-          <Text style={[styles.clearButtonText, isDarkEffective && styles.clearButtonTextDark]}>
-            Limpar Seeds
-          </Text>
+        <TouchableOpacity style={styles[colorMode].clearButton} onPress={handleClearSeeds}>
+          <Text style={styles[colorMode].clearButtonText}>Limpar Seeds</Text>
         </TouchableOpacity>
         {/* <TouchableOpacity
           style={[styles.clearButton, isDarkEffective && styles.clearButtonDark]}
@@ -118,7 +92,7 @@ export default function SettingsScreen() {
             Limpar Contas
           </Text>
         </TouchableOpacity> */}
-        <Text style={[styles.description, isDarkEffective && styles.descriptionDark]}>
+        <Text style={styles[colorMode].description}>
           Use os botões acima para limpar dados específicos salvos localmente.
         </Text>
       </View>
@@ -126,13 +100,10 @@ export default function SettingsScreen() {
   )
 }
 
-const styles = StyleSheet.create({
+const light = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background.light,
-  },
-  containerDark: {
-    backgroundColor: colors.background.dark,
   },
   section: {
     // backgroundColor: 'red',
@@ -143,9 +114,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: colors.text.light,
     marginBottom: 20,
-  },
-  titleDark: {
-    color: colors.text.dark,
   },
   settingRow: {
     flexDirection: 'row',
@@ -158,25 +126,16 @@ const styles = StyleSheet.create({
     marginRight: 15,
     minWidth: 60,
   },
-  labelDark: {
-    color: colors.text.dark,
-  },
   subtitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: colors.textSecondary.light,
     marginBottom: 15,
   },
-  subtitleDark: {
-    color: colors.textSecondary.dark,
-  },
   description: {
     fontSize: 16,
     color: colors.textSecondary.light,
     marginBottom: 15,
-  },
-  descriptionDark: {
-    color: colors.textSecondary.dark,
   },
   clearButton: {
     backgroundColor: colors.error,
@@ -186,15 +145,63 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
-  clearButtonDark: {
+  clearButtonText: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+})
+
+const dark: typeof light = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background.dark,
+  },
+  section: {
+    // backgroundColor: 'red',
+    padding: 20,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: colors.text.dark,
+    marginBottom: 20,
+  },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    // marginBottom: 15,
+  },
+  label: {
+    fontSize: 18,
+    color: colors.text.dark,
+    marginRight: 15,
+    minWidth: 60,
+  },
+  subtitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.textSecondary.dark,
+    marginBottom: 15,
+  },
+  description: {
+    fontSize: 16,
+    color: colors.textSecondary.dark,
+    marginBottom: 15,
+  },
+  clearButton: {
     backgroundColor: colors.error,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 10,
   },
   clearButtonText: {
     color: colors.white,
     fontSize: 16,
     fontWeight: 'bold',
   },
-  clearButtonTextDark: {
-    color: colors.white,
-  },
 })
+
+const styles = { light, dark }

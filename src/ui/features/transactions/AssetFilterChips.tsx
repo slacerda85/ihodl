@@ -18,6 +18,7 @@ import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 import type { AssetType } from './types'
 import { ASSET_CONFIG } from './types'
+import { useActiveColorMode } from '@/ui/features/app-provider'
 
 // ==========================================
 // TYPES
@@ -30,8 +31,6 @@ interface AssetFilterChipsProps {
   onToggle: (asset: AssetType) => void
   /** Contagem de transações por ativo */
   assetCounts: Record<AssetType, number>
-  /** Modo de cor (light/dark) */
-  isDark: boolean
   /** Ativos a exibir (default: todos com count > 0) */
   visibleAssets?: AssetType[]
 }
@@ -41,16 +40,16 @@ interface AssetChipProps {
   isSelected: boolean
   count: number
   onPress: () => void
-  isDark: boolean
 }
 
 // ==========================================
 // ASSET CHIP COMPONENT
 // ==========================================
 
-function AssetChip({ asset, isSelected, count, onPress, isDark }: AssetChipProps) {
+function AssetChip({ asset, isSelected, count, onPress }: AssetChipProps) {
+  const colorMode = useActiveColorMode()
   const config = ASSET_CONFIG[asset]
-  const textColor = isDark ? colors.text.dark : colors.text.light
+  const textColor = colors.text[colorMode]
 
   const containerStyle = [
     chipStyles.container,
@@ -91,9 +90,11 @@ export function AssetFilterChips({
   selectedAssets,
   onToggle,
   assetCounts,
-  isDark,
+  // isDark,
   visibleAssets,
 }: AssetFilterChipsProps) {
+  const colorMode = useActiveColorMode()
+
   // Determinar quais ativos mostrar
   const assetsToShow =
     visibleAssets ??
@@ -104,7 +105,7 @@ export function AssetFilterChips({
     return null
   }
 
-  const textColor = isDark ? colors.text.dark : colors.text.light
+  const textColor = colors.text[colorMode]
 
   return (
     <View style={styles.container}>
@@ -146,7 +147,6 @@ export function AssetFilterChips({
           isSelected={selectedAssets.includes(asset)}
           count={assetCounts[asset]}
           onPress={() => onToggle(asset)}
-          isDark={isDark}
         />
       ))}
     </View>
@@ -162,12 +162,11 @@ type DirectionFilter = 'all' | 'sent' | 'received'
 interface DirectionFilterChipsProps {
   selected: DirectionFilter
   onSelect: (direction: DirectionFilter) => void
-  isDark: boolean
 }
 
-export function DirectionFilterChips({ selected, onSelect, isDark }: DirectionFilterChipsProps) {
-  const textColor = isDark ? colors.text.dark : colors.text.light
-
+export function DirectionFilterChips({ selected, onSelect }: DirectionFilterChipsProps) {
+  const colorMode = useActiveColorMode()
+  const textColor = colors.text[colorMode]
   const options: { key: DirectionFilter; label: string; icon: string }[] = [
     { key: 'all', label: 'Todos', icon: 'arrow.left.arrow.right' },
     { key: 'sent', label: 'Enviados', icon: 'arrow.up.right' },

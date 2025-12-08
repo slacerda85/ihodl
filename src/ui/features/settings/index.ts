@@ -23,6 +23,9 @@ export type {
   SwapLimitsConfig,
   RoutingStrategy,
   AdvancedConfig,
+  LiquidityPolicyType,
+  LiquidityConfig,
+  SwapInConfig,
 } from './state'
 
 // Store centralizado (nova arquitetura)

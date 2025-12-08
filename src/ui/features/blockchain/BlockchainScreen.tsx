@@ -1,11 +1,11 @@
 import { View, StyleSheet, useColorScheme } from 'react-native'
 
 import colors from '@/ui/colors'
-import { useSettings } from '@/ui/features/app-provider'
+import { useColorMode } from '@/ui/features/app-provider'
 
 export default function BlockchainScreen() {
   const colorScheme = useColorScheme()
-  const { colorMode } = useSettings()
+  const colorMode = useColorMode()
   const effectiveColorMode = colorMode === 'auto' ? (colorScheme ?? 'light') : colorMode
   const isDark = effectiveColorMode === 'dark'
 

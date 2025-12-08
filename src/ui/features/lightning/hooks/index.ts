@@ -20,6 +20,15 @@ export {
   useIsConnected,
 } from './useLightningState'
 
+// Liquidity hooks
+export { useLightningPolicy, useSwapInPolicy, useIsAutoChannelEnabled } from './useLightningPolicy'
+
+export {
+  useInboundBalance,
+  useHasPendingOnChainBalance,
+  useWillAutoConvert,
+} from './useInboundBalance'
+
 // Action hooks
 export {
   useLightningActions,
@@ -47,3 +56,14 @@ export { useCpfp } from './useCpfp'
 
 // HTLC Monitor hooks
 export { useHtlcMonitor } from './useHtlcMonitor'
+
+// Auto Swap-In hooks
+export { useAutoSwapIn, useHasPendingSwapInBalance, useEstimatedSwapInFee } from './useAutoSwapIn'
+
+// Auto Channel hooks
+export {
+  useInboundCapacity,
+  useHasSufficientLiquidity,
+  useRequiredAdditionalCapacity,
+  useAutoChannelOpening,
+} from './useAutoChannel'

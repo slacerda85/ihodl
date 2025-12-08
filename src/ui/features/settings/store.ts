@@ -28,6 +28,8 @@ import {
   initialSettingsState,
   settingsReducer,
   settingsActions,
+  LiquidityConfig,
+  SwapInConfig,
 } from './state'
 
 // ==========================================
@@ -82,6 +84,8 @@ export interface SettingsStoreActions {
   setSwapLimits: (config: Partial<SwapLimitsConfig>) => void
   setAdvancedConfig: (config: Partial<AdvancedConfig>) => void
   setRoutingStrategy: (strategy: RoutingStrategy) => void
+  setLiquidityConfig: (config: Partial<LiquidityConfig>) => void
+  setSwapInConfig: (config: Partial<SwapInConfig>) => void
 }
 
 // ==========================================
@@ -210,6 +214,14 @@ class SettingsStore {
     this.dispatch(settingsActions.setRoutingStrategy(strategy))
   }
 
+  setLiquidityConfig = (config: Partial<LiquidityConfig>): void => {
+    this.dispatch(settingsActions.setLiquidityConfig(config))
+  }
+
+  setSwapInConfig = (config: Partial<SwapInConfig>): void => {
+    this.dispatch(settingsActions.setSwapInConfig(config))
+  }
+
   // ==========================================
   // ACTIONS OBJECT (para context)
   // ==========================================
@@ -235,6 +247,8 @@ class SettingsStore {
       setSwapLimits: this.setSwapLimits,
       setAdvancedConfig: this.setAdvancedConfig,
       setRoutingStrategy: this.setRoutingStrategy,
+      setLiquidityConfig: this.setLiquidityConfig,
+      setSwapInConfig: this.setSwapInConfig,
     }
   }
 }

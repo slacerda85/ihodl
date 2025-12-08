@@ -26,7 +26,6 @@ import {
   sendBatchTransactions,
   estimateTransactionFee,
   estimateOptimalFeeRate,
-  buildBatchTransaction,
 } from '../lib/transactions'
 import { createP2TRAddress } from '../lib/address'
 import SeedService from './seed'
@@ -197,10 +196,10 @@ interface TransactionServiceInterface {
   }>
   // Single batch transaction building (combines multiple outputs in one tx)
   buildBatchTransaction(params: {
-    transactions: Array<{
+    transactions: {
       recipientAddress: string
       amount: number
-    }>
+    }[]
     feeRate: number
     utxos: Utxo[]
     changeAddress: string
@@ -374,10 +373,10 @@ export default class TransactionService implements TransactionServiceInterface {
     consolidateSmallUtxos,
     enableRBF,
   }: {
-    transactions: Array<{
+    transactions: {
       recipientAddress: string
       amount: number
-    }>
+    }[]
     feeRate: number
     utxos: Utxo[]
     changeAddress: string
@@ -397,7 +396,7 @@ export default class TransactionService implements TransactionServiceInterface {
     fee: number
     changeAmount: number
   }> {
-    const transaction = await buildBatchTransaction({
+    const transaction = await this.buildBatchTransaction({
       transactions,
       feeRate,
       utxos,

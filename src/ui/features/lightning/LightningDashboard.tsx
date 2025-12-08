@@ -6,13 +6,14 @@
  *
  * Seções:
  * 1. Status & Connection
- * 2. Channels
- * 3. Routing & Payments
- * 4. Privacy
- * 5. Backup & Recovery
- * 6. Watchtower
- * 7. Submarine Swaps
- * 8. Advanced
+ * 2. Liquidity Management
+ * 3. Channels
+ * 4. Routing & Payments
+ * 5. Privacy
+ * 6. Backup & Recovery
+ * 7. Watchtower
+ * 8. Submarine Swaps
+ * 9. Advanced
  */
 
 import React, { useState, useCallback } from 'react'
@@ -25,12 +26,24 @@ import {
   TouchableOpacity,
   TextInput,
   RefreshControl,
+  Alert,
+  ViewStyle,
+  TextStyle,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
-import { useSettings, useActiveColorMode } from '@/ui/features/app-provider'
-import { useLightningState, useLightningActions, useConnectionState } from './hooks'
+import {
+  useLightningSettings,
+  useActiveColorMode,
+  useSettingsActions,
+} from '@/ui/features/app-provider'
+import {
+  useLightningState,
+  useLightningActions,
+  useConnectionState,
+  useInboundBalance,
+} from './hooks'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 import Button from '@/ui/components/Button'
 import type {
@@ -40,6 +53,8 @@ import type {
   PrivacyConfig,
   SwapLimitsConfig,
   AdvancedConfig,
+  LiquidityConfig,
+  SwapInConfig,
 } from '../settings/state'
 
 // ==========================================
@@ -153,10 +168,12 @@ const StatusBadge: React.FC<{
 export default function LightningDashboard() {
   const router = useRouter()
   const colorMode = useActiveColorMode()
-  const { lightning, dispatch, actions } = useSettings()
+  const lightningSettings = useLightningSettings()
+  const settingsActions = useSettingsActions()
   const connectionState = useConnectionState()
   const lightningState = useLightningState()
   const lightningActions = useLightningActions()
+  const inboundBalance = useInboundBalance()
 
   const [refreshing, setRefreshing] = useState(false)
 
@@ -173,51 +190,60 @@ export default function LightningDashboard() {
 
   // Handlers for settings changes
   const handlePrivacyChange = (key: keyof PrivacyConfig, value: boolean) => {
-    dispatch(actions.setPrivacyConfig({ [key]: value }))
+    settingsActions.setPrivacyConfig({ [key]: value })
   }
 
   const handleWatchtowerChange = (
     key: keyof WatchtowerConfig,
     value: boolean | string | number,
   ) => {
-    dispatch(actions.setWatchtowerConfig({ [key]: value }))
+    settingsActions.setWatchtowerConfig({ [key]: value })
   }
 
   const handleBackupChange = (key: keyof BackupConfig, value: boolean | string) => {
-    dispatch(actions.setBackupConfig({ [key]: value }))
+    settingsActions.setBackupConfig({ [key]: value })
   }
 
   const handleSwapLimitsChange = (key: keyof SwapLimitsConfig, value: number | boolean) => {
-    dispatch(actions.setSwapLimits({ [key]: value }))
+    settingsActions.setSwapLimits({ [key]: value })
+  }
+
+  const handleSwapInChange = (key: keyof SwapInConfig, value: number | boolean) => {
+    settingsActions.setSwapInConfig({ [key]: value })
   }
 
   const handleAdvancedChange = (
     key: keyof AdvancedConfig,
     value: number | boolean | RoutingStrategy,
   ) => {
-    dispatch(actions.setAdvancedConfig({ [key]: value }))
+    settingsActions.setAdvancedConfig({ [key]: value })
+  }
+
+  const handleLiquidityChange = (config: Partial<LiquidityConfig>) => {
+    settingsActions.setLiquidityConfig(config)
   }
 
   const handleRoutingStrategyChange = (strategy: RoutingStrategy) => {
-    dispatch(actions.setRoutingStrategy(strategy))
+    settingsActions.setRoutingStrategy(strategy)
   }
 
   const handleTrampolineNodeToggle = (nodeId: string, enabled: boolean) => {
-    const node = lightning.trampolineNodes?.find(n => n.nodeId === nodeId)
+    const node = lightningSettings.trampolineNodes?.find(n => n.nodeId === nodeId)
     if (node) {
-      dispatch(actions.updateTrampolineNode({ ...node, enabled }))
+      settingsActions.updateTrampolineNode({ ...node, enabled })
     }
   }
 
-  const formatSats = (sats: number) => {
-    if (sats >= 100000000) {
-      return `${(sats / 100000000).toFixed(2)} BTC`
-    } else if (sats >= 1000000) {
-      return `${(sats / 1000000).toFixed(2)}M sats`
-    } else if (sats >= 1000) {
-      return `${(sats / 1000).toFixed(1)}k sats`
+  const formatSats = (sats: bigint | number) => {
+    const numSats = typeof sats === 'bigint' ? Number(sats) : sats
+    if (numSats >= 100000000) {
+      return `${(numSats / 100000000).toFixed(2)} BTC`
+    } else if (numSats >= 1000000) {
+      return `${(numSats / 1000000).toFixed(2)}M sats`
+    } else if (numSats >= 1000) {
+      return `${(numSats / 1000).toFixed(1)}k sats`
     }
-    return `${sats} sats`
+    return `${numSats} sats`
   }
 
   const getConnectionStatus = (): 'connected' | 'disconnected' => {
@@ -236,7 +262,7 @@ export default function LightningDashboard() {
         <View style={styles.statusContainer}>
           <StatusBadge status={getConnectionStatus()} />
           <Text style={[styles.networkLabel, { color: colors.textSecondary[colorMode] }]}>
-            Rede: {lightning.network?.toUpperCase() ?? 'MAINNET'}
+            Rede: {lightningSettings.network?.toUpperCase() ?? 'MAINNET'}
           </Text>
         </View>
 
@@ -344,16 +370,205 @@ export default function LightningDashboard() {
         </View>
       </Section>
 
-      {/* ========== SECTION 2: ROUTING & PAYMENTS ========== */}
-      <Section title="Roteamento & Pagamentos" icon="🔀" colorMode={colorMode}>
+      {/* ========== SECTION 2: LIQUIDITY MANAGEMENT ========== */}
+      <Section title="Gerenciamento de Liquidez" icon="💧" colorMode={colorMode}>
+        <SettingRow
+          label="Política de Abertura"
+          description="Como abrir canais automaticamente"
+          colorMode={colorMode}
+        >
+          <View style={styles.pickerContainer}>
+            <TouchableOpacity
+              style={[
+                styles.pickerOption,
+                lightningSettings?.liquidity?.type === 'disable' && styles.pickerOptionSelected,
+                { backgroundColor: alpha(colors.border[colorMode], 0.5) },
+              ]}
+              onPress={() => handleLiquidityChange({ type: 'disable' })}
+            >
+              <Text
+                style={[
+                  styles.pickerOptionText,
+                  { color: colors.text[colorMode] },
+                  lightningSettings?.liquidity?.type === 'disable' &&
+                    styles.pickerOptionTextSelected,
+                ]}
+              >
+                Desabilitado
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.pickerOption,
+                lightningSettings?.liquidity?.type === 'auto' && styles.pickerOptionSelected,
+                { backgroundColor: alpha(colors.border[colorMode], 0.5) },
+              ]}
+              onPress={() => handleLiquidityChange({ type: 'auto' })}
+            >
+              <Text
+                style={[
+                  styles.pickerOptionText,
+                  { color: colors.text[colorMode] },
+                  lightningSettings?.liquidity?.type === 'auto' && styles.pickerOptionTextSelected,
+                ]}
+              >
+                Automático
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </SettingRow>
+
+        {lightningSettings?.liquidity?.type === 'auto' && (
+          <>
+            <View style={styles.inputContainer}>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary[colorMode] }]}>
+                Taxa Máxima Absoluta (sats)
+              </Text>
+              <TextInput
+                style={[
+                  styles.textInput,
+                  {
+                    backgroundColor: alpha(colors.border[colorMode], 0.5),
+                    color: colors.text[colorMode],
+                  },
+                ]}
+                value={lightningSettings.liquidity.maxAbsoluteFee?.toString() ?? ''}
+                onChangeText={v => {
+                  const num = parseInt(v, 10)
+                  if (!isNaN(num) && num >= 0) {
+                    handleLiquidityChange({ maxAbsoluteFee: num })
+                  }
+                }}
+                keyboardType="number-pad"
+                placeholder="5000"
+                placeholderTextColor={colors.placeholder}
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary[colorMode] }]}>
+                Taxa Máxima Relativa (%)
+              </Text>
+              <TextInput
+                style={[
+                  styles.textInput,
+                  {
+                    backgroundColor: alpha(colors.border[colorMode], 0.5),
+                    color: colors.text[colorMode],
+                  },
+                ]}
+                value={
+                  (lightningSettings.liquidity.maxRelativeFeeBasisPoints / 100)?.toString() ?? ''
+                }
+                onChangeText={v => {
+                  const num = parseFloat(v)
+                  if (!isNaN(num) && num >= 0 && num <= 100) {
+                    handleLiquidityChange({ maxRelativeFeeBasisPoints: Math.floor(num * 100) })
+                  }
+                }}
+                keyboardType="decimal-pad"
+                placeholder="50"
+                placeholderTextColor={colors.placeholder}
+              />
+            </View>
+
+            <SettingRow
+              label="Pular Verificação Absoluta"
+              description="Permitir taxas acima do limite absoluto em casos especiais"
+              colorMode={colorMode}
+            >
+              <Switch
+                value={lightningSettings.liquidity.skipAbsoluteFeeCheck ?? false}
+                onValueChange={v => handleLiquidityChange({ skipAbsoluteFeeCheck: v })}
+                trackColor={{ false: colors.disabled, true: colors.primary }}
+                thumbColor={colors.white}
+              />
+            </SettingRow>
+          </>
+        )}
+
+        <View style={styles.divider} />
+
+        <SettingRow
+          label="Swap-In Automático"
+          description="Converter automaticamente fundos on-chain para Lightning"
+          colorMode={colorMode}
+        >
+          <Switch
+            value={lightningSettings?.swapIn?.enabled ?? false}
+            onValueChange={v => handleSwapInChange('enabled', v)}
+            trackColor={{ false: colors.disabled, true: colors.primary }}
+            thumbColor={colors.white}
+          />
+        </SettingRow>
+
+        {lightningSettings?.swapIn?.enabled && (
+          <>
+            <View style={styles.inputContainer}>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary[colorMode] }]}>
+                Taxa Máxima para Swap-In (sats)
+              </Text>
+              <TextInput
+                style={[
+                  styles.textInput,
+                  {
+                    backgroundColor: alpha(colors.border[colorMode], 0.5),
+                    color: colors.text[colorMode],
+                  },
+                ]}
+                value={lightningSettings.swapIn.maxAbsoluteFee?.toString() ?? ''}
+                onChangeText={v => {
+                  const num = parseInt(v, 10)
+                  if (!isNaN(num) && num >= 0) {
+                    handleSwapInChange('maxAbsoluteFee', num)
+                  }
+                }}
+                keyboardType="number-pad"
+                placeholder="5000"
+                placeholderTextColor={colors.placeholder}
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary[colorMode] }]}>
+                Taxa Máxima Relativa (%)
+              </Text>
+              <TextInput
+                style={[
+                  styles.textInput,
+                  {
+                    backgroundColor: alpha(colors.border[colorMode], 0.5),
+                    color: colors.text[colorMode],
+                  },
+                ]}
+                value={
+                  (lightningSettings?.swapIn?.maxRelativeFeeBasisPoints / 100)?.toString() ?? ''
+                }
+                onChangeText={v => {
+                  const num = parseFloat(v)
+                  if (!isNaN(num) && num >= 0 && num <= 100) {
+                    handleSwapInChange('maxRelativeFeeBasisPoints', Math.floor(num * 100))
+                  }
+                }}
+                keyboardType="decimal-pad"
+                placeholder="50"
+                placeholderTextColor={colors.placeholder}
+              />
+            </View>
+          </>
+        )}
+      </Section>
+
+      {/* ========== SECTION 3: CHANNELS ========== */}
+      <Section title="Canais" icon="📡" colorMode={colorMode}>
         <SettingRow
           label="Trampoline Routing"
           description="Delega cálculo de rota para nós intermediários"
           colorMode={colorMode}
         >
           <Switch
-            value={lightning.trampolineRoutingEnabled ?? false}
-            onValueChange={v => dispatch(actions.setTrampolineRouting(v))}
+            value={lightningSettings.trampolineRoutingEnabled ?? false}
+            onValueChange={v => settingsActions.setTrampolineRouting(v)}
             trackColor={{ false: colors.disabled, true: colors.primary }}
             thumbColor={colors.white}
           />
@@ -365,8 +580,8 @@ export default function LightningDashboard() {
           colorMode={colorMode}
         >
           <Switch
-            value={lightning.mppEnabled ?? false}
-            onValueChange={v => dispatch(actions.setMppEnabled(v))}
+            value={lightningSettings.mppEnabled ?? false}
+            onValueChange={v => settingsActions.setMppEnabled(v)}
             trackColor={{ false: colors.disabled, true: colors.primary }}
             thumbColor={colors.white}
           />
@@ -393,7 +608,7 @@ export default function LightningDashboard() {
                 styles.optionRow,
                 {
                   backgroundColor:
-                    lightning.advanced?.routingStrategy === strategy
+                    lightningSettings.advanced?.routingStrategy === strategy
                       ? alpha(colors.primary, 0.12)
                       : alpha(colors.border[colorMode], 0.3),
                 },
@@ -406,14 +621,14 @@ export default function LightningDashboard() {
                 {strategy === 'most_reliable' && '✅ Mais Confiável'}
                 {strategy === 'balanced' && '⚖️ Balanceado'}
               </Text>
-              {lightning.advanced?.routingStrategy === strategy && (
+              {lightningSettings.advanced?.routingStrategy === strategy && (
                 <IconSymbol name="checkmark" size={20} color={colors.primary} />
               )}
             </TouchableOpacity>
           ),
         )}
 
-        {lightning.trampolineRoutingEnabled && (
+        {lightningSettings.trampolineRoutingEnabled && (
           <>
             <View
               style={[
@@ -429,7 +644,7 @@ export default function LightningDashboard() {
             <Text style={[styles.subsectionTitle, { color: colors.textSecondary[colorMode] }]}>
               Nós Trampoline Preferidos
             </Text>
-            {lightning.trampolineNodes?.map(node => (
+            {lightningSettings.trampolineNodes?.map(node => (
               <SettingRow
                 key={node.nodeId}
                 label={node.alias}
@@ -448,7 +663,75 @@ export default function LightningDashboard() {
         )}
       </Section>
 
-      {/* ========== SECTION 3: PRIVACY ========== */}
+      {/* ========== SECTION 4: ROUTING & PAYMENTS ========== */}
+      <Section title="Roteamento & Pagamentos" icon="🔀" colorMode={colorMode}>
+        <SettingRow
+          label="Trampoline Routing"
+          description="Delega cálculo de rota para nós intermediários"
+          colorMode={colorMode}
+        >
+          <Switch
+            value={lightningSettings.trampolineRoutingEnabled ?? false}
+            onValueChange={v => settingsActions.setTrampolineRouting(v)}
+            trackColor={{ false: colors.disabled, true: colors.primary }}
+            thumbColor={colors.white}
+          />
+        </SettingRow>
+
+        <SettingRow
+          label="MPP (Multi-Part Payments)"
+          description="Permite pagamentos divididos em múltiplas partes"
+          colorMode={colorMode}
+        >
+          <Switch
+            value={lightningSettings.mppEnabled ?? true}
+            onValueChange={v => settingsActions.setMppEnabled(v)}
+            trackColor={{ false: colors.disabled, true: colors.primary }}
+            thumbColor={colors.white}
+          />
+        </SettingRow>
+
+        <SettingRow
+          label="Zero-Conf Channels"
+          description="Aceitar canais sem confirmação on-chain"
+          colorMode={colorMode}
+        >
+          <Switch
+            value={lightningSettings.zeroConfEnabled ?? false}
+            onValueChange={v => settingsActions.setZeroConfEnabled(v)}
+            trackColor={{ false: colors.disabled, true: colors.primary }}
+            thumbColor={colors.white}
+          />
+        </SettingRow>
+
+        {lightningSettings.trampolineRoutingEnabled && (
+          <>
+            <View style={styles.divider} />
+
+            <Text style={[styles.subsectionTitle, { color: colors.textSecondary[colorMode] }]}>
+              Nós Trampoline
+            </Text>
+
+            {lightningSettings.trampolineNodes?.map(node => (
+              <SettingRow
+                key={node.nodeId}
+                label={node.alias}
+                description={`Prioridade: ${node.priority}`}
+                colorMode={colorMode}
+              >
+                <Switch
+                  value={node.enabled}
+                  onValueChange={v => handleTrampolineNodeToggle(node.nodeId, v)}
+                  trackColor={{ false: colors.disabled, true: colors.primary }}
+                  thumbColor={colors.white}
+                />
+              </SettingRow>
+            ))}
+          </>
+        )}
+      </Section>
+
+      {/* ========== SECTION 5: PRIVACY ========== */}
       <Section title="Privacidade" icon="🔒" colorMode={colorMode}>
         <SettingRow
           label="Blinded Paths"
@@ -456,7 +739,7 @@ export default function LightningDashboard() {
           colorMode={colorMode}
         >
           <Switch
-            value={lightning.privacy?.blindedPathsEnabled ?? false}
+            value={lightningSettings.privacy?.blindedPathsEnabled ?? false}
             onValueChange={v => handlePrivacyChange('blindedPathsEnabled', v)}
             trackColor={{ false: colors.disabled, true: colors.primary }}
             thumbColor={colors.white}
@@ -469,7 +752,7 @@ export default function LightningDashboard() {
           colorMode={colorMode}
         >
           <Switch
-            value={lightning.privacy?.onionMessagesEnabled ?? false}
+            value={lightningSettings.privacy?.onionMessagesEnabled ?? false}
             onValueChange={v => handlePrivacyChange('onionMessagesEnabled', v)}
             trackColor={{ false: colors.disabled, true: colors.primary }}
             thumbColor={colors.white}
@@ -482,7 +765,7 @@ export default function LightningDashboard() {
           colorMode={colorMode}
         >
           <Switch
-            value={lightning.privacy?.usePrivateChannelsOnly ?? false}
+            value={lightningSettings.privacy?.usePrivateChannelsOnly ?? false}
             onValueChange={v => handlePrivacyChange('usePrivateChannelsOnly', v)}
             trackColor={{ false: colors.disabled, true: colors.primary }}
             thumbColor={colors.white}
@@ -495,7 +778,7 @@ export default function LightningDashboard() {
           colorMode={colorMode}
         >
           <Switch
-            value={lightning.privacy?.hiddenNode ?? false}
+            value={lightningSettings.privacy?.hiddenNode ?? false}
             onValueChange={v => handlePrivacyChange('hiddenNode', v)}
             trackColor={{ false: colors.disabled, true: colors.primary }}
             thumbColor={colors.white}
@@ -503,7 +786,7 @@ export default function LightningDashboard() {
         </SettingRow>
       </Section>
 
-      {/* ========== SECTION 4: BACKUP & RECOVERY ========== */}
+      {/* ========== SECTION 5: BACKUP & RECOVERY ========== */}
       <Section title="Backup & Recuperação" icon="💾" colorMode={colorMode}>
         <SettingRow
           label="Backup Automático"
@@ -511,7 +794,7 @@ export default function LightningDashboard() {
           colorMode={colorMode}
         >
           <Switch
-            value={lightning.backup?.autoBackupEnabled ?? false}
+            value={lightningSettings.backup?.autoBackupEnabled ?? false}
             onValueChange={v => handleBackupChange('autoBackupEnabled', v)}
             trackColor={{ false: colors.disabled, true: colors.primary }}
             thumbColor={colors.white}
@@ -524,7 +807,7 @@ export default function LightningDashboard() {
           colorMode={colorMode}
         >
           <Switch
-            value={lightning.backup?.encryptWithPassword ?? false}
+            value={lightningSettings.backup?.encryptWithPassword ?? false}
             onValueChange={v => handleBackupChange('encryptWithPassword', v)}
             trackColor={{ false: colors.disabled, true: colors.primary }}
             thumbColor={colors.white}
@@ -551,7 +834,7 @@ export default function LightningDashboard() {
               styles.optionRow,
               {
                 backgroundColor:
-                  lightning.backup?.cloudProvider === provider
+                  lightningSettings.backup?.cloudProvider === provider
                     ? alpha(colors.primary, 0.12)
                     : alpha(colors.border[colorMode], 0.3),
               },
@@ -563,7 +846,7 @@ export default function LightningDashboard() {
               {provider === 'icloud' && '☁️ iCloud'}
               {provider === 'gdrive' && '📁 Google Drive'}
             </Text>
-            {lightning.backup?.cloudProvider === provider && (
+            {lightningSettings.backup?.cloudProvider === provider && (
               <IconSymbol name="checkmark" size={20} color={colors.primary} />
             )}
           </TouchableOpacity>
@@ -572,7 +855,7 @@ export default function LightningDashboard() {
         {/* Backup screen is in settings */}
       </Section>
 
-      {/* ========== SECTION 5: WATCHTOWER ========== */}
+      {/* ========== SECTION 6: WATCHTOWER ========== */}
       <Section title="Watchtower" icon="👁️" colorMode={colorMode}>
         <SettingRow
           label="Watchtower Local"
@@ -580,7 +863,7 @@ export default function LightningDashboard() {
           colorMode={colorMode}
         >
           <Switch
-            value={lightning.watchtower?.localEnabled ?? false}
+            value={lightningSettings.watchtower?.localEnabled ?? false}
             onValueChange={v => handleWatchtowerChange('localEnabled', v)}
             trackColor={{ false: colors.disabled, true: colors.primary }}
             thumbColor={colors.white}
@@ -593,14 +876,14 @@ export default function LightningDashboard() {
           colorMode={colorMode}
         >
           <Switch
-            value={lightning.watchtower?.remoteEnabled ?? false}
+            value={lightningSettings.watchtower?.remoteEnabled ?? false}
             onValueChange={v => handleWatchtowerChange('remoteEnabled', v)}
             trackColor={{ false: colors.disabled, true: colors.primary }}
             thumbColor={colors.white}
           />
         </SettingRow>
 
-        {lightning.watchtower?.remoteEnabled && (
+        {lightningSettings.watchtower?.remoteEnabled && (
           <View style={styles.inputContainer}>
             <Text style={[styles.inputLabel, { color: colors.textSecondary[colorMode] }]}>
               URL do Servidor
@@ -613,7 +896,7 @@ export default function LightningDashboard() {
                   color: colors.text[colorMode],
                 },
               ]}
-              value={lightning.watchtower?.remoteUrl ?? ''}
+              value={lightningSettings.watchtower?.remoteUrl ?? ''}
               onChangeText={v => handleWatchtowerChange('remoteUrl', v)}
               placeholder="wss://watchtower.example.com"
               placeholderTextColor={colors.placeholder}
@@ -629,7 +912,7 @@ export default function LightningDashboard() {
           colorMode={colorMode}
         >
           <Switch
-            value={lightning.watchtower?.autoUploadRevocations ?? false}
+            value={lightningSettings.watchtower?.autoUploadRevocations ?? false}
             onValueChange={v => handleWatchtowerChange('autoUploadRevocations', v)}
             trackColor={{ false: colors.disabled, true: colors.primary }}
             thumbColor={colors.white}
@@ -650,7 +933,7 @@ export default function LightningDashboard() {
         </TouchableOpacity>
       </Section>
 
-      {/* ========== SECTION 6: SUBMARINE SWAPS ========== */}
+      {/* ========== SECTION 7: SUBMARINE SWAPS ========== */}
       <Section title="Submarine Swaps" icon="🔄" colorMode={colorMode}>
         <SettingRow
           label="Auto-Swap"
@@ -658,14 +941,14 @@ export default function LightningDashboard() {
           colorMode={colorMode}
         >
           <Switch
-            value={lightning.swapLimits?.autoSwapEnabled ?? false}
+            value={lightningSettings.swapLimits?.autoSwapEnabled ?? false}
             onValueChange={v => handleSwapLimitsChange('autoSwapEnabled', v)}
             trackColor={{ false: colors.disabled, true: colors.primary }}
             thumbColor={colors.white}
           />
         </SettingRow>
 
-        {lightning.swapLimits?.autoSwapEnabled && (
+        {lightningSettings.swapLimits?.autoSwapEnabled && (
           <View style={styles.inputContainer}>
             <Text style={[styles.inputLabel, { color: colors.textSecondary[colorMode] }]}>
               Balanço Alvo (% Lightning)
@@ -678,7 +961,7 @@ export default function LightningDashboard() {
                   color: colors.text[colorMode],
                 },
               ]}
-              value={lightning.swapLimits?.targetBalance?.toString() ?? ''}
+              value={lightningSettings.swapLimits?.targetBalance?.toString() ?? ''}
               onChangeText={v => {
                 const num = parseInt(v, 10)
                 if (!isNaN(num) && num >= 0 && num <= 100) {
@@ -702,6 +985,101 @@ export default function LightningDashboard() {
         />
 
         <Text style={[styles.subsectionTitle, { color: colors.textSecondary[colorMode] }]}>
+          Swap-In Automático
+        </Text>
+
+        <SettingRow
+          label="Habilitado"
+          description="Converter automaticamente saldo on-chain para Lightning"
+          colorMode={colorMode}
+        >
+          <Switch
+            value={lightningSettings.swapIn?.enabled ?? false}
+            onValueChange={v => handleSwapInChange('enabled', v)}
+            trackColor={{ false: colors.disabled, true: colors.primary }}
+            thumbColor={colors.white}
+          />
+        </SettingRow>
+
+        {lightningSettings.swapIn?.enabled && (
+          <>
+            <View style={styles.inputContainer}>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary[colorMode] }]}>
+                Taxa Máxima Absoluta (sats)
+              </Text>
+              <TextInput
+                style={[
+                  styles.textInput,
+                  {
+                    backgroundColor: alpha(colors.border[colorMode], 0.5),
+                    color: colors.text[colorMode],
+                  },
+                ]}
+                value={lightningSettings.swapIn?.maxAbsoluteFee?.toString() ?? ''}
+                onChangeText={v => {
+                  const num = parseInt(v, 10)
+                  if (!isNaN(num) && num >= 0) {
+                    handleSwapInChange('maxAbsoluteFee', num)
+                  }
+                }}
+                keyboardType="numeric"
+                placeholder="100"
+                placeholderTextColor={colors.placeholder}
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary[colorMode] }]}>
+                Taxa Máxima Relativa (%)
+              </Text>
+              <TextInput
+                style={[
+                  styles.textInput,
+                  {
+                    backgroundColor: alpha(colors.border[colorMode], 0.5),
+                    color: colors.text[colorMode],
+                  },
+                ]}
+                value={(
+                  (lightningSettings.swapIn?.maxRelativeFeeBasisPoints ?? 0) / 100
+                ).toString()}
+                onChangeText={v => {
+                  const num = parseFloat(v)
+                  if (!isNaN(num) && num >= 0 && num <= 100) {
+                    handleSwapInChange('maxRelativeFeeBasisPoints', Math.floor(num * 100))
+                  }
+                }}
+                keyboardType="numeric"
+                placeholder="0.5"
+                placeholderTextColor={colors.placeholder}
+              />
+            </View>
+
+            <SettingRow
+              label="Pular Verificação Absoluta"
+              description="Ignorar limite de taxa absoluta"
+              colorMode={colorMode}
+            >
+              <Switch
+                value={lightningSettings.swapIn?.skipAbsoluteFeeCheck ?? false}
+                onValueChange={v => handleSwapInChange('skipAbsoluteFeeCheck', v)}
+                trackColor={{ false: colors.disabled, true: colors.primary }}
+                thumbColor={colors.white}
+              />
+            </SettingRow>
+          </>
+        )}
+
+        <View
+          style={[
+            styles.divider,
+            {
+              backgroundColor: alpha(colors.border[colorMode], colorMode === 'dark' ? 0.3 : 0.5),
+            },
+          ]}
+        />
+
+        <Text style={[styles.subsectionTitle, { color: colors.textSecondary[colorMode] }]}>
           Limites
         </Text>
 
@@ -711,7 +1089,7 @@ export default function LightningDashboard() {
               Máx. Loop In
             </Text>
             <Text style={[styles.limitValue, { color: colors.text[colorMode] }]}>
-              {formatSats(lightning.swapLimits?.maxLoopInSats ?? 0)}
+              {formatSats(lightningSettings.swapLimits?.maxLoopInSats ?? 0)}
             </Text>
           </View>
           <View style={styles.limitItem}>
@@ -719,7 +1097,7 @@ export default function LightningDashboard() {
               Máx. Loop Out
             </Text>
             <Text style={[styles.limitValue, { color: colors.text[colorMode] }]}>
-              {formatSats(lightning.swapLimits?.maxLoopOutSats ?? 0)}
+              {formatSats(lightningSettings.swapLimits?.maxLoopOutSats ?? 0)}
             </Text>
           </View>
           <View style={styles.limitItem}>
@@ -727,7 +1105,7 @@ export default function LightningDashboard() {
               Mínimo
             </Text>
             <Text style={[styles.limitValue, { color: colors.text[colorMode] }]}>
-              {formatSats(lightning.swapLimits?.minSwapSats ?? 0)}
+              {formatSats(lightningSettings.swapLimits?.minSwapSats ?? 0)}
             </Text>
           </View>
         </View>
@@ -744,9 +1122,39 @@ export default function LightningDashboard() {
           <Text style={styles.actionButtonText}>Realizar Swap</Text>
           <IconSymbol name="chevron.right" size={16} color={colors.primary} />
         </TouchableOpacity>
+
+        {/* Pending Swap-In Balance */}
+        {inboundBalance.pendingOnChainBalance > 0n && (
+          <View style={[styles.pendingBalanceCard, { backgroundColor: alpha(colors.info, 0.1) }]}>
+            <View style={styles.pendingBalanceHeader}>
+              <Text style={[styles.pendingBalanceTitle, { color: colors.info }]}>
+                💰 Saldo On-Chain Pendente
+              </Text>
+              <Text style={[styles.pendingBalanceAmount, { color: colors.text[colorMode] }]}>
+                {formatSats(inboundBalance.pendingOnChainBalance)}
+              </Text>
+            </View>
+
+            {inboundBalance.willAutoConvert ? (
+              <Text style={[styles.pendingBalanceNote, { color: colors.textSecondary[colorMode] }]}>
+                Será convertido automaticamente para Lightning
+              </Text>
+            ) : (
+              <TouchableOpacity
+                style={[styles.convertButton, { backgroundColor: colors.primary }]}
+                onPress={() => {
+                  // TODO: Implementar conversão manual
+                  Alert.alert('Conversão Manual', 'Funcionalidade em desenvolvimento')
+                }}
+              >
+                <Text style={styles.convertButtonText}>Converter Agora</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </Section>
 
-      {/* ========== SECTION 7: CHANNELS ========== */}
+      {/* ========== SECTION 8: CHANNELS ========== */}
       <Section title="Canais" icon="📡" colorMode={colorMode}>
         <SettingRow
           label="Zero-Conf Channels"
@@ -754,8 +1162,8 @@ export default function LightningDashboard() {
           colorMode={colorMode}
         >
           <Switch
-            value={lightning.zeroConfEnabled ?? false}
-            onValueChange={v => dispatch(actions.setZeroConfEnabled(v))}
+            value={lightningSettings.zeroConfEnabled ?? false}
+            onValueChange={v => settingsActions.setZeroConfEnabled(v)}
             trackColor={{ false: colors.disabled, true: colors.primary }}
             thumbColor={colors.white}
           />
@@ -767,8 +1175,8 @@ export default function LightningDashboard() {
           colorMode={colorMode}
         >
           <Switch
-            value={lightning.autoChannelManagement ?? false}
-            onValueChange={v => dispatch(actions.setAutoChannelManagement(v))}
+            value={lightningSettings.autoChannelManagement ?? false}
+            onValueChange={v => settingsActions.setAutoChannelManagement(v)}
             trackColor={{ false: colors.disabled, true: colors.primary }}
             thumbColor={colors.white}
           />
@@ -795,11 +1203,11 @@ export default function LightningDashboard() {
                 color: colors.text[colorMode],
               },
             ]}
-            value={lightning.feeConfig?.minChannelSize?.toString() ?? ''}
+            value={lightningSettings.feeConfig?.minChannelSize?.toString() ?? ''}
             onChangeText={v => {
               const num = parseInt(v, 10)
               if (!isNaN(num) && num >= 0) {
-                dispatch(actions.setLightningFeeConfig({ minChannelSize: num }))
+                settingsActions.setLightningFeeConfig({ minChannelSize: num })
               }
             }}
             keyboardType="numeric"
@@ -820,11 +1228,11 @@ export default function LightningDashboard() {
                 color: colors.text[colorMode],
               },
             ]}
-            value={lightning.maxHtlcCount?.toString() ?? ''}
+            value={lightningSettings.maxHtlcCount?.toString() ?? ''}
             onChangeText={v => {
               const num = parseInt(v, 10)
               if (!isNaN(num) && num >= 1 && num <= 483) {
-                dispatch(actions.setMaxHtlcCount(num))
+                settingsActions.setMaxHtlcCount(num)
               }
             }}
             keyboardType="numeric"
@@ -861,7 +1269,7 @@ export default function LightningDashboard() {
         </View>
       </Section>
 
-      {/* ========== SECTION 8: ADVANCED ========== */}
+      {/* ========== SECTION 9: ADVANCED ========== */}
       <Section title="Avançado" icon="⚙️" colorMode={colorMode} defaultExpanded={false}>
         <View style={styles.inputContainer}>
           <Text style={[styles.inputLabel, { color: colors.textSecondary[colorMode] }]}>
@@ -875,7 +1283,7 @@ export default function LightningDashboard() {
                 color: colors.text[colorMode],
               },
             ]}
-            value={lightning.advanced?.maxRoutingFeePercent?.toString() ?? ''}
+            value={lightningSettings.advanced?.maxRoutingFeePercent?.toString() ?? ''}
             onChangeText={v => {
               const num = parseFloat(v)
               if (!isNaN(num) && num >= 0) {
@@ -900,7 +1308,7 @@ export default function LightningDashboard() {
                 color: colors.text[colorMode],
               },
             ]}
-            value={lightning.advanced?.pathfindingTimeout?.toString() ?? ''}
+            value={lightningSettings.advanced?.pathfindingTimeout?.toString() ?? ''}
             onChangeText={v => {
               const num = parseInt(v, 10)
               if (!isNaN(num) && num >= 1) {
@@ -925,7 +1333,7 @@ export default function LightningDashboard() {
                 color: colors.text[colorMode],
               },
             ]}
-            value={lightning.advanced?.maxHops?.toString() ?? ''}
+            value={lightningSettings.advanced?.maxHops?.toString() ?? ''}
             onChangeText={v => {
               const num = parseInt(v, 10)
               if (!isNaN(num) && num >= 1 && num <= 30) {
@@ -950,11 +1358,11 @@ export default function LightningDashboard() {
                 color: colors.text[colorMode],
               },
             ]}
-            value={lightning.defaultCltvExpiry?.toString() ?? ''}
+            value={lightningSettings.defaultCltvExpiry?.toString() ?? ''}
             onChangeText={v => {
               const num = parseInt(v, 10)
               if (!isNaN(num) && num >= 9) {
-                dispatch(actions.setDefaultCltvExpiry(num))
+                settingsActions.setDefaultCltvExpiry(num)
               }
             }}
             keyboardType="numeric"
@@ -969,7 +1377,7 @@ export default function LightningDashboard() {
           colorMode={colorMode}
         >
           <Switch
-            value={lightning.advanced?.allowLegacyChannels ?? false}
+            value={lightningSettings.advanced?.allowLegacyChannels ?? false}
             onValueChange={v => handleAdvancedChange('allowLegacyChannels', v)}
             trackColor={{ false: colors.disabled, true: colors.primary }}
             thumbColor={colors.white}
@@ -1049,6 +1457,7 @@ const styles = StyleSheet.create({
   },
   settingControl: {
     alignItems: 'flex-end',
+    minWidth: 120,
   },
   divider: {
     height: 1,
@@ -1199,4 +1608,65 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 8,
   },
+  pickerContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    flex: 1,
+  },
+  pickerOption: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 36,
+  },
+  pickerOptionSelected: {
+    backgroundColor: colors.primary,
+  },
+  pickerOptionText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  pickerOptionTextSelected: {
+    color: colors.white,
+  },
+  pendingBalanceCard: {
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: alpha(colors.info, 0.3),
+  } as ViewStyle,
+  pendingBalanceHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  } as ViewStyle,
+  pendingBalanceTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+  } as TextStyle,
+  pendingBalanceAmount: {
+    fontSize: 16,
+    fontWeight: '700',
+  } as TextStyle,
+  pendingBalanceNote: {
+    fontSize: 12,
+    fontStyle: 'italic',
+  } as TextStyle,
+  convertButton: {
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  } as ViewStyle,
+  convertButtonText: {
+    color: colors.white,
+    fontSize: 14,
+    fontWeight: '600',
+  } as TextStyle,
 })

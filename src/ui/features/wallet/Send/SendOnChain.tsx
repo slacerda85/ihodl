@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useCallback, useMemo } from 'react'
 import {
   View,
   Text,
@@ -9,17 +9,21 @@ import {
   Alert,
   Switch,
 } from 'react-native'
-import { useRouter } from 'expo-router'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 import { useIsDark, useBalance } from '@/ui/features/app-provider'
 import { formatBalance } from '../utils'
-import { useNetwork } from '../../network/NetworkProvider'
-import { addressService, transactionService } from '@/core/services'
+import { addressService } from '@/core/services'
 import CoinSelectionOptions from './CoinSelectionOptions'
 import AdvancedTransactionOptions from './AdvancedTransactionOptions'
 import AdvancedFeeEstimation from './AdvancedFeeEstimation'
+import {
+  useSendOnChainState,
+  useFeeRates,
+  useBatchTransactions,
+  useSendOnChainActions,
+} from './SendOnChain/index'
 
 /**
  * SendOnChain Component
@@ -31,111 +35,56 @@ import AdvancedFeeEstimation from './AdvancedFeeEstimation'
  * - Construção, assinatura e envio de transações
  */
 export default function SendOnChain() {
-  const router = useRouter()
   const isDark = useIsDark()
-  const { getConnection } = useNetwork()
-  const { utxos, balance } = useBalance()
+  const { balance } = useBalance()
 
-  const [submitting, setSubmitting] = useState<boolean>(false)
-  const [recipientAddress, setRecipientAddress] = useState<string>('')
-  const [amountInput, setAmountInput] = useState<string>('')
-  const [amount, setAmount] = useState<number>(0)
-  const [memo, setMemo] = useState<string>('')
-  const [autoFeeAdjustment, setAutoFeeAdjustment] = useState<boolean>(true)
-  const [feeRates, setFeeRates] = useState<{
-    slow: number
-    normal: number
-    fast: number
-    urgent: number
-  } | null>(null)
-  const [loadingFeeRates, setLoadingFeeRates] = useState<boolean>(false)
-  const [selectedFeeRate, setSelectedFeeRate] = useState<'slow' | 'normal' | 'fast' | 'urgent'>(
-    'normal',
-  )
-
-  // Batch transactions state
-  const [isBatchMode, setIsBatchMode] = useState<boolean>(false)
-  const [batchTransactions, setBatchTransactions] = useState<
-    Array<{
-      id: string
-      recipientAddress: string
-      amount: number
-      memo?: string
-    }>
-  >([])
-
-  // Advanced options state
-  const [coinSelectionAlgorithm, setCoinSelectionAlgorithm] = useState<
-    'largest_first' | 'smallest_first' | 'branch_and_bound' | 'random' | 'privacy_focused'
-  >('branch_and_bound')
-  const [avoidAddressReuse, setAvoidAddressReuse] = useState<boolean>(false)
-  const [consolidateSmallUtxos, setConsolidateSmallUtxos] = useState<boolean>(false)
-  const [enableRBF, setEnableRBF] = useState<boolean>(false)
-  const [sighashType, setSighashType] = useState<'ALL' | 'NONE' | 'SINGLE' | 'ANYONECANPAY'>('ALL')
-  const [enableCPFP, setEnableCPFP] = useState<boolean>(false)
-  const [cpfpTargetFeeRate, setCpfpTargetFeeRate] = useState<number>(10)
-
-  // Refs para evitar múltiplas chamadas
-  const feeRatesFetchedRef = useRef(false)
+  // Hooks customizados para gerenciar estado e lógica
+  const state = useSendOnChainState()
+  const { selectedFeeRate, feeRate, setSelectedFeeRate } = useFeeRates()
+  const { batchTransactions, addToBatch, removeFromBatch, totalBatchAmount, batchCount } =
+    useBatchTransactions()
+  const { sendTransaction, sendBatchTransactions } = useSendOnChainActions()
 
   // Validação de endereço derivada via useMemo (não causa re-render extra)
   const addressValid = useMemo(() => {
-    if (!recipientAddress.trim()) return null
-    return addressService.validateAddress(recipientAddress)
-  }, [recipientAddress])
-
-  // Fee rate efetivo derivado (sem state duplicado)
-  const feeRate = useMemo(() => {
-    if (feeRates) {
-      return feeRates[selectedFeeRate]
-    }
-    return 1 // fallback
-  }, [feeRates, selectedFeeRate])
+    if (!state.recipientAddress.trim()) return null
+    return addressService.validateAddress(state.recipientAddress)
+  }, [state.recipientAddress])
 
   // Validação de amount derivada via useMemo
   const amountValid = useMemo(() => {
-    if (amount <= 0) return null
+    if (state.amount <= 0) return null
 
-    const amountInSatoshis = Math.round(amount * 100000000)
+    const amountInSatoshis = Math.round(state.amount * 100000000)
     const feeRateInteger = Math.round(feeRate)
     const estimatedTxSize = 250
     const estimatedFeeInSatoshis = Math.round(feeRateInteger * estimatedTxSize)
     const balanceInSatoshis = Math.round(balance * 100000000)
 
     return amountInSatoshis + estimatedFeeInSatoshis <= balanceInSatoshis
-  }, [feeRate, amount, balance])
+  }, [feeRate, state.amount, balance])
 
-  // Function to fetch recommended fee rates from network
-  const fetchRecommendedFeeRates = useCallback(async () => {
-    if (feeRatesFetchedRef.current) return
-    feeRatesFetchedRef.current = true
+  // Function to normalize amount input (convert commas to dots)
+  const normalizeAmount = (text: string): string => {
+    return text.replace(/,/g, '.')
+  }
 
-    setLoadingFeeRates(true)
-    try {
-      console.log('[SendOnChain] Fetching recommended fee rates from network...')
-      const connection = await getConnection()
-      const rates = await transactionService.getFeeRates(connection)
-      setFeeRates(rates)
-      setSelectedFeeRate('normal')
-      console.log('[SendOnChain] Fee rates updated:', rates)
-    } catch (error) {
-      console.error('[SendOnChain] Failed to fetch fee rates:', error)
-      const fallbackRates = { slow: 1, normal: 2, fast: 5, urgent: 10 }
-      setFeeRates(fallbackRates)
-      setSelectedFeeRate('normal')
-    } finally {
-      setLoadingFeeRates(false)
-    }
-  }, [getConnection])
-
-  // Effect to fetch fee rates quando componente monta
-  useEffect(() => {
-    fetchRecommendedFeeRates()
-  }, [fetchRecommendedFeeRates])
+  // Function to handle amount input changes
+  const handleAmountChange = (text: string) => {
+    const normalizedText = normalizeAmount(text)
+    state.setAmountInput(normalizedText)
+    const num = parseFloat(normalizedText)
+    state.setAmount(isNaN(num) ? 0 : num)
+  }
 
   // Function to add transaction to batch
-  const addToBatch = useCallback(() => {
-    if (!recipientAddress.trim() || addressValid !== true || amount <= 0 || amountValid !== true) {
+  const handleAddToBatch = useCallback(() => {
+    if (
+      !state.recipientAddress.trim() ||
+      addressValid !== true ||
+      state.amount <= 0 ||
+      amountValid !== true
+    ) {
       Alert.alert(
         'Error',
         'Please fill in valid recipient address and amount before adding to batch',
@@ -143,263 +92,24 @@ export default function SendOnChain() {
       return
     }
 
-    const newTransaction = {
-      id: Date.now().toString(),
-      recipientAddress,
-      amount,
-      memo: memo.trim() || undefined,
-    }
+    addToBatch({
+      recipient: state.recipientAddress,
+      amount: state.amount,
+      feeRate,
+    })
 
-    setBatchTransactions(prev => [...prev, newTransaction])
     // Clear current inputs
-    setRecipientAddress('')
-    setAmountInput('')
-    setAmount(0)
-    setMemo('')
-  }, [recipientAddress, addressValid, amount, amountValid, memo])
-
-  // Function to remove transaction from batch
-  const removeFromBatch = useCallback((id: string) => {
-    setBatchTransactions(prev => prev.filter(tx => tx.id !== id))
-  }, [])
-
-  // Function to normalize amount input (convert commas to dots)
-  const normalizeAmount = (text: string): string => {
-    return text.replace(/,/g, '.')
-  }
-  const validateBatchTransactions = useCallback(() => {
-    if (batchTransactions.length === 0) return false
-
-    const totalAmount = batchTransactions.reduce((sum, tx) => sum + tx.amount, 0)
-    const totalAmountInSatoshis = Math.round(totalAmount * 100000000)
-    const feeRateInteger = Math.round(feeRate)
-    const estimatedTxSize = 250 + (batchTransactions.length - 1) * 150 // Base tx + additional outputs
-    const estimatedFeeInSatoshis = Math.round(feeRateInteger * estimatedTxSize)
-    const balanceInSatoshis = Math.round(balance * 100000000)
-
-    return totalAmountInSatoshis + estimatedFeeInSatoshis <= balanceInSatoshis
-  }, [batchTransactions, feeRate, balance])
-
-  // Function to handle amount input changes
-  const handleAmountChange = (text: string) => {
-    const normalizedText = normalizeAmount(text)
-    setAmountInput(normalizedText)
-    const num = parseFloat(normalizedText)
-    setAmount(isNaN(num) ? 0 : num)
-  }
-
-  async function handleSendBatch() {
-    if (batchTransactions.length === 0) {
-      Alert.alert('Error', 'No transactions in batch')
-      return
-    }
-
-    if (!validateBatchTransactions()) {
-      Alert.alert('Error', 'Insufficient balance for batch transaction')
-      return
-    }
-
-    setSubmitting(true)
-
-    try {
-      console.log('[SendOnChain] Starting batch transaction assembly...')
-
-      const confirmedUtxos = utxos.filter(utxo => utxo.confirmations >= 2)
-
-      if (confirmedUtxos.length === 0) {
-        Alert.alert('Error', 'No confirmed UTXOs available for transaction')
-        setSubmitting(false)
-        return
-      }
-
-      const changeAddress = addressService.getNextChangeAddress()
-      const feeRateInteger = Math.round(feeRate)
-
-      // Build batch transaction
-      const buildResult = await transactionService.buildBatchTransaction({
-        transactions: batchTransactions.map(tx => ({
-          recipientAddress: tx.recipientAddress,
-          amount: Math.round(tx.amount * 100000000),
-        })),
-        feeRate: feeRateInteger,
-        utxos: confirmedUtxos,
-        changeAddress,
-        coinSelectionAlgorithm,
-        avoidAddressReuse,
-        consolidateSmallUtxos,
-        enableRBF,
-      })
-
-      console.log('[SendOnChain] Signing batch transaction...')
-      const signResult = await transactionService.signTransaction({
-        transaction: buildResult.transaction,
-        inputs: buildResult.inputs,
-      })
-
-      console.log('[SendOnChain] Sending batch transaction...')
-      const sendResult = await transactionService.sendTransaction({
-        signedTransaction: signResult.signedTransaction,
-        txHex: signResult.txHex,
-      })
-
-      if (sendResult.success) {
-        console.log('[SendOnChain] Batch transaction sent successfully...')
-
-        // Save each transaction in batch
-        for (const tx of batchTransactions) {
-          await transactionService.savePendingTransaction({
-            txid: sendResult.txid!,
-            recipientAddress: tx.recipientAddress,
-            amount: Math.round(tx.amount * 100000000),
-            fee: Math.round(buildResult.fee / batchTransactions.length), // Distribute fee evenly
-            txHex: signResult.txHex,
-            memo: tx.memo,
-          })
-        }
-
-        setSubmitting(false)
-        Alert.alert(
-          'Batch Transaction Sent',
-          `Batch transaction successfully sent!\n\nTXID: ${sendResult.txid}\nRecipients: ${batchTransactions.length}\nTotal Amount: ${batchTransactions.reduce((sum, tx) => sum + tx.amount, 0).toFixed(8)} BTC\nTotal Fee: ${(buildResult.fee / 100000000).toFixed(8)} BTC`,
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                setBatchTransactions([])
-                setIsBatchMode(false)
-                router.back()
-              },
-            },
-          ],
-        )
-      } else {
-        console.log('[SendOnChain] Failed to send batch transaction:', sendResult.error)
-        Alert.alert('Error', `Failed to send batch transaction: ${sendResult.error}`)
-        setSubmitting(false)
-      }
-    } catch (error) {
-      console.log('[SendOnChain] Batch transaction failed:', error)
-      Alert.alert('Error', `Batch transaction failed: ${(error as Error).message}`)
-      setSubmitting(false)
-    }
-  }
+    state.setRecipientAddress('')
+    state.setAmountInput('')
+    state.setAmount(0)
+    state.setMemo('')
+  }, [state, addressValid, amountValid, feeRate, addToBatch])
 
   async function handleSend() {
-    if (isBatchMode) {
-      await handleSendBatch()
-      return
-    }
-
-    setSubmitting(true)
-
-    if (!recipientAddress.trim()) {
-      Alert.alert('Error', 'Please enter a recipient address')
-      setSubmitting(false)
-      return
-    }
-
-    if (addressValid === false) {
-      Alert.alert('Error', 'Please enter a valid Bitcoin address')
-      setSubmitting(false)
-      return
-    }
-
-    if (amount <= 0) {
-      Alert.alert('Error', 'Please enter a valid amount')
-      setSubmitting(false)
-      return
-    }
-
-    const amountInSatoshis = Math.round(amount * 100000000)
-    if (amountInSatoshis < 546) {
-      Alert.alert('Error', `Amount must be at least 0.00000546 BTC (546 satoshis) to avoid dust`)
-      setSubmitting(false)
-      return
-    }
-
-    if (feeRate <= 0) {
-      Alert.alert('Error', 'Please enter a valid fee rate')
-      setSubmitting(false)
-      return
-    }
-
-    console.log('[SendOnChain] Starting transaction assembly...')
-
-    const confirmedUtxos = utxos.filter(utxo => utxo.confirmations >= 2)
-
-    if (confirmedUtxos.length === 0) {
-      Alert.alert('Error', 'No confirmed UTXOs available for transaction')
-      setSubmitting(false)
-      return
-    }
-
-    try {
-      console.log('[SendOnChain] Retrieving wallet data...')
-
-      const changeAddress = addressService.getNextChangeAddress()
-
-      const feeRateInteger = Math.round(feeRate)
-      console.log('[SendOnChain] feeRate (sat/vB)', feeRateInteger)
-
-      const buildResult = await transactionService.buildTransaction({
-        recipientAddress,
-        amount: amountInSatoshis,
-        feeRate: feeRateInteger,
-        utxos: confirmedUtxos,
-        changeAddress,
-        coinSelectionAlgorithm,
-        avoidAddressReuse,
-        consolidateSmallUtxos,
-        enableRBF,
-      })
-
-      console.log('[SendOnChain] Signing transaction...')
-      const signResult = await transactionService.signTransaction({
-        transaction: buildResult.transaction,
-        inputs: buildResult.inputs,
-      })
-
-      console.log('[SendOnChain] Sending transaction...')
-      const sendResult = await transactionService.sendTransaction({
-        signedTransaction: signResult.signedTransaction,
-        txHex: signResult.txHex,
-      })
-
-      if (sendResult.success) {
-        console.log('[SendOnChain] Transaction sent successfully...')
-
-        await transactionService.savePendingTransaction({
-          txid: sendResult.txid!,
-          recipientAddress,
-          amount: amountInSatoshis,
-          fee: buildResult.fee,
-          txHex: signResult.txHex,
-          memo,
-        })
-        console.log('[SendOnChain] Pending transaction saved to storage')
-
-        setSubmitting(false)
-        Alert.alert(
-          'Transaction Sent',
-          `Transaction successfully sent!\n\nTXID: ${sendResult.txid}\nAmount: ${amount.toFixed(8)} BTC\nFee: ${(buildResult.fee / 100000000).toFixed(8)} BTC`,
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                router.back()
-              },
-            },
-          ],
-        )
-      } else {
-        console.log('[SendOnChain] Failed to send transaction:', sendResult.error)
-        Alert.alert('Error', `Failed to send transaction: ${sendResult.error}`)
-        setSubmitting(false)
-      }
-    } catch (error) {
-      console.log('[SendOnChain] Transaction failed:', error)
-      Alert.alert('Error', `Transaction failed: ${(error as Error).message}`)
-      setSubmitting(false)
+    if (state.isBatchMode) {
+      await sendBatchTransactions()
+    } else {
+      await sendTransaction()
     }
   }
 
@@ -416,8 +126,8 @@ export default function SendOnChain() {
           ]}
           placeholder="Enter Bitcoin address (bc1...)"
           placeholderTextColor={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
-          value={recipientAddress}
-          onChangeText={setRecipientAddress}
+          value={state.recipientAddress}
+          onChangeText={state.setRecipientAddress}
           autoCapitalize="none"
           autoCorrect={false}
         />
@@ -436,20 +146,20 @@ export default function SendOnChain() {
           ]}
           placeholder="0.00000000"
           placeholderTextColor={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
-          value={amountInput}
+          value={state.amountInput}
           onChangeText={handleAmountChange}
           keyboardType="decimal-pad"
           autoCapitalize="none"
           autoCorrect={false}
         />
-        {amountValid === false && amount <= 0 && (
+        {amountValid === false && state.amount <= 0 && (
           <Text style={styles.errorText}>Amount must be greater than 0</Text>
         )}
-        {amountValid === false && amount > 0 && (
+        {amountValid === false && state.amount > 0 && (
           <Text style={styles.errorText}>
             Insufficient balance including estimated fees. Remaining:{' '}
             {formatBalance(
-              Math.max(0, balance - amount - (Math.round(feeRate) * 250) / 100000000),
+              Math.max(0, balance - state.amount - (Math.round(feeRate) * 250) / 100000000),
               'BTC',
             )}{' '}
             {'BTC'}
@@ -474,8 +184,8 @@ export default function SendOnChain() {
           style={[styles.input, isDark && styles.inputDark]}
           placeholder="Add a note for this transaction"
           placeholderTextColor={isDark ? colors.textSecondary.dark : colors.textSecondary.light}
-          value={memo}
-          onChangeText={setMemo}
+          value={state.memo}
+          onChangeText={state.setMemo}
           multiline
           numberOfLines={3}
         />
@@ -485,34 +195,34 @@ export default function SendOnChain() {
         <View style={styles.batchToggleContainer}>
           <Text style={[styles.label, isDark && styles.labelDark]}>Batch Mode</Text>
           <Switch
-            value={isBatchMode}
-            onValueChange={setIsBatchMode}
+            value={state.isBatchMode}
+            onValueChange={state.setIsBatchMode}
             trackColor={{ false: '#767577', true: colors.primary }}
-            thumbColor={isBatchMode ? colors.white : '#f4f3f4'}
+            thumbColor={state.isBatchMode ? colors.white : '#f4f3f4'}
           />
         </View>
         <Text style={[styles.batchInfo, isDark && styles.batchInfoDark]}>
-          {isBatchMode
+          {state.isBatchMode
             ? 'Add multiple recipients to send in a single transaction'
             : 'Send to a single recipient'}
         </Text>
 
-        {isBatchMode && (
+        {state.isBatchMode && (
           <>
             <Pressable
-              onPress={addToBatch}
+              onPress={handleAddToBatch}
               disabled={
-                !recipientAddress.trim() ||
+                !state.recipientAddress.trim() ||
                 addressValid !== true ||
-                amount <= 0 ||
+                state.amount <= 0 ||
                 amountValid !== true
               }
               style={[
                 styles.button,
                 styles.secondaryButton,
-                (!recipientAddress.trim() ||
+                (!state.recipientAddress.trim() ||
                   addressValid !== true ||
-                  amount <= 0 ||
+                  state.amount <= 0 ||
                   amountValid !== true) &&
                   styles.disabledButton,
               ]}
@@ -520,10 +230,10 @@ export default function SendOnChain() {
               <Text style={styles.secondaryButtonText}>Add to Batch</Text>
             </Pressable>
 
-            {batchTransactions.length > 0 && (
+            {batchCount > 0 && (
               <View style={styles.section}>
                 <Text style={[styles.label, isDark && styles.labelDark]}>
-                  Batch Transactions ({batchTransactions.length})
+                  Batch Transactions ({batchCount})
                 </Text>
                 {batchTransactions.map((tx, index) => (
                   <View key={tx.id} style={[styles.batchItem, isDark && styles.batchItemDark]}>
@@ -531,16 +241,11 @@ export default function SendOnChain() {
                       <Text
                         style={[styles.batchItemAddress, isDark && styles.batchItemAddressDark]}
                       >
-                        {index + 1}. {tx.recipientAddress}
+                        {index + 1}. {tx.recipient}
                       </Text>
                       <Text style={[styles.batchItemAmount, isDark && styles.batchItemAmountDark]}>
                         {tx.amount.toFixed(8)} BTC
                       </Text>
-                      {tx.memo && (
-                        <Text style={[styles.batchItemMemo, isDark && styles.batchItemMemoDark]}>
-                          {tx.memo}
-                        </Text>
-                      )}
                     </View>
                     <Pressable onPress={() => removeFromBatch(tx.id)} style={styles.removeButton}>
                       <IconSymbol name="minus.circle.fill" size={20} color={colors.error} />
@@ -548,7 +253,7 @@ export default function SendOnChain() {
                   </View>
                 ))}
                 <Text style={[styles.batchTotal, isDark && styles.batchTotalDark]}>
-                  Total: {batchTransactions.reduce((sum, tx) => sum + tx.amount, 0).toFixed(8)} BTC
+                  Total: {totalBatchAmount.toFixed(8)} BTC
                 </Text>
               </View>
             )}
@@ -557,32 +262,32 @@ export default function SendOnChain() {
       </View>
 
       <CoinSelectionOptions
-        selectedAlgorithm={coinSelectionAlgorithm}
-        onAlgorithmChange={setCoinSelectionAlgorithm}
-        avoidAddressReuse={avoidAddressReuse}
-        onAvoidAddressReuseChange={setAvoidAddressReuse}
-        consolidateSmallUtxos={consolidateSmallUtxos}
-        onConsolidateSmallUtxosChange={setConsolidateSmallUtxos}
+        selectedAlgorithm={state.coinSelectionAlgorithm}
+        onAlgorithmChange={state.setCoinSelectionAlgorithm}
+        avoidAddressReuse={state.avoidAddressReuse}
+        onAvoidAddressReuseChange={state.setAvoidAddressReuse}
+        consolidateSmallUtxos={state.consolidateSmallUtxos}
+        onConsolidateSmallUtxosChange={state.setConsolidateSmallUtxos}
       />
 
       <AdvancedTransactionOptions
-        enableRBF={enableRBF}
-        onEnableRBFChange={setEnableRBF}
-        selectedSighashType={sighashType}
-        onSighashTypeChange={setSighashType}
-        enableCPFP={enableCPFP}
-        onEnableCPFPChange={setEnableCPFP}
-        cpfpTargetFeeRate={cpfpTargetFeeRate}
-        onCpfpTargetFeeRateChange={setCpfpTargetFeeRate}
+        enableRBF={state.enableRBF}
+        onEnableRBFChange={state.setEnableRBF}
+        selectedSighashType={state.sighashType}
+        onSighashTypeChange={state.setSighashType}
+        enableCPFP={state.enableCPFP}
+        onEnableCPFPChange={state.setEnableCPFP}
+        cpfpTargetFeeRate={state.cpfpTargetFeeRate}
+        onCpfpTargetFeeRateChange={state.setCpfpTargetFeeRate}
       />
 
       <Pressable
         onPress={handleSend}
-        disabled={submitting || amountValid === false}
-        style={[styles.button, styles.primaryButton, submitting && styles.disabledButton]}
+        disabled={state.submitting || amountValid === false}
+        style={[styles.button, styles.primaryButton, state.submitting && styles.disabledButton]}
       >
-        {submitting ? <ActivityIndicator color={colors.white} /> : null}
-        <Text style={styles.buttonText}>{submitting ? 'Sending...' : 'Send Bitcoin'}</Text>
+        {state.submitting ? <ActivityIndicator color={colors.white} /> : null}
+        <Text style={styles.buttonText}>{state.submitting ? 'Sending...' : 'Send Bitcoin'}</Text>
       </Pressable>
     </>
   )

@@ -25,6 +25,8 @@ import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 import { useLightningActions, useHasActiveChannels } from '../hooks'
 import { useActiveColorMode } from '@/ui/features/app-provider'
+import { useAutoChannelOpening, useInboundCapacity } from '../hooks'
+import { useInboundBalance } from '../hooks'
 import type { Invoice, Millisatoshis } from '../types'
 
 // ==========================================
@@ -107,6 +109,9 @@ export default function PaymentReceiveScreen() {
   const colorMode = useActiveColorMode()
   const hasActiveChannels = useHasActiveChannels()
   const { generateInvoice } = useLightningActions()
+  const { openChannelIfNeeded, isAutoEnabled } = useAutoChannelOpening()
+  const inboundCapacity = useInboundCapacity()
+  const inboundBalance = useInboundBalance()
 
   const [state, setState] = useState<ReceiveState>({
     step: 'input',
@@ -115,6 +120,8 @@ export default function PaymentReceiveScreen() {
     invoice: null,
     error: null,
   })
+
+  const [isOpeningChannel, setIsOpeningChannel] = useState(false)
 
   // ==========================================
   // ACTIONS
@@ -131,6 +138,43 @@ export default function PaymentReceiveScreen() {
     setState(prev => ({ ...prev, step: 'generating', error: null }))
 
     try {
+      // Verifica liquidez se há valor especificado
+      if (amountMsat > 0n) {
+        // Calcula se há liquidez suficiente (inline para evitar hook rules violation)
+        const amountSat = amountMsat / 1000n
+        const effectiveCapacity = inboundCapacity + inboundBalance.pendingOnChainBalance
+        const hasLiquidity = effectiveCapacity >= amountSat
+
+        if (!hasLiquidity && isAutoEnabled) {
+          setIsOpeningChannel(true)
+
+          // Tenta abrir canal automaticamente
+          const channelOpened = await openChannelIfNeeded(amountMsat)
+
+          setIsOpeningChannel(false)
+
+          if (!channelOpened) {
+            // Canal não pôde ser aberto automaticamente
+            setState(prev => ({
+              ...prev,
+              step: 'input',
+              error:
+                'Liquidez insuficiente. Configure abertura automática de canais ou abra um canal manualmente.',
+            }))
+            return
+          }
+        } else if (!hasLiquidity) {
+          // Sem liquidez e abertura automática desabilitada
+          setState(prev => ({
+            ...prev,
+            step: 'input',
+            error: 'Liquidez insuficiente para receber este valor. Abra um canal adicional.',
+          }))
+          return
+        }
+      }
+
+      // Gera a invoice
       const invoice = await generateInvoice(amountMsat, state.description || undefined)
 
       setState(prev => ({
@@ -146,7 +190,15 @@ export default function PaymentReceiveScreen() {
         error: error instanceof Error ? error.message : 'Erro ao gerar invoice',
       }))
     }
-  }, [state.amount, state.description, generateInvoice])
+  }, [
+    state.amount,
+    state.description,
+    generateInvoice,
+    isAutoEnabled,
+    openChannelIfNeeded,
+    inboundCapacity,
+    inboundBalance,
+  ])
 
   const handleCopyInvoice = useCallback(async () => {
     if (!state.invoice) return
@@ -209,6 +261,7 @@ export default function PaymentReceiveScreen() {
             <Text style={[styles.warningText, { color: colors.warning }]}>
               ⚠️ Você não tem canais ativos. Para receber pagamentos Lightning, é necessário ter
               capacidade de entrada (inbound liquidity).
+              {isAutoEnabled && ' Canais podem ser abertos automaticamente quando necessário.'}
             </Text>
           </View>
         )}
@@ -261,7 +314,14 @@ export default function PaymentReceiveScreen() {
         {state.step === 'generating' && (
           <View style={styles.statusContainer}>
             <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={[styles.statusTitle, { color: textColor }]}>Gerando invoice...</Text>
+            <Text style={[styles.statusTitle, { color: textColor }]}>
+              {isOpeningChannel ? 'Abrindo canal automaticamente...' : 'Gerando invoice...'}
+            </Text>
+            {isOpeningChannel && (
+              <Text style={[styles.statusSubtitle, { color: secondaryColor }]}>
+                Configurando liquidez para receber pagamentos
+              </Text>
+            )}
           </View>
         )}
 
@@ -443,6 +503,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '500',
     marginTop: 16,
+  } as TextStyle,
+  statusSubtitle: {
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
   } as TextStyle,
   qrContainer: {
     alignItems: 'center',

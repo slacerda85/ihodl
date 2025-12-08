@@ -52,6 +52,26 @@ export type SwapLimitsConfig = {
   targetBalance: number // Target on-chain/lightning balance ratio (0-100)
 }
 
+// Liquidity Policy Types
+export type LiquidityPolicyType = 'auto' | 'disable'
+
+export type LiquidityConfig = {
+  type: LiquidityPolicyType
+  maxAbsoluteFee: number // in satoshis
+  maxRelativeFeeBasisPoints: number // 1 = 0.01%
+  skipAbsoluteFeeCheck: boolean
+  maxAllowedFeeCredit: number // in msats
+  inboundLiquidityTarget?: number // in satoshis, optional
+}
+
+// Swap-In Policy
+export type SwapInConfig = {
+  enabled: boolean
+  maxAbsoluteFee: number // in satoshis
+  maxRelativeFeeBasisPoints: number // 1 = 0.01%
+  skipAbsoluteFeeCheck: boolean
+}
+
 // Routing Strategy
 export type RoutingStrategy = 'lowest_fee' | 'fastest' | 'most_reliable' | 'balanced'
 
@@ -80,6 +100,9 @@ export type LightningSettings = {
   privacy: PrivacyConfig
   swapLimits: SwapLimitsConfig
   advanced: AdvancedConfig
+  // Liquidity management
+  liquidity: LiquidityConfig
+  swapIn: SwapInConfig
 }
 
 // Settings State
@@ -154,6 +177,20 @@ export const defaultLightningSettings: LightningSettings = {
     maxHops: 20,
     allowLegacyChannels: false,
   },
+  // Liquidity management defaults
+  liquidity: {
+    type: 'disable',
+    maxAbsoluteFee: 5000, // 5000 sats
+    maxRelativeFeeBasisPoints: 5000, // 50%
+    skipAbsoluteFeeCheck: false,
+    maxAllowedFeeCredit: 0, // 0 msats
+  },
+  swapIn: {
+    enabled: false,
+    maxAbsoluteFee: 5000, // 5000 sats
+    maxRelativeFeeBasisPoints: 5000, // 50%
+    skipAbsoluteFeeCheck: false,
+  },
 }
 
 // Settings Actions
@@ -177,6 +214,9 @@ export type SettingsAction =
   | { type: 'SET_SWAP_LIMITS'; payload: Partial<SwapLimitsConfig> }
   | { type: 'SET_ADVANCED_CONFIG'; payload: Partial<AdvancedConfig> }
   | { type: 'SET_ROUTING_STRATEGY'; payload: RoutingStrategy }
+  // Liquidity management
+  | { type: 'SET_LIQUIDITY_CONFIG'; payload: Partial<LiquidityConfig> }
+  | { type: 'SET_SWAP_IN_CONFIG'; payload: Partial<SwapInConfig> }
 
 // Initial state
 export const initialSettingsState: SettingsState = {
@@ -375,6 +415,30 @@ export const settingsReducer: Reducer<SettingsState, SettingsAction> = (state, a
         },
       }
 
+    case 'SET_LIQUIDITY_CONFIG':
+      return {
+        ...state,
+        lightning: {
+          ...state.lightning,
+          liquidity: {
+            ...state.lightning.liquidity,
+            ...action.payload,
+          },
+        },
+      }
+
+    case 'SET_SWAP_IN_CONFIG':
+      return {
+        ...state,
+        lightning: {
+          ...state.lightning,
+          swapIn: {
+            ...state.lightning.swapIn,
+            ...action.payload,
+          },
+        },
+      }
+
     default:
       return state
   }
@@ -472,6 +536,16 @@ export const settingsActions = {
     type: 'SET_ROUTING_STRATEGY',
     payload: strategy,
   }),
+
+  setLiquidityConfig: (config: Partial<LiquidityConfig>): SettingsAction => ({
+    type: 'SET_LIQUIDITY_CONFIG',
+    payload: config,
+  }),
+
+  setSwapInConfig: (config: Partial<SwapInConfig>): SettingsAction => ({
+    type: 'SET_SWAP_IN_CONFIG',
+    payload: config,
+  }),
 }
 
 // selectors
@@ -495,4 +569,7 @@ export const selectors = {
   selectSwapLimits: (state: SettingsState) => state.lightning.swapLimits,
   selectAdvancedConfig: (state: SettingsState) => state.lightning.advanced,
   selectRoutingStrategy: (state: SettingsState) => state.lightning.advanced.routingStrategy,
+  // Liquidity management
+  selectLiquidityConfig: (state: SettingsState) => state.lightning.liquidity,
+  selectSwapInConfig: (state: SettingsState) => state.lightning.swapIn,
 }

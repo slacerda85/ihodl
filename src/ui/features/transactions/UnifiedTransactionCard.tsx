@@ -16,6 +16,7 @@ import { formatBalance } from '../wallet/utils'
 import { truncateAddress } from './utils'
 import type { UnifiedTransaction, AssetType } from './types'
 import { ASSET_CONFIG } from './types'
+import { useActiveColorMode } from '@/ui/features/app-provider'
 
 // ==========================================
 // TYPES
@@ -23,7 +24,6 @@ import { ASSET_CONFIG } from './types'
 
 interface UnifiedTransactionCardProps {
   transaction: UnifiedTransaction
-  isDark: boolean
   isFirst?: boolean
   isLast?: boolean
 }
@@ -127,13 +127,13 @@ function AssetIcon({ assetType, direction }: AssetIconProps) {
 
 export function UnifiedTransactionCard({
   transaction,
-  isDark,
   isFirst = false,
   isLast = false,
 }: UnifiedTransactionCardProps) {
   const router = useRouter()
+  const colorMode = useActiveColorMode()
 
-  const secondaryColor = isDark ? colors.textSecondary.dark : colors.textSecondary.light
+  const secondaryColor = colors.textSecondary[colorMode]
 
   const isPositive = transaction.direction === 'received'
   const prefix = isPositive ? '+' : '-'
@@ -156,27 +156,29 @@ export function UnifiedTransactionCard({
     <Pressable onPress={handlePress}>
       <View
         style={[
-          styles.container,
-          isDark && styles.containerDark,
-          isFirst && styles.first,
-          isLast && styles.last,
+          styles[colorMode].container,
+          isFirst && styles[colorMode].first,
+          isLast && styles[colorMode].last,
         ]}
       >
         {/* Icon */}
-        <View style={styles.iconWrapper}>
+        <View style={styles[colorMode].iconWrapper}>
           <AssetIcon assetType={transaction.assetType} direction={transaction.direction} />
         </View>
 
         {/* Content */}
-        <View style={styles.content}>
-          <View style={styles.topRow}>
-            <View style={styles.titleRow}>
-              <Text style={[styles.type, isDark && styles.typeDark]}>
-                {getDirectionLabel(transaction)}
-              </Text>
+        <View style={styles[colorMode].content}>
+          <View style={styles[colorMode].topRow}>
+            <View style={styles[colorMode].titleRow}>
+              <Text style={styles[colorMode].type}>{getDirectionLabel(transaction)}</Text>
               {/* Asset type badge */}
-              <View style={[styles.assetBadge, { backgroundColor: alpha(config.color, 0.15) }]}>
-                <Text style={[styles.assetBadgeText, { color: config.color }]}>
+              <View
+                style={[
+                  styles[colorMode].assetBadge,
+                  { backgroundColor: alpha(config.color, 0.15) },
+                ]}
+              >
+                <Text style={[styles[colorMode].assetBadgeText, { color: config.color }]}>
                   {config.shortLabel}
                 </Text>
               </View>
@@ -184,9 +186,8 @@ export function UnifiedTransactionCard({
             {/* Amount */}
             <Text
               style={[
-                styles.amount,
-                isDark && styles.amountDark,
-                isPositive ? styles.amountPositive : styles.amountNegative,
+                styles[colorMode].amount,
+                isPositive ? styles[colorMode].amountPositive : styles[colorMode].amountNegative,
               ]}
             >
               {prefix}
@@ -194,9 +195,9 @@ export function UnifiedTransactionCard({
             </Text>
           </View>
 
-          <View style={styles.bottomRow}>
+          <View style={styles[colorMode].bottomRow}>
             {/* Address or description */}
-            <Text style={[styles.address, { color: secondaryColor }]} numberOfLines={1}>
+            <Text style={[styles[colorMode].address, { color: secondaryColor }]} numberOfLines={1}>
               {transaction.description ||
                 (transaction.displayAddress
                   ? `${transaction.direction === 'received' ? 'De' : 'Para'} ${truncateAddress(transaction.displayAddress, 4)}`
@@ -207,14 +208,14 @@ export function UnifiedTransactionCard({
             {statusLabel && (
               <View
                 style={[
-                  styles.statusBadge,
+                  styles[colorMode].statusBadge,
                   {
                     backgroundColor: alpha(
                       getStatusColor(transaction.status, transaction.isMempool),
                       0.15,
                     ),
                   },
-                  transaction.isMempool && styles.mempoolBadge,
+                  transaction.isMempool && styles[colorMode].mempoolBadge,
                 ]}
               >
                 {transaction.isMempool && (
@@ -227,7 +228,7 @@ export function UnifiedTransactionCard({
                 )}
                 <Text
                   style={[
-                    styles.statusText,
+                    styles[colorMode].statusText,
                     { color: getStatusColor(transaction.status, transaction.isMempool) },
                   ]}
                 >
@@ -246,16 +247,13 @@ export function UnifiedTransactionCard({
 // STYLES
 // ==========================================
 
-const styles = StyleSheet.create({
+const light = StyleSheet.create({
   container: {
     paddingVertical: 12,
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-  } as ViewStyle,
-  containerDark: {
-    backgroundColor: alpha(colors.white, 0.08),
   } as ViewStyle,
   first: {
     borderTopLeftRadius: 32,
@@ -288,9 +286,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.text.light,
   } as TextStyle,
-  typeDark: {
-    color: colors.text.dark,
-  } as TextStyle,
   assetBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -303,9 +298,6 @@ const styles = StyleSheet.create({
   amount: {
     fontSize: 16,
     color: colors.text.light,
-  } as TextStyle,
-  amountDark: {
-    color: colors.text.dark,
   } as TextStyle,
   amountPositive: {
     color: colors.success,
@@ -342,6 +334,97 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   } as TextStyle,
 })
+
+const dark: typeof light = StyleSheet.create({
+  container: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: alpha(colors.white, 0.08),
+  } as ViewStyle,
+  first: {
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+  } as ViewStyle,
+  last: {
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+  } as ViewStyle,
+  iconWrapper: {
+    width: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  } as ViewStyle,
+  content: {
+    flex: 1,
+    gap: 4,
+  } as ViewStyle,
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  } as ViewStyle,
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  } as ViewStyle,
+  type: {
+    fontSize: 16,
+    color: colors.text.dark,
+  } as TextStyle,
+  assetBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  } as ViewStyle,
+  assetBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+  } as TextStyle,
+  amount: {
+    fontSize: 16,
+    color: colors.text.dark,
+  } as TextStyle,
+  amountPositive: {
+    color: colors.success,
+    fontWeight: '600',
+  } as TextStyle,
+  amountNegative: {
+    color: colors.textSecondary.dark,
+    fontWeight: '500',
+  } as TextStyle,
+  bottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  } as ViewStyle,
+  address: {
+    fontSize: 14,
+    flex: 1,
+  } as TextStyle,
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  } as ViewStyle,
+  mempoolBadge: {
+    borderWidth: 1,
+    borderColor: alpha('#00BCD4', 0.3),
+    borderStyle: 'dashed',
+  } as ViewStyle,
+  statusText: {
+    fontSize: 11,
+    fontWeight: '500',
+  } as TextStyle,
+})
+
+const styles = { light, dark }
 
 const iconStyles = StyleSheet.create({
   container: {
