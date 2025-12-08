@@ -4,7 +4,7 @@
 // Follows the architecture: lib (pure functions) -> services (business logic) -> UI
 
 import { LightningWorker } from '../lib/lightning/worker'
-import { WatchtowerService } from './watchtower'
+import { WatchtowerService } from './ln-watchtower-service'
 import { LightningMonitorService } from './lightningMonitor'
 import { PeerConnectivityService } from './peerConnectivity'
 import EventEmitter from 'eventemitter3'

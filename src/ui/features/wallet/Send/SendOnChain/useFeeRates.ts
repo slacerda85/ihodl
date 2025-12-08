@@ -3,8 +3,8 @@
  */
 
 import { useEffect, useCallback, useRef, useState } from 'react'
-import { useNetwork } from '../../../network/NetworkProvider'
 import { transactionService } from '@/core/services'
+import { useNetworkConnection } from '@/ui/features/app-provider/AppProvider'
 
 interface FeeRates {
   slow: number
@@ -23,7 +23,7 @@ interface UseFeeRatesReturn {
 }
 
 export function useFeeRates(): UseFeeRatesReturn {
-  const { getConnection } = useNetwork()
+  const getConnection = useNetworkConnection()
   const [feeRates, setFeeRates] = useState<FeeRates | null>(null)
   const [selectedFeeRate, setSelectedFeeRate] = useState<'slow' | 'normal' | 'fast' | 'urgent'>(
     'normal',

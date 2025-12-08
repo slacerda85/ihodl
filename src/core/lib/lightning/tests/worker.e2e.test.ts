@@ -5,7 +5,7 @@
 
 import LightningWorker from '../worker'
 import { randomBytes } from '../../crypto/crypto'
-import watchtowerService from '@/core/services/watchtower'
+import watchtowerService from '@/core/services/ln-watchtower-service'
 
 // Mock de conexão Lightning
 const createMockConnection = () => {

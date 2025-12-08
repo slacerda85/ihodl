@@ -2,7 +2,7 @@
  * WalletChangeHandler
  *
  * Componente que reage à mudança de wallet ativa e dispara o discover de endereços.
- * Deve ficar dentro da hierarquia de providers após AppProvider e NetworkProvider.
+ * Deve ficar dentro da hierarquia de providers após AppProvider e Network Provider.
  *
  * FLUXO QUANDO WALLET MUDA:
  * 1. Detecta mudança de activeWalletId

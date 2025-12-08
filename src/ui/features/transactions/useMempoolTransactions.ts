@@ -12,10 +12,10 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useNetwork } from '@/ui/features/network/NetworkProvider'
 import { useActiveWalletId } from '@/ui/features/app-provider'
 import { addressService, transactionService } from '@/core/services'
 import type { Tx } from '@/core/models/transaction'
+import { useNetworkConnection } from '../app-provider/AppProvider'
 
 // ==========================================
 // TYPES
@@ -119,7 +119,7 @@ function transformMempoolTx(tx: Tx, walletAddresses: Set<string>): MempoolTransa
 export function useMempoolTransactions(
   pollingInterval: number = DEFAULT_POLLING_INTERVAL,
 ): UseMempoolTransactionsResult {
-  const { getConnection } = useNetwork()
+  const getConnection = useNetworkConnection()
   const activeWalletId = useActiveWalletId()
 
   const [transactions, setTransactions] = useState<MempoolTransaction[]>([])

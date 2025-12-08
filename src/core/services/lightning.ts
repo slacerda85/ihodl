@@ -18,7 +18,7 @@ import {
   DEFAULT_MIN_FINAL_CLTV_EXPIRY_DELTA,
 } from '@/core/models/lightning/invoice'
 import { deriveChildKey, createPublicKey } from '../lib/key'
-import { LightningTransport, getTransport, type TransportEvent } from './transport'
+import { LightningTransport, getTransport, type TransportEvent } from './ln-transport-service'
 
 // ==========================================
 // TIPOS

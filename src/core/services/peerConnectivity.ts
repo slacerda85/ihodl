@@ -2,7 +2,7 @@
 // Manages persistent Lightning Network peer connections
 // Implements auto-reconnect, connection pooling, and health monitoring
 
-import { LightningTransport, getTransport } from './transport'
+import { LightningTransport, getTransport } from './ln-transport-service'
 import EventEmitter from 'eventemitter3'
 
 // ==========================================
@@ -264,18 +264,15 @@ export class PeerConnectivityService extends EventEmitter {
   }
 
   private async loadInitialPeers(): Promise<void> {
-    // TODO: Load peers from DNS bootstrap or cached list
-    // For now, add some well-known peers
-    const bootstrapPeers = [
-      { nodeId: '03abcd...', address: '1.2.3.4', port: 9735 },
-      { nodeId: '02efgh...', address: '5.6.7.8', port: 9735 },
-    ]
+    // No bootstrap peers - peers will be added dynamically when user creates channels
+    // or connects to known nodes through the UI
+    //
+    // Future: Could load from:
+    // - Cached peer list from previous sessions
+    // - DNS bootstrap (lseed.bitcoinstats.com, nodes.lightning.directory)
+    // - Well-known public nodes from nodeinfo APIs
 
-    bootstrapPeers.forEach(peer => {
-      this.addPeer(peer.nodeId, peer.address, peer.port)
-    })
-
-    console.log(`[PeerConnectivity] Loaded ${bootstrapPeers.length} initial peers`)
+    console.log('[PeerConnectivity] No bootstrap peers configured - waiting for user connections')
   }
 
   private async connectToPeers(): Promise<void> {

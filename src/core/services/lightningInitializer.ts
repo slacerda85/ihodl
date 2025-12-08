@@ -3,11 +3,11 @@
 // Ensures wallet is ready for Lightning operations without user interaction
 
 import { LightningRepository } from '../repositories/lightning'
-import { LightningTransport } from './transport'
+import { LightningTransport } from './ln-transport-service'
 import LightningService from './lightning'
 import LSPService from './lsp'
 import WalletService from './wallet'
-import { WatchtowerService } from './watchtower'
+import { WatchtowerService } from './ln-watchtower-service'
 import { PeerConnectivityService, createPeerConnectivityService } from './peerConnectivity'
 import { LightningMonitorService, createLightningMonitorService } from './lightningMonitor'
 import { ErrorRecoveryService, createErrorRecoveryService } from './errorRecovery'

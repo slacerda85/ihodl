@@ -58,7 +58,7 @@ class NetworkStore {
     lastConnectionAttempt: 0,
   }
 
-  // Refs para conexões (como no NetworkProvider original)
+  // Refs para conexões (como no Network Provider original)
   private connectionRef: Connection | null = null
   private lightningWorkerRef: LightningWorker | null = null
 
@@ -68,17 +68,44 @@ class NetworkStore {
   }
 
   private refreshCache = (): void => {
-    // Estado baseado nas refs atuais
+    // Estado baseado nas refs atuais - preservar lastError
+    const previousError = this.cachedState?.lastError
     this.cachedState = {
       electrumConnected: this.connectionRef !== null && !this.connectionRef.destroyed,
       lightningWorkerReady: this.lightningWorkerRef !== null,
       lastConnectionAttempt: Date.now(),
+      lastError: previousError,
     }
   }
 
   private notify = (): void => {
     this.refreshCache()
     this.subscribers.forEach(callback => callback())
+  }
+
+  // ==========================================
+  // ERROR HANDLERS (arrow functions para preservar this)
+  // ==========================================
+
+  private handleConnectionError = (err: Error): void => {
+    console.warn('[NetworkStore] Connection error:', err.message)
+    this.connectionRef?.destroy()
+    this.connectionRef = null
+    // Garantir que cachedState existe antes de acessar
+    if (this.cachedState) {
+      this.cachedState.lastError = err.message
+    }
+    this.notify()
+  }
+
+  private handleLightningConnectionError = (err: Error): void => {
+    console.warn('[NetworkStore] Lightning connection error:', err.message)
+    this.lightningWorkerRef = null
+    // Garantir que cachedState existe antes de acessar
+    if (this.cachedState) {
+      this.cachedState.lastError = err.message
+    }
+    this.notify()
   }
 
   // ==========================================
@@ -128,13 +155,7 @@ class NetworkStore {
 
         // Configurar listener de erro
         if (this.connectionRef.listenerCount('error') === 0) {
-          this.connectionRef.on('error', err => {
-            console.warn('[NetworkStore] Connection error:', err.message)
-            this.connectionRef?.destroy()
-            this.connectionRef = null
-            this.cachedState.lastError = err.message
-            this.notify()
-          })
+          this.connectionRef.on('error', this.handleConnectionError)
         }
       }
 
@@ -176,12 +197,7 @@ class NetworkStore {
       // Configurar listener de erro
       const connection = (worker as any).connection
       if (connection && connection.listenerCount('error') === 0) {
-        connection.on('error', (err: Error) => {
-          console.warn('[NetworkStore] Lightning connection error:', err.message)
-          this.lightningWorkerRef = null
-          this.cachedState.lastError = err.message
-          this.notify()
-        })
+        connection.on('error', this.handleLightningConnectionError)
       }
 
       this.cachedState.lastError = undefined

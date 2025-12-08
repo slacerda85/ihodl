@@ -7,7 +7,7 @@
     "development": {
       "environment": "development",
       "distribution": "internal",
-      "credentialsSource": "local",
+      "credentialsSource": "remote",
       "developmentClient": true,
       "env": {
         "APP_VARIANT": "development"

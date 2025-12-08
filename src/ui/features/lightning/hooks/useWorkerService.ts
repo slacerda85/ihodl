@@ -5,7 +5,7 @@
  * Lightning Network (monitor, conectividade, watchtower, etc.)
  */
 
-import { WorkerService, createWorkerService } from '@/core/services/worker-service'
+import { WorkerService, createWorkerService } from '@/core/services/ln-worker-service'
 
 // Instância singleton do WorkerService criada na importação
 const workerServiceInstance = createWorkerService({

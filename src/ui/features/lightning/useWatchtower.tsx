@@ -19,7 +19,7 @@ import watchtowerService, {
   WatchtowerEventForUI,
   MonitoredChannel,
   WatchtowerServiceConfig,
-} from '@/core/services/watchtower'
+} from '@/core/services/ln-watchtower-service'
 import { BreachResult, ChannelInfo } from '@/core/lib/lightning/watchtower'
 
 // ==========================================

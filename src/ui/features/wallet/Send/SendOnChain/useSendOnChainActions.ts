@@ -3,11 +3,11 @@
  */
 
 import { useCallback } from 'react'
-import { useNetwork } from '../../../network/NetworkProvider'
 import { transactionService } from '@/core/services'
 import { useSendOnChainState } from './useSendOnChainState'
 import { useFeeRates } from './useFeeRates'
 import { useBatchTransactions } from './useBatchTransactions'
+import { useNetworkConnection } from '@/ui/features/app-provider/AppProvider'
 
 interface UseSendOnChainActionsReturn {
   sendTransaction: () => Promise<void>
@@ -18,7 +18,7 @@ interface UseSendOnChainActionsReturn {
 }
 
 export function useSendOnChainActions(): UseSendOnChainActionsReturn {
-  const { getConnection } = useNetwork()
+  const getConnection = useNetworkConnection()
   const state = useSendOnChainState()
 
   const { feeRate } = useFeeRates()
