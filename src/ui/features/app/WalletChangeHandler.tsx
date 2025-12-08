@@ -17,12 +17,12 @@
 
 import { useEffect, useRef, useCallback } from 'react'
 import { InteractionManager } from 'react-native'
-import { useNetwork } from '../network/NetworkProvider'
+import { useNetworkConnection } from '../app-provider/AppProvider'
 import { useActiveWalletId, useAppContext } from '../app-provider'
 import { addressService } from '@/core/services'
 
 export default function WalletChangeHandler() {
-  const { getConnection } = useNetwork()
+  const getConnection = useNetworkConnection()
   const activeWalletId = useActiveWalletId()
   const { dispatch, address } = useAppContext()
 

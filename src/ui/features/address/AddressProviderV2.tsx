@@ -28,7 +28,7 @@ import {
 } from 'react'
 import { InteractionManager } from 'react-native'
 import { AddressDetails } from '@/core/models/address'
-import { useNetwork } from '../network/NetworkProvider'
+import { useNetworkConnection } from '../app-provider/AppProvider'
 import { useActiveWalletId } from '../wallet/WalletProviderV2'
 import { addressService, transactionService, walletService } from '@/core/services'
 import { Utxo } from '@/core/models/transaction'
@@ -182,7 +182,7 @@ interface AddressProviderProps {
 // ==========================================
 
 export default function AddressProvider({ children }: AddressProviderProps) {
-  const { getConnection } = useNetwork()
+  const getConnection = useNetworkConnection()
   const activeWalletId = useActiveWalletId()
 
   // ÚNICO estado: loading

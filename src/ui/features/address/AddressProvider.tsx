@@ -10,7 +10,7 @@ import {
   useRef,
 } from 'react'
 import { useWallet } from '../wallet'
-import { useNetwork } from '../network/NetworkProvider'
+import { useNetworkConnection } from '../app-provider/AppProvider'
 import { addressService, transactionService } from '@/core/services'
 import { Utxo } from '@/core/models/transaction'
 import { useActiveWalletId } from '../wallet/WalletProviderV2'
@@ -50,7 +50,7 @@ const initialState: AddressState = {
 
 export default function AddressProvider({ children }: AddressProviderProps) {
   const activeWalletId = useActiveWalletId()
-  const { getConnection } = useNetwork()
+  const getConnection = useNetworkConnection()
 
   // Estado consolidado para reduzir re-renders
   const [state, setState] = useState<AddressState>(initialState)

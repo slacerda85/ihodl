@@ -20,14 +20,15 @@ Este roadmap atualizado incorpora as funcionalidades on-chain modernas implement
 - **Testabilidade**: Cobertura de testes >90% para componentes UI
 - **On-Chain Superiority**: Funcionalidades que superam carteiras concorrentes
 
-### 📊 Status Atual (07/12/2025)
+### 📊 Status Atual (08/12/2025)
 
 - **Core Bitcoin On-Chain**: ✅ 100% implementado (RBF, CPFP, Batch, Fee Estimation)
-- **Core Lightning**: ✅ ~90% implementado
-- **UI Básica**: ✅ ~85% implementado
-- **On-Chain Advanced UI**: ✅ ~60% implementado (RBF/CPFP interfaces criadas)
-- **Integrações**: 🔄 ~80% implementado
-- **Testes**: ⚠️ ~30% implementado
+- **Core Lightning**: ✅ ~95% implementado (On-Chain Balance Auto Channel Opening ✅ COMPLETO)
+- **UI Básica**: ✅ ~90% implementado
+- **On-Chain Advanced UI**: ✅ ~70% implementado (RBF/CPFP interfaces funcionais)
+- **Lightning Advanced UI**: ✅ ~85% implementado (Auto Channel Opening, LSP Integration)
+- **Integrações**: 🔄 ~90% implementado
+- **Testes**: ⚠️ ~40% implementado
 
 ---
 
@@ -42,7 +43,14 @@ Este roadmap atualizado incorpora as funcionalidades on-chain modernas implement
 - [x] **RBF/CPFP UI Implementation**
   - AdvancedTransactionOptions atualizado com CPFP controls
   - TransactionDetails com botões RBF/CPFP para txs pendentes
-  - Status: ✅ UI implementada, integração pendente
+  - Status: ✅ UI implementada e integrada
+
+- [x] **On-Chain Balance Auto Channel Opening**
+  - LSP Service completo com fee estimation e channel opening
+  - Auto-monitoring de saldo on-chain com thresholds configuráveis
+  - IncomingBalancePopover para mostrar saldos pendentes
+  - Manual channel opening via UI
+  - Status: ✅ Completamente implementado e funcional
 
 - [x] **Batch Transactions UI Preparation**
   - SendOnChain preparado para modo batch
@@ -170,6 +178,9 @@ Este roadmap atualizado incorpora as funcionalidades on-chain modernas implement
 - [x] **Advanced Features**: Dual Funding, Splice, Watchtower, Swaps
 - [x] **BOLT 12**: Offers, Recurring Payments
 - [x] **Monitoring**: HTLC Monitor, Force Close Status
+- [x] **Auto Channel Opening**: On-chain balance monitoring e abertura automática
+- [x] **LSP Integration**: Lightning Service Provider para channel opening
+- [x] **Liquidity Management**: Políticas granulares com fee controls
 
 #### **Settings Tab** (`/settings`)
 
@@ -179,12 +190,21 @@ Este roadmap atualizado incorpora as funcionalidades on-chain modernas implement
 
 ### ⚠️ Funcionalidades Parcialmente Implementadas
 
-#### **On-Chain Advanced Features** (60% completo)
+#### **On-Chain Advanced Features** (75% completo)
 
-- [x] **UI Components**: RBF/CPFP toggles, batch mode preparation
-- [x] **TransactionDetails**: Botões RBF/CPFP (sem integração)
-- [ ] **Service Integration**: Conectar UIs aos serviços implementados
+- [x] **UI Components**: RBF/CPFP toggles funcionais, batch mode preparation
+- [x] **TransactionDetails**: Botões RBF/CPFP integrados
+- [x] **Service Integration**: Conectar UIs aos serviços implementados
 - [ ] **Batch Transactions**: Lógica completa de envio em lote
+
+#### **Lightning Advanced Features** (85% completo)
+
+- [x] **Auto Channel Opening**: On-chain balance monitoring ✅ COMPLETO
+- [x] **LSP Integration**: Fee estimation e channel opening ✅ COMPLETO
+- [x] **Incoming Balance Popover**: Display de saldos pendentes ✅ COMPLETO
+- [x] **Liquidity Policies**: Configurações granulares ✅ COMPLETO
+- [ ] **Channels Watcher**: Monitoramento em background
+- [ ] **Liquidity Ads UI**: Interface para adicionar liquidez manual
 
 #### **Search Tab** (`/search`) (10% completo)
 

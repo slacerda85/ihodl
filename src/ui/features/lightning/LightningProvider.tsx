@@ -27,6 +27,7 @@ import LightningService, {
   sendPing as sendPingService,
 } from '@/core/services/lightning'
 import { walletService } from '@/core/services'
+import { useLightningStartup } from './hooks/useLightningStartup'
 
 import { LightningContext, type LightningContextType } from './context'
 import type { LightningState, Invoice, Payment, Channel, Millisatoshis } from './types'
@@ -84,6 +85,32 @@ export default function LightningProvider({
 }: LightningProviderProps) {
   // Estado principal
   const [state, setState] = useState<LightningState>(INITIAL_LIGHTNING_STATE)
+
+  // Hook para inicialização autônoma
+  const { status: initStatus, start: startAutonomousInit } = useLightningStartup({
+    autoStart: false, // Controlado manualmente
+    config: {
+      enableGossipSync: true,
+      enablePeerConnectivity: true,
+      enableHTLCMonitoring: true,
+      enableWatchtower: true,
+      enableLSPIntegration: true,
+      graphCacheEnabled: true,
+      maxPeers: 5,
+      syncTimeout: 120,
+    },
+    onComplete: (success, error) => {
+      if (!success) {
+        console.error('[LightningProvider] Autonomous initialization failed:', error)
+        setState(prev => ({
+          ...prev,
+          error: error || 'Autonomous initialization failed',
+        }))
+      } else {
+        console.log('[LightningProvider] Autonomous initialization completed successfully')
+      }
+    },
+  })
 
   // Ref para o serviço (singleton, não precisa re-criar)
   const serviceRef = useRef<LightningService | null>(null)
@@ -151,8 +178,10 @@ export default function LightningProvider({
       initializeRef.current = true
       // eslint-disable-next-line react-hooks/set-state-in-effect
       void initialize()
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      void startAutonomousInit()
     }
-  }, [autoInitialize, initialize])
+  }, [autoInitialize, initialize, startAutonomousInit])
 
   // ==========================================
   // INVOICES
@@ -485,6 +514,7 @@ export default function LightningProvider({
   const contextValue = useMemo<LightningContextType>(
     () => ({
       state,
+      initStatus,
       initialize,
       generateInvoice,
       decodeInvoice,
@@ -504,6 +534,7 @@ export default function LightningProvider({
     }),
     [
       state,
+      initStatus,
       initialize,
       generateInvoice,
       decodeInvoice,

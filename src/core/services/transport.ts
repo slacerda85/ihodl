@@ -18,7 +18,7 @@ import {
   createFeatureVector,
   FEATURE_BITS,
 } from '../lib/lightning/bolt1'
-import type { InitMessage, PongMessage } from '@/core/models/lightning/base'
+import type { InitMessage, PongMessage } from '../models/lightning/base'
 import { uint8ArrayToHex, hexToUint8Array } from '../lib/utils'
 
 // ==========================================
@@ -222,7 +222,7 @@ export class LightningTransport {
    */
   async sendError(message: string, channelId?: Uint8Array): Promise<void> {
     if (this.state.socket) {
-      const errorMsg = createErrorMessage(message, channelId)
+      const errorMsg = createErrorMessage(channelId ?? new Uint8Array(32), message)
       const encoded = encodeErrorMessage(errorMsg)
       this.state.socket.send(encoded)
     }

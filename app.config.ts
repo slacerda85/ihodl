@@ -92,6 +92,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         faceIDPermission: 'Allow $(PRODUCT_NAME) to access your Face ID biometric data.',
       },
     ],
+    [
+      'expo-notifications',
+      {
+        icon: './assets/images/icon.png',
+        color: '#ffffff',
+        // sounds: ['./assets/sounds/notification.wav'], // Removido - usando som padrão do sistema
+      },
+    ],
   ],
   experiments: {
     typedRoutes: true,

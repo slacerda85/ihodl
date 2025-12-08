@@ -2,12 +2,14 @@
  * Hook para verificar e gerenciar liquidez inbound automática
  */
 
-import { useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useLightningState } from './useLightningState'
 import { useLightningActions } from './useLightningActions'
 import { useIsAutoChannelEnabled } from './useLightningPolicy'
 import { useInboundBalance } from './useInboundBalance'
+import { useLiquidityPolicy } from './useLiquidityPolicy'
 import type { Millisatoshis, Satoshis } from '../types'
+import LSPService, { type LiquidityAd, type FeeEstimate } from '@/core/services/lsp'
 
 /**
  * Hook para calcular capacidade inbound total disponível
@@ -57,6 +59,88 @@ export function useRequiredAdditionalCapacity(amountMsat: Millisatoshis): Satosh
 }
 
 /**
+ * Hook para monitorar saldo on-chain e acionar abertura automática de canal
+ */
+export function useOnChainBalanceMonitor() {
+  const inboundBalance = useInboundBalance()
+  const liquidityPolicy = useLiquidityPolicy()
+  const [isMonitoring, setIsMonitoring] = useState(false)
+  const [lastCheckedBalance, setLastCheckedBalance] = useState<Satoshis>(0n)
+
+  // Monitora mudanças no saldo on-chain
+  useEffect(() => {
+    const currentBalance = inboundBalance.pendingOnChainBalance
+    const threshold = liquidityPolicy.onChainBalanceThreshold || 100000n
+
+    // Se o saldo aumentou e está acima do threshold, marca para monitoramento
+    if (currentBalance > lastCheckedBalance && currentBalance >= threshold) {
+      setIsMonitoring(true)
+    }
+
+    setLastCheckedBalance(currentBalance)
+  }, [
+    inboundBalance.pendingOnChainBalance,
+    liquidityPolicy.onChainBalanceThreshold,
+    lastCheckedBalance,
+  ])
+
+  const resetMonitoring = useCallback(() => {
+    setIsMonitoring(false)
+  }, [])
+
+  return {
+    shouldMonitor: isMonitoring,
+    pendingBalance: inboundBalance.pendingOnChainBalance,
+    threshold: liquidityPolicy.onChainBalanceThreshold || 100000n,
+    resetMonitoring,
+  }
+}
+
+/**
+ * Hook para integração com LSP para abertura automática
+ */
+export function useLSPIntegration() {
+  const [lspService] = useState(() => {
+    // TODO: Obter instância do LightningService do contexto
+    // Por enquanto, cria uma instância mock
+    const mockLightningService = {} as any
+    return new LSPService(mockLightningService)
+  })
+
+  const getAvailableLSPs = useCallback((): LiquidityAd[] => {
+    return lspService.getAvailableLSPs()
+  }, [lspService])
+
+  const estimateChannelFee = useCallback(
+    (lspId: string, capacity: Satoshis): FeeEstimate | null => {
+      return lspService.estimateFee(lspId, capacity)
+    },
+    [lspService],
+  )
+
+  const openChannelViaLSP = useCallback(
+    async (lspId: string, capacity: Satoshis, maxFee?: Satoshis) => {
+      return await lspService.openChannelViaLSP(lspId, capacity, maxFee)
+    },
+    [lspService],
+  )
+
+  const selectBestLSP = useCallback(
+    (capacity: Satoshis, maxFee?: Satoshis): LiquidityAd | null => {
+      return lspService.selectBestLSP(capacity, maxFee)
+    },
+    [lspService],
+  )
+
+  return {
+    getAvailableLSPs,
+    estimateChannelFee,
+    openChannelViaLSP,
+    selectBestLSP,
+  }
+}
+
+/**
  * Hook para abertura automática de canal
  */
 export function useAutoChannelOpening() {
@@ -64,53 +148,116 @@ export function useAutoChannelOpening() {
   const { createChannel } = useLightningActions()
   const inboundCapacity = useInboundCapacity()
   const inboundBalance = useInboundBalance()
+  const liquidityPolicy = useLiquidityPolicy()
+  const { openChannelViaLSP, selectBestLSP } = useLSPIntegration()
 
   /**
-   * Abre um canal automaticamente se necessário
+   * Abre um canal automaticamente se necessário baseado no saldo on-chain
    * Retorna true se um canal foi aberto, false se não foi necessário ou não pôde ser aberto
    */
   const openChannelIfNeeded = useCallback(
-    async (amountMsat: Millisatoshis): Promise<boolean> => {
+    async (amountMsat?: Millisatoshis): Promise<boolean> => {
       if (!isAutoEnabled) {
         return false
       }
 
-      const amountSat = amountMsat / 1000n
-      const effectiveCapacity = inboundCapacity + inboundBalance.pendingOnChainBalance
+      // Se amountMsat for fornecido, verifica se é necessário
+      if (amountMsat) {
+        const amountSat = amountMsat / 1000n
+        const effectiveCapacity = inboundCapacity + inboundBalance.pendingOnChainBalance
 
-      if (effectiveCapacity >= amountSat) {
-        return false // Já tem capacidade suficiente
+        if (effectiveCapacity >= amountSat) {
+          return false // Já tem capacidade suficiente
+        }
       }
 
-      const requiredCapacity = amountSat - effectiveCapacity
+      // Verifica se há saldo on-chain pendente suficiente
+      const pendingBalance = inboundBalance.pendingOnChainBalance
+      const threshold = liquidityPolicy.inboundLiquidityTarget || 100000n
+
+      if (pendingBalance < threshold) {
+        return false // Saldo insuficiente para abertura automática
+      }
 
       try {
-        // Por enquanto, usa valores padrão para abertura automática
-        // TODO: Implementar lógica mais sofisticada para escolher peer e parâmetros
-        const channelCapacity = Math.max(Number(requiredCapacity), 100000) // Mínimo 100k sats
+        // Usa o saldo pendente como base para a capacidade do canal
+        const channelCapacity = pendingBalance
 
-        // TODO: Obter peerId de um peer confiável ou LSP
-        // Por enquanto, retorna false indicando que não conseguiu abrir
-        console.log(`[AutoChannel] Would open channel with capacity: ${channelCapacity} sats`)
+        // Seleciona o melhor LSP baseado na capacidade e limites de taxa
+        const maxFee = BigInt(liquidityPolicy.maxAbsoluteFee)
+        const bestLSP = selectBestLSP(channelCapacity, maxFee)
 
-        // Simulação - em produção, descomente:
-        // await createChannel({
-        //   peerId: 'trusted-peer-id', // TODO: obter peer confiável
-        //   capacitySat: BigInt(channelCapacity),
-        //   pushMsat: 0n, // Não push para canais de recebimento
-        // })
+        if (!bestLSP) {
+          console.log('[AutoChannel] No suitable LSP found for capacity:', channelCapacity)
+          return false
+        }
 
-        return false // Temporariamente retorna false até implementar peer selection
+        console.log(
+          `[AutoChannel] Opening channel via ${bestLSP.name} with capacity: ${channelCapacity}`,
+        )
+
+        // Abre canal via LSP
+        const result = await openChannelViaLSP(bestLSP.lspId, channelCapacity, maxFee)
+
+        if (result.success) {
+          console.log(`[AutoChannel] Channel opened successfully: ${result.channelId}`)
+          return true
+        } else {
+          console.error('[AutoChannel] Failed to open channel:', result.error)
+          return false
+        }
       } catch (error) {
         console.error('[AutoChannel] Failed to open channel:', error)
         return false
       }
     },
-    [isAutoEnabled, inboundCapacity, inboundBalance],
+    [
+      isAutoEnabled,
+      inboundCapacity,
+      inboundBalance,
+      liquidityPolicy,
+      openChannelViaLSP,
+      selectBestLSP,
+    ],
+  )
+
+  /**
+   * Abre canal manualmente usando fundos on-chain
+   */
+  const openChannelManually = useCallback(
+    async (capacity: Satoshis, lspId?: string): Promise<boolean> => {
+      try {
+        const maxFee = BigInt(liquidityPolicy.maxAbsoluteFee)
+
+        let selectedLSP: LiquidityAd | null = null
+
+        if (lspId) {
+          selectedLSP = selectBestLSP(capacity, maxFee)
+        } else {
+          // Seleciona automaticamente o melhor LSP
+          selectedLSP = selectBestLSP(capacity, maxFee)
+        }
+
+        if (!selectedLSP) {
+          console.error('[AutoChannel] No suitable LSP found')
+          return false
+        }
+
+        const result = await openChannelViaLSP(selectedLSP.lspId, capacity, maxFee)
+
+        return result.success
+      } catch (error) {
+        console.error('[AutoChannel] Failed to open channel manually:', error)
+        return false
+      }
+    },
+    [liquidityPolicy, selectBestLSP, openChannelViaLSP],
   )
 
   return {
     openChannelIfNeeded,
+    openChannelManually,
     isAutoEnabled,
+    pendingBalance: inboundBalance.pendingOnChainBalance,
   }
 }

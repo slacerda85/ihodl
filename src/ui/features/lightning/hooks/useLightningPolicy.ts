@@ -15,10 +15,10 @@ export function useLightningPolicy(): LiquidityPolicy {
 
   return {
     type: config.type,
-    maxAbsoluteFee: BigInt(config.maxAbsoluteFee),
-    maxRelativeFeeBasisPoints: config.maxRelativeFeeBasisPoints,
-    skipAbsoluteFeeCheck: config.skipAbsoluteFeeCheck,
-    maxAllowedFeeCredit: BigInt(config.maxAllowedFeeCredit),
+    maxAbsoluteFee: BigInt(config.maxAbsoluteFee ?? 5000),
+    maxRelativeFeeBasisPoints: config.maxRelativeFeeBasisPoints ?? 5000,
+    skipAbsoluteFeeCheck: config.skipAbsoluteFeeCheck ?? false,
+    maxAllowedFeeCredit: BigInt(config.maxAllowedFeeCredit ?? 0),
     inboundLiquidityTarget: config.inboundLiquidityTarget
       ? BigInt(config.inboundLiquidityTarget)
       : undefined,

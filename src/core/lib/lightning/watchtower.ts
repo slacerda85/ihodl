@@ -239,6 +239,13 @@ export class Watchtower {
     this.emitEvent({ type: 'check_complete', timestamp: Date.now() })
   }
 
+  /**
+   * Sincroniza watchtower - alias para checkAllChannels
+   */
+  async sync(): Promise<void> {
+    return this.checkAllChannels()
+  }
+
   // ==========================================
   // EVENT SYSTEM
   // ==========================================

@@ -20,6 +20,8 @@ function AppContent() {
     <Stack>
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <InactivityOverlay />
+      <AuthScreen />
     </Stack>
   )
 }
@@ -42,8 +44,6 @@ export default function RootLayout() {
       <ErrorBoundary>
         <AppProviders>
           <AppContent />
-          <InactivityOverlay />
-          <AuthScreen />
           <StatusBar style="auto" />
         </AppProviders>
       </ErrorBoundary>

@@ -19,6 +19,54 @@ jest.mock('react-native-mmkv', () => ({
   })),
 }))
 
+// Mock para react-native-tcp-socket (usado em Lightning network connections)
+jest.mock('react-native-tcp-socket', () => {
+  const mockSocket = {
+    write: jest.fn(() => true),
+    destroy: jest.fn(),
+    on: jest.fn().mockReturnThis(),
+    once: jest.fn().mockReturnThis(),
+    removeListener: jest.fn().mockReturnThis(),
+    removeAllListeners: jest.fn().mockReturnThis(),
+    end: jest.fn(),
+    setNoDelay: jest.fn(),
+    setKeepAlive: jest.fn(),
+  }
+
+  return {
+    default: {
+      createConnection: jest.fn(() => mockSocket),
+      createServer: jest.fn(() => ({
+        listen: jest.fn(),
+        close: jest.fn(),
+        on: jest.fn().mockReturnThis(),
+      })),
+    },
+    TLSSocket: jest.fn().mockImplementation(() => mockSocket),
+  }
+})
+
+// Mock para react-native-cloud-storage (usado em cloud backup)
+jest.mock('react-native-cloud-storage', () => ({
+  CloudStorage: {
+    setProvider: jest.fn(),
+    isCloudAvailable: jest.fn().mockResolvedValue(true),
+    readFile: jest.fn().mockResolvedValue(''),
+    writeFile: jest.fn().mockResolvedValue(undefined),
+    deleteFile: jest.fn().mockResolvedValue(undefined),
+    exists: jest.fn().mockResolvedValue(false),
+    listFiles: jest.fn().mockResolvedValue([]),
+  },
+  CloudStorageProvider: {
+    ICloud: 'icloud',
+    GoogleDrive: 'googledrive',
+  },
+  CloudStorageScope: {
+    Documents: 'documents',
+    AppData: 'appdata',
+  },
+}))
+
 // Serializer for BigInt
 const bigIntSerializer = {
   serialize: val => val.toString(),

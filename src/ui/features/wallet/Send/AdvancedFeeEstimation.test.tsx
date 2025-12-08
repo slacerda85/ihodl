@@ -1,16 +1,20 @@
 import React from 'react'
 import { render, fireEvent, waitFor } from '@testing-library/react-native'
+
+// Import component after mocks are set up
 import AdvancedFeeEstimation from './AdvancedFeeEstimation'
 
-// Mock the network hook
-jest.mock('@/ui/features/network/NetworkProvider', () => ({
-  useNetwork: () => ({
-    getConnection: jest.fn().mockResolvedValue({}),
-  }),
-}))
-
-// Mock transaction service
+// Mock the core services (must be before component import)
 jest.mock('@/core/services', () => ({
+  walletService: {
+    getAllWallets: jest.fn().mockReturnValue([]),
+    getActiveWalletId: jest.fn().mockReturnValue(null),
+    createWallet: jest.fn(),
+    deleteWallet: jest.fn(),
+    toggleActiveWallet: jest.fn(),
+    editWallet: jest.fn(),
+    getMasterKey: jest.fn(),
+  },
   transactionService: {
     getFeeRates: jest.fn().mockResolvedValue({
       slow: 1,
@@ -21,9 +25,46 @@ jest.mock('@/core/services', () => ({
   },
 }))
 
-// Mock the isDark hook
+// Mock the wallet store (to prevent initialization errors)
+jest.mock('@/ui/features/wallet/store', () => ({
+  walletStore: {
+    wallets: [],
+    activeWalletId: null,
+    activeWallet: null,
+    createWallet: jest.fn(),
+    deleteWallet: jest.fn(),
+    toggleActiveWallet: jest.fn(),
+    editWallet: jest.fn(),
+    getMasterKey: jest.fn(),
+  },
+  useWalletStore: () => ({
+    wallets: [],
+    activeWalletId: null,
+    activeWallet: null,
+  }),
+}))
+
+// Mock the app-provider module completely
+const mockGetConnection = jest.fn().mockResolvedValue({})
+
 jest.mock('@/ui/features/app-provider', () => ({
+  __esModule: true,
+  useNetworkConnection: () => mockGetConnection,
   useIsDark: () => false,
+  useAppContext: () => ({
+    network: { getConnection: mockGetConnection },
+    isConnected: true,
+  }),
+}))
+
+jest.mock('@/ui/features/app-provider/AppProvider', () => ({
+  __esModule: true,
+  useNetworkConnection: () => mockGetConnection,
+  useIsDark: () => false,
+  useAppContext: () => ({
+    network: { getConnection: mockGetConnection },
+    isConnected: true,
+  }),
 }))
 
 describe('AdvancedFeeEstimation', () => {

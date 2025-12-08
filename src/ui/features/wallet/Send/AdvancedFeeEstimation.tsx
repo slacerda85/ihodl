@@ -4,7 +4,7 @@ import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 import { useIsDark } from '@/ui/features/app-provider'
-import { useNetwork } from '../../network/NetworkProvider'
+import { useNetworkConnection } from '@/ui/features/app-provider/AppProvider'
 import { transactionService } from '@/core/services'
 
 interface FeeEstimationData {
@@ -48,7 +48,7 @@ export default function AdvancedFeeEstimation({
   onEnableCustomFeeChange,
 }: AdvancedFeeEstimationProps) {
   const isDark = useIsDark()
-  const { getConnection } = useNetwork()
+  const getConnection = useNetworkConnection()
 
   const [feeData, setFeeData] = useState<FeeEstimationData | null>(null)
   const [loading, setLoading] = useState<boolean>(false)

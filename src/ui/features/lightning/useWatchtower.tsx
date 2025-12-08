@@ -106,7 +106,7 @@ type WatchtowerProviderProps = {
   autoStart?: boolean
 }
 
-export function WatchtowerProvider({ children, autoStart = true }: WatchtowerProviderProps) {
+export function WatchtowerProvider({ children, autoStart = false }: WatchtowerProviderProps) {
   const [state, setState] = useState<WatchtowerState>(initialState)
 
   // ==========================================

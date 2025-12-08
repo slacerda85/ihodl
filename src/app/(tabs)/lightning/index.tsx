@@ -1,5 +1,5 @@
 import { LightningDashboard } from '@/ui/features/lightning'
 
-export default function LightningPage() {
+export default function LightningRoute() {
   return <LightningDashboard />
 }

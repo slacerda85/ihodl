@@ -8,7 +8,7 @@
  */
 
 import TcpSocket from 'react-native-tcp-socket'
-import { EventEmitter } from 'events'
+import EventEmitter from 'eventemitter3'
 import {
   generateKey,
   initializeHandshakeState,

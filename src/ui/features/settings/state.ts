@@ -62,6 +62,17 @@ export type LiquidityConfig = {
   skipAbsoluteFeeCheck: boolean
   maxAllowedFeeCredit: number // in msats
   inboundLiquidityTarget?: number // in satoshis, optional
+  onChainBalanceThreshold?: number // in satoshis, threshold for auto-opening channels
+}
+
+// Processed liquidity policy with BigInt values for calculations
+export type LiquidityPolicy = {
+  type: LiquidityPolicyType
+  maxAbsoluteFee: bigint
+  maxRelativeFeeBasisPoints: number
+  skipAbsoluteFeeCheck: boolean
+  maxAllowedFeeCredit: bigint
+  inboundLiquidityTarget?: bigint
 }
 
 // Swap-In Policy

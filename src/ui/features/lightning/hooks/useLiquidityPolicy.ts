@@ -15,6 +15,7 @@ const DEFAULT_LIQUIDITY_POLICY: LiquidityConfig = {
   skipAbsoluteFeeCheck: false,
   maxAllowedFeeCredit: 100000,
   inboundLiquidityTarget: undefined,
+  onChainBalanceThreshold: 100000, // 100k sats default threshold
 }
 
 /**
@@ -53,6 +54,12 @@ export function useLiquidityPolicy(): LiquidityConfig {
     inboundLiquidityTarget: config.inboundLiquidityTarget
       ? safeNumber(config.inboundLiquidityTarget, 0)
       : DEFAULT_LIQUIDITY_POLICY.inboundLiquidityTarget,
+    onChainBalanceThreshold: config.onChainBalanceThreshold
+      ? safeNumber(
+          config.onChainBalanceThreshold,
+          DEFAULT_LIQUIDITY_POLICY.onChainBalanceThreshold!,
+        )
+      : DEFAULT_LIQUIDITY_POLICY.onChainBalanceThreshold,
   }
 }
 

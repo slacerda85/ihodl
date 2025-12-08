@@ -126,6 +126,17 @@ import {
   DEFAULT_RETRY_CONFIG,
 } from './errorHandling'
 
+// Watchtower
+import { Watchtower, BreachResult, ChannelInfo } from './watchtower'
+
+interface ReestablishTlvs {
+  nextFundingTxId?: Uint8Array
+  nextLocalCommitmentNumber?: bigint
+  nextRemoteCommitmentNumber?: bigint
+  nextLocalNonce?: Uint8Array
+  nextRemoteNonce?: Uint8Array
+}
+
 /**
  * Lightning Worker - Wallet-level operations
  * Provides complete Lightning Network functionality including:
@@ -166,9 +177,6 @@ export class LightningWorker {
   // Gossip message processing
   private gossipMessages: GossipMessageUnion[] = []
 
-  // Watchtower for channel monitoring
-  private watchtower: Watchtower = new Watchtower()
-
   // BOLT #7: Gossip Sync
   private gossipSync: GossipSync | null = null
 
@@ -194,6 +202,9 @@ export class LightningWorker {
   // Rate limiter for outgoing operations
   private rateLimiter: RateLimiter = new RateLimiter(100, 10) // 100 tokens, 10/sec refill
 
+  // Watchtower for channel monitoring
+  private watchtower: Watchtower
+
   // Retry configuration
   private retryConfig: RetryConfig = {
     ...DEFAULT_RETRY_CONFIG,
@@ -215,6 +226,14 @@ export class LightningWorker {
 
     // Inicializar PeerManager
     this.peerManager = new PeerManager()
+
+    // Inicializar watchtower
+    this.watchtower = new Watchtower({
+      checkIntervalMs: 60000, // 1 minuto
+      maxStoredSecrets: 1000,
+      autoRecover: true,
+      autoBroadcastPenalty: true,
+    })
 
     // Inicializar módulos
     this.gossipSync = createGossipSync()
@@ -513,6 +532,9 @@ export class LightningWorker {
 
       // 5. Restaurar peers conhecidos
       await this.loadPersistedPeers()
+
+      // 6. Inicializar watchtower
+      await this.watchtower.loadFromStorage()
 
       console.log('[lightning] Initialization from storage complete')
     } catch (error) {
@@ -5631,32 +5653,6 @@ export class LightningWorker {
   }
 
   /**
-   * Verifica breach em todos os canais monitorados pelo watchtower
-   * Chamado quando uma transação suspeita é detectada na blockchain
-   *
-   * Como usar:
-   * const breaches = await client.checkAllChannelsForBreach(txHex)
-   * if (breaches.length > 0) {
-   *   // Broadcast penalty transactions
-   * }
-   *
-   * @param txHex - Transação suspeita em formato hex
-   * @returns Promise<BreachResult[]> - Lista de breaches detectados
-   */
-  async checkAllChannelsForBreach(txHex: string): Promise<BreachResult[]> {
-    const breaches: BreachResult[] = []
-
-    for (const channelId of this.watchtower['monitoredChannels'].keys()) {
-      const result = this.watchtower.checkForBreach(channelId, txHex)
-      if (result.breach) {
-        breaches.push(result)
-      }
-    }
-
-    return breaches
-  }
-
-  /**
    * Broadcast penalty transaction para um canal comprometido
    * Envia transação de penalidade para a blockchain
    *
@@ -5714,10 +5710,14 @@ export class LightningWorker {
         const recentTxs = await this.getRecentBlockchainTransactions()
 
         for (const txHex of recentTxs) {
-          const breaches = await this.checkAllChannelsForBreach(txHex)
-          for (const breach of breaches) {
-            console.warn(`[watchtower] Breach detected: ${breach.reason}`)
-            await this.broadcastPenaltyTransaction(breach)
+          // Verificar breach em todos os canais monitorados
+          const monitoredChannels = this.watchtower.getMonitoredChannels()
+          for (const channelId of monitoredChannels) {
+            const breach = this.watchtower.checkForBreach(channelId, txHex)
+            if (breach.breach) {
+              console.warn(`[watchtower] Breach detected: ${breach.reason}`)
+              await this.broadcastPenaltyTransaction(breach)
+            }
           }
         }
       } catch (error) {
@@ -6384,10 +6384,62 @@ export class LightningWorker {
 
     return mockConnection
   }
+
+  // ==========================================
+  // WATCHTOWER PUBLIC API
+  // ==========================================
+
+  /**
+   * Adiciona canal ao watchtower para monitoramento
+   */
+  addChannelToWatchtower(
+    channelId: string,
+    channelInfo: ChannelInfo,
+    remotePubkey: Uint8Array,
+  ): void {
+    this.watchtower.addChannel(channelId, channelInfo, remotePubkey)
+  }
+
+  /**
+   * Remove canal do watchtower
+   */
+  removeChannelFromWatchtower(channelId: string): void {
+    this.watchtower.removeChannel(channelId)
+  }
+
+  /**
+   * Verifica se canal está sendo monitorado pelo watchtower
+   */
+  isChannelMonitored(channelId: string): boolean {
+    return this.watchtower.isChannelMonitored(channelId)
+  }
+
+  /**
+   * Obtém estatísticas do watchtower
+   */
+  getWatchtowerStats() {
+    return this.watchtower.getStats()
+  }
+
+  /**
+   * Inicia monitoramento do watchtower
+   */
+  startWatchtower(): void {
+    this.watchtower.start()
+  }
+
+  /**
+   * Para monitoramento do watchtower
+   */
+  stopWatchtower(): void {
+    this.watchtower.stop()
+  }
 }
 
 export default LightningWorker
 
+// ==========================================
+// WATCHTOWER - CHANNEL MONITORING
 // ==========================================
 // TIPOS AUXILIARES PARA GERENCIAMENTO DE CANAIS
 // ==========================================
@@ -6412,22 +6464,6 @@ export enum ChannelState {
 
   // Estados de erro
   ERROR = 'error',
-}
-
-/**
- * Informações de um canal Lightning
- */
-export interface ChannelInfo {
-  channelId: string
-  peerId: string
-  state: ChannelState
-  localBalance: bigint
-  remoteBalance: bigint
-  fundingTxid?: string
-  fundingOutputIndex?: number
-  capacity: bigint
-  createdAt: number
-  lastActivity: number
 }
 
 /**
@@ -6514,90 +6550,4 @@ export type PeerConnectionResult = {
   connection?: LightningConnection
   error?: Error
   message?: string
-}
-
-// ==========================================
-// WATCHTOWER - CHANNEL MONITORING
-// ==========================================
-
-/**
- * Watchtower for channel monitoring
- * Detects channel theft attempts and forces closure
- */
-export class Watchtower {
-  private monitoredChannels: Map<string, WatchtowerChannel> = new Map()
-
-  addChannel(channelId: string, channelInfo: ChannelInfo, remotePubkey: Uint8Array): void {
-    const watchtowerChannel: WatchtowerChannel = {
-      channelId,
-      remotePubkey,
-      localBalance: channelInfo.localBalance,
-      remoteBalance: channelInfo.remoteBalance,
-      commitmentNumber: 0n,
-      lastCommitmentTx: null,
-      breachDetected: false,
-    }
-
-    this.monitoredChannels.set(channelId, watchtowerChannel)
-  }
-
-  updateChannelState(channelId: string, commitmentTx: Uint8Array, commitmentNumber: bigint): void {
-    const channel = this.monitoredChannels.get(channelId)
-    if (!channel) return
-
-    channel.lastCommitmentTx = commitmentTx
-    channel.commitmentNumber = commitmentNumber
-  }
-
-  checkForBreach(channelId: string, txHex: string): BreachResult {
-    const channel = this.monitoredChannels.get(channelId)
-    if (!channel) {
-      return { breach: false, reason: 'Channel not monitored' }
-    }
-
-    // TODO: Implement real breach checking
-    if (txHex.includes('breach')) {
-      channel.breachDetected = true
-      return {
-        breach: true,
-        reason: 'Suspicious transaction detected',
-        penaltyTx: this.generatePenaltyTx(channel),
-      }
-    }
-
-    return { breach: false }
-  }
-
-  private generatePenaltyTx(channel: WatchtowerChannel): Uint8Array {
-    // TODO: Implement real penalty transaction generation
-    return new Uint8Array(32) // Placeholder
-  }
-
-  removeChannel(channelId: string): void {
-    this.monitoredChannels.delete(channelId)
-  }
-}
-
-// Watchtower types
-interface BreachResult {
-  breach: boolean
-  reason?: string
-  penaltyTx?: Uint8Array
-}
-
-interface WatchtowerChannel {
-  channelId: string
-  remotePubkey: Uint8Array
-  localBalance: bigint
-  remoteBalance: bigint
-  commitmentNumber: bigint
-  lastCommitmentTx: Uint8Array | null
-  breachDetected: boolean
-}
-
-// Channel reestablish TLVs
-interface ReestablishTlvs {
-  nextFundingTxId?: Uint8Array
-  nextLocalNonce?: Uint8Array
-  nextRemoteNonce?: Uint8Array
 }

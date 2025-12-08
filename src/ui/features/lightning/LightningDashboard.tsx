@@ -310,6 +310,24 @@ export default function LightningDashboard() {
               Ativos
             </Text>
           </View>
+          <View
+            style={[
+              styles.statBox,
+              {
+                backgroundColor:
+                  inboundBalance.pendingOnChainBalance > 0n
+                    ? alpha(colors.warning, colorMode === 'dark' ? 0.15 : 0.08)
+                    : alpha(colors.success, colorMode === 'dark' ? 0.15 : 0.08),
+              },
+            ]}
+          >
+            <Text style={styles.statValue}>
+              {formatSats(Number(inboundBalance.pendingOnChainBalance))}
+            </Text>
+            <Text style={[styles.statLabel, { color: colors.textSecondary[colorMode] }]}>
+              On-Chain
+            </Text>
+          </View>
         </View>
 
         <TouchableOpacity
@@ -373,49 +391,16 @@ export default function LightningDashboard() {
       {/* ========== SECTION 2: LIQUIDITY MANAGEMENT ========== */}
       <Section title="Gerenciamento de Liquidez" icon="💧" colorMode={colorMode}>
         <SettingRow
-          label="Política de Abertura"
-          description="Como abrir canais automaticamente"
+          label="Gerenciamento automático de liquidez"
+          description="Abrir canais automaticamente conforme necessidade"
           colorMode={colorMode}
         >
-          <View style={styles.pickerContainer}>
-            <TouchableOpacity
-              style={[
-                styles.pickerOption,
-                lightningSettings?.liquidity?.type === 'disable' && styles.pickerOptionSelected,
-                { backgroundColor: alpha(colors.border[colorMode], 0.5) },
-              ]}
-              onPress={() => handleLiquidityChange({ type: 'disable' })}
-            >
-              <Text
-                style={[
-                  styles.pickerOptionText,
-                  { color: colors.text[colorMode] },
-                  lightningSettings?.liquidity?.type === 'disable' &&
-                    styles.pickerOptionTextSelected,
-                ]}
-              >
-                Desabilitado
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.pickerOption,
-                lightningSettings?.liquidity?.type === 'auto' && styles.pickerOptionSelected,
-                { backgroundColor: alpha(colors.border[colorMode], 0.5) },
-              ]}
-              onPress={() => handleLiquidityChange({ type: 'auto' })}
-            >
-              <Text
-                style={[
-                  styles.pickerOptionText,
-                  { color: colors.text[colorMode] },
-                  lightningSettings?.liquidity?.type === 'auto' && styles.pickerOptionTextSelected,
-                ]}
-              >
-                Automático
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <Switch
+            value={lightningSettings?.liquidity?.type === 'auto'}
+            onValueChange={v => handleLiquidityChange({ type: v ? 'auto' : 'disable' })}
+            trackColor={{ false: colors.disabled, true: colors.primary }}
+            thumbColor={colors.white}
+          />
         </SettingRow>
 
         {lightningSettings?.liquidity?.type === 'auto' && (
@@ -447,7 +432,7 @@ export default function LightningDashboard() {
 
             <View style={styles.inputContainer}>
               <Text style={[styles.inputLabel, { color: colors.textSecondary[colorMode] }]}>
-                Taxa Máxima Relativa (%)
+                Threshold de Saldo On-Chain (sats)
               </Text>
               <TextInput
                 style={[
@@ -457,17 +442,15 @@ export default function LightningDashboard() {
                     color: colors.text[colorMode],
                   },
                 ]}
-                value={
-                  (lightningSettings.liquidity.maxRelativeFeeBasisPoints / 100)?.toString() ?? ''
-                }
+                value={lightningSettings.liquidity.onChainBalanceThreshold?.toString() ?? ''}
                 onChangeText={v => {
-                  const num = parseFloat(v)
-                  if (!isNaN(num) && num >= 0 && num <= 100) {
-                    handleLiquidityChange({ maxRelativeFeeBasisPoints: Math.floor(num * 100) })
+                  const num = parseInt(v, 10)
+                  if (!isNaN(num) && num >= 0) {
+                    handleLiquidityChange({ onChainBalanceThreshold: num })
                   }
                 }}
-                keyboardType="decimal-pad"
-                placeholder="50"
+                keyboardType="number-pad"
+                placeholder="100000"
                 placeholderTextColor={colors.placeholder}
               />
             </View>

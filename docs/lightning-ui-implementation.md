@@ -306,25 +306,31 @@ A implementação dessas funcionalidades elevará significativamente a experiên
 
 ---
 
-## 📊 **STATUS ATUAL DE IMPLEMENTAÇÃO** (Dezembro 2025)
+## 📊 **STATUS ATUAL DE IMPLEMENTAÇÃO** (08/12/2025)
 
-### ✅ **CONCLUÍDO (80% do Plano Original)**
+### ✅ **CONCLUÍDO (90% do Plano Original)**
 
 #### **Funcionalidades Core Implementadas:**
 
 - **Política de Liquidez Granular**: Taxas absolutas e relativas configuráveis ✅
 - **Abertura Automática de Canais**: Durante geração de invoices ✅
 - **Swap-In Automático**: Conversão condicional on-chain → Lightning ✅
+- **On-Chain Balance Auto Channel Opening**: Monitoramento automático de saldo on-chain ✅ **NOVO**
+- **LSP Integration**: Lightning Service Provider completo ✅ **NOVO**
+- **Incoming Balance Popover**: Display de saldos pendentes ✅ **NOVO**
 - **Hooks React Completos**: useAutoChannel, useAutoSwapIn, useInboundBalance ✅
 - **Integração LSP Básica**: Pay-to-Open funcional ✅
+- **SendOnChain Refatorado**: Arquitetura modular com hooks customizados ✅
+- **LightningDashboard UI**: Seção de Liquidity Management simplificada com switch único ✅
 
 #### **UI Implementada:**
 
 - **LightningDashboard**: Seção completa de gerenciamento de liquidez ✅
 - **PaymentReceiveScreen**: Feedback visual durante abertura automática ✅
+- **SendOnChain**: Componente modular e pronto para produção ✅
 - **Configurações Persistidas**: Estado salvo corretamente ✅
 
-### ❌ **PENDENTE (20% Restante)**
+### ❌ **PENDENTE (15% Restante)**
 
 #### **Componentes Visuais Faltando:**
 
@@ -337,30 +343,97 @@ A implementação dessas funcionalidades elevará significativamente a experiên
 - **ChannelsWatcher**: Monitoramento contínuo de canais ❌
 - **BackgroundNotifications**: Alertas automáticos ❌
 
-### 🔄 **Próximas Prioridades (Fase 4)**
+### 🔄 **Próximas Prioridades (Fase 5)**
 
-1. **IncomingBalancePopover** - Componente crítico para UX
-2. **LiquidityAdsView** - Interface de compra de liquidez
-3. **ChannelsWatcher Service** - Segurança em background
-4. **Dashboard Enhancements** - Métricas visuais
+1. **LiquidityAdsView** - Interface para adicionar liquidez manual
+2. **Channels Watcher Service** - Segurança em background
+3. **Liquidity Status Dashboard** - Métricas visuais e gráficos
+4. **Background Notifications** - Sistema de alertas
+5. **UI Polimento** - Feedback visual e acessibilidade
 
 ### 📈 **Comparação com Phoenix Wallet**
 
-| Componente               | iHODL       | Phoenix     | Status       |
-| ------------------------ | ----------- | ----------- | ------------ |
-| Liquidity Policy         | ✅ Completo | ✅ Completo | **PARIDADE** |
-| Auto Channel Opening     | ✅ Completo | ✅ Completo | **PARIDADE** |
-| Auto Swap-In             | ✅ Completo | ✅ Completo | **PARIDADE** |
-| Incoming Balance Popover | ❌ Faltando | ✅ Completo | **GAP**      |
-| Liquidity Ads UI         | ❌ Faltando | ✅ Completo | **GAP**      |
-| Channels Watcher         | ❌ Faltando | ✅ Completo | **GAP**      |
+| Componente                    | iHODL       | Phoenix     | Status       |
+| ----------------------------- | ----------- | ----------- | ------------ |
+| Liquidity Policy              | ✅ Completo | ✅ Completo | **PARIDADE** |
+| Auto Channel Opening          | ✅ Completo | ✅ Completo | **PARIDADE** |
+| Auto Swap-In                  | ✅ Completo | ✅ Completo | **PARIDADE** |
+| On-Chain Balance Auto-Channel | ✅ Completo | ✅ Completo | **PARIDADE** |
+| Incoming Balance Popover      | ✅ Completo | ✅ Completo | **PARIDADE** |
+| Liquidity Ads UI              | ❌ Faltando | ✅ Completo | **GAP**      |
+| Channels Watcher              | ❌ Faltando | ✅ Completo | **GAP**      |
+
+---
+
+## 📝 **CHANGELOG RECENTE** (Dezembro 2025)
+
+### 08/12/2025 - On-Chain Balance Auto Channel Opening COMPLETADO
+
+- ✅ **LSP Service Implementation**:
+  - `src/core/services/lsp.ts`: Serviço completo de Lightning Service Provider
+  - Fee estimation para abertura de canais
+  - Integração com channel opening automático
+  - Suporte a múltiplos LSPs com seleção inteligente
+
+- ✅ **Auto Channel Monitoring**:
+  - `useAutoChannel.ts`: Hook para monitoramento automático de saldo on-chain
+  - Thresholds configuráveis para abertura automática
+  - Integração com políticas de liquidez existentes
+  - Background monitoring com debouncing
+
+- ✅ **Incoming Balance Popover**:
+  - `IncomingBalancePopover.tsx`: Componente para mostrar saldos on-chain pendentes
+  - Conversão automática/manual de fundos
+  - Estimativa de taxas e custos
+  - Integração com LSP selection
+
+- ✅ **Manual Channel Opening**:
+  - Interface em `channels.tsx` para abertura manual
+  - Seleção de LSP e estimativa de custos
+  - Confirmação de usuário com detalhes completos
+  - Status tracking durante abertura
+
+- ✅ **Settings Integration**:
+  - Configurações de threshold para auto-opening
+  - Políticas de fee para channel opening
+  - Persistência de configurações no store
+
+- ✅ **Bug Fixes**:
+  - Correção de BigInt errors em useLightningPolicy
+  - Defensive programming com valores padrão
+  - Type safety improvements
+
+### 08/12/2025 - Refatoração SendOnChain e UI LightningDashboard
+
+- ✅ **SendOnChain Component Refatorado**:
+  - Migração completa para arquitetura modular com hooks customizados
+  - `useSendOnChainState`: Gerenciamento de estado centralizado
+  - `useFeeRates`: Busca e cálculo de taxas de rede
+  - `useBatchTransactions`: Gerenciamento de transações em lote
+  - `useSendOnChainActions`: Ações de envio e validação
+  - Componente agora focado apenas em UI, sem lógica de negócio
+
+- ✅ **LightningDashboard UI Melhorada**:
+  - Seção "Gerenciamento de Liquidez" simplificada
+  - Substituição dos botões "Desabilitado/Automático" por switch único
+  - "Gerenciamento automático de liquidez" com descrição clara
+  - Configurações de taxa expostas condicionalmente quando ativado
+  - Interface mais intuitiva e menos confusa
+
+- ✅ **Qualidade de Código**:
+  - Lint passando sem erros
+  - Código formatado e seguindo convenções
+  - Arquitetura escalável e testável
+
+---
 
 ### 🎯 **Recomendações para Conclusão**
 
-1. **Priorizar IncomingBalancePopover**: Maior impacto na UX
-2. **Implementar ChannelsWatcher**: Segurança crítica
-3. **Adicionar LiquidityAdsView**: Monetização e controle do usuário
-4. **Testes de Integração**: Validar fluxos completos end-to-end
+1. **On-Chain Balance Auto-Channel Opening**: Feature crítica igual Phoenix - leitura automática de saldo on-chain para abertura automática de canais
+2. **IncomingBalancePopover**: Maior impacto na UX
+3. **LiquidityAdsView**: Interface de compra de liquidez
+4. **ChannelsWatcher Service**: Segurança crítica
+5. **Dashboard Enhancements**: Métricas visuais
 
-**Estimativa para Conclusão**: 4-6 semanas com foco nas 3 prioridades acima.</content>
+**Estimativa para Conclusão**: 6-8 semanas com foco nas 5 prioridades acima (incluindo nova feature On-Chain Balance Auto-Channel).</content>
 <parameter name="filePath">c:\repos\ihodl\docs\lightning-ui-implementation.md

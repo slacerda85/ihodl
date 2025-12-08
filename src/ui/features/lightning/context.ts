@@ -13,6 +13,7 @@ import type {
   DecodedInvoice,
   Millisatoshis,
 } from './types'
+import type { InitStatus } from '@/core/services/lightningInitializer'
 
 // ==========================================
 // TIPOS DO CONTEXTO
@@ -62,6 +63,7 @@ export interface LightningActions {
 /** Tipo completo do contexto */
 export interface LightningContextType extends LightningActions {
   state: LightningState
+  initStatus: InitStatus
 }
 
 // ==========================================

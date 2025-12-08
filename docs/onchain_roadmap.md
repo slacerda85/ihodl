@@ -1,8 +1,27 @@
 # Roadmap On-Chain para ihodl
 
-## Introdução
+## Status Atual (08/12/2025)
 
-Este roadmap detalhado visa preencher as lacunas identificadas na análise comparativa entre o projeto ihodl e o Electrum, focando nas funcionalidades Bitcoin on-chain. O objetivo é elevar o ihodl a um nível de maturidade comparável ao Electrum, garantindo suporte completo a padrões modernos como Taproot, PSBT avançado e recursos de privacidade. O escopo inclui implementação de funcionalidades críticas, modernização de componentes existentes e adição de recursos avançados, priorizando tarefas acionáveis para desenvolvedores.
+✅ **IMPLEMENTADO**: RBF (Replace-By-Fee), CPFP (Child-Pays-For-Parent), Batch Transactions, Fee Estimation Avançada
+✅ **EM DESENVOLVIMENTO**: Coin Selection aprimorada, Privacy Features
+🔄 **PLANEJADO**: Taproot completo, PSBT avançado, Multisig
+
+## Funcionalidades Implementadas (✅ Completo)
+
+### Core On-Chain Features
+
+- **RBF (Replace-By-Fee)**: Implementação completa com UI integrada
+- **CPFP (Child-Pays-For-Parent)**: Aceleração de transações com fee bumping
+- **Batch Transactions**: Envio múltiplo de transações otimizado
+- **Fee Estimation**: Estimativa avançada com histórico e previsões
+- **Advanced Transaction Options**: Controles granulares para RBF/CPFP
+- **Transaction Details**: Interface completa com ações RBF/CPFP
+
+### Lightning Integration
+
+- **On-Chain Balance Auto Channel Opening**: Monitoramento automático e abertura de canais
+- **LSP Integration**: Lightning Service Provider para channel management
+- **Liquidity Management**: Políticas automáticas baseadas em saldo on-chain
 
 ## Visão Geral
 

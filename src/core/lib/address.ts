@@ -1,5 +1,4 @@
 import { publicKeyVerify } from 'secp256k1'
-import base58 from 'bs58'
 import { hash160, sha256, taggedHash } from './crypto'
 import { bech32, bech32m } from './bips'
 import { Point } from '@noble/secp256k1'
@@ -7,6 +6,7 @@ import { uint8ArrayToHex } from './utils'
 import { Tx } from '../models/transaction'
 import { createPublicKey, deriveChildKey, splitMasterKey } from './key'
 import { P2WPKH_VERSION, HASH160_LENGTH } from '../models/address'
+import { encodeBase58 } from './utils/base58'
 
 /** Used address information */
 export interface AddressDetails {
@@ -188,24 +188,6 @@ function base58checkEncode(version: number, payload: Uint8Array): string {
   const checksum = sha256(sha256(versionPayload)).subarray(0, 4)
   const fullPayload = new Uint8Array([...versionPayload, ...checksum])
   return encodeBase58(fullPayload)
-}
-
-/**
- * Encodes data to Base58 format.
- * @param buffer - The data to encode.
- * @returns The Base58 encoded string.
- */
-function encodeBase58(buffer: Uint8Array): string {
-  return base58.encode(buffer)
-}
-
-/**
- * Decodes a Base58 string to data.
- * @param base58String - The Base58 string to decode.
- * @returns The decoded Uint8Array.
- */
-function decodeBase58(base58String: string): Uint8Array {
-  return base58.decode(base58String)
 }
 
 /**
@@ -639,8 +621,6 @@ export {
   toBech32,
   encodeBech32,
   decodeBech32,
-  encodeBase58,
-  decodeBase58,
   toScriptHash,
   generateAddresses,
   // Taproot functions

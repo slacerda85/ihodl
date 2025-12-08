@@ -1,9 +1,6 @@
 import secp256k1 from 'secp256k1'
 import { createChecksum, hash160, hmacSeed, hmacSHA512, uint8ArrayToHex } from '@/core/lib/crypto'
-import {
-  encodeBase58 as encodeBase58Address,
-  decodeBase58 as decodeBase58Address,
-} from '@/core/lib/address'
+import { encodeBase58, decodeBase58 } from '@/core/lib/utils/base58'
 import { entropyToMnemonic, mnemonicToSeedSync } from './bips/bip39'
 import wordList from 'bip39/src/wordlists/english.json'
 import { CURVE_ORDER } from '../models/key'
@@ -305,7 +302,7 @@ function privateKeyToWIF(privateKey: Uint8Array, compressed: boolean = true): st
   wifBuffer.set(keyWithVersion)
   wifBuffer.set(checksum, keyWithVersion.length)
 
-  return encodeBase58Address(wifBuffer)
+  return encodeBase58(wifBuffer)
 }
 
 function toPublicKeyHash(serializedPublicKey: Uint8Array): Uint8Array {
@@ -400,7 +397,7 @@ function deriveChildPublicKey(
  * @param base58Key - The base58-encoded key.
  * @returns An object with version, depth, parentFingerprint, childIndex, chainCode, and privateKey.
  */
-function deserializePrivateKey(base58Key: string): {
+export function parseExtendedPrivateKey(base58Key: string): {
   version: Uint8Array
   depth: number
   parentFingerprint: number
@@ -408,7 +405,7 @@ function deserializePrivateKey(base58Key: string): {
   chainCode: Uint8Array
   privateKey: Uint8Array
 } {
-  const decoded = decodeBase58Address(base58Key)
+  const decoded = decodeBase58(base58Key)
   if (decoded.length !== 82) {
     throw new Error('Invalid key length')
   }
@@ -444,7 +441,7 @@ function deserializePublicKey(base58Key: string): {
   chainCode: Uint8Array
   publicKey: Uint8Array
 } {
-  const decoded = decodeBase58Address(base58Key)
+  const decoded = decodeBase58(base58Key)
   if (decoded.length !== 82) {
     throw new Error('Invalid key length')
   }
@@ -526,7 +523,6 @@ export {
   getParentFingerprint,
   serializePrivateKey,
   serializePublicKey,
-  deserializePrivateKey,
   deserializePublicKey,
   privateKeyToWIF,
   toMnemonic,

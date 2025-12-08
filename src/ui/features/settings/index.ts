@@ -25,6 +25,7 @@ export type {
   AdvancedConfig,
   LiquidityPolicyType,
   LiquidityConfig,
+  LiquidityPolicy,
   SwapInConfig,
 } from './state'
 

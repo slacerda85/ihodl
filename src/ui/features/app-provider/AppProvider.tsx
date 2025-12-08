@@ -49,6 +49,7 @@ import { useColorScheme } from 'react-native'
 import { walletStore, type WalletStoreActions } from '../wallet/store'
 import { settingsStore, type SettingsStoreActions, type ColorMode } from '../settings/store'
 import { addressStore } from '../address/store'
+import { networkStore, type NetworkStoreActions } from '../network/store'
 
 // ==========================================
 // AUTH UTILS (autenticação biométrica)
@@ -215,6 +216,15 @@ interface AppContextType {
     notifyLight: typeof addressStore.notifyLight
     clear: typeof addressStore.clear
   }
+
+  // ========== NETWORK STORE ==========
+  network: {
+    subscribe: typeof networkStore.subscribe
+    getSnapshot: typeof networkStore.getSnapshot
+    getConnection: typeof networkStore.getConnection
+    getLightningWorker: typeof networkStore.getLightningWorker
+    actions: NetworkStoreActions
+  }
 }
 
 const AppContext = createContext<AppContextType | null>(null)
@@ -269,6 +279,15 @@ export function AppProvider({ children }: AppProviderProps) {
         notify: addressStore.notify,
         notifyLight: addressStore.notifyLight,
         clear: addressStore.clear,
+      },
+
+      // Network store
+      network: {
+        subscribe: networkStore.subscribe,
+        getSnapshot: networkStore.getSnapshot,
+        getConnection: networkStore.getConnection,
+        getLightningWorker: networkStore.getLightningWorker,
+        actions: networkStore.actions,
       },
     }),
     [state],
@@ -619,6 +638,68 @@ export function useSettings() {
       ...storeActions,
     }
   }, [state, isDark, colorMode, storeActions])
+}
+
+// ==========================================
+// NETWORK HOOKS
+// ==========================================
+
+/**
+ * Hook para obter o estado completo da rede
+ */
+export function useNetworkState() {
+  const { network } = useAppContext()
+  return useSyncExternalStore(network.subscribe, network.getSnapshot)
+}
+
+/**
+ * Hook para obter a conexão Electrum
+ */
+export function useNetworkConnection() {
+  const { network } = useAppContext()
+  return useCallback(() => network.getConnection(), [network])
+}
+
+/**
+ * Hook para obter o worker Lightning (requer masterKey e network)
+ */
+export function useLightningWorker(
+  masterKey: Uint8Array,
+  network?: 'mainnet' | 'testnet' | 'regtest',
+) {
+  const { network: networkStore } = useAppContext()
+  return networkStore.getLightningWorker(masterKey, network)
+}
+
+/**
+ * Hook para actions do network store
+ */
+export function useNetworkActions(): NetworkStoreActions {
+  const { network } = useAppContext()
+  return network.actions
+}
+
+/**
+ * Hook para verificar se Electrum está conectado
+ */
+export function useElectrumConnected(): boolean {
+  const networkState = useNetworkState()
+  return networkState.electrumConnected
+}
+
+/**
+ * Hook para verificar se Lightning Worker está pronto
+ */
+export function useLightningWorkerReady(): boolean {
+  const networkState = useNetworkState()
+  return networkState.lightningWorkerReady
+}
+
+/**
+ * Hook para loading de conexões de rede
+ */
+export function useNetworkLoading(): boolean {
+  return useLoading('lightningInit')
 }
 
 // ==========================================

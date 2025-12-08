@@ -24,6 +24,8 @@ import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 import { useLightningChannels } from '../hooks'
 import { useLightningActions } from '../hooks'
 import { useActiveColorMode } from '@/ui/features/app-provider'
+import { useAutoChannelOpening } from '../hooks/useAutoChannel'
+import { useInboundBalance } from '../hooks/useInboundBalance'
 import type { Channel, ChannelStateType, Satoshis } from '../types'
 
 // ==========================================
@@ -190,6 +192,8 @@ export default function ChannelManageScreen() {
   const colorMode = useActiveColorMode()
   const channels = useLightningChannels()
   const { getChannels, closeChannel, forceCloseChannel } = useLightningActions()
+  const { openChannelManually } = useAutoChannelOpening()
+  const inboundBalance = useInboundBalance()
 
   const [isRefreshing, setIsRefreshing] = useState(false)
 
@@ -266,6 +270,38 @@ export default function ChannelManageScreen() {
     router.push('/lightning/channel/create' as any)
   }, [router])
 
+  const handleOpenChannelWithOnChain = useCallback(async () => {
+    const pendingBalance = inboundBalance.pendingOnChainBalance
+
+    if (pendingBalance <= 0n) {
+      Alert.alert('Sem fundos', 'Não há saldo on-chain pendente para abrir canal.')
+      return
+    }
+
+    Alert.alert(
+      'Abrir Canal com Fundos On-Chain',
+      `Deseja abrir um canal usando ${formatSatoshis(pendingBalance)} de fundos on-chain?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Abrir Canal',
+          onPress: async () => {
+            try {
+              const success = await openChannelManually(pendingBalance)
+              if (success) {
+                Alert.alert('Sucesso', 'Canal aberto com sucesso!')
+              } else {
+                Alert.alert('Erro', 'Falha ao abrir canal. Tente novamente.')
+              }
+            } catch (error) {
+              Alert.alert('Erro', 'Erro inesperado ao abrir canal.')
+            }
+          },
+        },
+      ],
+    )
+  }, [inboundBalance.pendingOnChainBalance, openChannelManually])
+
   // ==========================================
   // RENDER
   // ==========================================
@@ -282,9 +318,26 @@ export default function ChannelManageScreen() {
           <IconSymbol name="chevron.left" size={24} color={textColor} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: textColor }]}>Canais</Text>
-        <TouchableOpacity onPress={handleNavigateToCreate} style={styles.addButton}>
-          <IconSymbol name="plus" size={24} color={colors.primary} />
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity
+            onPress={handleOpenChannelWithOnChain}
+            style={styles.onChainButton}
+            disabled={inboundBalance.pendingOnChainBalance <= 0n}
+          >
+            <IconSymbol
+              name="arrow.down.circle"
+              size={20}
+              color={
+                inboundBalance.pendingOnChainBalance > 0n
+                  ? colors.primary
+                  : colors.textSecondary[colorMode]
+              }
+            />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleNavigateToCreate} style={styles.addButton}>
+            <IconSymbol name="plus" size={24} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Stats Summary */}
@@ -360,6 +413,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   } as ViewStyle,
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  } as ViewStyle,
   backButton: {
     padding: 8,
   } as ViewStyle,
@@ -368,6 +426,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   } as TextStyle,
   addButton: {
+    padding: 8,
+  } as ViewStyle,
+  onChainButton: {
     padding: 8,
   } as ViewStyle,
   statsContainer: {
