@@ -5,7 +5,7 @@
  * estimativa de taxas e anúncios de liquidez.
  */
 
-import LightningService from './lightning'
+import LightningService from './ln-service'
 import type { Satoshis } from '@/ui/features/lightning/types'
 
 // ==========================================

@@ -16,6 +16,7 @@ import {
   GossipTimestampFilterMessage,
   QueryChannelRangeMessage,
   ReplyChannelRangeMessage,
+  ReplyChannelRangeTlvs,
   QueryShortChannelIdsMessage,
   ChannelAnnouncementMessage,
   NodeAnnouncementMessage,
@@ -23,6 +24,7 @@ import {
   EncodingType,
   BITCOIN_CHAIN_HASH,
   formatShortChannelId,
+  ChannelUpdateChecksum,
 } from '@/core/models/lightning/p2p'
 import { ShortChannelId, ChainHash } from '@/core/models/lightning/base'
 import { uint8ArrayToHex } from '@/core/lib/utils'
@@ -533,6 +535,96 @@ export class GossipSync {
   }
 
   /**
+   * Parseia TLVs (Type-Length-Value) de acordo com BOLT #1
+   *
+   * Formato: [type: bigsize][length: bigsize][value: bytes]
+   * Os TLVs devem estar ordenados por type em ordem crescente
+   *
+   * @param data - Dados binários contendo TLVs
+   * @returns Array de registros TLV parseados
+   */
+  private parseTlvs(data: Uint8Array): { type: bigint; length: bigint; value: Uint8Array }[] {
+    const tlvs: { type: bigint; length: bigint; value: Uint8Array }[] = []
+    let offset = 0
+
+    while (offset < data.length) {
+      // Parse type (bigsize)
+      const typeResult = this.parseBigSize(data, offset)
+      if (!typeResult) break
+      const type = typeResult.value
+      offset = typeResult.newOffset
+
+      // Parse length (bigsize)
+      const lengthResult = this.parseBigSize(data, offset)
+      if (!lengthResult) break
+      const length = lengthResult.value
+      offset = lengthResult.newOffset
+
+      // Parse value
+      if (offset + Number(length) > data.length) break
+      const value = data.slice(offset, offset + Number(length))
+      offset += Number(length)
+
+      tlvs.push({ type, length, value })
+    }
+
+    return tlvs
+  }
+
+  /**
+   * Parseia um BigSize (inteiro variável) de acordo com BOLT #1
+   *
+   * @param data - Dados binários
+   * @param offset - Posição inicial
+   * @returns Valor parseado e nova posição, ou null se inválido
+   */
+  private parseBigSize(
+    data: Uint8Array,
+    offset: number,
+  ): { value: bigint; newOffset: number } | null {
+    if (offset >= data.length) return null
+
+    const firstByte = data[offset]
+    offset++
+
+    if (firstByte < 0xfd) {
+      // 1 byte: 0x00-0xfc
+      return { value: BigInt(firstByte), newOffset: offset }
+    } else if (firstByte === 0xfd) {
+      // 3 bytes: 0xfd + 2 bytes little-endian
+      if (offset + 2 > data.length) return null
+      const value = BigInt(data[offset] | (data[offset + 1] << 8))
+      return { value, newOffset: offset + 2 }
+    } else if (firstByte === 0xfe) {
+      // 5 bytes: 0xfe + 4 bytes little-endian
+      if (offset + 4 > data.length) return null
+      const value = BigInt(
+        data[offset] |
+          (data[offset + 1] << 8) |
+          (data[offset + 2] << 16) |
+          (data[offset + 3] << 24),
+      )
+      return { value, newOffset: offset + 4 }
+    } else if (firstByte === 0xff) {
+      // 9 bytes: 0xff + 8 bytes little-endian
+      if (offset + 8 > data.length) return null
+      const value = BigInt(
+        data[offset] |
+          (data[offset + 1] << 8) |
+          (data[offset + 2] << 16) |
+          (data[offset + 3] << 24) |
+          (data[offset + 4] << 32) |
+          (data[offset + 5] << 40) |
+          (data[offset + 6] << 48) |
+          (data[offset + 7] << 56),
+      )
+      return { value, newOffset: offset + 8 }
+    }
+
+    return null
+  }
+
+  /**
    * Define callback para mensagens de gossip recebidas
    */
   setMessageCallback(callback: GossipMessageCallback): void {
@@ -669,6 +761,37 @@ export class GossipSync {
     const len = view.getUint16(43, false)
     const encodedShortIds = data.slice(45, 45 + len)
 
+    // Parse TLVs após encodedShortIds
+    const tlvData = data.slice(45 + len)
+    const parsedTlvs = this.parseTlvs(tlvData)
+
+    // Extrair TLVs específicos para ReplyChannelRange
+    const tlvs: ReplyChannelRangeTlvs = {}
+    for (const tlv of parsedTlvs) {
+      if (tlv.type === 1n) {
+        // timestamps_tlv
+        if (tlv.value.length >= 1) {
+          const encodingType = tlv.value[0]
+          const encodedTimestamps = tlv.value.slice(1)
+          tlvs.timestampsTlv = { encodingType, encodedTimestamps }
+        }
+      } else if (tlv.type === 3n) {
+        // checksums_tlv
+        const checksums: ChannelUpdateChecksum[] = []
+        const checksumData = tlv.value
+        for (let i = 0; i < checksumData.length; i += 8) {
+          if (i + 8 <= checksumData.length) {
+            const view = new DataView(checksumData.buffer, checksumData.byteOffset + i)
+            checksums.push({
+              checksumNodeId1: view.getUint32(0, false),
+              checksumNodeId2: view.getUint32(4, false),
+            })
+          }
+        }
+        tlvs.checksumsTlv = { checksums }
+      }
+    }
+
     return {
       type,
       chainHash,
@@ -677,7 +800,7 @@ export class GossipSync {
       syncComplete,
       len,
       encodedShortIds,
-      tlvs: {}, // TODO: Parse TLVs
+      tlvs,
     }
   }
 

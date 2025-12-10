@@ -7,7 +7,7 @@ import {
   createLightningInitializer,
   type InitStatus,
   type LightningInitConfig,
-} from '@/core/services/lightningInitializer'
+} from '@/core/services/ln-initializer-service'
 
 // ==========================================
 // HOOK: useLightningStartup

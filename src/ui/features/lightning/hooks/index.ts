@@ -5,6 +5,9 @@
 // Context hook
 export { useLightningContext } from './useLightningContext'
 
+// Readiness hook
+export { useLightningReadiness } from './useLightningReadiness'
+
 // State hooks
 export {
   useLightningState,

@@ -15,11 +15,14 @@ import {
   actOneSend,
   actTwoReceive,
   actThreeSend,
+  actOneReceive,
+  actTwoSend,
+  actThreeReceive,
   encryptMessage,
   decryptMessage,
 } from './transport'
 import type { KeyPair, TransportKeys, HandshakeState } from '@/core/models/lightning/transport'
-import { ACT_TWO_SIZE } from '@/core/models/lightning/transport'
+import { ACT_ONE_SIZE, ACT_TWO_SIZE, ACT_THREE_SIZE } from '@/core/models/lightning/transport'
 import { uint8ArrayToHex, hexToUint8Array } from '../utils'
 
 // ============================================================================
@@ -37,6 +40,9 @@ const MAX_RECEIVE_BUFFER = 65535 + 2 + 16 // max message + length + tag
 
 /** Intervalo de ping em ms */
 const PING_INTERVAL_MS = 30000
+
+/** Timeout para pong em ms */
+const PONG_TIMEOUT_MS = 10000
 
 /** Porta padrão Lightning */
 const DEFAULT_LIGHTNING_PORT = 9735
@@ -62,6 +68,7 @@ export enum TcpConnectionState {
  */
 export enum HandshakePhase {
   NONE = 'NONE',
+  WAITING_ACT_ONE = 'WAITING_ACT_ONE',
   ACT_ONE_SENT = 'ACT_ONE_SENT',
   ACT_ONE_RECEIVED = 'ACT_ONE_RECEIVED',
   ACT_TWO_SENT = 'ACT_TWO_SENT',
@@ -93,6 +100,8 @@ export interface TcpTransportConfig {
   handshakeTimeout?: number
   /** Intervalo de ping em ms */
   pingInterval?: number
+  /** Timeout para pong em ms */
+  pongTimeout?: number
   /** Auto-reconectar em caso de desconexão */
   autoReconnect?: boolean
   /** Delay máximo de reconexão em ms */
@@ -140,6 +149,7 @@ export class TcpTransport extends EventEmitter {
   private config: Required<TcpTransportConfig>
   private connectionState: ConnectionState
   private pingTimer: ReturnType<typeof setInterval> | null = null
+  private pongTimeoutTimer: ReturnType<typeof setTimeout> | null = null
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private host: string = ''
   private port: number = DEFAULT_LIGHTNING_PORT
@@ -153,6 +163,7 @@ export class TcpTransport extends EventEmitter {
       connectionTimeout: config.connectionTimeout ?? CONNECTION_TIMEOUT_MS,
       handshakeTimeout: config.handshakeTimeout ?? HANDSHAKE_TIMEOUT_MS,
       pingInterval: config.pingInterval ?? PING_INTERVAL_MS,
+      pongTimeout: config.pongTimeout ?? PONG_TIMEOUT_MS,
       autoReconnect: config.autoReconnect ?? false,
       maxReconnectDelay: config.maxReconnectDelay ?? 60000,
     }
@@ -241,6 +252,35 @@ export class TcpTransport extends EventEmitter {
     this.cleanup()
     this.updateState(this.createInitialState())
     this.emitEvent({ type: 'disconnected', reason: 'User requested disconnect' })
+  }
+
+  /**
+   * Define o socket para conexões de entrada (usado pelo servidor)
+   */
+  setSocket(socket: ReturnType<typeof TcpSocket.createConnection>): void {
+    if (this.socket) {
+      throw new Error('Socket already set')
+    }
+
+    this.socket = socket
+    this.setupSocketListeners()
+  }
+
+  /**
+   * Inicia handshake como responder (para conexões de entrada)
+   */
+  async startResponderHandshake(): Promise<void> {
+    if (this.connectionState.state !== TcpConnectionState.DISCONNECTED) {
+      throw new Error('Transport not in disconnected state')
+    }
+
+    this.updateState({
+      state: TcpConnectionState.HANDSHAKING,
+      handshakePhase: HandshakePhase.NONE,
+    })
+
+    // Iniciar handshake como responder
+    await this.respondHandshake()
   }
 
   /**
@@ -392,10 +432,24 @@ export class TcpTransport extends EventEmitter {
     this.socketWrite(actOneResult.message)
   }
 
+  private async respondHandshake(): Promise<void> {
+    // Inicializar estado do handshake para responder
+    const handshakeState = initializeHandshakeState(undefined, this.config.localKeyPair)
+    this.updateState({ handshakeState, handshakePhase: HandshakePhase.WAITING_ACT_ONE })
+    console.log('[TcpTransport] Waiting for Act One (responder mode)')
+  }
+
   private processHandshakeData(): void {
     const { handshakePhase, receiveBufferOffset } = this.connectionState
 
     switch (handshakePhase) {
+      case HandshakePhase.WAITING_ACT_ONE:
+        // Esperando Act One do initiator
+        if (receiveBufferOffset >= ACT_ONE_SIZE) {
+          this.processActOne()
+        }
+        break
+
       case HandshakePhase.ACT_ONE_SENT:
         // Esperando Act Two
         if (receiveBufferOffset >= ACT_TWO_SIZE) {
@@ -405,6 +459,17 @@ export class TcpTransport extends EventEmitter {
 
       case HandshakePhase.ACT_TWO_RECEIVED:
         // Não esperamos dados após enviar Act Three como initiator
+        break
+
+      case HandshakePhase.ACT_ONE_RECEIVED:
+        // Não esperamos dados após enviar Act Two como responder
+        break
+
+      case HandshakePhase.ACT_TWO_SENT:
+        // Esperando Act Three do initiator
+        if (receiveBufferOffset >= ACT_THREE_SIZE) {
+          this.processActThree()
+        }
         break
 
       default:
@@ -477,6 +542,90 @@ export class TcpTransport extends EventEmitter {
     this.cleanup()
   }
 
+  private processActOne(): void {
+    const actOneData = this.consumeFromBuffer(ACT_ONE_SIZE)
+    if (!actOneData) return
+
+    console.log('[TcpTransport] Processing Act One (responder)')
+
+    const handshakeState = this.connectionState.handshakeState
+    if (!handshakeState) {
+      this.failHandshake('Invalid handshake state for Act One')
+      return
+    }
+
+    const result = actOneReceive(handshakeState, actOneData, this.config.localKeyPair)
+
+    if ('error' in result) {
+      this.failHandshake(`Act One failed: ${result.error}`)
+      return
+    }
+
+    // Extrair remote ephemeral key do Act One
+    const remoteEphemeral = actOneData.subarray(1, 34)
+
+    this.updateState({
+      handshakeState: { ...result.newState, re: remoteEphemeral },
+      handshakePhase: HandshakePhase.ACT_ONE_RECEIVED,
+      remoteNodeId: remoteEphemeral, // Temporário, será atualizado no Act Three
+    })
+
+    // Act Two: Responder -> Initiator
+    this.sendActTwo(result.newState, remoteEphemeral)
+  }
+
+  private sendActTwo(handshakeState: HandshakeState, remoteEphemeral: Uint8Array): void {
+    console.log('[TcpTransport] Sending Act Two (responder)')
+
+    const actTwoResult = actTwoSend(handshakeState, remoteEphemeral)
+
+    this.updateState({
+      handshakeState: { ...actTwoResult.newState, e: actTwoResult.newState.e },
+      handshakePhase: HandshakePhase.ACT_TWO_SENT,
+    })
+
+    this.socketWrite(actTwoResult.message)
+  }
+
+  private processActThree(): void {
+    const actThreeData = this.consumeFromBuffer(ACT_THREE_SIZE)
+    if (!actThreeData) return
+
+    console.log('[TcpTransport] Processing Act Three (responder)')
+
+    const handshakeState = this.connectionState.handshakeState
+    const ephemeralKey = handshakeState?.e
+
+    if (!handshakeState || !ephemeralKey) {
+      this.failHandshake('Invalid handshake state for Act Three')
+      return
+    }
+
+    const result = actThreeReceive(handshakeState, actThreeData, ephemeralKey, handshakeState.re!)
+
+    if ('error' in result) {
+      this.failHandshake(`Act Three failed: ${result.error}`)
+      return
+    }
+
+    // Handshake completo
+    this.updateState({
+      handshakePhase: HandshakePhase.COMPLETE,
+      transportKeys: result.keys,
+      state: TcpConnectionState.CONNECTED,
+      remoteNodeId: handshakeState.re, // Remote static key from Act Three
+    })
+
+    console.log('[TcpTransport] Handshake complete (responder)')
+
+    const remoteNodeId = handshakeState.re ? uint8ArrayToHex(handshakeState.re) : ''
+    this.emitEvent({ type: 'handshakeComplete', remoteNodeId })
+    this.emitEvent({ type: 'connected', remoteNodeId })
+
+    // Iniciar ping keepalive
+    this.startPingTimer()
+  }
+
   // ============================================================================
   // MESSAGE PROCESSING
   // ============================================================================
@@ -495,6 +644,11 @@ export class TcpTransport extends EventEmitter {
         console.error('[TcpTransport] Decrypt error:', result.error)
         this.emitEvent({ type: 'error', error: new Error(result.error) })
         break
+      }
+
+      // Handle pong messages specially
+      if (this.handlePongMessage(result.message)) {
+        continue // Don't emit pong messages as regular messages
       }
 
       // Emitir mensagem decriptada
@@ -558,11 +712,22 @@ export class TcpTransport extends EventEmitter {
       clearInterval(this.pingTimer)
       this.pingTimer = null
     }
+
+    if (this.pongTimeoutTimer) {
+      clearTimeout(this.pongTimeoutTimer)
+      this.pongTimeoutTimer = null
+    }
   }
 
   private sendPing(): void {
     if (this.connectionState.state !== TcpConnectionState.CONNECTED) {
       return
+    }
+
+    // Clear any existing pong timeout
+    if (this.pongTimeoutTimer) {
+      clearTimeout(this.pongTimeoutTimer)
+      this.pongTimeoutTimer = null
     }
 
     // Ping message: type (2) + num_pong_bytes (2) + ignored (byteslen)
@@ -578,6 +743,34 @@ export class TcpTransport extends EventEmitter {
 
     this.sendMessage(pingMsg)
     this.updateState({ lastPingSent: Date.now() })
+
+    // Set pong timeout
+    this.pongTimeoutTimer = setTimeout(() => {
+      console.warn('[TcpTransport] Pong timeout - disconnecting')
+      this.disconnect('pong_timeout')
+    }, this.config.pongTimeout)
+  }
+
+  private handlePongMessage(message: Uint8Array): boolean {
+    if (message.length < 2) {
+      return false
+    }
+
+    const msgType = (message[0] << 8) | message[1]
+
+    if (msgType === 19) {
+      // pong message type
+      // Clear pong timeout
+      if (this.pongTimeoutTimer) {
+        clearTimeout(this.pongTimeoutTimer)
+        this.pongTimeoutTimer = null
+      }
+
+      this.updateState({ lastPongReceived: Date.now() })
+      return true // Message handled
+    }
+
+    return false // Not a pong message
   }
 
   // ============================================================================
@@ -660,6 +853,11 @@ export class TcpTransport extends EventEmitter {
 
   private cleanup(): void {
     this.stopPingTimer()
+
+    if (this.pongTimeoutTimer) {
+      clearTimeout(this.pongTimeoutTimer)
+      this.pongTimeoutTimer = null
+    }
 
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
@@ -771,25 +969,30 @@ export class TcpServer extends EventEmitter {
   }
 
   private handleIncomingConnection(socket: ReturnType<typeof TcpSocket.createConnection>): void {
-    console.log('[TcpServer] Incoming connection')
+    console.log('[TcpServer] Incoming connection - starting responder handshake')
 
-    // Para conexões de entrada, precisamos implementar o responder side do handshake
-    // Isso requer criar um TcpTransport em modo responder
-    // Por enquanto, apenas logamos - implementação completa requer mais trabalho
+    // Criar TcpTransport para esta conexão
+    const transport = new TcpTransport(this.config)
 
-    // TODO: Implementar responder handshake
-    // 1. Receber Act One
-    // 2. Enviar Act Two
-    // 3. Receber Act Three
-    // 4. Estabelecer conexão encriptada
+    // Configurar socket existente
+    transport.setSocket(socket)
 
-    socket.on('data', (data: Buffer | string) => {
-      console.log('[TcpServer] Received data from incoming connection')
-    })
-
-    socket.on('close', () => {
-      console.log('[TcpServer] Incoming connection closed')
-    })
+    // Iniciar handshake como responder
+    transport
+      .startResponderHandshake()
+      .then(() => {
+        // Handshake bem-sucedido, adicionar à lista de conexões
+        const remoteNodeId = transport.getRemoteNodeId()
+        if (remoteNodeId) {
+          this.connections.set(remoteNodeId, transport)
+          console.log(`[TcpServer] Connection established with ${remoteNodeId}`)
+          this.emit('connection', transport)
+        }
+      })
+      .catch(error => {
+        console.error('[TcpServer] Responder handshake failed:', error)
+        transport.disconnect()
+      })
   }
 }
 

@@ -3,8 +3,8 @@
 // Handles automatic channel opening, LSP integration, and balance optimization
 
 import EventEmitter from 'eventemitter3'
-import LightningService from './lightning'
-import LSPService from './lsp'
+import LightningService from './ln-service'
+import LSPService from './ln-lsp-service'
 import { LightningRepository } from '../repositories/lightning'
 
 // ==========================================

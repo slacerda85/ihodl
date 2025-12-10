@@ -18,10 +18,12 @@ export interface PersistedChannel {
   state: string
   fundingTxid?: string
   fundingOutputIndex?: number
+  fundingScriptPubKey?: string
   localBalance: string
   remoteBalance: string
   localConfig: any
   remoteConfig: any
+  isInitiator?: boolean
   createdAt?: number
   lastActivity?: number
 }
@@ -33,6 +35,7 @@ export interface PersistedPeer {
   pubkey: string
   lastConnected?: number
   features?: string
+  score?: number // Peer reliability score (increments on success, decrements on failure)
 }
 
 export interface PersistedPreimage {
@@ -97,6 +100,8 @@ const STORAGE_KEYS = {
   CHANNEL_BACKUPS: 'channel_backups',
   RESTORE_CONTEXTS: 'restore_contexts',
   LAST_BACKUP_TIME: 'last_backup_time',
+  LAST_PEER_UPDATE: 'last_peer_update',
+  PEER_STATS: 'peer_stats',
 } as const
 
 // Watchtower types
@@ -681,6 +686,107 @@ export class LightningRepository implements LightningRepositoryInterface {
    */
   clearRestoreData(): void {
     lightningStorage.delete(STORAGE_KEYS.RESTORE_CONTEXTS)
+  }
+
+  // ==========================================
+  // PEER MANAGEMENT (similar to Electrum repository)
+  // ==========================================
+
+  /**
+   * Salva timestamp da última atualização de peers
+   */
+  setLastPeerUpdate(timestamp: number): void {
+    try {
+      lightningStorage.set(STORAGE_KEYS.LAST_PEER_UPDATE, timestamp)
+    } catch (error) {
+      console.error('[lightning-repo] Failed to save last peer update:', error)
+    }
+  }
+
+  /**
+   * Obtém timestamp da última atualização de peers
+   */
+  getLastPeerUpdate(): number | null {
+    try {
+      const timestamp = lightningStorage.getNumber(STORAGE_KEYS.LAST_PEER_UPDATE)
+      return timestamp ?? null
+    } catch (error) {
+      console.error('[lightning-repo] Failed to get last peer update:', error)
+      return null
+    }
+  }
+
+  /**
+   * Salva estatísticas de um peer específico
+   */
+  savePeerStats(nodeId: string, stats: Partial<PersistedPeer>): void {
+    try {
+      const allStats = this.getAllPeerStats()
+      allStats[nodeId] = { ...allStats[nodeId], ...stats, nodeId } as PersistedPeer
+      lightningStorage.set(STORAGE_KEYS.PEER_STATS, JSON.stringify(allStats))
+    } catch (error) {
+      console.error('[lightning-repo] Failed to save peer stats:', error)
+    }
+  }
+
+  /**
+   * Obtém estatísticas de um peer específico
+   */
+  getPeerStats(nodeId: string): PersistedPeer | null {
+    const allStats = this.getAllPeerStats()
+    return allStats[nodeId] || null
+  }
+
+  /**
+   * Obtém todas as estatísticas de peers
+   */
+  getAllPeerStats(): Record<string, PersistedPeer> {
+    try {
+      const data = lightningStorage.getString(STORAGE_KEYS.PEER_STATS)
+      if (data) {
+        return JSON.parse(data)
+      }
+      return {}
+    } catch (error) {
+      console.error('[lightning-repo] Failed to parse peer stats:', error)
+      lightningStorage.delete(STORAGE_KEYS.PEER_STATS)
+      return {}
+    }
+  }
+
+  /**
+   * Limpa todas as estatísticas de peers
+   */
+  clearPeerStats(): void {
+    lightningStorage.delete(STORAGE_KEYS.PEER_STATS)
+  }
+
+  /**
+   * Obtém peers ordenados por sucesso de conexão
+   */
+  getPeersByReliability(): PersistedPeer[] {
+    const allPeers = this.findAllPeers()
+    const peerStats = this.getAllPeerStats()
+
+    return Object.values(allPeers)
+      .map(peer => ({
+        ...peer,
+        ...(peerStats[peer.nodeId] || {}),
+      }))
+      .sort((a, b) => {
+        // Priorizar por score (maior score primeiro), depois por lastConnected
+        const aScore = a.score || 0
+        const bScore = b.score || 0
+
+        if (aScore !== bScore) {
+          return bScore - aScore
+        }
+
+        // Tiebreaker: peers conectados mais recentemente
+        const aLastConnected = a.lastConnected || 0
+        const bLastConnected = b.lastConnected || 0
+        return bLastConnected - aLastConnected
+      })
   }
 }
 

@@ -91,12 +91,33 @@ export {
 export {
   GossipSync,
   createGossipSync,
+  verifyChannelAnnouncement,
+  verifyNodeAnnouncement,
+  verifyChannelUpdate,
+  verifyChannelUpdateRaw,
   GossipSyncState,
   type GossipSyncOptions,
   type GossipSyncStats,
   type GossipMessageCallback,
   type GossipPeerInterface,
 } from './gossip'
+
+// Gossip Sync Manager
+export {
+  GossipSyncManager,
+  createGossipSyncManager,
+  type SyncProgress,
+  type GossipSyncOptions,
+} from './gossip-sync'
+
+// Graph Cache Manager
+export {
+  GraphCacheManager,
+  createGraphCacheManager,
+  type GraphCacheConfig,
+  type GraphCacheStats,
+  type IncrementalUpdateResult,
+} from './graph-cache'
 
 // Trampoline Routing
 export {
@@ -105,14 +126,39 @@ export {
   supportsTrampolineRouting,
   KNOWN_TRAMPOLINE_NODES,
   DEFAULT_FEE_LEVELS,
+  TRAMPOLINE_FEE_LEVEL_COUNT,
   TrampolineTlvType,
   type TrampolineNode,
   type TrampolineFeeLevel,
+  type TrampolineRouteHop,
   type TrampolineHop,
   type TrampolineRoute,
   type TrampolinePayload,
   type TrampolineOnionResult,
+  createTrampolineOnion,
+  EnhancedTrampolineRouter,
+  createEnhancedTrampolineRouter,
+  type TrampolineNodeStats,
+  type TrampolineSelection,
+  TrampolineSelectionStrategy,
+  type EnhancedTrampolineConfig,
 } from './trampoline'
+
+// Pathfinding
+export {
+  findRoute,
+  createRoutingGraph,
+  addChannelToGraph,
+  addNodeToGraph,
+  removeChannelFromGraph,
+  removeNodeFromGraph,
+  updateChannelFees,
+  getGraphStats,
+  validateRoute,
+  calculateRouteCost,
+  type Route,
+  type RoutingGraphInterface,
+} from './pathfinding'
 
 // Watchtower
 export {

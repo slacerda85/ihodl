@@ -13,6 +13,8 @@ import { sha256 } from '@noble/hashes/sha2.js'
 import { pbkdf2 } from '@noble/hashes/pbkdf2.js'
 import * as Crypto from 'expo-crypto'
 import { hexToUint8Array, uint8ArrayToHex } from '@/core/lib/utils'
+import { createPublicKey } from '@/core/lib/key'
+import { bech32 } from '@/core/lib/bips'
 
 /**
  * Gera bytes aleatórios usando expo-crypto
@@ -694,6 +696,27 @@ export function getBackupChecksum(backup: FullBackup): string {
 }
 
 /**
+ * Calcula endereço Bitcoin a partir de scriptPubKey
+ * Suporta P2WSH (usado em canais Lightning)
+ */
+function scriptPubKeyToAddress(scriptPubKeyHex: string): string {
+  const script = hexToUint8Array(scriptPubKeyHex)
+
+  // Check if it's a P2WSH script (OP_0 <32-byte-hash>)
+  if (script.length === 34 && script[0] === 0x00 && script[1] === 0x20) {
+    // Extract the 32-byte script hash
+    const scriptHash = script.slice(2)
+    // Convert to bech32 address
+    const words = bech32.toWords(scriptHash)
+    return bech32.encode('bc', [0, ...words]) // version 0 for P2WSH
+  }
+
+  // For other script types, return empty string (not implemented)
+  // Could be extended to support P2PKH, P2SH, etc.
+  return ''
+}
+
+/**
  * Cria backup a partir de dados do canal persistido
  */
 export function createBackupFromPersistedChannel(
@@ -702,6 +725,7 @@ export function createBackupFromPersistedChannel(
     nodeId: string
     fundingTxid?: string
     fundingOutputIndex?: number
+    fundingScriptPubKey?: string
     localConfig: {
       toSelfDelay?: number
       paymentBasepoint?: string
@@ -711,6 +735,7 @@ export function createBackupFromPersistedChannel(
       paymentBasepoint?: string
       revocationBasepoint?: string
     }
+    isInitiator?: boolean
     createdAt?: number
   },
   secrets: {
@@ -727,27 +752,42 @@ export function createBackupFromPersistedChannel(
     throw new Error('Channel not funded - cannot create backup')
   }
 
+  // Derive actual keys from channel seed
+  const channelSeedBytes = hexToUint8Array(secrets.channelSeed)
+
+  // Derive keys using the same method as worker.ts
+  const fundingPrivKey = sha256(new Uint8Array([...channelSeedBytes, 0]))
+  const paymentBasepointPrivKey = sha256(new Uint8Array([...channelSeedBytes, 1]))
+
+  // Derive public keys from private keys
+  const paymentBasepoint = createPublicKey(paymentBasepointPrivKey)
+
+  // Calculate funding address from scriptPubKey if available
+  let fundingAddress: string | undefined
+  if (channel.fundingScriptPubKey) {
+    fundingAddress = scriptPubKeyToAddress(channel.fundingScriptPubKey)
+  }
+
   return {
     channelId: channel.channelId,
     nodeId: channel.nodeId,
     fundingTxid: channel.fundingTxid,
     fundingOutputIndex: channel.fundingOutputIndex,
-    channelSeed: secrets.channelSeed,
+    channelSeed: secrets.channelSeed, // Keep original seed for reference
     localPrivkey: secrets.localPrivkey,
-    multisigFundingPrivkey: secrets.multisigFundingPrivkey,
-    isInitiator: true, // TODO: determinar a partir do config
+    multisigFundingPrivkey: uint8ArrayToHex(fundingPrivKey), // Use derived funding key
+    isInitiator: channel.isInitiator ?? true,
     localDelay: channel.localConfig.toSelfDelay || 144,
     remoteDelay: channel.remoteConfig.toSelfDelay || 144,
     remotePaymentPubkey: channel.remoteConfig.paymentBasepoint || '',
     remoteRevocationPubkey: channel.remoteConfig.revocationBasepoint || '',
-    localPaymentPubkey: channel.localConfig.paymentBasepoint,
+    localPaymentPubkey: uint8ArrayToHex(paymentBasepoint), // Use derived payment pubkey
     host: peerInfo.host,
     port: peerInfo.port,
     createdAt: channel.createdAt || Date.now(),
+    fundingAddress,
   }
-}
-
-// ==========================================
+} // ==========================================
 // CHANNEL RESTORE
 // ==========================================
 

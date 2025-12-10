@@ -14,6 +14,7 @@ import {
   DUST_LIMIT_P2WPKH,
   fundingOutputScript,
 } from './commitment'
+import { LightningMessageType } from '../../models/lightning/base'
 import {
   encodeOpenChannelMessage,
   encodeAcceptChannelMessage,
@@ -24,8 +25,10 @@ import {
   encodeCommitmentSignedMessage,
   encodeRevokeAndAckMessage,
   encodeShutdownMessage,
+  encodeChannelReestablishMessage,
 } from './peer'
 import { signMessage, verifyMessage, hash256 } from '../crypto/crypto'
+import { BITCOIN_CHAIN_HASH } from '../../models/lightning/p2p'
 
 // ==========================================
 // TIPOS E ENUMS
@@ -453,6 +456,22 @@ export class ChannelManager {
   }
 
   /**
+   * Verifica assinatura do commitment transaction recebido
+   * O peer assina nosso commitment (LOCAL), então verificamos com a chave pública dele
+   */
+  private verifyRemoteCommitmentSignature(signature: Uint8Array): boolean {
+    if (!this.commitmentBuilder) {
+      throw new Error('CommitmentBuilder not initialized')
+    }
+
+    // Construir nosso commitment (LOCAL) que o peer está assinando
+    const localCommitment = this.commitmentBuilder.buildCommitmentTx(HTLCOwner.LOCAL)
+
+    // Verificar assinatura usando a chave pública do peer
+    return this.commitmentBuilder.verifyCommitmentSignature(localCommitment, signature)
+  }
+
+  /**
    * Processa funding_created
    */
   handleFundingCreated(message: FundingCreatedMessage): Uint8Array {
@@ -463,7 +482,9 @@ export class ChannelManager {
     this.setFundingTx(message.fundingTxid, message.fundingOutputIndex)
 
     // Verificar assinatura do commitment remoto
-    // TODO: Implementar verificação
+    if (!this.verifyRemoteCommitmentSignature(message.signature)) {
+      throw new Error('Invalid remote commitment signature in funding_created')
+    }
 
     // Criar funding_signed
     return this.createFundingSignedMessage(message.signature)
@@ -477,8 +498,13 @@ export class ChannelManager {
       return { success: false, error: new Error('Received funding_signed but we are not funder') }
     }
 
-    // Verificar assinatura
-    // TODO: Implementar verificação
+    // Verificar assinatura do commitment
+    if (!this.verifyRemoteCommitmentSignature(message.signature)) {
+      return {
+        success: false,
+        error: new Error('Invalid remote commitment signature in funding_signed'),
+      }
+    }
 
     this.transitionTo(ChannelState.WAITING_FOR_FUNDING_CONFIRMED)
 
@@ -651,13 +677,16 @@ export class ChannelManager {
     // Assinar commitment usando chave privada real
     const signature = this.commitmentBuilder.signCommitmentTx(remoteCommitment)
 
-    // Assinar HTLCs
+    // Assinar cada HTLC output do commitment do peer
     const htlcSignatures: Uint8Array[] = []
     for (const output of remoteCommitment.outputs) {
       if (output.type === 'htlc_offered' || output.type === 'htlc_received') {
-        // Para HTLCs, também precisamos assinar, mas por enquanto usar stub
-        // TODO: Implementar assinatura HTLC completa
-        htlcSignatures.push(new Uint8Array(64))
+        const htlcSignature = this.commitmentBuilder.signHtlcTransaction(
+          remoteCommitment,
+          output,
+          HTLCOwner.REMOTE,
+        )
+        htlcSignatures.push(htlcSignature)
       }
     }
 
@@ -688,7 +717,26 @@ export class ChannelManager {
     }
 
     // Verificar assinaturas HTLC
-    // TODO: Implementar verificação de assinaturas HTLC
+    const htlcOutputs = localCommitment.outputs.filter(
+      o => o.type === 'htlc_offered' || o.type === 'htlc_received',
+    )
+
+    if (htlcOutputs.length !== htlcSignatures.length) {
+      throw new Error(
+        `HTLC signature count mismatch: expected ${htlcOutputs.length}, got ${htlcSignatures.length}`,
+      )
+    }
+
+    for (let i = 0; i < htlcOutputs.length; i++) {
+      const isValidHtlcSig = this.commitmentBuilder.verifyHtlcSignature(
+        localCommitment,
+        htlcOutputs[i],
+        htlcSignatures[i],
+      )
+      if (!isValidHtlcSig) {
+        throw new Error(`Invalid HTLC signature at index ${i}`)
+      }
+    }
 
     // Atualizar estado
     this.htlcManager.recvCtx()
@@ -917,7 +965,7 @@ export class ChannelManager {
 
     const message = {
       type: 32, // OPEN_CHANNEL
-      chainHash: new Uint8Array(32), // TODO: Bitcoin mainnet chain hash
+      chainHash: BITCOIN_CHAIN_HASH, // Bitcoin mainnet chain hash
       temporaryChannelId: this.info.tempChannelId,
       fundingSatoshis: this.info.fundingSatoshis,
       pushMsat: 0n, // No push for now
@@ -1099,20 +1147,16 @@ export class ChannelManager {
       throw new Error('Channel ID not set')
     }
 
-    // TODO: Implementar encodeChannelReestablishMessage no peer.ts
-    // const message = {
-    //   type: 136, // CHANNEL_REESTABLISH
-    //   channelId: this.info.channelId,
-    //   nextCommitmentNumber,
-    //   nextRevocationNumber,
-    //   lastPerCommitmentSecret: lastSecret,
-    //   nextPerCommitmentPoint: nextPoint,
-    //   tlvs: [],
-    // }
-    // return encodeChannelReestablishMessage(message)
-
-    // Stub implementation
-    return new Uint8Array()
+    const message = {
+      type: LightningMessageType.CHANNEL_REESTABLISH as const,
+      channelId: this.info.channelId,
+      nextCommitmentNumber,
+      nextRevocationNumber,
+      yourLastPerCommitmentSecret: lastSecret,
+      myCurrentPerCommitmentPoint: nextPoint,
+      tlvs: [], // Empty TLVs array for basic reestablish
+    }
+    return encodeChannelReestablishMessage(message)
   }
 
   // ==========================================

@@ -45,7 +45,7 @@ import {
 } from '@/core/models/lightning/onchain'
 import { CommitmentOutputType } from '@/core/models/lightning/transaction'
 import { Tx } from '@/core/models/transaction'
-import { uint8ArrayToHex } from '@/core/lib/utils'
+import { uint8ArrayToHex, hexToUint8Array } from '@/core/lib/utils'
 
 // Test data fixtures
 const mockSha256 = new Uint8Array(32).fill(1)
@@ -1341,15 +1341,45 @@ describe('BOLT #5: On-chain Transaction Handling', () => {
     })
 
     describe('detectRevokedCommitment', () => {
-      it('should detect revoked commitment when secret is non-zero', () => {
-        const result = detectRevokedCommitment(mockTxid, mockPerCommitmentSecret, mockPoint)
+      it('should detect revoked commitment when secret matches expected point', () => {
+        // Usar vetores BOLT-3: secret deve derivar o point esperado
+        const perCommitmentSecret = hexToUint8Array(
+          '0000000000000000000000000000000000000000000000000000000000000001',
+        )
+        const expectedPerCommitmentPoint = hexToUint8Array(
+          '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
+        )
+
+        const result = detectRevokedCommitment(
+          mockTxid,
+          perCommitmentSecret,
+          expectedPerCommitmentPoint,
+        )
 
         expect(result).toBe(true)
       })
 
       it('should not detect revoked commitment when secret is zero', () => {
         const zeroSecret = new Uint8Array(32).fill(0)
-        const result = detectRevokedCommitment(mockTxid, zeroSecret, mockPoint)
+        const expectedPoint = hexToUint8Array(
+          '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
+        )
+
+        const result = detectRevokedCommitment(mockTxid, zeroSecret, expectedPoint)
+
+        expect(result).toBe(false)
+      })
+
+      it('should not detect revoked commitment when secret does not match point', () => {
+        // Secret diferente que não corresponde ao point esperado
+        const wrongSecret = hexToUint8Array(
+          '0000000000000000000000000000000000000000000000000000000000000002',
+        )
+        const expectedPoint = hexToUint8Array(
+          '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
+        )
+
+        const result = detectRevokedCommitment(mockTxid, wrongSecret, expectedPoint)
 
         expect(result).toBe(false)
       })
@@ -1441,6 +1471,17 @@ describe('BOLT #5: On-chain Transaction Handling', () => {
           perCommitmentPoint,
         )
         expect(result).toEqual(result2)
+      })
+
+      it('should derive different keys for different secrets', () => {
+        const secret1 = new Uint8Array(32).fill(1)
+        const secret2 = new Uint8Array(32).fill(2)
+        const basepoint = new Uint8Array(33).fill(0x33)
+        const point = new Uint8Array(33).fill(0x44)
+        const result1 = deriveRevocationPrivkey(secret1, secret1, basepoint, point)
+        const result2 = deriveRevocationPrivkey(secret2, secret2, basepoint, point)
+
+        expect(result1).not.toEqual(result2)
       })
     })
 

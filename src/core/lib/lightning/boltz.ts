@@ -19,6 +19,8 @@ import {
   generatePreimage,
 } from './submarineSwap'
 import { hexToUint8Array, uint8ArrayToHex } from '@/core/lib/utils'
+import { buildTransaction, sendTransaction, signTransaction } from '@/core/lib/transactions'
+import { getAddressTxHistory, getTransaction } from '@/core/lib/electrum'
 
 // ============================================================================
 // Constantes
@@ -583,7 +585,77 @@ export class BoltzSwapManager {
     // 3. Assinar com privateKey do swap
     // 4. Broadcast via Boltz ou Electrum
 
-    throw new Error('Claim not implemented - use external signing')
+    // 1. Buscar UTXO do lockup address
+    const utxos = await getAddressTxHistory(swap.lockupAddress!)
+    if (!utxos || utxos.length === 0) {
+      throw new Error('No UTXOs found for lockup address')
+    }
+
+    // Encontrar UTXO não gasto
+    let lockupUtxo = null
+    for (const utxo of utxos) {
+      const tx = await getTransaction(utxo.tx_hash)
+      if (tx && tx.vout && tx.vout[utxo.tx_pos]) {
+        const output = tx.vout[utxo.tx_pos]
+        if (output.value === Number(swap.expectedAmount!)) {
+          lockupUtxo = {
+            txid: utxo.tx_hash,
+            vout: utxo.tx_pos,
+            value: output.value,
+            scriptPubKey: output.scriptPubKey.hex,
+          }
+          break
+        }
+      }
+    }
+
+    if (!lockupUtxo) {
+      throw new Error('Lockup UTXO not found or already spent')
+    }
+
+    // 2. Construir witness script para claim
+    const scriptParams = extractSwapScriptParams(hexToUint8Array(swap.redeemScript!))
+    if (!scriptParams) {
+      throw new Error('Invalid redeem script')
+    }
+
+    // Witness stack para claim: [preimage, 1]
+    const witnessStack = [
+      swap.preimage!, // preimage (32 bytes)
+      new Uint8Array([1]), // 1 para escolher o branch claim
+    ]
+
+    // 3. Construir transação
+    const claimTx = await buildTransaction({
+      inputs: [
+        {
+          txid: lockupUtxo.txid,
+          vout: lockupUtxo.vout,
+          scriptPubKey: lockupUtxo.scriptPubKey,
+          witnessScript: swap.redeemScript!, // witness script
+          witnessStack: witnessStack,
+        },
+      ],
+      outputs: [
+        {
+          address: claimAddress,
+          value: lockupUtxo.value - Math.ceil((feeRate * 150) / 1000), // subtrair fee estimada
+        },
+      ],
+      feeRate: feeRate,
+      network: this.network,
+    })
+
+    // 4. Assinar transação
+    const signedTx = await this.signSwapTransaction(claimTx, swap.privateKey!)
+
+    // 5. Broadcast
+    const result = await sendTransaction({
+      rawTx: signedTx,
+      network: this.network,
+    })
+
+    return { txid: result.txid }
   }
 
   /**
@@ -610,7 +682,100 @@ export class BoltzSwapManager {
     // TODO: Construir e assinar refund transaction
     // Similar ao claim, mas usando o path de refund do script
 
-    throw new Error('Refund not implemented - use external signing')
+    // 1. Buscar UTXO do lockup address
+    const utxos = await getAddressTxHistory(swap.lockupAddress!)
+    if (!utxos || utxos.length === 0) {
+      throw new Error('No UTXOs found for lockup address')
+    }
+
+    // Encontrar UTXO não gasto
+    let lockupUtxo = null
+    for (const utxo of utxos) {
+      const tx = await getTransaction(utxo.tx_hash)
+      if (tx && tx.vout && tx.vout[utxo.tx_pos]) {
+        const output = tx.vout[utxo.tx_pos]
+        if (output.value === Number(swap.expectedAmount!)) {
+          lockupUtxo = {
+            txid: utxo.tx_hash,
+            vout: utxo.tx_pos,
+            value: output.value,
+            scriptPubKey: output.scriptPubKey.hex,
+          }
+          break
+        }
+      }
+    }
+
+    if (!lockupUtxo) {
+      throw new Error('Lockup UTXO not found or already spent')
+    }
+
+    // 2. Verificar se locktime já passou
+    const currentTime = Math.floor(Date.now() / 1000)
+    const scriptParams = extractSwapScriptParams(hexToUint8Array(swap.redeemScript!))
+    if (!scriptParams) {
+      throw new Error('Invalid redeem script')
+    }
+
+    if (currentTime < scriptParams.locktime) {
+      throw new Error(
+        `Locktime not reached yet. Current: ${currentTime}, Required: ${scriptParams.locktime}`,
+      )
+    }
+
+    // 3. Construir witness script para refund
+    // Witness stack para refund: [0] (escolhe o branch ELSE)
+    const witnessStack = [
+      new Uint8Array([0]), // 0 para escolher o branch refund
+    ]
+
+    // 4. Construir transação com locktime
+    const refundTx = await buildTransaction({
+      inputs: [
+        {
+          txid: lockupUtxo.txid,
+          vout: lockupUtxo.vout,
+          scriptPubKey: lockupUtxo.scriptPubKey,
+          witnessScript: swap.redeemScript!,
+          witnessStack: witnessStack,
+          sequence: 0xfffffffe, // enable locktime
+        },
+      ],
+      outputs: [
+        {
+          address: refundAddress,
+          value: lockupUtxo.value - Math.ceil((feeRate * 150) / 1000), // subtrair fee estimada
+        },
+      ],
+      feeRate: feeRate,
+      locktime: scriptParams.locktime,
+      network: this.network,
+    })
+
+    // 5. Assinar transação
+    const signedTx = await this.signSwapTransaction(refundTx, swap.refundPrivateKey!)
+
+    // 6. Broadcast
+    const result = await sendTransaction({
+      rawTx: signedTx,
+      network: this.network,
+    })
+
+    return { txid: result.txid }
+  }
+
+  /**
+   * Assina transação de swap com chave privada
+   */
+  private async signSwapTransaction(rawTx: string, privateKey: Uint8Array): Promise<string> {
+    // Usar signTransaction do módulo de transações
+    const signResult = await signTransaction({
+      rawTx: rawTx,
+      privateKeys: [uint8ArrayToHex(privateKey)],
+      network: this.network,
+    })
+
+    return signResult.signedTx
   }
 
   /**

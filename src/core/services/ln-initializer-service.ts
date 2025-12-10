@@ -4,16 +4,17 @@
 
 import { LightningRepository } from '../repositories/lightning'
 import { LightningTransport } from './ln-transport-service'
-import LightningService from './lightning'
-import LSPService from './lsp'
+import LightningService from './ln-service'
+import LSPService from './ln-lsp-service'
 import WalletService from './wallet'
 import { WatchtowerService } from './ln-watchtower-service'
-import { PeerConnectivityService, createPeerConnectivityService } from './peerConnectivity'
-import { LightningMonitorService, createLightningMonitorService } from './lightningMonitor'
+import { PeerConnectivityService, createPeerConnectivityService } from './ln-peer-service'
+import { LightningMonitorService, createLightningMonitorService } from './ln-monitor-service'
 import { ErrorRecoveryService, createErrorRecoveryService } from './errorRecovery'
-import { LiquidityManagerService, createLiquidityManagerService } from './liquidityManager'
-import { PaymentProcessorService, createPaymentProcessorService } from './paymentProcessor'
+import { LiquidityManagerService, createLiquidityManagerService } from './ln-liquidity-service'
+import { PaymentProcessorService, createPaymentProcessorService } from './ln-payment-service'
 import { NotificationService, createNotificationService } from './notification'
+import ChannelReestablishService from './ln-channel-reestablish-service'
 // import { AsyncStorage } from '@react-native-async-storage/async-storage'
 
 // ==========================================
@@ -83,6 +84,7 @@ export class LightningInitializer {
   private paymentProcessor?: PaymentProcessorService
   private notifications?: NotificationService
   private watchtower?: WatchtowerService
+  private channelReestablish?: ChannelReestablishService
 
   // Public access to services for UI hooks
   public get peerConnectivityService(): PeerConnectivityService | undefined {
@@ -111,6 +113,10 @@ export class LightningInitializer {
 
   public get notificationService(): NotificationService | undefined {
     return this.notifications
+  }
+
+  public get channelReestablishService(): ChannelReestablishService | undefined {
+    return this.channelReestablish
   }
 
   constructor(config: Partial<LightningInitConfig> = {}) {
@@ -275,6 +281,9 @@ export class LightningInitializer {
         await this.peerConnectivity.start()
       }
 
+      // Initialize channel reestablish service
+      this.channelReestablish = new ChannelReestablishService()
+
       // Initialize Lightning service
       this.lightningService = new LightningService()
       const walletService = new WalletService()
@@ -382,25 +391,22 @@ export class LightningInitializer {
     this.updateStatus('connecting', 75, 'Establishing peer connections...')
 
     try {
-      // TODO: Implement peer connection establishment
-      // const transport = getTransport()
-      // const gossipManager = new GossipSync()
+      let successfulConnections = 0
 
-      // Get peers from graph
-      // const availablePeers = gossipManager.getAvailablePeers()
-      // const peersToConnect = availablePeers.slice(0, this.config.maxPeers)
+      // Use peer connectivity service if available
+      if (this.peerConnectivity) {
+        const connectedPeers = this.peerConnectivity.getConnectedPeers()
+        successfulConnections = connectedPeers.length
 
-      // Connect to peers
-      // const connectionPromises = peersToConnect.map(peer =>
-      //   transport.connect(peer.nodeId, peer.address),
-      // )
-
-      // const results = await Promise.allSettled(connectionPromises)
-      // const successfulConnections = results.filter(r => r.status === 'fulfilled').length
-
-      // Simulate connection delay
-      await new Promise(resolve => setTimeout(resolve, 500))
-      const successfulConnections = Math.min(this.config.maxPeers, 3)
+        // After peers are connected, reestablish channels with each peer
+        if (this.channelReestablish && successfulConnections > 0) {
+          await this.reestablishChannelsWithPeers(connectedPeers)
+        }
+      } else {
+        // Fallback: simulate connection delay for testing
+        await new Promise(resolve => setTimeout(resolve, 500))
+        successfulConnections = Math.min(this.config.maxPeers, 3)
+      }
 
       this.updateStatus(
         'connecting',
@@ -415,6 +421,80 @@ export class LightningInitializer {
         error: error instanceof Error ? error.message : 'Peer connection failed',
       }
     }
+  }
+
+  /**
+   * Reestablishes channels with connected peers
+   * Called after peer connections are established during initialization
+   */
+  private async reestablishChannelsWithPeers(connectedPeers: { nodeId: string }[]): Promise<void> {
+    if (!this.channelReestablish) {
+      console.warn('[LightningInitializer] Channel reestablish service not available')
+      return
+    }
+
+    this.updateStatus('connecting', 80, 'Reestablishing channels...')
+
+    const repository = new LightningRepository()
+    const allChannels = repository.findAllChannels()
+
+    let reestablishedCount = 0
+    let failedCount = 0
+
+    for (const peer of connectedPeers) {
+      // Find channels with this peer
+      const peerChannels = Object.values(allChannels).filter(
+        channel => channel.nodeId === peer.nodeId,
+      )
+
+      if (peerChannels.length === 0) {
+        continue
+      }
+
+      console.log(
+        `[LightningInitializer] Reestablishing ${peerChannels.length} channels with peer ${peer.nodeId}`,
+      )
+
+      for (const channel of peerChannels) {
+        try {
+          // Convert channel ID to Uint8Array
+          const channelIdBytes = new Uint8Array(
+            channel.channelId.match(/.{1,2}/g)?.map(byte => parseInt(byte, 16)) || [],
+          )
+
+          const result = await this.channelReestablish.reestablishChannel(
+            channelIdBytes,
+            peer.nodeId,
+          )
+
+          if (result.success) {
+            reestablishedCount++
+            console.log(`[LightningInitializer] Channel ${channel.channelId} reestablished`)
+          } else {
+            failedCount++
+            console.error(
+              `[LightningInitializer] Failed to reestablish channel ${channel.channelId}: ${result.error}`,
+            )
+          }
+        } catch (error) {
+          failedCount++
+          console.error(
+            `[LightningInitializer] Error reestablishing channel ${channel.channelId}:`,
+            error,
+          )
+        }
+      }
+    }
+
+    console.log(
+      `[LightningInitializer] Channel reestablishment complete: ${reestablishedCount} succeeded, ${failedCount} failed`,
+    )
+
+    this.updateStatus(
+      'connecting',
+      85,
+      `Reestablished ${reestablishedCount} channels${failedCount > 0 ? `, ${failedCount} failed` : ''}`,
+    )
   }
 
   private async startMonitoringServices(): Promise<void> {

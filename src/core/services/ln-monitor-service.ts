@@ -3,7 +3,7 @@
 // Implements autonomous monitoring with error recovery and alerts
 
 import EventEmitter from 'eventemitter3'
-import LightningService from './lightning'
+import LightningService from './ln-service'
 import { ChannelManager } from '../lib/lightning/channel'
 import { HTLCManager, HTLCOwner } from '../lib/lightning/htlc'
 import { Watchtower } from '../lib/lightning/watchtower'

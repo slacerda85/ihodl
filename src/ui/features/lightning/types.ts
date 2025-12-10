@@ -4,6 +4,9 @@
  * Centraliza todos os tipos usados pelo LightningProvider e hooks relacionados
  */
 
+import type { ReadinessState, ReadinessLevel } from '@/core/models/lightning/readiness'
+import { createInitialReadinessState, getReadinessLevel } from '@/core/models/lightning/readiness'
+
 // ==========================================
 // TIPOS BASE
 // ==========================================
@@ -157,6 +160,10 @@ export interface LightningState {
   isLoading: boolean
   error: string | null
 
+  // Readiness state
+  readinessState: ReadinessState
+  readinessLevel: ReadinessLevel
+
   // Conexão
   connection: ConnectionState
 
@@ -187,6 +194,8 @@ export const INITIAL_LIGHTNING_STATE: LightningState = {
   isInitialized: false,
   isLoading: false,
   error: null,
+  readinessState: createInitialReadinessState(),
+  readinessLevel: getReadinessLevel(createInitialReadinessState()),
   connection: INITIAL_CONNECTION_STATE,
   totalBalance: 0n,
   channels: [],

@@ -8,6 +8,10 @@
 export { default as LightningProvider } from './LightningProvider'
 export type { LightningProviderProps } from './LightningProvider'
 
+// Components
+export { LightningReadinessGuard } from './LightningReadinessGuard'
+export { LightningReadinessStatus } from './LightningReadinessStatus'
+
 // Context
 export { LightningContext } from './context'
 export type { LightningContextType, LightningActions, CreateChannelParams } from './context'

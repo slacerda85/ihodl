@@ -48,6 +48,7 @@ export interface ChannelInfo {
   fundingTxid?: string
   fundingOutputIndex?: number
   capacity: bigint
+  shortChannelId?: Uint8Array
   createdAt: number
   lastActivity: number
 }
@@ -116,6 +117,8 @@ export interface OpenChannelParams {
   htlcMinimumMsat?: bigint
   toSelfDelay?: number
   maxAcceptedHtlcs?: number
+  announceChannel?: boolean // Se o canal deve ser anunciado na rede
+  upfrontShutdownScript?: Uint8Array // Script de shutdown personalizado
 }
 
 /**

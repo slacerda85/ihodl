@@ -1913,7 +1913,12 @@ export interface PenaltyOutput {
 
 /**
  * Deriva revocation privkey do per-commitment secret
- * revocation_privkey = revocation_basepoint_secret + SHA256(revocation_basepoint || per_commitment_point) * per_commitment_secret
+ *
+ * Conforme BOLT-3:
+ * revocation_privkey = revocation_basepoint_secret * SHA256(revocation_basepoint || per_commitment_point)
+ *                    + per_commitment_secret * SHA256(per_commitment_point || revocation_basepoint)
+ *
+ * @see https://github.com/lightning/bolts/blob/master/03-transactions.md#revocationpubkey-derivation
  */
 export function deriveRevocationPrivkey(
   revocationBasepointSecret: Uint8Array,
@@ -1921,23 +1926,23 @@ export function deriveRevocationPrivkey(
   revocationBasepoint: Uint8Array,
   perCommitmentPoint: Uint8Array,
 ): Uint8Array {
-  // Calcular SHA256(revocation_basepoint || per_commitment_point)
+  // Import secp256k1 functions for modular arithmetic
+  const { scalarMultiply, scalarAdd } = require('@/core/lib/crypto/secp256k1')
+
+  // Hash: SHA256(revocation_basepoint || per_commitment_point)
   const combined = new Uint8Array(66)
   combined.set(revocationBasepoint, 0)
   combined.set(perCommitmentPoint, 33)
   const hash = sha256(combined)
 
-  // revocationPrivkey = revocationBasepointSecret + hash * perCommitmentSecret
-  // Isso requer aritmética de curva elíptica
-  // Por simplicidade, retornamos uma aproximação
-  // TODO: Implementar corretamente com secp256k1
+  // term1 = revocation_basepoint_secret
+  const term1 = revocationBasepointSecret
 
-  const result = new Uint8Array(32)
-  for (let i = 0; i < 32; i++) {
-    result[i] = (revocationBasepointSecret[i] + ((hash[i] * perCommitmentSecret[i]) % 256)) % 256
-  }
+  // term2 = per_commitment_secret * hash (mod n)
+  const term2 = scalarMultiply(perCommitmentSecret, hash) as Uint8Array
 
-  return result
+  // revocation_privkey = term1 + term2 (mod n)
+  return scalarAdd(term1, term2) as Uint8Array
 }
 
 /**
@@ -2041,19 +2046,41 @@ export function buildReceivedHtlcPenaltyWitness(
 
 /**
  * Detecta se um commitment transaction é revogado
+ *
+ * Verifica se o per-commitment secret corresponde ao per-commitment point esperado.
+ * Um commitment é considerado revogado se:
+ * 1. O secret não é zero
+ * 2. secret * G == expectedPerCommitmentPoint
+ *
+ * @param _commitmentTxid - TXID do commitment (não usado, mantido para API)
+ * @param perCommitmentSecret - Secret revelado pelo peer
+ * @param expectedPerCommitmentPoint - Point que deveria corresponder ao secret
+ * @returns true se o commitment é revogado (secret é válido)
  */
 export function detectRevokedCommitment(
-  commitmentTxid: Uint8Array,
+  _commitmentTxid: Uint8Array,
   perCommitmentSecret: Uint8Array,
   expectedPerCommitmentPoint: Uint8Array,
 ): boolean {
-  // Verificar se o secret corresponde ao point esperado
-  // secret -> point deve dar o expectedPerCommitmentPoint
-  // TODO: Implementar verificação com secp256k1
+  // Import secp256k1 functions
+  const { secretToPoint: scalarToPoint, pointsEqual } = require('@/core/lib/crypto/secp256k1')
 
-  // Por enquanto, verificar se o secret não é zero
+  // Verificar se o secret não é zero
   const isZero = perCommitmentSecret.every(b => b === 0)
-  return !isZero
+  if (isZero) {
+    return false
+  }
+
+  try {
+    // Derivar point do secret: point = secret * G
+    const derivedPoint = scalarToPoint(perCommitmentSecret, true) as Uint8Array
+
+    // Verificar se o point derivado corresponde ao esperado
+    return pointsEqual(derivedPoint, expectedPerCommitmentPoint)
+  } catch {
+    // Se falhar (ex: secret inválido), não é um commitment revogado válido
+    return false
+  }
 }
 
 /**

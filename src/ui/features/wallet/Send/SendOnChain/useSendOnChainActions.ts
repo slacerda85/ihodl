@@ -73,14 +73,7 @@ export function useSendOnChainActions(): UseSendOnChainActionsReturn {
     } finally {
       state.setSubmitting(false)
     }
-  }, [
-    state.recipientAddress,
-    state.amount,
-    feeRate,
-    getConnection,
-    state.setSubmitting,
-    validateTransaction,
-  ])
+  }, [validateTransaction, state, getConnection, feeRate])
 
   const sendTransaction = useCallback(async () => {
     // if (!transaction) {

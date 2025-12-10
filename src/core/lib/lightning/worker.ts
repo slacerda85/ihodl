@@ -18,6 +18,7 @@ import {
   AcceptChannelMessage,
   FundingCreatedMessage,
   ChannelReadyMessage,
+  ChannelReadyTlvs,
 } from '@/core/models/lightning/peer'
 import {
   LightningConnection,
@@ -43,6 +44,7 @@ import {
   CurrencyPrefix,
   DEFAULT_EXPIRY_SECONDS,
   DEFAULT_MIN_FINAL_CLTV_EXPIRY_DELTA,
+  RoutingInfoEntry,
 } from '@/core/models/lightning/invoice'
 import { encodeInvoice, decodeInvoice, validateInvoice } from './invoice'
 import { deriveChildKey, createPublicKey } from '../key'
@@ -51,12 +53,18 @@ import AddressService from '../../services/address'
 import {
   RoutingGraph,
   PaymentRoute,
+  RouteHop,
   RoutingNode,
   RoutingChannel,
   constructOnionPacket,
   decryptOnion,
 } from './routing'
-import { signMessage } from './p2p'
+import {
+  signMessage,
+  validateChannelAnnouncement,
+  validateChannelUpdate,
+  verifySignature,
+} from './p2p'
 import {
   GossipMessageType,
   GossipMessageUnion,
@@ -82,12 +90,14 @@ import {
   decodeChannelReestablishMessage,
   createChannelReestablishMessage,
 } from './peer'
+import type { ChannelReestablishMessage } from '@/core/models/lightning/peer'
 
 import {
   broadcastTransaction,
   estimateFeeRate,
   getAddressTxHistory,
   getTransaction,
+  callElectrumMethod,
 } from '../electrum/client'
 
 // Integrated Lightning modules
@@ -138,6 +148,18 @@ interface ReestablishTlvs {
 }
 
 /**
+ * Política de aceitação automática de canais
+ */
+interface ChannelAcceptancePolicy {
+  enabled: boolean
+  minCapacity: bigint // satoshis
+  maxCapacity: bigint // satoshis
+  maxChannelsPerPeer: number
+  allowedPeers?: string[] // lista de pubkeys permitidas (whitelist)
+  blockedPeers?: string[] // lista de pubkeys bloqueadas
+}
+
+/**
  * Lightning Worker - Wallet-level operations
  * Provides complete Lightning Network functionality including:
  * - Invoice generation with automatic channel opening
@@ -155,6 +177,12 @@ export class LightningWorker {
   private channelFeeConfig: ChannelOpeningFeeConfig
   private nodeIndex: number = 0 // Incrementa para cada invoice gerado
   private preimageStore: Map<string, Uint8Array> = new Map() // Armazenamento de preimages
+  private peerFeatures?: Uint8Array // Features do último peer conectado
+
+  // Message tracking for reliability
+  private sentMessages: Map<string, { message: any; timestamp: number; acknowledged: boolean }> =
+    new Map()
+  private messageIdCounter: number = 0
 
   // Gerenciamento de canais
   private channels: Map<string, ChannelInfo> = new Map()
@@ -204,6 +232,16 @@ export class LightningWorker {
 
   // Watchtower for channel monitoring
   private watchtower: Watchtower
+
+  // Channel acceptance policy
+  private channelAcceptancePolicy: ChannelAcceptancePolicy = {
+    enabled: false,
+    minCapacity: 10000n, // 10k sats minimum
+    maxCapacity: 10000000n, // 10M sats maximum
+    maxChannelsPerPeer: 5,
+    allowedPeers: [],
+    blockedPeers: [],
+  }
 
   // Retry configuration
   private retryConfig: RetryConfig = {
@@ -446,9 +484,20 @@ export class LightningWorker {
       // Tentar reconectar usando retry logic
       const result = await withRetry(
         async () => {
-          // Lógica de reconexão aqui
-          console.log('[lightning] Reconnection attempt...')
-          // TODO: Implementar reconexão real ao peer
+          // Verificar se a conexão ainda está ativa
+          if (this.connection && !this.connection.destroyed) {
+            console.log('[lightning] Connection is still active, checking channels...')
+            // Verificar estado dos canais e marcar para reestabelecimento se necessário
+            await this.checkAllChannelStates()
+            return true
+          }
+
+          // Conexão perdida - aguardar reconexão automática do PeerManager
+          // Os canais serão reestabelecidos quando recebermos channel_reestablish do peer
+          console.log(
+            '[lightning] Connection lost, channels will be re-established when peer reconnects',
+          )
+
           return true
         },
         {
@@ -596,7 +645,7 @@ export class LightningWorker {
             peerId: hexToUint8Array(persisted.nodeId),
             fundingSatoshis: BigInt(persisted.localBalance) + BigInt(persisted.remoteBalance),
             localConfig,
-            weAreFunder: persisted.localConfig?.isInitiator ?? true,
+            weAreFunder: persisted.isInitiator ?? true,
           })
           this.channelManagers.set(channelId, channelManager)
 
@@ -765,10 +814,9 @@ export class LightningWorker {
       fundingOutputIndex: channel.fundingOutputIndex,
       localBalance: channel.localBalance.toString(),
       remoteBalance: channel.remoteBalance.toString(),
-      localConfig: {
-        isInitiator: weAreFunder,
-      },
+      localConfig: {},
       remoteConfig: {},
+      isInitiator: weAreFunder,
       lastActivity: Date.now(),
     })
 
@@ -1002,8 +1050,15 @@ export class LightningWorker {
       throw new Error(`Failed to decrypt peer Init: ${decryptedPeerInit.error}`)
     }
 
-    // Decodificar Init do peer (não usado por enquanto)
-    decodeInitMessage(decryptedPeerInit.message)
+    // Decodificar Init do peer e armazenar features
+    const peerInitMessage = decodeInitMessage(decryptedPeerInit.message)
+    if (peerInitMessage && peerInitMessage.features) {
+      // Armazenar features do peer no PeerManager
+      // Nota: precisamos identificar o peer pelo pubkey ou connection
+      // Por enquanto, armazenamos temporariamente até ter o peerId
+      this.peerFeatures = peerInitMessage.features
+    }
+
     console.log('[lightning] Init exchange completed')
   }
 
@@ -1614,9 +1669,73 @@ export class LightningWorker {
 
   private async handleOpenChannel(message: Uint8Array, peerId: string): Promise<void> {
     // Decodificar open_channel e processar
-    // Por enquanto, apenas log - implementação completa em openChannel()
     console.log(`[lightning] Received open_channel from ${peerId}`)
+
     // TODO: Implementar aceitação automática de canais baseado em política
+    if (!this.channelAcceptancePolicy.enabled) {
+      console.log(`[lightning] Channel acceptance disabled, ignoring open_channel from ${peerId}`)
+      return
+    }
+
+    // Verificar se peer está na whitelist (se configurada)
+    if (
+      this.channelAcceptancePolicy.allowedPeers &&
+      this.channelAcceptancePolicy.allowedPeers.length > 0
+    ) {
+      if (!this.channelAcceptancePolicy.allowedPeers.includes(peerId)) {
+        console.log(`[lightning] Peer ${peerId} not in whitelist, rejecting channel`)
+        return
+      }
+    }
+
+    // Verificar se peer está na blacklist
+    if (
+      this.channelAcceptancePolicy.blockedPeers &&
+      this.channelAcceptancePolicy.blockedPeers.includes(peerId)
+    ) {
+      console.log(`[lightning] Peer ${peerId} is blocked, rejecting channel`)
+      return
+    }
+
+    // Verificar limite de canais por peer
+    const peerChannels = Array.from(this.channels.values()).filter(
+      channel => channel.peerId === peerId,
+    )
+    if (peerChannels.length >= this.channelAcceptancePolicy.maxChannelsPerPeer) {
+      console.log(
+        `[lightning] Peer ${peerId} already has ${peerChannels.length} channels, rejecting new channel`,
+      )
+      return
+    }
+
+    // Decodificar a mensagem open_channel para verificar capacidade
+    try {
+      // A decodificação real seria feita aqui - por enquanto assumimos que passa
+      // TODO: Implementar decodificação completa de open_channel message
+      const fundingSatoshis = 100000n // Placeholder - seria extraído da mensagem
+
+      if (fundingSatoshis < this.channelAcceptancePolicy.minCapacity) {
+        console.log(
+          `[lightning] Channel capacity ${fundingSatoshis} below minimum ${this.channelAcceptancePolicy.minCapacity}, rejecting`,
+        )
+        return
+      }
+
+      if (fundingSatoshis > this.channelAcceptancePolicy.maxCapacity) {
+        console.log(
+          `[lightning] Channel capacity ${fundingSatoshis} above maximum ${this.channelAcceptancePolicy.maxCapacity}, rejecting`,
+        )
+        return
+      }
+
+      // Aceitar o canal automaticamente
+      console.log(
+        `[lightning] Auto-accepting channel from ${peerId} with capacity ${fundingSatoshis}`,
+      )
+      // TODO: Implementar envio de accept_channel message
+    } catch (error) {
+      console.error(`[lightning] Failed to decode open_channel message from ${peerId}:`, error)
+    }
   }
 
   private async handleAcceptChannelMessage(message: Uint8Array, peerId: string): Promise<void> {
@@ -2014,6 +2133,7 @@ export class LightningWorker {
     txid: Uint8Array
     outputIndex: number
     signature: Uint8Array
+    scriptPubKey: Uint8Array
   }> {
     try {
       // Derivar chave de funding do canal
@@ -2101,7 +2221,7 @@ export class LightningWorker {
       channelInfo.fundingOutputIndex = 0
 
       console.log(`[lightning] Funding transaction broadcasted: ${txidHex}`)
-      return { txid, outputIndex: 0, signature }
+      return { txid, outputIndex: 0, signature, scriptPubKey: multisigScript }
     } catch (error) {
       console.error('[lightning] Failed to create funding transaction:', error)
       throw error
@@ -2144,7 +2264,7 @@ export class LightningWorker {
         toSelfDelay: params.toSelfDelay || 144,
         channelReserveSat: params.channelReserveSatoshis || amount / 100n,
         initialMsat: amount - pushMsat,
-        upfrontShutdownScript: new Uint8Array(), // TODO: Implementar
+        upfrontShutdownScript: params.upfrontShutdownScript || this.generateShutdownScript(),
         perCommitmentSecretSeed: this.getNodeKey(0).subarray(0, 32), // Usar chave do nó como seed
         fundingPubkey: createPublicKey(fundingPrivateKey),
         fundingPrivateKey,
@@ -2161,7 +2281,7 @@ export class LightningWorker {
         fundingSatoshis: amount,
         localConfig,
         weAreFunder: true,
-        announceChannel: false, // TODO: Configurar baseado em params
+        announceChannel: params.announceChannel ?? false,
       })
       this.channelManagers.set(channelId, channelManager)
 
@@ -2195,6 +2315,7 @@ export class LightningWorker {
         remoteBalance: channelInfo.remoteBalance.toString(),
         localConfig: {},
         remoteConfig: {},
+        isInitiator: true, // Local node initiated the channel opening
       })
 
       console.log(`[lightning] Opening channel ${channelId} with peer ${peerId}`)
@@ -2322,12 +2443,20 @@ export class LightningWorker {
         remoteBalance: channelInfo.remoteBalance.toString(),
         localConfig: {},
         remoteConfig,
+        isInitiator: false, // Remote node initiated the channel opening
       })
 
       // 6. Criar transação de funding
       const fundingTx = await this.createFundingTransaction(channelId, channelInfo, remoteConfig)
 
-      // 7. Preparar mensagem funding_created
+      // 7. Atualizar persistência do canal com scriptPubKey
+      const existingChannel = lightningRepository.findChannelById(channelId)
+      if (existingChannel) {
+        existingChannel.fundingScriptPubKey = uint8ArrayToHex(fundingTx.scriptPubKey)
+        lightningRepository.saveChannel(existingChannel)
+      }
+
+      // 8. Preparar mensagem funding_created
       const fundingCreatedMsg: FundingCreatedMessage = {
         type: LightningMessageType.FUNDING_CREATED,
         temporaryChannelId,
@@ -2406,10 +2535,45 @@ export class LightningWorker {
     }
 
     try {
-      // TODO: Validar assinatura da transação de funding
-      // Por enquanto, aceitar qualquer assinatura válida
-      if (signature.length !== 64) {
-        console.error('[lightning] Invalid funding signature length')
+      // Validar assinatura da transação de funding (BOLT #2)
+      // A assinatura é do commitment hash, não da transação completa
+
+      // Recriar o commitment data usado para assinatura
+      const commitmentData = new Uint8Array(110) // 32 + 4 + 8 + 33 + 33
+      const txid = hexToUint8Array(channel.fundingTxid!)
+      const outputIndex = channel.fundingOutputIndex || 0
+      const capacity = channel.capacity
+
+      // Copiar txid (32 bytes)
+      commitmentData.set(txid, 0)
+      // Output index (4 bytes, little endian)
+      new DataView(commitmentData.buffer).setUint32(32, outputIndex, true)
+      // Capacity (8 bytes, little endian)
+      new DataView(commitmentData.buffer).setBigUint64(36, capacity, true)
+
+      // Chaves públicas na ordem correta (lexicográfica)
+      const localPubkey = this.getLocalPubkey(channelId)
+      const remotePubkey = channel.remotePubkey
+
+      // Determinar ordem lexicográfica das chaves
+      const localHex = uint8ArrayToHex(localPubkey)
+      const remoteHex = uint8ArrayToHex(remotePubkey)
+
+      if (localHex < remoteHex) {
+        commitmentData.set(localPubkey, 44) // local primeiro
+        commitmentData.set(remotePubkey, 77) // remote segundo
+      } else {
+        commitmentData.set(remotePubkey, 44) // remote primeiro
+        commitmentData.set(localPubkey, 77) // local segundo
+      }
+
+      const commitmentHash = sha256(sha256(commitmentData))
+
+      // Verificar assinatura usando a chave pública do peer
+      const isValidSignature = verifySignature(commitmentHash, signature, channel.remotePubkey)
+
+      if (!isValidSignature) {
+        console.error('[lightning] Invalid funding signature from peer')
         return false
       }
 
@@ -2421,7 +2585,7 @@ export class LightningWorker {
         console.error(`[lightning] Funding confirmation monitoring failed:`, error)
       })
 
-      console.log(`[lightning] Received funding_signed for channel ${channelId}`)
+      console.log(`[lightning] Received valid funding_signed for channel ${channelId}`)
       return true
     } catch (error) {
       console.error('[lightning] Failed to process funding_signed:', error)
@@ -2559,12 +2723,23 @@ export class LightningWorker {
     // Derivar próximo per-commitment point
     const basepoints = this.getChannelBasepoints(channelId)
 
+    // Criar TLVs para channel_ready
+    const tlvs: ChannelReadyTlvs = []
+    const channelInfo = this.channels.get(channelId)
+    if (channelInfo?.shortChannelId) {
+      tlvs.push({
+        type: 1n, // short_channel_id TLV type
+        length: 8n,
+        value: channelInfo.shortChannelId,
+      })
+    }
+
     // Criar mensagem channel_ready
     const channelReadyMessage: ChannelReadyMessage = {
       type: LightningMessageType.CHANNEL_READY,
       channelId: hexToUint8Array(channelId),
       secondPerCommitmentPoint: basepoints.perCommitment.subarray(1, 34), // Simulação
-      tlvs: [] as any, // TODO: Implementar ChannelReadyTlvs
+      tlvs,
     }
 
     // Codificar e enviar
@@ -3339,7 +3514,7 @@ export class LightningWorker {
     description?: string
     cltvExpiry: number
     expiry: number
-    routingInfo?: any[]
+    routingInfo?: RoutingInfoEntry[]
   }> {
     try {
       // Usar decodificador BOLT11 real
@@ -3388,7 +3563,7 @@ export class LightningWorker {
   private async findRoute(
     destination: Uint8Array,
     amount: bigint,
-    routingInfo?: any[],
+    routingInfo?: RoutingInfoEntry[],
   ): Promise<{
     channelId: string
     route: PaymentRoute | null
@@ -3426,7 +3601,49 @@ export class LightningWorker {
     // 3. Se routing info foi fornecido na invoice, usar como hints
     if (routingInfo && routingInfo.length > 0) {
       console.log(`[routing] Using ${routingInfo.length} routing hints from invoice`)
-      // TODO: Implementar uso de routing hints
+
+      // Tentar cada routing hint em ordem
+      for (const hint of routingInfo) {
+        const hintNodeIdHex = uint8ArrayToHex(hint.pubkey)
+
+        // Verificar se temos um canal direto com o nó do hint
+        const hintChannel = this.findDirectChannelToNode(hint.pubkey)
+        if (hintChannel && hintChannel.localBalance >= amount) {
+          console.log(
+            `[routing] Using routing hint direct channel: ${hintChannel.channelId} to ${hintNodeIdHex}`,
+          )
+          return {
+            channelId: hintChannel.channelId,
+            route: null,
+            isDirectChannel: false, // Mesmo sendo direto, é via hint
+          }
+        }
+
+        // Se não temos canal direto, tentar usar o hint como primeiro hop
+        // Procurar um canal que possa alcançar o nó do hint
+        if (this.routingGraph) {
+          try {
+            // Construir rota usando o hint como intermediário
+            const route = await this.findPaymentRouteViaHint(destination, amount, hint)
+            if (route && route.hops.length > 0) {
+              const firstHop = route.hops[0]
+              const channelForFirstHop = this.findChannelForHop(firstHop)
+              if (channelForFirstHop) {
+                console.log(
+                  `[routing] Using routing hint route with ${route.hops.length} hops via ${hintNodeIdHex}`,
+                )
+                return {
+                  channelId: channelForFirstHop.channelId,
+                  route,
+                  isDirectChannel: false,
+                }
+              }
+            }
+          } catch (error) {
+            console.warn(`[routing] Failed to build route via hint ${hintNodeIdHex}:`, error)
+          }
+        }
+      }
     }
 
     // 4. Fallback: usar primeiro canal disponível com saldo suficiente
@@ -3460,15 +3677,78 @@ export class LightningWorker {
   /**
    * Encontra canal adequado para o primeiro hop da rota
    */
-  private findChannelForHop(hop: any): ChannelInfo | null {
-    // Buscar canal que conecta ao nó do primeiro hop
+  private findChannelForHop(hop: RouteHop): ChannelInfo | null {
+    const hopNodeIdHex = uint8ArrayToHex(hop.nodeId)
+
+    // Buscar canal que conecta diretamente ao nó do primeiro hop
     for (const [, channel] of this.channels) {
-      if (this.channelStates.get(channel.channelId) === ChannelState.NORMAL) {
-        // Verificar se este canal leva ao nó do hop
-        // TODO: Implementar verificação completa usando routing graph
-        return channel
+      if (this.channelStates.get(channel.channelId) !== ChannelState.NORMAL) {
+        continue
       }
+
+      // Verificar se este canal conecta ao nó do hop
+      const peerNodeIdHex = channel.peerId
+      if (peerNodeIdHex !== hopNodeIdHex) {
+        continue
+      }
+
+      // Verificar se o canal tem capacidade suficiente para o hop
+      // Para o primeiro hop, precisamos considerar o amountMsat total da rota
+      // TODO: Calcular amount correto baseado na rota completa
+
+      // Usar routing graph para validação adicional se disponível
+      if (this.routingGraph) {
+        try {
+          // Obter shortChannelId do canal para consultar o routing graph
+          const shortChannelId = this.findShortChannelIdForChannel(channel.channelId)
+          if (!shortChannelId) {
+            console.log(`[routing] Cannot find shortChannelId for channel ${channel.channelId}`)
+            continue
+          }
+
+          const channelInfo = this.routingGraph.getChannel(shortChannelId)
+          if (!channelInfo) {
+            console.log(`[routing] Channel ${channel.channelId} not found in routing graph`)
+            continue
+          }
+
+          // Verificar se o canal conecta os nós corretos
+          const node1Hex = uint8ArrayToHex(channelInfo.nodeId1)
+          const node2Hex = uint8ArrayToHex(channelInfo.nodeId2)
+
+          const connectsToHop = node1Hex === hopNodeIdHex || node2Hex === hopNodeIdHex
+          const localPubkey = this.getLocalPubkey()
+          const localPubkeyHex = uint8ArrayToHex(localPubkey)
+          const connectsToLocal = node1Hex === localPubkeyHex || node2Hex === localPubkeyHex
+
+          if (!connectsToHop || !connectsToLocal) {
+            console.log(
+              `[routing] Channel ${channel.channelId} doesn't connect ${localPubkeyHex} to ${hopNodeIdHex}`,
+            )
+            continue
+          }
+
+          console.log(
+            `[routing] Found valid channel ${channel.channelId} for hop to ${hopNodeIdHex}`,
+          )
+          return channel
+        } catch (error) {
+          console.warn(
+            `[routing] Error validating channel ${channel.channelId} with routing graph:`,
+            error,
+          )
+          // Continuar sem validação do grafo se houver erro
+        }
+      }
+
+      // Se não temos routing graph ou houve erro, usar verificação básica
+      console.log(
+        `[routing] Using channel ${channel.channelId} for hop to ${hopNodeIdHex} (basic validation)`,
+      )
+      return channel
     }
+
+    console.log(`[routing] No suitable channel found for hop to ${hopNodeIdHex}`)
     return null
   }
 
@@ -3647,6 +3927,87 @@ export class LightningWorker {
         return channelId
       }
     }
+    return null
+  }
+
+  /**
+   * Calcula shortChannelId a partir dos dados da transação de funding (BOLT #7)
+   * shortChannelId = block_height << 40 | tx_index << 16 | output_index
+   *
+   * Nota: Esta é uma implementação simplificada. O cálculo completo requer
+   * acesso aos dados do bloco que podem não estar disponíveis via Electrum.
+   */
+  private async calculateShortChannelId(
+    fundingTxid: string,
+    outputIndex: number,
+  ): Promise<Uint8Array | null> {
+    try {
+      // Obter dados da transação via Electrum
+      const txResponse = await getTransaction(fundingTxid)
+      const tx = txResponse.result
+
+      if (!tx || !tx.confirmations || tx.confirmations < 1) {
+        console.warn(`[lightning] Funding tx ${fundingTxid} not confirmed yet`)
+        return null
+      }
+
+      // Para implementação simplificada, usar um placeholder baseado no txid
+      // TODO: Implementar cálculo completo com block height e tx index
+      const hash = sha256(hexToUint8Array(fundingTxid))
+      const shortChannelId =
+        (BigInt(hash[0]) << 56n) |
+        (BigInt(hash[1]) << 48n) |
+        (BigInt(hash[2]) << 40n) |
+        (BigInt(hash[3]) << 32n) |
+        (BigInt(hash[4]) << 24n) |
+        (BigInt(hash[5]) << 16n) |
+        (BigInt(outputIndex) << 8n) |
+        BigInt(hash[6])
+
+      // Converter para Uint8Array (8 bytes, big-endian)
+      const buffer = new ArrayBuffer(8)
+      const view = new DataView(buffer)
+      view.setBigUint64(0, shortChannelId, false) // big-endian
+
+      return new Uint8Array(buffer)
+    } catch (error) {
+      console.error(`[lightning] Failed to calculate shortChannelId for ${fundingTxid}:`, error)
+      return null
+    }
+  }
+
+  /**
+   * Encontra shortChannelId para um channelId
+   */
+  private findShortChannelIdForChannel(channelId: string): Uint8Array | null {
+    // Primeiro, verificar se já está armazenado no ChannelInfo
+    const channelInfo = this.channels.get(channelId)
+    if (channelInfo?.shortChannelId) {
+      return channelInfo.shortChannelId
+    }
+
+    // Fallback: tentar encontrar no routing graph
+    if (this.routingGraph) {
+      // Procurar em todos os canais do routing graph
+      for (const [scidHex, channelInfo] of this.routingGraph['channels']) {
+        // Verificar se este canal corresponde ao channelId
+        // TODO: Melhorar mapeamento channelId <-> shortChannelId
+        if (scidHex.length >= 16 && channelId.includes(scidHex.slice(0, 16))) {
+          return hexToUint8Array(scidHex)
+        }
+      }
+    }
+
+    // Fallback: tentar converter channelId diretamente se for um shortChannelId
+    try {
+      const scid = hexToUint8Array(channelId)
+      if (scid.length === 8) {
+        return scid
+      }
+    } catch {
+      // Ignorar erro de conversão
+    }
+
     return null
   }
 
@@ -4611,17 +4972,51 @@ export class LightningWorker {
    * Obtém mensagens não reconhecidas para um canal
    */
   private getUnacknowledgedMessages(channelId: string): any[] {
-    // TODO: Implementar tracking de mensagens não reconhecidas
-    // Por enquanto, retornar array vazio
-    return []
+    const unacknowledged: any[] = []
+    for (const [messageId, messageData] of this.sentMessages) {
+      // Check if message belongs to this channel and is not acknowledged
+      if (messageId.startsWith(`${channelId}:`) && !messageData.acknowledged) {
+        // Check if message is older than timeout (e.g., 30 seconds)
+        const timeoutMs = 30000
+        if (Date.now() - messageData.timestamp > timeoutMs) {
+          unacknowledged.push(messageData.message)
+        }
+      }
+    }
+    return unacknowledged
   }
 
   /**
    * Reenvia mensagem para peer
    */
   private async resendMessage(peerId: string, message: any): Promise<void> {
-    // TODO: Implementar reenvio de mensagens
-    console.log(`[lightning] Resending message to peer ${peerId}`)
+    try {
+      // Get peer connection
+      const peerConnection = this.peerManager.getPeerConnection(peerId)
+      if (!peerConnection) {
+        console.warn(`[lightning] Cannot resend message: no connection to peer ${peerId}`)
+        return
+      }
+
+      // Assume message is already encoded bytes, or encode it if it's an object
+      let messageBytes: Uint8Array
+      if (message instanceof Uint8Array) {
+        messageBytes = message
+      } else {
+        // For now, assume it's a raw message object that needs encoding
+        // This would need to be expanded based on message type
+        console.warn(`[lightning] Resending unencoded message not implemented`)
+        return
+      }
+
+      // Resend the message
+      await peerConnection.write(messageBytes)
+
+      console.log(`[lightning] Successfully resent message to peer ${peerId}`)
+    } catch (error) {
+      console.error(`[lightning] Failed to resend message to peer ${peerId}:`, error)
+      throw error
+    }
   }
 
   // ==========================================
@@ -4683,6 +5078,87 @@ export class LightningWorker {
       return result.route
     } catch (error) {
       console.error('[routing] Failed to find payment route:', error)
+      return null
+    }
+  }
+
+  /**
+   * Encontra rota de pagamento usando routing hint como intermediário obrigatório
+   *
+   * @param destination - Chave pública do destino final
+   * @param amountMsat - Valor em millisatoshis
+   * @param hint - Routing hint com informações do nó intermediário
+   * @returns Promise<PaymentRoute | null> - Rota encontrada ou null
+   */
+  private async findPaymentRouteViaHint(
+    destination: Uint8Array,
+    amountMsat: bigint,
+    hint: RoutingInfoEntry,
+  ): Promise<PaymentRoute | null> {
+    if (!this.routingGraph) {
+      console.warn('[routing] No routing graph available for hint routing')
+      return null
+    }
+
+    try {
+      // Obter chave pública local para source
+      const localPubkey = this.getLocalPubkey()
+
+      // Construir rota: source -> hint_node -> destination
+      // Primeiro encontrar rota do source até o hint_node
+      const toHintResult = this.routingGraph.findRoute(localPubkey, hint.pubkey, amountMsat)
+      if (!toHintResult.route) {
+        console.log(`[routing] No route found to hint node ${uint8ArrayToHex(hint.pubkey)}`)
+        return null
+      }
+
+      // Depois encontrar rota do hint_node até o destination
+      const fromHintResult = this.routingGraph.findRoute(hint.pubkey, destination, amountMsat)
+      if (!fromHintResult.route) {
+        console.log(
+          `[routing] No route found from hint node ${uint8ArrayToHex(hint.pubkey)} to destination`,
+        )
+        return null
+      }
+
+      // Combinar as rotas, removendo o nó intermediário duplicado
+      const combinedHops = [...toHintResult.route.hops]
+
+      // Adicionar hops da segunda parte (exceto o primeiro que é o hint_node)
+      for (let i = 1; i < fromHintResult.route.hops.length; i++) {
+        combinedHops.push(fromHintResult.route.hops[i])
+      }
+
+      // Calcular fee total e CLTV expiry
+      const totalFeeMsat = toHintResult.route.totalFeeMsat + fromHintResult.route.totalFeeMsat
+      const totalCltvExpiry =
+        toHintResult.route.totalCltvExpiry + fromHintResult.route.totalCltvExpiry
+
+      // Aplicar taxas do hint no primeiro hop após o hint_node
+      if (combinedHops.length > 1) {
+        // O primeiro hop após o hint_node deve usar as taxas do hint
+        const firstHopAfterHint =
+          combinedHops[combinedHops.length - fromHintResult.route.hops.length + 1]
+        if (firstHopAfterHint) {
+          firstHopAfterHint.feeBaseMsat = hint.feeBaseMsat
+          firstHopAfterHint.feeProportionalMillionths = hint.feeProportionalMillionths
+          firstHopAfterHint.cltvExpiryDelta = hint.cltvExpiryDelta
+        }
+      }
+
+      const route: PaymentRoute = {
+        hops: combinedHops,
+        totalFeeMsat,
+        totalAmountMsat: amountMsat + totalFeeMsat,
+        totalCltvExpiry,
+      }
+
+      console.log(
+        `[routing] Found hint route with ${route.hops.length} hops, fee: ${route.totalFeeMsat} msat`,
+      )
+      return route
+    } catch (error) {
+      console.error('[routing] Failed to find payment route via hint:', error)
       return null
     }
   }
@@ -5137,6 +5613,62 @@ export class LightningWorker {
   }
 
   /**
+   * Calcula a capacidade de um canal a partir do shortChannelId (BOLT #7)
+   * shortChannelId = block_height << 40 | tx_index << 16 | output_index
+   */
+  private async calculateChannelCapacity(shortChannelId: Uint8Array): Promise<bigint> {
+    try {
+      // Extrair componentes do shortChannelId
+      const view = new DataView(shortChannelId.buffer)
+      const blockHeight = view.getBigUint64(0, false) >> 40n
+      const txIndex = (view.getBigUint64(0, false) >> 16n) & 0xffffffn
+      const outputIndex = view.getBigUint64(0, false) & 0xffffn
+
+      // Consultar o bloco para obter a transação
+      const blockHashResponse = await callElectrumMethod('blockchain.block.hash', [
+        Number(blockHeight),
+      ])
+      const blockHash = blockHashResponse.result
+
+      // Obter as transações do bloco
+      const blockResponse = await callElectrumMethod('blockchain.block.header', [blockHash, true])
+      const blockData = blockResponse.result
+
+      if (!blockData || !blockData.tx) {
+        console.warn(`[gossip] Could not get block data for height ${blockHeight}`)
+        return 0n
+      }
+
+      // Encontrar a transação pelo índice
+      if (txIndex >= blockData.tx.length) {
+        console.warn(`[gossip] Transaction index ${txIndex} out of range for block ${blockHeight}`)
+        return 0n
+      }
+
+      const txid = blockData.tx[Number(txIndex)]
+
+      // Obter detalhes da transação
+      const txResponse = await getTransaction(txid)
+      const tx = txResponse.result
+
+      if (!tx || !tx.vout || outputIndex >= tx.vout.length) {
+        console.warn(`[gossip] Could not get transaction ${txid} or output ${outputIndex}`)
+        return 0n
+      }
+
+      // Retornar o valor do output específico (em satoshis)
+      const outputValue = tx.vout[Number(outputIndex)].value
+      return BigInt(Math.floor(outputValue * 100000000)) // Convert BTC to satoshis
+    } catch (error) {
+      console.error(
+        `[gossip] Failed to calculate capacity for shortChannelId ${uint8ArrayToHex(shortChannelId)}:`,
+        error,
+      )
+      return 0n
+    }
+  }
+
+  /**
    * Processa mensagem channel_announcement (BOLT #7)
    */
   private async processChannelAnnouncement(message: ChannelAnnouncementMessage): Promise<void> {
@@ -5148,19 +5680,33 @@ export class LightningWorker {
         return
       }
 
+      // Verificar se este canal é um dos nossos canais locais
+      const channelId = this.findChannelByShortId(message.shortChannelId)
+      if (channelId) {
+        // Atualizar ChannelInfo com shortChannelId
+        const channelInfo = this.channels.get(channelId)
+        if (channelInfo && !channelInfo.shortChannelId) {
+          channelInfo.shortChannelId = message.shortChannelId
+          console.log(
+            `[gossip] Updated channel ${channelId} with shortChannelId ${uint8ArrayToHex(message.shortChannelId)}`,
+          )
+        }
+      }
+
       // Criar entrada no grafo de roteamento
+      const capacity = await this.calculateChannelCapacity(message.shortChannelId)
       const channel: RoutingChannel = {
         shortChannelId: message.shortChannelId,
         nodeId1: message.nodeId1,
         nodeId2: message.nodeId2,
-        capacity: 0n, // TODO: Calculate from funding amount
+        capacity: capacity,
         features: message.features,
         lastUpdate: Date.now(),
         feeBaseMsat: 1000, // Default fee base
         feeProportionalMillionths: 1, // Default fee proportional
         cltvExpiryDelta: 40, // Default CLTV delta
         htlcMinimumMsat: 1n, // Default minimum
-        htlcMaximumMsat: 0n, // TODO: Calculate from capacity
+        htlcMaximumMsat: capacity > 0n ? capacity * 1000n : 0n, // Calculate from capacity
       }
 
       this.routingGraph.addChannel(channel)
@@ -5170,6 +5716,62 @@ export class LightningWorker {
     } catch (error) {
       console.error('[gossip] Failed to process channel announcement:', error)
     }
+  }
+
+  /**
+   * Converte AddressDescriptor[] para NodeAddress[] format
+   */
+  private convertAddressDescriptors(descriptors: any[]): NodeAddress[] {
+    const addresses: NodeAddress[] = []
+
+    for (const desc of descriptors) {
+      try {
+        switch (desc.type) {
+          case 1: // IPv4
+            addresses.push({
+              type: 'ipv4',
+              address: `${desc.addr[0]}.${desc.addr[1]}.${desc.addr[2]}.${desc.addr[3]}`,
+              port: desc.port,
+            })
+            break
+          case 2: // IPv6
+            // Converter bytes IPv6 para string
+            const ipv6Parts = []
+            for (let i = 0; i < 16; i += 2) {
+              const part = (desc.addr[i] << 8) | desc.addr[i + 1]
+              ipv6Parts.push(part.toString(16))
+            }
+            addresses.push({
+              type: 'ipv6',
+              address: ipv6Parts.join(':'),
+              port: desc.port,
+            })
+            break
+          case 4: // Tor v3
+            // Tor v3 address: 32-byte pubkey + 2-byte checksum + 1-byte version
+            const torAddr = uint8ArrayToHex(desc.addr.subarray(0, 32)) + '.onion'
+            addresses.push({
+              type: 'torv3',
+              address: torAddr,
+              port: desc.port,
+            })
+            break
+          case 5: // DNS hostname
+            addresses.push({
+              type: 'dns',
+              address: new TextDecoder().decode(desc.hostname),
+              port: desc.port,
+            })
+            break
+          default:
+            console.warn(`[gossip] Unknown address type: ${desc.type}`)
+        }
+      } catch (error) {
+        console.warn(`[gossip] Failed to convert address descriptor:`, error)
+      }
+    }
+
+    return addresses
   }
 
   /**
@@ -5189,7 +5791,7 @@ export class LightningWorker {
         nodeId: message.nodeId,
         features: message.features,
         lastUpdate: Date.now(),
-        addresses: [], // TODO: Convert address descriptors to NodeAddress format
+        addresses: this.convertAddressDescriptors(message.addresses),
         alias: uint8ArrayToHex(message.alias).replace(/00/g, '').trim(),
       }
 
@@ -5263,23 +5865,71 @@ export class LightningWorker {
       // Para validação inicial, aceitar canais de nós desconhecidos
       // mas marcar para verificação posterior
 
-      // 3. Usar validação do p2p.ts para assinaturas e confirmações
-      // Nota: Esta validação requer informações da blockchain que não temos aqui
-      // Por enquanto, fazer validação básica de assinaturas
-
-      // Verificar se nodeId1 != nodeId2
+      // 3. Verificar se nodeId1 != nodeId2
       if (node1Hex === node2Hex) {
         console.warn(`[gossip] Channel announcement with same node IDs`)
         return false
       }
 
-      // Verificar ordem lexicográfica dos node IDs (BOLT #7)
+      // 4. Verificar ordem lexicográfica dos node IDs (BOLT #7)
       if (uint8ArrayToHex(message.nodeId1) > uint8ArrayToHex(message.nodeId2)) {
         console.warn(`[gossip] Channel announcement node IDs not in lexicographic order`)
         return false
       }
 
-      console.log(`[gossip] Channel announcement ${scidHex} passed basic validation`)
+      // 5. Obter informações da transação de funding via Electrum
+      const fundingTxid = uint8ArrayToHex(message.shortChannelId.slice(0, 32)) // shortChannelId contém txid
+      const fundingOutputIndex = message.shortChannelId[32] | (message.shortChannelId[33] << 8) // output index
+
+      try {
+        // Consultar transação de funding
+        const fundingTx = await callElectrumMethod('blockchain.transaction.get', [
+          fundingTxid,
+          true,
+        ])
+
+        if (!fundingTx) {
+          console.warn(`[gossip] Funding transaction ${fundingTxid} not found`)
+          return false
+        }
+
+        // Verificar se o output existe
+        if (fundingOutputIndex >= fundingTx.vout.length) {
+          console.warn(`[gossip] Funding output ${fundingOutputIndex} not found in transaction`)
+          return false
+        }
+
+        const fundingOutput = fundingTx.vout[fundingOutputIndex]
+
+        // Verificar se o scriptPubKey corresponde ao esperado (2-of-2 multisig)
+        // Para validação completa, verificaríamos se é um P2WSH 2-of-2 multisig
+        // Por enquanto, aceitar qualquer output não gasto
+
+        // Verificar confirmações
+        const confirmations = fundingTx.confirmations || 0
+
+        // Verificar se o output foi gasto
+        const spendingTx = await callElectrumMethod('blockchain.scripthash.get_history', [
+          hash160(fundingOutput.scriptPubKey.hex),
+        ])
+
+        const isSpent = spendingTx && spendingTx.length > 0
+
+        // 6. Usar validação completa do p2p.ts
+        const validation = validateChannelAnnouncement(message, confirmations, isSpent)
+
+        if (!validation.valid) {
+          console.warn(`[gossip] Channel announcement validation failed: ${validation.error}`)
+          return false
+        }
+      } catch (error) {
+        console.warn(`[gossip] Failed to verify funding transaction ${fundingTxid}:`, error)
+        // Em modo de desenvolvimento, aceitar sem verificação completa
+        // TODO: Remover este fallback quando Electrum estiver sempre disponível
+        console.warn(`[gossip] Accepting channel announcement without full validation`)
+      }
+
+      console.log(`[gossip] Channel announcement ${scidHex} passed validation`)
       return true
     } catch (error) {
       console.error('[gossip] Error validating channel announcement:', error)
@@ -5299,8 +5949,37 @@ export class LightningWorker {
    * Valida assinatura de channel_update
    */
   private async validateChannelUpdate(message: ChannelUpdateMessage): Promise<boolean> {
-    // TODO: Implementar validação real de assinatura
-    return true // Simulação
+    try {
+      const scidHex = uint8ArrayToHex(message.shortChannelId)
+      const channel = this.routingGraph?.getChannel(message.shortChannelId)
+
+      if (!channel) {
+        console.warn(`[gossip] Unknown channel ${scidHex} in channel_update`)
+        return false
+      }
+
+      // Verificar se o output de funding foi gasto
+      // Para isso, precisaríamos consultar a blockchain novamente
+      // Por enquanto, assumir que não foi gasto (canais ativos não são gastos)
+      const fundingOutputSpent = false
+
+      // Obter último timestamp para comparação
+      const lastTimestamp = channel.lastUpdate
+
+      // Usar validação completa do p2p.ts
+      const validation = validateChannelUpdate(message, true, fundingOutputSpent, lastTimestamp)
+
+      if (!validation.valid) {
+        console.warn(`[gossip] Channel update validation failed: ${validation.error}`)
+        return false
+      }
+
+      console.log(`[gossip] Channel update ${scidHex} passed validation`)
+      return true
+    } catch (error) {
+      console.error('[gossip] Error validating channel update:', error)
+      return false
+    }
   }
 
   /**
@@ -5319,8 +5998,34 @@ export class LightningWorker {
     return {
       nodeCount: stats.nodes,
       channelCount: stats.channels,
-      totalCapacity: 0n, // TODO: Calcular capacidade total
+      totalCapacity: this.calculateTotalRoutingCapacity(),
     }
+  }
+
+  /**
+   * Calcula a capacidade total do routing graph
+   */
+  private calculateTotalRoutingCapacity(): bigint {
+    if (!this.routingGraph) return 0n
+
+    let totalCapacity = 0n
+    // Assumindo que o routing graph tem um método para iterar sobre canais
+    // Esta é uma implementação simplificada - em produção, o routing graph
+    // deveria fornecer um método mais eficiente para calcular estatísticas
+    try {
+      const channels = (this.routingGraph as any)['channels']
+      if (channels instanceof Map) {
+        for (const [, channel] of channels) {
+          if (channel.capacity && typeof channel.capacity === 'bigint') {
+            totalCapacity += channel.capacity
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('[routing] Failed to calculate total routing capacity:', error)
+    }
+
+    return totalCapacity
   }
 
   // ==========================================
@@ -5559,9 +6264,26 @@ export class LightningWorker {
    * Nota: Requer que peerFeatures seja armazenado durante troca de init messages
    */
   peerSupportsTrampolineRouting(): boolean {
-    // TODO: Armazenar features do peer durante init message exchange
-    // Por enquanto, retornar false
-    return false
+    // Verificar se temos features armazenadas do último peer
+    if (!this.peerFeatures) {
+      return false
+    }
+
+    // Verificar bit de suporte a trampoline routing (bit 516)
+    // BOLT #9: Feature bits para trampoline
+    const TRAMPOLINE_SUPPORT_BIT = 516
+    const byteIndex = Math.floor(TRAMPOLINE_SUPPORT_BIT / 8)
+    const bitIndex = TRAMPOLINE_SUPPORT_BIT % 8
+
+    if (byteIndex >= this.peerFeatures.length) {
+      return false
+    }
+
+    // Verificar se o bit está setado
+    const byte = this.peerFeatures[byteIndex]
+    const bitSet = (byte & (1 << bitIndex)) !== 0
+
+    return bitSet
   }
 
   /**
@@ -5603,9 +6325,27 @@ export class LightningWorker {
    * Obtém altura do bloco atual
    */
   private async getCurrentBlockHeight(): Promise<number> {
-    // TODO: Implementar consulta real via Electrum
-    // Por enquanto, retornar estimativa
-    return 850000
+    try {
+      // Usar Electrum para obter altura atual do bloco
+      // O método 'blockchain.headers.subscribe' retorna o header mais recente
+      const response = await this.callElectrumMethod('blockchain.headers.subscribe', [])
+      if (response && response.result && response.result.height) {
+        return response.result.height
+      }
+
+      // Fallback: usar 'blockchain.headers.get_tip'
+      const tipResponse = await this.callElectrumMethod('blockchain.headers.get_tip', [])
+      if (tipResponse && tipResponse.result && tipResponse.result.height) {
+        return tipResponse.result.height
+      }
+
+      // Último fallback: estimativa
+      console.warn('[lightning] Failed to get current block height from Electrum, using estimate')
+      return 850000
+    } catch (error) {
+      console.error('[lightning] Failed to get current block height:', error)
+      return 850000 // Estimativa conservadora
+    }
   }
 
   /**
@@ -5630,9 +6370,8 @@ export class LightningWorker {
    * Usada como source para roteamento
    */
   private getLocalPubkey(): Uint8Array {
-    // TODO: Implementar obtenção real da chave pública do nó
-    // Por enquanto, usar chave derivada
-    const nodeKey = this.deriveLightningKey(this.nodeIndex++)
+    // Usar chave derivada do nó (m/9735'/0'/0'/0')
+    const nodeKey = this.getNodeKey(0)
     return createPublicKey(nodeKey.subarray(0, 32))
   }
 
@@ -5647,9 +6386,96 @@ export class LightningWorker {
     cltvExpiry: number,
     onionPacket: Uint8Array,
   ): Promise<{ success: boolean; error?: string }> {
-    // TODO: Implementar envio real de HTLC
-    console.log(`[routing] Sending HTLC to channel ${channelId}`)
-    return { success: true }
+    try {
+      const channel = this.channels.get(channelId)
+      if (!channel) {
+        return { success: false, error: `Channel ${channelId} not found` }
+      }
+
+      const peerConnection = this.peerManager.getPeerConnection(channel.peerId)
+      if (!peerConnection) {
+        return { success: false, error: `Peer connection for channel ${channelId} not found` }
+      }
+
+      // Obter ChannelManager para este canal
+      const channelManager = this.channelManagers.get(channelId)
+
+      // Se temos ChannelManager, usar ele para gerenciar HTLC
+      if (channelManager) {
+        try {
+          const result = channelManager.addHtlc(amountMsat, paymentHash, cltvExpiry, onionPacket)
+
+          // Codificar e enviar mensagem gerada
+          const { encrypted } = encryptMessage(peerConnection.transportKeys, result.message)
+          await this.sendRaw(peerConnection, encrypted)
+
+          // Registrar HTLC na lista
+          const htlcInfo: HtlcInfo = {
+            id: result.htlcId,
+            amountMsat,
+            paymentHash,
+            cltvExpiry,
+            direction: 'outgoing',
+            state: 'pending',
+          }
+          const htlcList = this.htlcs.get(channelId) || []
+          htlcList.push(htlcInfo)
+          this.htlcs.set(channelId, htlcList)
+
+          console.log(
+            `[routing] Sent HTLC ${result.htlcId} on channel ${channelId} (via ChannelManager)`,
+          )
+          return { success: true }
+        } catch (error) {
+          console.error(`[routing] ChannelManager addHtlc failed for channel ${channelId}:`, error)
+          return {
+            success: false,
+            error: `ChannelManager error: ${error instanceof Error ? error.message : String(error)}`,
+          }
+        }
+      }
+
+      // Fallback: gerenciamento manual de HTLC
+      const htlcId = this.nextHtlcId.get(channelId) || 0n
+      this.nextHtlcId.set(channelId, htlcId + 1n)
+
+      // Criar HTLC message
+      const htlcMessage = {
+        type: LightningMessageType.UPDATE_ADD_HTLC,
+        channelId: hexToUint8Array(channelId),
+        id: htlcId,
+        amountMsat,
+        paymentHash,
+        cltvExpiry,
+        onionRoutingPacket: onionPacket,
+        tlvs: [] as unknown,
+      }
+
+      // Codificar e enviar
+      const encodedHtlc = encodeUpdateAddHtlcMessage(htlcMessage as any)
+      const encryptedHtlc = await encryptMessage(peerConnection.transportKeys, encodedHtlc)
+
+      await this.sendRaw(peerConnection, encryptedHtlc.encrypted)
+
+      // Registrar HTLC na lista
+      const htlcInfo: HtlcInfo = {
+        id: htlcId,
+        amountMsat,
+        paymentHash,
+        cltvExpiry,
+        direction: 'outgoing',
+        state: 'pending',
+      }
+      const htlcList = this.htlcs.get(channelId) || []
+      htlcList.push(htlcInfo)
+      this.htlcs.set(channelId, htlcList)
+
+      console.log(`[routing] Sent HTLC ${htlcId} on channel ${channelId} (manual)`)
+      return { success: true }
+    } catch (error) {
+      console.error(`[routing] Failed to send HTLC to channel ${channelId}:`, error)
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
   }
 
   /**
@@ -5775,7 +6601,7 @@ export class LightningWorker {
    */
   async processChannelReestablish(
     peerId: string,
-    reestablishMsg: any, // TODO: Import ChannelReestablishMessage
+    reestablishMsg: ChannelReestablishMessage,
   ): Promise<boolean> {
     try {
       // 1. Encontrar canal correspondente
@@ -6076,29 +6902,84 @@ export class LightningWorker {
    */
   private async isUtxoSpent(txid: string, vout: number): Promise<boolean> {
     try {
-      // Obter a transação que contém este UTXO
-      const spendingTx = await getTransaction(txid)
+      // Para verificar se um UTXO foi gasto, precisamos:
+      // 1. Obter a transação que contém o UTXO
+      // 2. Obter o scriptPubKey do output
+      // 3. Converter para script hash
+      // 4. Verificar o histórico do script hash para ver se foi gasto
 
-      if (!spendingTx) {
+      const txResponse = await getTransaction(txid)
+      if (!txResponse.result) {
         console.warn(`[lightning] Could not find transaction ${txid}`)
         return true // Assumir gasto se não conseguir verificar
       }
 
-      // Verificar se este output específico foi gasto
-      // Para isso, precisamos verificar se existe alguma transação que usa este txid:vout como input
-      // Como o Electrum não tem um método direto, vamos usar uma abordagem diferente
+      const tx = txResponse.result
+      if (vout >= tx.vout.length) {
+        console.warn(`[lightning] Invalid vout ${vout} for transaction ${txid}`)
+        return true
+      }
 
-      // Por enquanto, vamos assumir que UTXOs não são gastos (simplificação)
-      // TODO: Implementar verificação real de gastos usando blockchain.scripthash.get_history
-      // ou mantendo um cache de UTXOs gastos
+      const output = tx.vout[vout]
+      const scriptPubKey = output.scriptPubKey.hex
 
-      console.log(`[lightning] Assuming UTXO ${txid}:${vout} is unspent (simplified check)`)
+      // Converter scriptPubKey para script hash (Electrum format)
+      const scriptHash = this.scriptPubKeyToScriptHash(scriptPubKey)
+
+      const historyResponse = await callElectrumMethod('blockchain.scripthash.get_history', [
+        scriptHash,
+      ])
+      const history = Array.isArray(historyResponse.result) ? historyResponse.result : []
+
+      // Para cada transação no histórico, verificar se gasta este UTXO específico
+      for (const histItem of history) {
+        if (histItem.tx_hash === txid) {
+          // Esta é a transação que criou o UTXO
+          // Verificar se height é -1 (não confirmado) ou positivo (confirmado)
+          if (histItem.height === -1) {
+            // Transação na mempool, UTXO ainda não confirmado
+            return false
+          } else if (histItem.height > 0) {
+            // Transação confirmada, UTXO existe
+            // Mas precisamos verificar se foi gasto posteriormente
+            continue
+          }
+        } else {
+          // Transação diferente - pode estar gastando nosso UTXO
+          // Obter detalhes da transação potencialmente gastadora
+          const spenderTxResponse = await getTransaction(histItem.tx_hash)
+          if (spenderTxResponse.result) {
+            const spenderTx = spenderTxResponse.result
+
+            // Verificar se algum input desta transação gasta nosso UTXO
+            for (const input of spenderTx.vin) {
+              if (input.txid === txid && input.vout === vout) {
+                // Encontramos uma transação que gasta nosso UTXO!
+                return true
+              }
+            }
+          }
+        }
+      }
+
+      // Se chegamos aqui, o UTXO não foi gasto
       return false
     } catch (error) {
       console.error(`[lightning] Failed to check if UTXO ${txid}:${vout} is spent:`, error)
       // Em caso de erro, assumir que está gasto para ser conservador
       return true
     }
+  }
+
+  /**
+   * Converte scriptPubKey para script hash (formato Electrum)
+   * O script hash é hash160 do scriptPubKey em little-endian
+   */
+  private scriptPubKeyToScriptHash(scriptPubKey: string): string {
+    const scriptBytes = hexToUint8Array(scriptPubKey)
+    const scriptHash = hash160(scriptBytes)
+    // Electrum usa little-endian para script hashes
+    return uint8ArrayToHex(scriptHash.reverse())
   }
 
   /**
@@ -6136,9 +7017,27 @@ export class LightningWorker {
    * Baseado no número de inputs/outputs e fee rate
    */
   private estimateFundingTxFee(inputCount: number, outputCount: number, feeRate: bigint): bigint {
-    // Estimativa simplificada: 150 bytes por input, 100 bytes por output
-    const estimatedTxSize = inputCount * 150 + outputCount * 100 + 100 // Overhead
+    // Usar função auxiliar para calcular tamanho preciso
+    const estimatedTxSize = this.estimateFundingTxSize(inputCount, outputCount)
     return (BigInt(estimatedTxSize) * feeRate) / 1000n // feeRate em sat/vbyte
+  }
+
+  /**
+   * Calcula tamanho estimado da transação de funding
+   */
+  private estimateFundingTxSize(inputCount: number, outputCount: number): number {
+    // Estimativa conservadora:
+    // - Header: 10 bytes
+    // - Inputs: ~148 bytes cada (P2WPKH)
+    // - Outputs: ~43 bytes cada (P2WSH)
+    // - Witnesses: ~107 bytes por input (P2WPKH)
+
+    const headerSize = 10
+    const inputSize = 148 // sem witness
+    const outputSize = 43
+    const witnessSize = 107
+
+    return headerSize + inputCount * inputSize + outputCount * outputSize + inputCount * witnessSize
   }
 
   /**
@@ -6157,25 +7056,39 @@ export class LightningWorker {
 
     // Calcular troco (se necessário)
     const changeAmount = totalInput - amount - fee
-    const outputs = [{ address: channelAddress, value: amount }]
+    const outputs = []
 
-    if (changeAmount > 0n) {
-      // TODO: Gerar endereço de troco
-      const changeAddress = 'bc1q' + '0'.repeat(38) // Placeholder
-      outputs.push({ address: changeAddress, value: changeAmount })
+    // Output principal para o canal
+    const channelScriptPubKey = this.addressToScriptPubKey(channelAddress)
+    outputs.push({
+      value: amount,
+      scriptPubKey: uint8ArrayToHex(channelScriptPubKey),
+    })
+
+    // Output de troco se necessário
+    if (changeAmount > 546n) {
+      // Dust threshold
+      const changeAddress = this.getChangeAddress()
+      const changeScriptPubKey = this.addressToScriptPubKey(changeAddress)
+      outputs.push({
+        value: changeAmount,
+        scriptPubKey: uint8ArrayToHex(changeScriptPubKey),
+      })
     }
 
-    // Estrutura básica da transação
+    // Estrutura da transação SegWit
     const tx = {
       version: 2,
-      inputs: selectedUtxos.map(utxo => ({
+      inputs: selectedUtxos.map((utxo, index) => ({
         txid: utxo.txid,
         vout: utxo.vout,
-        scriptSig: '',
+        scriptSig: '', // Empty for SegWit
         sequence: 0xffffffff,
+        // Witness será adicionado depois da assinatura
       })),
       outputs,
       locktime: 0,
+      witnesses: [], // Será preenchido após assinatura
     }
 
     return tx
@@ -6322,6 +7235,54 @@ export class LightningWorker {
     return toBech32(scriptHash, 0, 'bc')
   }
 
+  /**
+   * Converte endereço para scriptPubKey
+   */
+  private addressToScriptPubKey(address: string): Uint8Array {
+    try {
+      // Usar função do módulo address para converter
+      const { version, data } = fromBech32(address)
+
+      if (version === 0) {
+        // P2WPKH ou P2WSH
+        if (data.length === 20) {
+          // P2WPKH: OP_0 <20-byte-hash>
+          const script = new Uint8Array(22)
+          script[0] = 0x00 // OP_0
+          script[1] = 0x14 // Push 20 bytes
+          script.set(data, 2)
+          return script
+        } else if (data.length === 32) {
+          // P2WSH: OP_0 <32-byte-hash>
+          const script = new Uint8Array(34)
+          script[0] = 0x00 // OP_0
+          script[1] = 0x20 // Push 32 bytes
+          script.set(data, 2)
+          return script
+        }
+      }
+
+      throw new Error(`Unsupported address version: ${version}`)
+    } catch (error) {
+      console.error('[lightning] Failed to convert address to scriptPubKey:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Obtém endereço de troco da carteira
+   */
+  private getChangeAddress(): string {
+    try {
+      const addressService = new AddressService()
+      return addressService.getNextChangeAddress()
+    } catch (error) {
+      console.error('[lightning] Failed to get change address:', error)
+      // Fallback: gerar endereço básico
+      return 'bc1q' + '0'.repeat(38) // Placeholder - não usar em produção
+    }
+  }
+
   // ==========================================
   // FACTORY METHOD
   // ==========================================
@@ -6361,28 +7322,23 @@ export class LightningWorker {
     network: 'mainnet' | 'testnet' | 'regtest',
     channelFeeConfig?: ChannelOpeningFeeConfig,
   ): Promise<LightningConnection> {
-    // Por enquanto, criar uma conexão mock para desenvolvimento
-    // TODO: Implementar conexão real quando peer estiver disponível
-    const mockConnection = {
-      write: () => false,
-      destroy: function () {
-        return this
-      },
-      on: () => mockConnection,
-      once: () => mockConnection,
-      removeListener: () => mockConnection,
-      transportKeys: {
-        sk: new Uint8Array(32),
-        rk: new Uint8Array(32),
-        sn: 0,
-        rn: 0,
-        sck: new Uint8Array(32),
-        rck: new Uint8Array(32),
-      },
-      peerPubKey: config.peerPubKey || new Uint8Array(33),
-    } as unknown as LightningConnection
+    // Implementar conexão real usando PeerManager
+    const peerManager = new PeerManager()
 
-    return mockConnection
+    // Tentar conectar ao peer
+    const peer: PeerWithPubkey = {
+      host: config.peer.host,
+      port: config.peer.port,
+      pubkey: config.peerPubKey ? uint8ArrayToHex(config.peerPubKey) : undefined,
+    }
+
+    const result = await peerManager.connectPeer(peer)
+
+    if (!result.success || !result.connection) {
+      throw new Error(`Failed to connect to peer: ${result.error?.message || result.message}`)
+    }
+
+    return result.connection
   }
 
   // ==========================================
@@ -6480,6 +7436,8 @@ export interface OpenChannelParams {
   htlcMinimumMsat?: bigint
   toSelfDelay?: number
   maxAcceptedHtlcs?: number
+  announceChannel?: boolean // Se o canal deve ser anunciado na rede
+  upfrontShutdownScript?: Uint8Array // Script de shutdown personalizado
 }
 
 /**

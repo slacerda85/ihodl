@@ -678,8 +678,11 @@ export class CommitmentBuilder {
     let localBalanceMsat = this.localConfig.initialMsat
     let remoteBalanceMsat = this.remoteConfig.initialMsat
 
-    // Obter HTLCs ativos
-    const activeHtlcs = this.htlcManager.getHtlcsActiveAtCtn(owner, targetCtn)
+    // Obter HTLCs ativos com seus proposers
+    const activeHtlcsWithProposer = this.htlcManager.getHtlcsActiveAtCtnWithProposer(
+      owner,
+      targetCtn,
+    )
 
     // Criar outputs
     const outputs: CommitmentOutput[] = []
@@ -709,8 +712,8 @@ export class CommitmentBuilder {
     }
 
     // Outputs HTLC
-    for (const htlc of activeHtlcs) {
-      const htlcOutput = this.createHtlcOutput(htlc, owner, keys)
+    for (const { htlc, proposer } of activeHtlcsWithProposer) {
+      const htlcOutput = this.createHtlcOutput(htlc, owner, keys, proposer)
       if (htlcOutput) {
         outputs.push(htlcOutput)
       }
@@ -835,6 +838,7 @@ export class CommitmentBuilder {
   private createHtlcOutput(
     htlc: UpdateAddHtlc,
     owner: HTLCOwner,
+    htlcProposer: HTLCOwner,
     keys: ReturnType<typeof this.deriveKeys>,
   ): HTLCOutput | null {
     // Verificar dust limit
@@ -847,8 +851,8 @@ export class CommitmentBuilder {
     }
 
     // Determinar se é offered ou received do ponto de vista do dono do commitment
-    // TODO: Implementar lógica completa
-    const isOffered = true // Simplificado
+    // Um HTLC é "offered" quando o dono do commitment é o mesmo que o proposer do HTLC
+    const isOffered = owner === htlcProposer
 
     // Verificar se canal usa anchors
     const hasAnchors = this.channelType >= ChannelType.ANCHORS
@@ -1010,6 +1014,180 @@ export class CommitmentBuilder {
 
     // Verificar assinatura usando a chave pública de funding do peer
     return verifyMessage(sighash, signature, this.remoteConfig.fundingPubkey)
+  }
+
+  /**
+   * Calcula o sighash para uma HTLC transaction
+   * Baseado em BIP 143 para HTLC success/timeout transactions
+   *
+   * @param commitmentTx - Commitment transaction que contém o HTLC
+   * @param htlcOutput - Output HTLC do commitment
+   * @param outputIndex - Índice do output HTLC no commitment
+   * @returns Hash para assinar
+   */
+  private calculateHtlcSighash(
+    commitmentTx: CommitmentTx,
+    htlcOutput: CommitmentOutput,
+    outputIndex: number,
+  ): Uint8Array {
+    // HTLC transaction gasta o output do commitment
+    // Construir dados para BIP143 sighash
+    const data = new Uint8Array(32 + 4 + 4 + 32 + 8)
+    let offset = 0
+
+    // Commitment TXID
+    const commitmentTxid = this.computeCommitmentTxid(commitmentTx)
+    data.set(commitmentTxid, offset)
+    offset += 32
+
+    // Output index
+    new DataView(data.buffer).setUint32(offset, outputIndex, true)
+    offset += 4
+
+    // Sequence (0 para HTLC transactions)
+    new DataView(data.buffer).setUint32(offset, 0, true)
+    offset += 4
+
+    // Script hash do witness script do HTLC
+    const scriptHash = sha256(htlcOutput.witnessScript || new Uint8Array(0))
+    data.set(scriptHash.slice(0, 32), offset)
+    offset += 32
+
+    // Amount
+    new DataView(data.buffer).setBigUint64(offset, htlcOutput.amountSat, true)
+
+    return sha256(sha256(data))
+  }
+
+  /**
+   * Computa o TXID de uma commitment transaction
+   */
+  private computeCommitmentTxid(commitmentTx: CommitmentTx): Uint8Array {
+    // Hash simples dos dados da transação
+    // Na prática seria a serialização completa
+    const data = new Uint8Array(8)
+    new DataView(data.buffer).setBigUint64(0, commitmentTx.obscuredCommitmentNumber, true)
+    return sha256(sha256(data))
+  }
+
+  /**
+   * Assina uma HTLC transaction (success ou timeout)
+   *
+   * Usada quando enviamos commitment_signed para incluir assinaturas
+   * de todas as HTLC transactions do peer.
+   *
+   * @param commitmentTx - Commitment transaction que contém o HTLC
+   * @param htlcOutput - Output HTLC a assinar
+   * @param owner - Dono do commitment (LOCAL ou REMOTE)
+   * @returns Assinatura de 64 bytes
+   */
+  signHtlcTransaction(
+    commitmentTx: CommitmentTx,
+    htlcOutput: CommitmentOutput,
+    owner: HTLCOwner,
+  ): Uint8Array {
+    // Encontrar o índice do output HTLC
+    const outputIndex = commitmentTx.outputs.findIndex(
+      o =>
+        o.type === htlcOutput.type &&
+        o.amountSat === htlcOutput.amountSat &&
+        this.arraysEqual(o.scriptPubKey, htlcOutput.scriptPubKey),
+    )
+
+    if (outputIndex === -1) {
+      throw new Error('HTLC output not found in commitment transaction')
+    }
+
+    // Calcular sighash
+    const sighash = this.calculateHtlcSighash(commitmentTx, htlcOutput, outputIndex)
+
+    // Assinar usando a chave HTLC derivada
+    // Para o commitment do peer (REMOTE), usamos nossa chave HTLC
+    // A chave derivada é baseada no per-commitment point do dono
+    const perCommitmentPoint =
+      owner === HTLCOwner.REMOTE
+        ? this.remoteConfig.currentPerCommitmentPoint || this.remoteConfig.fundingPubkey
+        : secretToPoint(
+            getPerCommitmentSecretFromSeed(
+              this.localConfig.perCommitmentSecretSeed,
+              this.localCommitmentNumber,
+            ),
+          )
+
+    const htlcPrivkey = this.deriveHtlcPrivkey(perCommitmentPoint)
+
+    return signMessage(sighash, htlcPrivkey)
+  }
+
+  /**
+   * Deriva a chave privada HTLC
+   * htlc_privkey = htlc_basepoint_secret + SHA256(per_commitment_point || htlc_basepoint)
+   */
+  private deriveHtlcPrivkey(perCommitmentPoint: Uint8Array): Uint8Array {
+    // Precisamos da chave privada do htlc_basepoint
+    // Por enquanto, usamos a funding private key como aproximação
+    // TODO: Armazenar htlc_basepoint_secret separadamente
+    const combined = new Uint8Array(33 + 33)
+    combined.set(perCommitmentPoint, 0)
+    combined.set(this.localConfig.htlcBasepoint, 33)
+    const tweak = sha256(combined)
+
+    // Adicionar tweak à chave privada base (mod n)
+    const { scalarAdd } = require('@/core/lib/crypto/secp256k1')
+    return scalarAdd(this.localConfig.fundingPrivateKey, tweak) as Uint8Array
+  }
+
+  /**
+   * Verifica uma assinatura de HTLC transaction
+   *
+   * @param commitmentTx - Commitment transaction
+   * @param htlcOutput - Output HTLC
+   * @param signature - Assinatura a verificar
+   * @returns true se válida
+   */
+  verifyHtlcSignature(
+    commitmentTx: CommitmentTx,
+    htlcOutput: CommitmentOutput,
+    signature: Uint8Array,
+  ): boolean {
+    // Encontrar o índice do output HTLC
+    const outputIndex = commitmentTx.outputs.findIndex(
+      o =>
+        o.type === htlcOutput.type &&
+        o.amountSat === htlcOutput.amountSat &&
+        this.arraysEqual(o.scriptPubKey, htlcOutput.scriptPubKey),
+    )
+
+    if (outputIndex === -1) {
+      return false
+    }
+
+    // Calcular sighash
+    const sighash = this.calculateHtlcSighash(commitmentTx, htlcOutput, outputIndex)
+
+    // Derivar a chave pública HTLC do peer
+    // Usamos nosso per-commitment point para derivar a chave do peer
+    const perCommitmentPoint = secretToPoint(
+      getPerCommitmentSecretFromSeed(
+        this.localConfig.perCommitmentSecretSeed,
+        this.localCommitmentNumber,
+      ),
+    )
+
+    const remoteHtlcPubkey = derivePubkey(this.remoteConfig.htlcBasepoint, perCommitmentPoint)
+
+    return verifyMessage(sighash, signature, remoteHtlcPubkey)
+  }
+
+  /**
+   * Helper para comparar arrays
+   */
+  private arraysEqual(a: Uint8Array, b: Uint8Array): boolean {
+    if (a.length !== b.length) return false
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] !== b[i]) return false
+    }
+    return true
   }
 
   /**

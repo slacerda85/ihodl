@@ -3,7 +3,7 @@
 // Handles background invoice monitoring and automatic payment fulfillment
 
 import EventEmitter from 'eventemitter3'
-import LightningService from './lightning'
+import LightningService from './ln-service'
 import { LightningRepository } from '../repositories/lightning'
 
 // ==========================================

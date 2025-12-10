@@ -660,6 +660,47 @@ export class HTLCManager {
   }
 
   /**
+   * Retorna todos os HTLCs ativos em um determinado ctn com seus proposers
+   */
+  getHtlcsActiveAtCtnWithProposer(
+    ctxOwner: HTLCOwner,
+    ctn?: number,
+  ): { htlc: UpdateAddHtlc; proposer: HTLCOwner }[] {
+    const targetCtn = ctn ?? this.ctnLatest(ctxOwner)
+    const activeHtlcs: { htlc: UpdateAddHtlc; proposer: HTLCOwner }[] = []
+
+    // Verificar HTLCs oferecidos por LOCAL
+    for (const [htlcId, htlc] of this.logLocal.adds) {
+      if (
+        this.isHtlcActiveAtCtn({
+          ctxOwner,
+          ctn: targetCtn,
+          htlcProposer: HTLCOwner.LOCAL,
+          htlcId,
+        })
+      ) {
+        activeHtlcs.push({ htlc, proposer: HTLCOwner.LOCAL })
+      }
+    }
+
+    // Verificar HTLCs oferecidos por REMOTE
+    for (const [htlcId, htlc] of this.logRemote.adds) {
+      if (
+        this.isHtlcActiveAtCtn({
+          ctxOwner,
+          ctn: targetCtn,
+          htlcProposer: HTLCOwner.REMOTE,
+          htlcId,
+        })
+      ) {
+        activeHtlcs.push({ htlc, proposer: HTLCOwner.REMOTE })
+      }
+    }
+
+    return activeHtlcs
+  }
+
+  /**
    * Retorna o HTLC por ID
    */
   getHtlc(htlcProposer: HTLCOwner, htlcId: bigint): UpdateAddHtlc | undefined {

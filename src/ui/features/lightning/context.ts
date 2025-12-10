@@ -13,7 +13,8 @@ import type {
   DecodedInvoice,
   Millisatoshis,
 } from './types'
-import type { InitStatus } from '@/core/services/lightningInitializer'
+import type { InitStatus } from '@/core/services/ln-initializer-service'
+import type { ReadinessState, ReadinessLevel } from '@/core/models/lightning/readiness'
 
 // ==========================================
 // TIPOS DO CONTEXTO
@@ -64,6 +65,8 @@ export interface LightningActions {
 export interface LightningContextType extends LightningActions {
   state: LightningState
   initStatus: InitStatus
+  readinessState: ReadinessState
+  readinessLevel: ReadinessLevel
 }
 
 // ==========================================

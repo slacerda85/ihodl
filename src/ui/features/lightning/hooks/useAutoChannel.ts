@@ -9,7 +9,7 @@ import { useIsAutoChannelEnabled } from './useLightningPolicy'
 import { useInboundBalance } from './useInboundBalance'
 import { useLiquidityPolicy } from './useLiquidityPolicy'
 import type { Millisatoshis, Satoshis } from '../types'
-import LSPService, { type LiquidityAd, type FeeEstimate } from '@/core/services/lsp'
+import LSPService, { type LiquidityAd, type FeeEstimate } from '@/core/services/ln-lsp-service'
 
 /**
  * Hook para calcular capacidade inbound total disponível

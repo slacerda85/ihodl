@@ -20,7 +20,7 @@ import { hkdf } from '@noble/hashes/hkdf.js'
 // Constantes de Trampoline
 const TRAMPOLINE_ONION_SIZE = 650 // Payload menor que onion normal
 const MAX_TRAMPOLINE_HOPS = 4 // Máximo de trampoline hops
-const TRAMPOLINE_FEE_LEVEL_COUNT = 4 // Níveis de fee para retry
+export const TRAMPOLINE_FEE_LEVEL_COUNT = 4 // Níveis de fee para retry
 
 // TLV types específicos de trampoline
 export const enum TrampolineTlvType {
@@ -90,9 +90,9 @@ export const KNOWN_TRAMPOLINE_NODES: TrampolineNode[] = [
 ]
 
 /**
- * Hop em uma rota trampoline
+ * Hop em uma rota trampoline (para roteamento)
  */
-export interface TrampolineHop {
+export interface TrampolineRouteHop {
   nodeId: Point
   amountMsat: bigint
   cltvExpiry: number
@@ -100,10 +100,18 @@ export interface TrampolineHop {
 }
 
 /**
+ * Hop para construção de onion trampoline
+ */
+export interface TrampolineHop {
+  nodeId: Uint8Array
+  payloadTlv: Uint8Array
+}
+
+/**
  * Rota trampoline completa
  */
 export interface TrampolineRoute {
-  hops: TrampolineHop[]
+  hops: TrampolineRouteHop[]
   totalAmountMsat: bigint
   totalFeeMsat: bigint
   totalCltvDelta: number
@@ -137,9 +145,12 @@ export interface TrampolineOnionResult {
 export class TrampolineRouter {
   private trampolineNodes: TrampolineNode[]
   private currentFeeLevel: number = 0
+  private nodeStats: Map<string, TrampolineNodeStats> = new Map()
 
   constructor(trampolineNodes?: TrampolineNode[]) {
     this.trampolineNodes = trampolineNodes || [...KNOWN_TRAMPOLINE_NODES]
+    // Inicializar estatísticas para nós conhecidos
+    this.initializeStats()
   }
 
   /**
@@ -164,6 +175,58 @@ export class TrampolineRouter {
   }
 
   /**
+   * Inicializa estatísticas para nós conhecidos
+   */
+  private initializeStats(): void {
+    for (const node of this.trampolineNodes) {
+      const nodeIdHex = uint8ArrayToHex(node.nodeId)
+      if (!this.nodeStats.has(nodeIdHex)) {
+        this.nodeStats.set(nodeIdHex, {
+          nodeId: nodeIdHex,
+          totalAttempts: 0,
+          successfulPayments: 0,
+          failedPayments: 0,
+          avgResponseTimeMs: 0,
+          lastUsed: 0,
+          failureReasons: new Map(),
+        })
+      }
+    }
+  }
+
+  /**
+   * Registra resultado de tentativa de pagamento
+   */
+  recordPaymentAttempt(
+    nodeId: Point,
+    success: boolean,
+    responseTimeMs?: number,
+    errorCode?: number,
+  ): void {
+    const nodeIdHex = uint8ArrayToHex(nodeId)
+    const stats = this.nodeStats.get(nodeIdHex)
+    if (!stats) return
+
+    stats.totalAttempts++
+    stats.lastUsed = Date.now()
+
+    if (success) {
+      stats.successfulPayments++
+      if (responseTimeMs !== undefined) {
+        // Atualizar média móvel do tempo de resposta
+        stats.avgResponseTimeMs = (stats.avgResponseTimeMs + responseTimeMs) / 2
+      }
+    } else {
+      stats.failedPayments++
+      stats.lastFailure = Date.now()
+      if (errorCode !== undefined) {
+        const count = stats.failureReasons.get(errorCode) || 0
+        stats.failureReasons.set(errorCode, count + 1)
+      }
+    }
+  }
+
+  /**
    * Retorna lista de nós trampoline disponíveis
    */
   getTrampolineNodes(): TrampolineNode[] {
@@ -172,17 +235,66 @@ export class TrampolineRouter {
 
   /**
    * Seleciona melhor nó trampoline para alcançar destino
-   * Por enquanto, usa o primeiro disponível
+   * Usa algoritmo sofisticado baseado em múltiplos fatores
    */
   selectTrampolineNode(destinationNodeId?: Point): TrampolineNode | null {
     if (this.trampolineNodes.length === 0) return null
 
-    // Simples seleção: primeiro nó disponível
-    // TODO: Implementar lógica mais sofisticada baseada em:
-    // - Proximidade ao destino
-    // - Histórico de sucesso
-    // - Fees mais baixas
-    return this.trampolineNodes[0]
+    // Filtrar nós com alta taxa de falha recente
+    const candidates = this.trampolineNodes.filter(node => {
+      const stats = this.nodeStats.get(uint8ArrayToHex(node.nodeId))
+      if (!stats || stats.totalAttempts === 0) return true // incluir nós não testados
+
+      const successRate = stats.successfulPayments / stats.totalAttempts
+      const recentFailures = stats.lastFailure && Date.now() - stats.lastFailure < 3600000 // última hora
+      return successRate > 0.5 && !recentFailures // >50% sucesso e sem falhas recentes
+    })
+
+    if (candidates.length === 0) {
+      // Fallback: usar todos os nós se nenhum candidato qualificado
+      candidates.push(...this.trampolineNodes)
+    }
+
+    // Calcular score para cada candidato baseado em múltiplos fatores
+    const scoredCandidates = candidates.map(node => {
+      const stats = this.nodeStats.get(uint8ArrayToHex(node.nodeId))
+      let score = 0
+
+      // Fator 1: Taxa de sucesso (peso 40%)
+      const successRate =
+        stats && stats.totalAttempts > 0 ? stats.successfulPayments / stats.totalAttempts : 0.5 // assumir 50% para nós não testados
+      score += successRate * 40
+
+      // Fator 2: Tempo de resposta (peso 20%) - menor é melhor
+      const responseTime = stats?.avgResponseTimeMs || 1000 // assumir 1s se desconhecido
+      const responseScore = Math.max(0, 20 - responseTime / 100) // penalizar >2s
+      score += responseScore
+
+      // Fator 3: Fee (peso 20%) - menor é melhor
+      const feeScore = Math.max(0, 20 - Number(node.feeBaseMsat) / 1000) // penalizar >20k msat base fee
+      score += feeScore
+
+      // Fator 4: Recência de uso (peso 10%) - nós recentemente usados são preferidos
+      const lastUsed = stats?.lastUsed || 0
+      const hoursSinceLastUse = (Date.now() - lastUsed) / 3600000
+      const recencyScore = Math.max(0, 10 - hoursSinceLastUse) // penalizar uso >10h atrás
+      score += recencyScore
+
+      // Fator 5: Capacidade (peso 10%) - baseado em CLTV delta (menor = mais capacidade)
+      const capacityScore = Math.max(0, 10 - node.cltvExpiryDelta / 10) // penalizar CLTV >100
+      score += capacityScore
+
+      return { node, score }
+    })
+
+    // Ordenar por score decrescente e retornar o melhor
+    scoredCandidates.sort((a, b) => b.score - a.score)
+
+    console.log(
+      `[trampoline] Selected node ${scoredCandidates[0].node.alias || uint8ArrayToHex(scoredCandidates[0].node.nodeId).slice(0, 8)} with score ${scoredCandidates[0].score.toFixed(2)}`,
+    )
+
+    return scoredCandidates[0].node
   }
 
   /**
@@ -232,7 +344,7 @@ export class TrampolineRouter {
     const finalCltvExpiry = currentBlockHeight + cltvDelta
     const trampolineCltvExpiry = finalCltvExpiry + trampolineNode.cltvExpiryDelta
 
-    const hops: TrampolineHop[] = [
+    const hops: TrampolineRouteHop[] = [
       // Hop 1: Nós -> Trampoline
       {
         nodeId: trampolineNode.nodeId,
@@ -1140,14 +1252,15 @@ export class EnhancedTrampolineRouter extends TrampolineRouter {
   }
 
   /**
-   * Cria pagamento com seleção inteligente
+   * Cria pagamento com seleção inteligente e nível de fee específico
    */
-  createSmartTrampolinePayment(
+  createSmartTrampolinePaymentWithFeeLevel(
     destinationNodeId: Uint8Array,
     amountMsat: bigint,
     paymentHash: Uint8Array,
     paymentSecret: Uint8Array,
     currentBlockHeight: number,
+    feeLevel: number,
   ): { result: TrampolineOnionResult; selectedNode: TrampolineNode } | null {
     const selection = this.startPayment(amountMsat, destinationNodeId)
     if (!selection) return null
@@ -1158,6 +1271,7 @@ export class EnhancedTrampolineRouter extends TrampolineRouter {
       paymentHash,
       paymentSecret,
       currentBlockHeight,
+      feeLevel,
     )
 
     if (!result) return null
@@ -1242,4 +1356,107 @@ export function createEnhancedTrampolineRouter(
   config?: Partial<EnhancedTrampolineConfig>,
 ): EnhancedTrampolineRouter {
   return new EnhancedTrampolineRouter(trampolineNodes, config)
+}
+
+/**
+ * Cria onion trampoline a partir de hops com payloads TLV pré-codificados
+ *
+ * Esta é uma função de baixo nível que constrói o pacote onion
+ * usando o protocolo Sphinx com hops trampoline.
+ *
+ * @param hops - Hops com nodeId e payload TLV pré-codificado
+ * @param associatedData - Dados associados (payment_hash)
+ * @returns Pacote onion como Uint8Array
+ */
+export function createTrampolineOnion(
+  hops: TrampolineHop[],
+  associatedData: Uint8Array,
+): Uint8Array {
+  const numHops = hops.length
+  if (numHops === 0) throw new Error('No hops provided')
+  if (numHops > MAX_TRAMPOLINE_HOPS) {
+    throw new Error(`Too many hops: ${numHops}, max: ${MAX_TRAMPOLINE_HOPS}`)
+  }
+
+  // Gerar chave de sessão efêmera
+  const sessionKey = crypto.getRandomValues(new Uint8Array(32))
+  const ephemeralPubkey = secp256k1.getPublicKey(sessionKey, true)
+
+  // Calcular shared secrets para cada hop
+  const sharedSecrets: Uint8Array[] = []
+  const ephemeralPubkeys: Uint8Array[] = [ephemeralPubkey]
+  let currentKey = sessionKey
+
+  for (let i = 0; i < numHops; i++) {
+    // ECDH: shared_secret = SHA256(pubkey * privkey)
+    const sharedPoint = secp256k1.getSharedSecret(currentKey, hops[i].nodeId)
+    const sharedSecret = sha256(sharedPoint)
+    sharedSecrets.push(sharedSecret)
+
+    if (i < numHops - 1) {
+      // Calcular próxima ephemeral key: blindingFactor = SHA256(ephemeralPubkey || sharedSecret)
+      const blindingFactor = sha256(concatUint8Arrays([ephemeralPubkeys[i], sharedSecret]))
+      // Próxima key = currentKey * blindingFactor
+      currentKey = hkdf(
+        sha256,
+        blindingFactor,
+        currentKey,
+        new TextEncoder().encode('blinding'),
+        32,
+      )
+      const nextEphemeralPubkey = secp256k1.getPublicKey(currentKey, true)
+      ephemeralPubkeys.push(nextEphemeralPubkey)
+    }
+  }
+
+  // Construir o pacote onion
+  const onionSize = TRAMPOLINE_ONION_SIZE
+  const onion = new Uint8Array(onionSize)
+  const view = new DataView(onion.buffer)
+
+  // Version byte (0)
+  view.setUint8(0, 0)
+
+  // Ephemeral pubkey (33 bytes)
+  onion.set(ephemeralPubkey, 1)
+
+  // HMACs e payloads criptografados
+  let offset = 34 // version + pubkey
+
+  for (let i = 0; i < numHops; i++) {
+    const sharedSecret = sharedSecrets[i]
+    const payload = hops[i].payloadTlv
+
+    // Derivar chaves rho e mu do shared secret
+    const rho = hkdf(sha256, sharedSecret, associatedData, new TextEncoder().encode('rho'), 32)
+    const mu = hkdf(sha256, sharedSecret, associatedData, new TextEncoder().encode('mu'), 32)
+
+    // Criptografar payload
+    const encryptedPayload = new Uint8Array(payload.length)
+    for (let j = 0; j < payload.length; j++) {
+      encryptedPayload[j] = payload[j] ^ rho[j % 32]
+    }
+
+    // Calcular HMAC
+    const hmacData = concatUint8Arrays([
+      i === 0 ? new Uint8Array(0) : onion.slice(0, offset),
+      encryptedPayload,
+    ])
+    const hmac = sha256(concatUint8Arrays([mu, hmacData]))
+
+    // Escrever HMAC (32 bytes)
+    onion.set(hmac.slice(0, 32), offset)
+    offset += 32
+
+    // Escrever payload criptografado
+    onion.set(encryptedPayload, offset)
+    offset += encryptedPayload.length
+  }
+
+  // Padding com zeros
+  while (offset < onionSize) {
+    onion[offset++] = 0
+  }
+
+  return onion
 }

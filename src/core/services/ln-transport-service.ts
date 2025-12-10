@@ -20,6 +20,7 @@ import {
 } from '../lib/lightning/bolt1'
 import type { InitMessage, PongMessage } from '../models/lightning/base'
 import { uint8ArrayToHex, hexToUint8Array } from '../lib/utils'
+import { TcpTransport, TcpTransportEvent } from '@/core/lib/lightning/tcpTransport'
 
 // ==========================================
 // TYPES
@@ -36,6 +37,11 @@ export type TransportEvent =
   | { type: 'error'; error: Error }
   | { type: 'init'; message: InitMessage }
   | { type: 'pong'; message: PongMessage }
+
+export interface InitNegotiationResult {
+  remoteInit: InitMessage
+  negotiatedFeatures: Uint8Array
+}
 
 /** Listener de eventos de transporte */
 export type TransportEventListener = (event: TransportEvent) => void
@@ -86,6 +92,8 @@ const DEFAULT_CONFIG: TransportConfig = {
 const MAINNET_CHAIN_HASH = hexToUint8Array(
   '6fe28c0ab6f1b372c1a6a246ae63f74f931e8365e15a089c68d6190000000000',
 )
+
+const INIT_TIMEOUT_MS = 15000
 
 // ==========================================
 // TRANSPORT SERVICE
@@ -478,6 +486,99 @@ export class LightningTransport {
 
     this.updateState({ pingTimer: timer })
   }
+}
+
+// ==========================================
+// TCP-BASED INIT NEGOTIATION (BOLT #1)
+// ==========================================
+
+/**
+ * Executa troca de mensagens init (BOLT #1) sobre um TcpTransport já conectado (BOLT #8 concluído).
+ * Envia init local, espera init remoto, negocia features e retorna o resultado.
+ */
+export async function performInitExchange(
+  transport: TcpTransport,
+  config: Partial<TransportConfig> = {},
+): Promise<InitNegotiationResult> {
+  const { localFeatures, chainHash, connectionTimeout } = { ...DEFAULT_CONFIG, ...config }
+
+  const localFeatureVector = createFeatureVector(localFeatures)
+  const chainHashes = chainHash ? [chainHash] : [MAINNET_CHAIN_HASH]
+  const initMsg = createInitMessage(localFeatureVector, chainHashes)
+  const encodedInit = encodeInitMessage(initMsg)
+
+  // Enviar init logo após handshake
+  transport.sendMessage(encodedInit)
+
+  return new Promise<InitNegotiationResult>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      cleanup()
+      reject(new Error('Init exchange timed out'))
+    }, connectionTimeout ?? INIT_TIMEOUT_MS)
+
+    const cleanup = () => {
+      clearTimeout(timeout)
+      transport.removeListener('transport', onTransportEvent)
+    }
+
+    const onTransportEvent = (event: TcpTransportEvent) => {
+      if (event.type === 'message') {
+        handleMessage(event.data)
+      } else if (event.type === 'disconnected' || event.type === 'error') {
+        cleanup()
+        reject(new Error('Transport closed before init completed'))
+      }
+    }
+
+    const handleMessage = (data: Uint8Array) => {
+      if (data.length < 2) return
+      const msgType = (data[0] << 8) | data[1]
+
+      switch (msgType) {
+        case 16: {
+          try {
+            const remoteInit = decodeInitMessage(data)
+            const negotiated = negotiateFeatures(localFeatureVector, remoteInit.features)
+            if (!negotiated) {
+              throw new Error('Feature negotiation failed')
+            }
+
+            cleanup()
+            resolve({ remoteInit, negotiatedFeatures: negotiated })
+          } catch (error) {
+            cleanup()
+            reject(error instanceof Error ? error : new Error('Init decode failed'))
+          }
+          break
+        }
+        case 18: {
+          // ping → responder com pong
+          respondPong(data)
+          break
+        }
+        case 19: {
+          // pong → ignorar (keepalive)
+          break
+        }
+        default:
+          // Ignorar outras mensagens até completar init
+          break
+      }
+    }
+
+    const respondPong = (pingData: Uint8Array) => {
+      if (pingData.length < 4) return
+      const numPongBytes = (pingData[2] << 8) | pingData[3]
+      const pongMsg = new Uint8Array(4 + numPongBytes)
+      pongMsg[0] = 0
+      pongMsg[1] = 19 // pong type
+      pongMsg[2] = (numPongBytes >> 8) & 0xff
+      pongMsg[3] = numPongBytes & 0xff
+      transport.sendMessage(pongMsg)
+    }
+
+    transport.addListener('transport', onTransportEvent)
+  })
 }
 
 // ==========================================

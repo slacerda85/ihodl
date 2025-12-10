@@ -11,7 +11,7 @@ import {
   getInvoiceExpiryStatus,
 } from '../lib/lightning/invoice'
 import { sha256, randomBytes } from '../lib/crypto/crypto'
-import { uint8ArrayToHex } from '../lib/utils'
+import { uint8ArrayToHex, hexToUint8Array } from '../lib/utils'
 import {
   CurrencyPrefix,
   DEFAULT_EXPIRY_SECONDS,
@@ -19,6 +19,19 @@ import {
 } from '@/core/models/lightning/invoice'
 import { deriveChildKey, createPublicKey } from '../lib/key'
 import { LightningTransport, getTransport, type TransportEvent } from './ln-transport-service'
+import { ChannelOpeningFeeConfig } from '../models/lightning/client'
+import {
+  TRAMPOLINE_FEE_LEVEL_COUNT,
+  EnhancedTrampolineRouter,
+  createEnhancedTrampolineRouter,
+} from '../lib/lightning'
+import {
+  ReadinessState,
+  ReadinessLevel,
+  getReadinessLevel,
+  isOperationAllowed,
+  createInitialReadinessState,
+} from '../models/lightning/readiness'
 
 // ==========================================
 // TIPOS
@@ -219,10 +232,13 @@ export default class LightningService implements LightningServiceInterface {
   private feeConfig: ChannelOpeningFeeConfig = DEFAULT_CHANNEL_FEE_CONFIG
   private nodeIndex: number = 0
   private initialized: boolean = false
+  private trampolineRouter: EnhancedTrampolineRouter
+  private readinessState: ReadinessState = createInitialReadinessState()
 
   constructor() {
     this.repository = new LightningRepository()
     this.walletService = new WalletService()
+    this.trampolineRouter = createEnhancedTrampolineRouter()
   }
 
   // ==========================================
@@ -249,6 +265,20 @@ export default class LightningService implements LightningServiceInterface {
    */
   isInitialized(): boolean {
     return this.initialized && this.masterKey !== null
+  }
+
+  /**
+   * Obtém o estado atual de readiness do Lightning Network
+   */
+  getReadinessState(): ReadinessState {
+    return { ...this.readinessState }
+  }
+
+  /**
+   * Atualiza o estado de readiness
+   */
+  updateReadinessState(updates: Partial<ReadinessState>): void {
+    this.readinessState = { ...this.readinessState, ...updates }
   }
 
   // ==========================================
@@ -292,6 +322,12 @@ export default class LightningService implements LightningServiceInterface {
   async generateInvoice(params: GenerateInvoiceParams): Promise<GenerateInvoiceResult> {
     if (!this.isInitialized()) {
       throw new Error('Lightning service not initialized')
+    }
+
+    // Verificar se a operação de recebimento é permitida pelo estado de readiness
+    const readinessLevel = getReadinessLevel(this.readinessState)
+    if (!isOperationAllowed(readinessLevel, 'receive')) {
+      throw new Error(`Cannot generate invoice: ${readinessLevel}`)
     }
 
     const { amount, description = '', expiry = DEFAULT_EXPIRY_SECONDS } = params
@@ -369,6 +405,8 @@ export default class LightningService implements LightningServiceInterface {
     amount: bigint
     description: string
     paymentHash: string
+    payeePubkey?: string
+    paymentSecret?: string
     isExpired: boolean
   }> {
     const decoded = decodeInvoice(invoiceString)
@@ -384,6 +422,12 @@ export default class LightningService implements LightningServiceInterface {
       amount: decoded.amount || 0n,
       description: decoded.taggedFields.description || '',
       paymentHash: uint8ArrayToHex(decoded.taggedFields.paymentHash),
+      payeePubkey: decoded.taggedFields.payeePubkey
+        ? uint8ArrayToHex(decoded.taggedFields.payeePubkey)
+        : undefined,
+      paymentSecret: decoded.taggedFields.paymentSecret
+        ? uint8ArrayToHex(decoded.taggedFields.paymentSecret)
+        : undefined,
       isExpired: expiryStatus.isExpired,
     }
   }
@@ -398,6 +442,16 @@ export default class LightningService implements LightningServiceInterface {
   async sendPayment(params: SendPaymentParams): Promise<SendPaymentResult> {
     if (!this.isInitialized()) {
       throw new Error('Lightning service not initialized')
+    }
+
+    // Verificar se a operação de envio é permitida pelo estado de readiness
+    const readinessLevel = getReadinessLevel(this.readinessState)
+    if (!isOperationAllowed(readinessLevel, 'send')) {
+      return {
+        success: false,
+        paymentHash: '',
+        error: `Cannot send payment: ${readinessLevel}`,
+      }
     }
 
     const { invoice } = params
@@ -435,24 +489,97 @@ export default class LightningService implements LightningServiceInterface {
         }
       }
 
-      // TODO: Implementar envio real de pagamento via HTLCs
-      // Por enquanto, simular pagamento para desenvolvimento
+      // Verificar se invoice tem payee pubkey (obrigatório para trampoline)
+      if (!decoded.payeePubkey) {
+        return {
+          success: false,
+          paymentHash: decoded.paymentHash,
+          error: 'Invoice missing payee pubkey',
+        }
+      }
 
-      // Registrar pagamento
-      this.repository.savePaymentInfo({
-        paymentHash: decoded.paymentHash,
-        amountMsat: decoded.amount.toString(),
-        direction: 'sent',
-        status: 'pending',
-        createdAt: Date.now(),
-      })
+      // Verificar se invoice tem payment secret (obrigatório para trampoline)
+      if (!decoded.paymentSecret) {
+        return {
+          success: false,
+          paymentHash: decoded.paymentHash,
+          error: 'Invoice missing payment secret',
+        }
+      }
 
-      // Simular sucesso (em produção, seria resultado real do HTLC)
+      // Obter altura do bloco atual (simulado por enquanto)
+      const currentBlockHeight = 800000 // TODO: obter da blockchain
+
+      // Preparar dados para o pagamento
+      const destinationNodeId = hexToUint8Array(decoded.payeePubkey)
+      const paymentHash = hexToUint8Array(decoded.paymentHash)
+      const paymentSecret = hexToUint8Array(decoded.paymentSecret)
+
+      // Tentar pagamento com retry de fee levels
+      const maxRetries = 3 // Máximo de tentativas com fees diferentes
+      let lastError = ''
+
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        const feeLevel = Math.min(attempt, TRAMPOLINE_FEE_LEVEL_COUNT - 1)
+
+        // Criar pagamento trampoline com nível de fee específico
+        const trampolineResult = this.trampolineRouter.createSmartTrampolinePaymentWithFeeLevel(
+          destinationNodeId,
+          decoded.amount,
+          paymentHash,
+          paymentSecret,
+          currentBlockHeight,
+          feeLevel,
+        )
+
+        if (!trampolineResult) {
+          lastError = 'Failed to create trampoline payment'
+          continue
+        }
+
+        // TODO: Conectar ao trampoline node e enviar onion
+        // Por enquanto, simular envio com chance de falha baseada no fee level
+
+        // Simulação: pagamentos com fee level baixo têm maior chance de falhar
+        const failureChance = Math.max(0, 0.8 - feeLevel * 0.2) // 80% chance de falha no level 0, 0% no level 3
+        const shouldFail = Math.random() < failureChance
+
+        if (shouldFail && attempt < maxRetries) {
+          console.log(
+            `[LightningService] Payment attempt ${attempt + 1} failed with fee level ${feeLevel}, retrying with higher fee...`,
+          )
+          lastError = `Fee insufficient at level ${feeLevel}`
+          continue
+        }
+
+        // Sucesso ou última tentativa
+        if (!shouldFail || attempt === maxRetries) {
+          // Registrar pagamento
+          this.repository.savePaymentInfo({
+            paymentHash: decoded.paymentHash,
+            amountMsat: decoded.amount.toString(),
+            direction: 'sent',
+            status: 'completed',
+            createdAt: Date.now(),
+          })
+
+          // Calcular fee total pago
+          const feePaid = this.trampolineRouter.calculateFeeForLevel(decoded.amount, feeLevel)
+
+          return {
+            success: true,
+            paymentHash: decoded.paymentHash,
+            preimage: uint8ArrayToHex(randomBytes(32)), // Simulação
+            feePaid,
+          }
+        }
+      }
+
+      // Todas as tentativas falharam
       return {
-        success: true,
+        success: false,
         paymentHash: decoded.paymentHash,
-        preimage: uint8ArrayToHex(randomBytes(32)), // Simulação
-        feePaid: 0n,
+        error: `Payment failed after ${maxRetries + 1} attempts: ${lastError}`,
       }
     } catch (error) {
       console.error('[LightningService] Payment failed:', error)

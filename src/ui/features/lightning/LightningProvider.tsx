@@ -25,7 +25,7 @@ import LightningService, {
   connectToPeer as connectToPeerService,
   disconnect as disconnectService,
   sendPing as sendPingService,
-} from '@/core/services/lightning'
+} from '@/core/services/ln-service'
 import { walletService } from '@/core/services'
 import { useLightningStartup } from './hooks/useLightningStartup'
 
@@ -33,6 +33,7 @@ import { LightningContext, type LightningContextType } from './context'
 import type { LightningState, Invoice, Payment, Channel, Millisatoshis } from './types'
 import { INITIAL_LIGHTNING_STATE, INITIAL_CONNECTION_STATE } from './types'
 import { mapServiceInvoices, mapServicePayments } from './utils'
+import { getReadinessLevel } from '@/core/models/lightning/readiness'
 
 // ==========================================
 // CONSTANTS (React Compiler não suporta BigInt literals inline)
@@ -141,17 +142,20 @@ export default function LightningProvider({
       await service.initialize(walletId)
 
       // Carregar dados iniciais em paralelo
-      const [balance, channels, invoices, payments] = await Promise.all([
+      const [balance, channels, invoices, payments, readinessState] = await Promise.all([
         service.getBalance(),
         service.getChannels(),
         service.getInvoices(),
         service.getPayments(),
+        service.getReadinessState(),
       ])
 
       setState(prev => ({
         ...prev,
         isInitialized: true,
         isLoading: false,
+        readinessState,
+        readinessLevel: getReadinessLevel(readinessState),
         totalBalance: balance,
         channels,
         hasActiveChannels: channels.some(ch => ch.isActive),
@@ -515,6 +519,8 @@ export default function LightningProvider({
     () => ({
       state,
       initStatus,
+      readinessState: state.readinessState,
+      readinessLevel: state.readinessLevel,
       initialize,
       generateInvoice,
       decodeInvoice,

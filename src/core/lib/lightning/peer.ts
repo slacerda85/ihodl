@@ -1118,6 +1118,7 @@ export interface PeerInfo {
   port: number
   state: PeerState
   connectedAt?: number
+  features?: Uint8Array
 }
 
 /**
@@ -1129,6 +1130,17 @@ export interface PeerConnectionResult {
   connection?: LightningConnection
   message?: string
   error?: Error
+}
+
+/**
+ * Política de reconexão automática
+ */
+export interface ReconnectionPolicy {
+  enabled: boolean
+  maxAttempts: number
+  initialDelay: number // ms
+  maxDelay: number // ms
+  backoffMultiplier: number
 }
 
 /**
@@ -1145,6 +1157,16 @@ export interface PeerWithPubkey extends PeerType {
 export class PeerManager {
   private connectedPeers: Map<string, LightningConnection> = new Map()
   private peerStates: Map<string, PeerState> = new Map()
+  private reconnectionPolicy: ReconnectionPolicy = {
+    enabled: true,
+    maxAttempts: 5,
+    initialDelay: 1000,
+    maxDelay: 30000,
+    backoffMultiplier: 2,
+  }
+  private reconnectionTimers: Map<string, ReturnType<typeof setTimeout>> = new Map()
+  private reconnectionAttempts: Map<string, number> = new Map()
+  private connectedAt: Map<string, number> = new Map()
 
   /**
    * Conecta a um peer específico da rede Lightning
@@ -1175,6 +1197,7 @@ export class PeerManager {
       // Registrar peer conectado
       this.connectedPeers.set(peerId, connection)
       this.peerStates.set(peerId, PeerState.CONNECTED)
+      this.connectedAt.set(peerId, Date.now())
 
       // Persistir estado do peer
       lightningRepository.savePeer({
@@ -1219,6 +1242,7 @@ export class PeerManager {
       // Limpar estado
       this.connectedPeers.delete(peerId)
       this.peerStates.set(peerId, PeerState.DISCONNECTED)
+      this.connectedAt.delete(peerId)
 
       // Atualizar persistência
       const peerData = lightningRepository.findPeerById(peerId)
@@ -1248,7 +1272,7 @@ export class PeerManager {
         host: peerId.split(':')[0],
         port: parseInt(peerId.split(':')[1]),
         state,
-        connectedAt: Date.now(), // TODO: armazenar timestamp real
+        connectedAt: this.connectedAt.get(peerId),
       })
     }
 
@@ -1276,10 +1300,17 @@ export class PeerManager {
     try {
       const persistedPeers = lightningRepository.findAllPeers()
 
-      for (const peerId of Object.keys(persistedPeers)) {
-        // TODO: Implementar reconexão automática baseada em configuração
-        // Por enquanto, apenas registra estado
-        this.peerStates.set(peerId, PeerState.DISCONNECTED)
+      for (const peerData of Object.values(persistedPeers)) {
+        const peerId = peerData.nodeId
+
+        if (this.reconnectionPolicy.enabled) {
+          // Iniciar reconexão automática
+          this.scheduleReconnection(peerData)
+        } else {
+          // Apenas registrar estado
+          this.peerStates.set(peerId, PeerState.DISCONNECTED)
+        }
+
         console.log(`[lightning] Loaded persisted peer: ${peerId}`)
       }
     } catch (error) {
@@ -1570,5 +1601,86 @@ export class PeerManager {
       socket.on('data', onData)
       socket.on('error', onError)
     })
+  }
+
+  /**
+   * Agenda reconexão automática para um peer
+   */
+  private scheduleReconnection(peerData: PersistedPeer): void {
+    const peerId = peerData.nodeId
+
+    // Cancelar reconexão existente se houver
+    this.cancelReconnection(peerId)
+
+    // Resetar contador de tentativas
+    this.reconnectionAttempts.set(peerId, 0)
+
+    // Agendar primeira tentativa
+    this.attemptReconnection(peerData)
+  }
+
+  /**
+   * Tenta reconectar a um peer com backoff exponencial
+   */
+  private attemptReconnection(peerData: PersistedPeer): void {
+    const peerId = peerData.nodeId
+    const attempts = this.reconnectionAttempts.get(peerId) || 0
+
+    if (attempts >= this.reconnectionPolicy.maxAttempts) {
+      console.log(`[lightning] Max reconnection attempts reached for peer: ${peerId}`)
+      return
+    }
+
+    // Calcular delay com backoff exponencial
+    const delay = Math.min(
+      this.reconnectionPolicy.initialDelay *
+        Math.pow(this.reconnectionPolicy.backoffMultiplier, attempts),
+      this.reconnectionPolicy.maxDelay,
+    )
+
+    console.log(
+      `[lightning] Scheduling reconnection attempt ${attempts + 1}/${this.reconnectionPolicy.maxAttempts} for peer: ${peerId} in ${delay}ms`,
+    )
+
+    const timer = setTimeout(async () => {
+      try {
+        // Tentar conectar
+        const peer: PeerWithPubkey = {
+          host: peerData.host,
+          port: peerData.port,
+          pubkey: peerData.pubkey,
+        }
+
+        const result = await this.connectPeer(peer)
+
+        if (result.success) {
+          console.log(`[lightning] Successfully reconnected to peer: ${peerId}`)
+          this.reconnectionTimers.delete(peerId)
+          this.reconnectionAttempts.delete(peerId)
+        } else {
+          // Agendar próxima tentativa
+          this.reconnectionAttempts.set(peerId, attempts + 1)
+          this.attemptReconnection(peerData)
+        }
+      } catch (error) {
+        console.error(`[lightning] Reconnection attempt failed for peer ${peerId}:`, error)
+        // Agendar próxima tentativa
+        this.reconnectionAttempts.set(peerId, attempts + 1)
+        this.attemptReconnection(peerData)
+      }
+    }, delay)
+
+    this.reconnectionTimers.set(peerId, timer)
+  }
+
+  /**
+   * Cancela reconexão agendada para um peer
+   */
+  private cancelReconnection(peerId: string): void {
+    const timer = this.reconnectionTimers.get(peerId)
+    if (timer) {
+      clearTimeout(timer)
+      this.reconnectionTimers.delete(peerId)
+    }
   }
 }

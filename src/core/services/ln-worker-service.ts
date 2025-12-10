@@ -5,8 +5,8 @@
 
 import { LightningWorker } from '../lib/lightning/worker'
 import { WatchtowerService } from './ln-watchtower-service'
-import { LightningMonitorService } from './lightningMonitor'
-import { PeerConnectivityService } from './peerConnectivity'
+import { LightningMonitorService } from './ln-monitor-service'
+import { PeerConnectivityService } from './ln-peer-service'
 import EventEmitter from 'eventemitter3'
 
 // ==========================================
