@@ -132,10 +132,10 @@ export interface SendTransactionParams {
 }
 
 export interface BuildBatchTransactionParams {
-  transactions: Array<{
+  transactions: {
     recipientAddress: string
     amount: number // in satoshis
-  }>
+  }[]
   feeRate: number // sat/vB
   utxos: Utxo[]
   changeAddress: string

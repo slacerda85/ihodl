@@ -17,6 +17,7 @@ import { createPublicKey, splitMasterKey } from '@/core/lib/key'
 import type { KeyPair } from '@/core/models/lightning/transport'
 import { performInitExchange } from './ln-transport-service'
 import { uint8ArrayToHex } from '@/core/lib/utils'
+import { getBootstrapPeers } from '@/core/lib/lightning/dns-bootstrap'
 
 interface PeerRepository {
   savePeer(peer: PersistedPeer): void
@@ -509,6 +510,37 @@ export class PeerConnectivityService extends EventEmitter {
           this.addPeer(peer.nodeId, peer.address, peer.port)
           loadedPeers.add(peerKey)
         }
+      }
+    }
+
+    // 4. Try DNS bootstrap as last resort if we still don't have enough peers
+    if (loadedPeers.size < Math.max(3, this.config.maxPeers)) {
+      console.log('[PeerConnectivity] Attempting DNS bootstrap for additional peers...')
+
+      try {
+        const dnsPeers = await getBootstrapPeers()
+
+        if (dnsPeers.length > 0) {
+          console.log(`[PeerConnectivity] Found ${dnsPeers.length} peers via DNS bootstrap`)
+
+          // Add DNS-discovered peers (limit to avoid too many)
+          const maxDnsPeers = Math.min(5, this.config.maxPeers - loadedPeers.size)
+
+          for (const peer of dnsPeers.slice(0, maxDnsPeers)) {
+            if (peer.nodeId) {
+              const peerKey = `${uint8ArrayToHex(peer.nodeId)}@${peer.host}:${peer.port}`
+              if (!loadedPeers.has(peerKey)) {
+                console.log(`[PeerConnectivity] Adding DNS peer: ${peer.host}:${peer.port}`)
+                this.addPeer(uint8ArrayToHex(peer.nodeId), peer.host, peer.port)
+                loadedPeers.add(peerKey)
+              }
+            }
+          }
+        } else {
+          console.log('[PeerConnectivity] No peers found via DNS bootstrap')
+        }
+      } catch (error) {
+        console.warn('[PeerConnectivity] DNS bootstrap failed:', error)
       }
     }
 

@@ -11,6 +11,8 @@ export type { LightningProviderProps } from './LightningProvider'
 // Components
 export { LightningReadinessGuard } from './LightningReadinessGuard'
 export { LightningReadinessStatus } from './LightningReadinessStatus'
+export { LightningInitStatus } from './LightningInitStatus'
+export { LightningTrafficControlStatus } from './LightningTrafficControlStatus'
 
 // Context
 export { LightningContext } from './context'
@@ -61,9 +63,11 @@ export {
   useCanLoopOut,
   useCpfp,
   useHtlcMonitor,
+  useTrafficControl,
+  useCanConnect,
+  useWalletAvailability,
+  useDisconnectCount,
 } from './hooks'
-
-// Utils
 export {
   mapServiceInvoice,
   mapServicePayment,

@@ -13,7 +13,7 @@ import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { useIsDark } from '@/ui/features/app-provider'
 import { formatBalance } from '../utils'
-import { useLightning } from '../../lightning/LightningProvider'
+import { useLightningState, useLightningActions } from '@/ui/features/app-provider'
 
 /**
  * SendLightning Component
@@ -27,7 +27,8 @@ import { useLightning } from '../../lightning/LightningProvider'
 export default function SendLightning() {
   const router = useRouter()
   const isDark = useIsDark()
-  const { state: lightningState, sendPayment, decodeInvoice } = useLightning()
+  const lightningState = useLightningState()
+  const { sendPayment, decodeInvoice } = useLightningActions()
 
   const [submitting, setSubmitting] = useState<boolean>(false)
   const [lightningInvoice, setLightningInvoice] = useState<string>('')

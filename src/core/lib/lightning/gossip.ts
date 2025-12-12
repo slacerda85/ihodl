@@ -70,6 +70,8 @@ export interface GossipSyncStats {
   repliesReceived: number
   lastSyncTimestamp: number
   syncProgress: number // 0.0 - 1.0
+  messagesProcessed: number
+  errors: number
 }
 
 /**
@@ -531,6 +533,8 @@ export class GossipSync {
       repliesReceived: 0,
       lastSyncTimestamp: 0,
       syncProgress: 0,
+      messagesProcessed: 0,
+      errors: 0,
     }
   }
 
@@ -1429,6 +1433,8 @@ export class GossipSync {
       repliesReceived: 0,
       lastSyncTimestamp: 0,
       syncProgress: 0,
+      messagesProcessed: 0,
+      errors: 0,
     }
   }
 }

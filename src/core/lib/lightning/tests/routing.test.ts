@@ -15,6 +15,12 @@ import { Point } from '@/core/models/lightning/base'
 import { BlindedPath, OnionmsgTlv } from '@/core/models/lightning/routing'
 import * as secp256k1 from 'secp256k1'
 
+// ==========================================
+// ROUTING GRAPH TESTS
+// ==========================================
+
+import { RoutingGraph, RoutingNode, RoutingChannel } from '../routing'
+
 // BOLT #4 Test Vectors
 const boltPubkeys = [
   new Uint8Array([
@@ -244,12 +250,6 @@ describe('routing', () => {
     // Add more test vectors for error packets, etc.
   })
 })
-
-// ==========================================
-// ROUTING GRAPH TESTS
-// ==========================================
-
-import { RoutingGraph, RoutingNode, RoutingChannel } from '../routing'
 
 describe('RoutingGraph', () => {
   let graph: RoutingGraph

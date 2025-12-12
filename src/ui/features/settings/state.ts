@@ -130,7 +130,7 @@ export type ColorMode = 'light' | 'dark' | 'auto'
 // Default Lightning Settings
 export const defaultLightningSettings: LightningSettings = {
   network: 'mainnet',
-  trampolineRoutingEnabled: false,
+  trampolineRoutingEnabled: true, // Iniciar em trampoline mode por padrão
   zeroConfEnabled: false,
   mppEnabled: true,
   feeConfig: {

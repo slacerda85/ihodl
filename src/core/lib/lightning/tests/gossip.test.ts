@@ -31,6 +31,9 @@ import {
   MessageFlag,
 } from '@/core/models/lightning/p2p'
 import { uint8ArrayToHex, hexToUint8Array } from '@/core/lib/utils'
+import { sha256, signMessage } from '@/core/lib/crypto/crypto'
+import * as secp256k1 from 'secp256k1'
+import * as Crypto from 'expo-crypto'
 
 // Helper: Create test chain hash
 function createTestChainHash(): Uint8Array {
@@ -371,11 +374,33 @@ describe('Gossip Announcement Decoding', () => {
 
   describe('channel_announcement (type 256)', () => {
     it('should decode valid channel_announcement', async () => {
-      // Build minimal channel_announcement
-      const nodeId1 = createTestNodeId(1)
-      const nodeId2 = createTestNodeId(2)
-      const bitcoinKey1 = createTestNodeId(3)
-      const bitcoinKey2 = createTestNodeId(4)
+      // Generate real private keys for signing
+      let priv1: Uint8Array
+      do {
+        priv1 = Crypto.getRandomValues(new Uint8Array(32))
+      } while (!secp256k1.privateKeyVerify(priv1))
+
+      let priv2: Uint8Array
+      do {
+        priv2 = Crypto.getRandomValues(new Uint8Array(32))
+      } while (!secp256k1.privateKeyVerify(priv2))
+
+      let priv3: Uint8Array
+      do {
+        priv3 = Crypto.getRandomValues(new Uint8Array(32))
+      } while (!secp256k1.privateKeyVerify(priv3))
+
+      let priv4: Uint8Array
+      do {
+        priv4 = Crypto.getRandomValues(new Uint8Array(32))
+      } while (!secp256k1.privateKeyVerify(priv4))
+
+      // Derive compressed pubkeys
+      const nodeId1 = secp256k1.publicKeyCreate(priv1, true)
+      const nodeId2 = secp256k1.publicKeyCreate(priv2, true)
+      const bitcoinKey1 = secp256k1.publicKeyCreate(priv3, true)
+      const bitcoinKey2 = secp256k1.publicKeyCreate(priv4, true)
+
       const scid = createTestShortChannelId(700000, 1, 0)
 
       // Message structure:
@@ -390,15 +415,11 @@ describe('Gossip Announcement Decoding', () => {
       view.setUint16(0, GossipMessageType.CHANNEL_ANNOUNCEMENT, false)
       offset = 2
 
-      // Signatures
-      message.set(createTestSignature(1), offset)
-      offset += 64
-      message.set(createTestSignature(2), offset)
-      offset += 64
-      message.set(createTestSignature(3), offset)
-      offset += 64
-      message.set(createTestSignature(4), offset)
-      offset += 64
+      // Zero signatures initially
+      for (let i = 0; i < 4; i++) {
+        message.set(new Uint8Array(64), offset)
+        offset += 64
+      }
 
       // Features (length 0)
       view.setUint16(offset, 0, false)
@@ -420,6 +441,25 @@ describe('Gossip Announcement Decoding', () => {
       message.set(bitcoinKey1, offset)
       offset += 33
       message.set(bitcoinKey2, offset)
+
+      // Compute hash for signing (double SHA256 of the message)
+      const hash = sha256(sha256(message))
+
+      // Sign with each private key
+      const sig1 = signMessage(hash, priv1)
+      const sig2 = signMessage(hash, priv2)
+      const sig3 = signMessage(hash, priv3)
+      const sig4 = signMessage(hash, priv4)
+
+      // Set the signatures in the message
+      offset = 2
+      message.set(sig1, offset)
+      offset += 64
+      message.set(sig2, offset)
+      offset += 64
+      message.set(sig3, offset)
+      offset += 64
+      message.set(sig4, offset)
 
       // Process
       await gossipSync.handleIncomingMessage(message)

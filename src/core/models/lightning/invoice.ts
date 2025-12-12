@@ -92,7 +92,7 @@ export interface InvoiceTaggedFields {
 
 // Invoice structure
 export interface Invoice {
-  currency: CurrencyPrefix
+  currency: string
   amount?: bigint // amount in millisatoshis, undefined for donation
   timestamp: number // seconds since Unix epoch
   taggedFields: InvoiceTaggedFields
@@ -107,7 +107,7 @@ export interface InvoiceParseResult {
 
 // Invoice creation parameters
 export interface InvoiceCreateParams {
-  currency: CurrencyPrefix
+  currency?: string
   amount?: bigint
   paymentHash: PaymentHash
   paymentSecret?: PaymentSecret

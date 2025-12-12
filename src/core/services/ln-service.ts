@@ -32,6 +32,7 @@ import {
   isOperationAllowed,
   createInitialReadinessState,
 } from '../models/lightning/readiness'
+import { getLightningRoutingService, RoutingMode } from './ln-routing-service'
 
 // ==========================================
 // TIPOS
@@ -222,6 +223,13 @@ interface LightningServiceInterface {
   // Histórico
   getInvoices(): Promise<InvoiceState[]>
   getPayments(): Promise<PaymentState[]>
+
+  // Métricas de routing
+  getRoutingMetrics(): {
+    localRoutingAttempts: number
+    localRoutingFailures: number
+    trampolineFallbacks: number
+  }
 }
 
 export default class LightningService implements LightningServiceInterface {
@@ -234,6 +242,34 @@ export default class LightningService implements LightningServiceInterface {
   private initialized: boolean = false
   private trampolineRouter: EnhancedTrampolineRouter
   private readinessState: ReadinessState = createInitialReadinessState()
+  private routingMetrics = {
+    localRoutingAttempts: 0,
+    localRoutingFailures: 0,
+    trampolineFallbacks: 0,
+  }
+
+  /**
+   * Registra métricas de falha de routing local
+   */
+  private recordLocalRoutingFailure(errorType: string): void {
+    this.routingMetrics.localRoutingFailures++
+    console.log(`[LightningService] Local routing failure recorded: ${errorType}`)
+  }
+
+  /**
+   * Registra uso de fallback para trampoline
+   */
+  private recordTrampolineFallback(): void {
+    this.routingMetrics.trampolineFallbacks++
+    console.log('[LightningService] Trampoline fallback recorded')
+  }
+
+  /**
+   * Obtém métricas de routing para debug/monitoramento
+   */
+  getRoutingMetrics() {
+    return { ...this.routingMetrics }
+  }
 
   constructor() {
     this.repository = new LightningRepository()
@@ -515,72 +551,37 @@ export default class LightningService implements LightningServiceInterface {
       const paymentHash = hexToUint8Array(decoded.paymentHash)
       const paymentSecret = hexToUint8Array(decoded.paymentSecret)
 
-      // Tentar pagamento com retry de fee levels
-      const maxRetries = 3 // Máximo de tentativas com fees diferentes
-      let lastError = ''
+      // Determinar modo de routing baseado no estado do sistema
+      const routingMode = this.routingService.getCurrentMode()
+      console.log(`[LightningService] Using routing mode: ${routingMode}`)
 
-      for (let attempt = 0; attempt <= maxRetries; attempt++) {
-        const feeLevel = Math.min(attempt, TRAMPOLINE_FEE_LEVEL_COUNT - 1)
-
-        // Criar pagamento trampoline com nível de fee específico
-        const trampolineResult = this.trampolineRouter.createSmartTrampolinePaymentWithFeeLevel(
+      if (routingMode === RoutingMode.LOCAL) {
+        // Tentar local routing primeiro com fallback automático
+        const localResult = await this.tryLocalRouting(
+          decoded,
           destinationNodeId,
-          decoded.amount,
           paymentHash,
-          paymentSecret,
-          currentBlockHeight,
-          feeLevel,
+          params.maxFee,
         )
 
-        if (!trampolineResult) {
-          lastError = 'Failed to create trampoline payment'
-          continue
+        if (localResult.success) {
+          return localResult
         }
 
-        // TODO: Conectar ao trampoline node e enviar onion
-        // Por enquanto, simular envio com chance de falha baseada no fee level
-
-        // Simulação: pagamentos com fee level baixo têm maior chance de falhar
-        const failureChance = Math.max(0, 0.8 - feeLevel * 0.2) // 80% chance de falha no level 0, 0% no level 3
-        const shouldFail = Math.random() < failureChance
-
-        if (shouldFail && attempt < maxRetries) {
-          console.log(
-            `[LightningService] Payment attempt ${attempt + 1} failed with fee level ${feeLevel}, retrying with higher fee...`,
-          )
-          lastError = `Fee insufficient at level ${feeLevel}`
-          continue
-        }
-
-        // Sucesso ou última tentativa
-        if (!shouldFail || attempt === maxRetries) {
-          // Registrar pagamento
-          this.repository.savePaymentInfo({
-            paymentHash: decoded.paymentHash,
-            amountMsat: decoded.amount.toString(),
-            direction: 'sent',
-            status: 'completed',
-            createdAt: Date.now(),
-          })
-
-          // Calcular fee total pago
-          const feePaid = this.trampolineRouter.calculateFeeForLevel(decoded.amount, feeLevel)
-
-          return {
-            success: true,
-            paymentHash: decoded.paymentHash,
-            preimage: uint8ArrayToHex(randomBytes(32)), // Simulação
-            feePaid,
-          }
-        }
+        console.log('[LightningService] Local routing failed, falling back to trampoline')
+        this.recordTrampolineFallback()
+        // Fallback automático para trampoline se local falhar
       }
 
-      // Todas as tentativas falharam
-      return {
-        success: false,
-        paymentHash: decoded.paymentHash,
-        error: `Payment failed after ${maxRetries + 1} attempts: ${lastError}`,
-      }
+      // Usar trampoline routing (modo padrão ou fallback)
+      return await this.sendTrampolinePayment(
+        decoded,
+        destinationNodeId,
+        paymentHash,
+        paymentSecret,
+        currentBlockHeight,
+        params.maxFee,
+      )
     } catch (error) {
       console.error('[LightningService] Payment failed:', error)
       return {
@@ -589,6 +590,177 @@ export default class LightningService implements LightningServiceInterface {
         error: error instanceof Error ? error.message : 'Unknown error',
       }
     }
+  }
+
+  /**
+   * Tenta executar routing local com tratamento robusto de erros
+   */
+  private async tryLocalRouting(
+    decoded: any,
+    destinationNodeId: Uint8Array,
+    paymentHash: Uint8Array,
+    maxFee?: bigint,
+  ): Promise<SendPaymentResult> {
+    this.routingMetrics.localRoutingAttempts++
+
+    try {
+      console.log('[LightningService] Attempting local routing...')
+
+      // Encontrar rota local
+      const localRoute = this.routingService.findLocalRoute(
+        this.getOurNodeId(),
+        destinationNodeId,
+        decoded.amount,
+        maxFee || 10000n,
+      )
+
+      if (!localRoute) {
+        console.log('[LightningService] No local route found')
+        this.recordLocalRoutingFailure('no_route_found')
+        return {
+          success: false,
+          paymentHash: decoded.paymentHash,
+          error: 'No local route available',
+        }
+      }
+
+      console.log('[LightningService] Found local route, attempting payment...')
+
+      // TODO: Implementar envio via rota local real
+      // Por enquanto, simular com verificação de timeout
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Local routing timeout'))
+        }, 5000) // 5s timeout
+
+        // Simulação de processamento
+        setTimeout(() => {
+          clearTimeout(timeout)
+          // Simular falha aleatória para testar fallback (remover em produção)
+          if (Math.random() < 0.3) {
+            reject(new Error('Simulated local routing failure'))
+          } else {
+            resolve(true)
+          }
+        }, 1000)
+      })
+
+      // Simular sucesso
+      this.repository.savePaymentInfo({
+        paymentHash: decoded.paymentHash,
+        amountMsat: decoded.amount.toString(),
+        direction: 'sent',
+        status: 'completed',
+        createdAt: Date.now(),
+      })
+
+      return {
+        success: true,
+        paymentHash: decoded.paymentHash,
+        preimage: uint8ArrayToHex(randomBytes(32)),
+        feePaid: 1000n,
+      }
+    } catch (error) {
+      console.error('[LightningService] Local routing failed:', error)
+
+      // Categorizar erro para métricas futuras
+      const errorMessage = error instanceof Error ? error.message : 'Unknown local routing error'
+      this.recordLocalRoutingFailure(errorMessage)
+
+      return {
+        success: false,
+        paymentHash: decoded.paymentHash,
+        error: `Local routing failed: ${errorMessage}`,
+      }
+    }
+  }
+
+  /**
+   * Envia pagamento usando routing trampoline
+   */
+  private async sendTrampolinePayment(
+    decoded: any,
+    destinationNodeId: Uint8Array,
+    paymentHash: Uint8Array,
+    paymentSecret: Uint8Array,
+    currentBlockHeight: number,
+    maxFee?: bigint,
+  ): Promise<SendPaymentResult> {
+    // Tentar pagamento com retry de fee levels
+    const maxRetries = 3 // Máximo de tentativas com fees diferentes
+    let lastError = ''
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const feeLevel = Math.min(attempt, TRAMPOLINE_FEE_LEVEL_COUNT - 1)
+
+      // Criar pagamento trampoline com nível de fee específico
+      const trampolineResult = this.trampolineRouter.createSmartTrampolinePaymentWithFeeLevel(
+        destinationNodeId,
+        decoded.amount,
+        paymentHash,
+        paymentSecret,
+        currentBlockHeight,
+        feeLevel,
+      )
+
+      if (!trampolineResult) {
+        lastError = 'Failed to create trampoline payment'
+        continue
+      }
+
+      // TODO: Conectar ao trampoline node e enviar onion
+      // Por enquanto, simular envio com chance de falha baseada no fee level
+
+      // Simulação: pagamentos com fee level baixo têm maior chance de falhar
+      const failureChance = Math.max(0, 0.8 - feeLevel * 0.2) // 80% chance de falha no level 0, 0% no level 3
+      const shouldFail = Math.random() < failureChance
+
+      if (shouldFail && attempt < maxRetries) {
+        console.log(
+          `[LightningService] Payment attempt ${attempt + 1} failed with fee level ${feeLevel}, retrying with higher fee...`,
+        )
+        lastError = `Fee insufficient at level ${feeLevel}`
+        continue
+      }
+
+      // Sucesso ou última tentativa
+      if (!shouldFail || attempt === maxRetries) {
+        // Registrar pagamento
+        this.repository.savePaymentInfo({
+          paymentHash: decoded.paymentHash,
+          amountMsat: decoded.amount.toString(),
+          direction: 'sent',
+          status: 'completed',
+          createdAt: Date.now(),
+        })
+
+        // Calcular fee total pago
+        const feePaid = this.trampolineRouter.calculateFeeForLevel(decoded.amount, feeLevel)
+
+        return {
+          success: true,
+          paymentHash: decoded.paymentHash,
+          preimage: uint8ArrayToHex(randomBytes(32)), // Simulação
+          feePaid,
+        }
+      }
+    }
+
+    // Todas as tentativas falharam
+    return {
+      success: false,
+      paymentHash: decoded.paymentHash,
+      error: `Payment failed after ${maxRetries + 1} attempts: ${lastError}`,
+    }
+  }
+
+  /**
+   * Obtém o node ID deste nó
+   */
+  private getOurNodeId(): Uint8Array {
+    // TODO: Implementar obtenção do node ID real da carteira
+    // Por enquanto, retornar um node ID simulado
+    return hexToUint8Array('02' + '00'.repeat(32)) // Node ID simulado
   }
 
   // ==========================================

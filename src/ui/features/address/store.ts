@@ -152,6 +152,28 @@ class AddressStore {
       nextChangeAddress: this.cachedNextAddresses.change,
     }
   }
+
+  // ==========================================
+  // ACTIONS OBJECT (para context)
+  // ==========================================
+
+  get actions(): AddressStoreActions {
+    return {
+      notify: this.notify.bind(this),
+      notifyLight: this.notifyLight.bind(this),
+      clear: this.clear.bind(this),
+    }
+  }
+}
+
+// ==========================================
+// ACTIONS INTERFACE
+// ==========================================
+
+export interface AddressStoreActions {
+  notify: () => void
+  notifyLight: () => void
+  clear: () => void
 }
 
 // ==========================================

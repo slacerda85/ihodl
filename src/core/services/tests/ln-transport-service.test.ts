@@ -1,4 +1,4 @@
-import { EventEmitter } from 'events'
+import { EventEmitter } from 'eventemitter3'
 import { performInitExchange } from '../ln-transport-service'
 import {
   createInitMessage,

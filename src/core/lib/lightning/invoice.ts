@@ -12,7 +12,6 @@
  */
 
 import {
-  CurrencyPrefix,
   AmountMultiplier,
   TaggedFieldType,
   PaymentSecret,
@@ -32,6 +31,7 @@ import { Sha256, Signature } from '@/core/models/lightning/base'
 import { sha256 } from '../crypto'
 import { signMessage, verifyMessage } from '../crypto/crypto'
 import { toWords, fromWords, encode, decode } from '../bips/bech32'
+import { getAllInvoicePrefixes, getNetworkConfig } from '@/config/network'
 import {
   concatUint8Arrays,
   writeUint32BE,
@@ -354,7 +354,8 @@ export function encodeInvoice(params: InvoiceCreateParams): string {
   const taggedWords = encodeTaggedFields(taggedFields)
 
   // Build human-readable part with currency and amount
-  const hrp = buildHumanReadablePart(params.currency, params.amount)
+  const currency = params.currency ?? getNetworkConfig().lightning.invoiceHrp
+  const hrp = buildHumanReadablePart(currency, params.amount)
 
   // Reconstruct the original data bytes for signing (timestamp + tagged fields data)
   const timestampBytes = new Uint8Array(4)
@@ -439,7 +440,7 @@ export function decodeInvoice(invoiceString: string): Invoice {
  * @param amount - Amount in millisatoshis (undefined for any-amount invoices)
  * @returns Human-readable part string
  */
-function buildHumanReadablePart(currency: CurrencyPrefix, amount?: bigint): string {
+function buildHumanReadablePart(currency: string, amount?: bigint): string {
   // Se amount for undefined ou 0, retornar apenas o currency (invoice sem valor fixo)
   if (!amount || amount === 0n) {
     return currency
@@ -484,7 +485,7 @@ function buildHumanReadablePart(currency: CurrencyPrefix, amount?: bigint): stri
  * @throws Error for unknown currency or invalid amount format
  */
 function parseHumanReadablePart(hrp: string): {
-  currency: CurrencyPrefix
+  currency: string
   amount: bigint | undefined
 } {
   // HRP should start with 'ln'
@@ -493,23 +494,19 @@ function parseHumanReadablePart(hrp: string): {
   }
 
   // Extract currency prefix (ln + currency code)
-  let currency: CurrencyPrefix
+  let currency: string | undefined
   let amountPart = ''
 
-  // Try different currency prefixes in order of length (longest first)
-  if (hrp.startsWith('lnbcrt')) {
-    currency = CurrencyPrefix.BITCOIN_REGTEST
-    amountPart = hrp.slice(6)
-  } else if (hrp.startsWith('lntbs')) {
-    currency = CurrencyPrefix.BITCOIN_SIGNET
-    amountPart = hrp.slice(5)
-  } else if (hrp.startsWith('lntb')) {
-    currency = CurrencyPrefix.BITCOIN_TESTNET
-    amountPart = hrp.slice(4)
-  } else if (hrp.startsWith('lnbc')) {
-    currency = CurrencyPrefix.BITCOIN_MAINNET
-    amountPart = hrp.slice(4)
-  } else {
+  const invoicePrefixes = getAllInvoicePrefixes().sort((a, b) => b.length - a.length)
+  for (const prefix of invoicePrefixes) {
+    if (hrp.startsWith(prefix)) {
+      currency = prefix
+      amountPart = hrp.slice(prefix.length)
+      break
+    }
+  }
+
+  if (!currency) {
     throw new Error(`Unknown currency prefix in HRP: ${hrp}`)
   }
 

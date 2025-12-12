@@ -16,7 +16,8 @@ import { BottomSheetTrigger } from '@/ui/components/BottomSheet'
 import Button from '@/ui/components/Button'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 import QRCode from '@/ui/components/QRCode'
-import { useLightning, Invoice } from '@/ui/features/lightning/LightningProvider'
+import { useLightningActions, useLightningState } from '@/ui/features/app-provider'
+import { Invoice } from '@/ui/features/lightning/types'
 import { useIsDark } from '@/ui/features/app-provider'
 import { alpha } from '@/ui/utils'
 
@@ -262,7 +263,8 @@ function InvoiceDisplay({
 
 export default function ReceiveLightning() {
   const isDark = useIsDark()
-  const { generateInvoice, state } = useLightning()
+  const lightningState = useLightningState()
+  const { generateInvoice } = useLightningActions()
 
   const [amount, setAmount] = useState('')
   const [description, setDescription] = useState('')
@@ -276,9 +278,13 @@ export default function ReceiveLightning() {
 
   // Gerar invoice automaticamente ao inicializar
   useEffect(() => {
-    if (!state.isInitialized) return
+    if (!lightningState.isInitialized) return
 
-    const existingInvoice = findExistingInvoice(state.invoices, amountMsat, descriptionValue)
+    const existingInvoice = findExistingInvoice(
+      lightningState.invoices,
+      amountMsat,
+      descriptionValue,
+    )
 
     if (existingInvoice) {
       console.log('[ReceiveLightning] Reusing existing invoice:', existingInvoice.paymentHash)
@@ -300,7 +306,13 @@ export default function ReceiveLightning() {
     }
 
     generateNewInvoice()
-  }, [amountMsat, descriptionValue, state.isInitialized, state.invoices, generateInvoice])
+  }, [
+    amountMsat,
+    descriptionValue,
+    lightningState.isInitialized,
+    lightningState.invoices,
+    generateInvoice,
+  ])
 
   // Handlers
   const handleShareInvoice = async () => {
@@ -335,12 +347,12 @@ export default function ReceiveLightning() {
   }
 
   // Early returns para estados de loading e erro
-  if (!state.isInitialized && state.isLoading) {
+  if (!lightningState.isInitialized && lightningState.isLoading) {
     return <LoadingState isDark={isDark} message="Initializing Lightning..." />
   }
 
-  if (state.error) {
-    return <ErrorState isDark={isDark} error={state.error} />
+  if (lightningState.error) {
+    return <ErrorState isDark={isDark} error={lightningState.error} />
   }
 
   // Render principal
@@ -356,7 +368,7 @@ export default function ReceiveLightning() {
               invoiceData={invoiceData}
               amount={amount}
               description={description}
-              hasActiveChannels={state.hasActiveChannels}
+              hasActiveChannels={lightningState.hasActiveChannels}
               onAmountChange={setAmount}
               onDescriptionChange={setDescription}
               onCopy={handleCopyInvoice}

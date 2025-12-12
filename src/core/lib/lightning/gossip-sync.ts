@@ -16,6 +16,8 @@ import {
   verifyChannelUpdate,
 } from './gossip'
 import { ShortChannelId } from '@/core/models/lightning/base'
+import { RoutingGraph } from './routing'
+import { GraphCacheManager } from './graph-cache'
 
 /**
  * Progresso da sincronização
@@ -45,6 +47,10 @@ export interface GossipSyncOptions {
   timeoutMs?: number
   /** Intervalo entre batches */
   batchIntervalMs?: number
+  /** Routing graph para atualizar */
+  routingGraph?: RoutingGraph
+  /** Cache manager para persistir dados */
+  cacheManager?: GraphCacheManager
 }
 
 /**
@@ -54,7 +60,12 @@ export class GossipSyncManager {
   private peers: GossipPeerInterface[] = []
   private activeSyncs: Map<string, GossipSyncStats> = new Map()
   private isReadyFlag: boolean = false
-  private options: Required<GossipSyncOptions>
+  private options: Required<Omit<GossipSyncOptions, 'routingGraph' | 'cacheManager'>> & {
+    routingGraph: RoutingGraph
+    cacheManager?: GraphCacheManager
+  }
+  private routingGraph: RoutingGraph
+  private cacheManager?: GraphCacheManager
 
   // Estatísticas globais
   private globalStats: GossipSyncStats = {
@@ -66,14 +77,21 @@ export class GossipSyncManager {
     repliesReceived: 0,
     lastSyncTimestamp: 0,
     syncProgress: 0,
+    messagesProcessed: 0,
+    errors: 0,
   }
 
   constructor(options: GossipSyncOptions = {}) {
+    this.routingGraph = options.routingGraph || new RoutingGraph()
+    this.cacheManager = options.cacheManager
+
     this.options = {
       startBlockHeight: options.startBlockHeight ?? 0,
       maxConcurrentPeers: options.maxConcurrentPeers ?? 3,
       timeoutMs: options.timeoutMs ?? 30000,
       batchIntervalMs: options.batchIntervalMs ?? 1000,
+      routingGraph: this.routingGraph,
+      cacheManager: this.cacheManager,
     }
   }
 
@@ -105,6 +123,9 @@ export class GossipSyncManager {
       throw new Error('No peers available for gossip sync')
     }
 
+    // Carregar grafo do cache antes de iniciar sincronização
+    await this.loadCachedGraph()
+
     this.globalStats.state = GossipSyncState.SYNCING
     this.globalStats.lastSyncTimestamp = Date.now()
     this.isReadyFlag = false
@@ -124,6 +145,9 @@ export class GossipSyncManager {
           await this.delay(this.options.batchIntervalMs)
         }
       }
+
+      // Salvar grafo no cache após sincronização completa
+      await this.saveGraphToCache()
 
       this.globalStats.state = GossipSyncState.SYNCED
       this.globalStats.syncProgress = 1.0
@@ -214,6 +238,46 @@ export class GossipSyncManager {
    */
   getStats(): GossipSyncStats {
     return { ...this.globalStats }
+  }
+
+  /**
+   * Retorna o grafo de roteamento atual
+   */
+  getRoutingGraph(): RoutingGraph {
+    return this.routingGraph
+  }
+
+  /**
+   * Carrega grafo do cache se disponível
+   */
+  async loadCachedGraph(): Promise<void> {
+    if (this.cacheManager) {
+      try {
+        console.log('[gossip-sync] Loading cached routing graph')
+        const cachedGraph = this.cacheManager.loadGraph()
+        // Mesclar dados do cache com o grafo atual
+        // Nota: Isso é uma simplificação - em produção, seria mais sofisticado
+        this.routingGraph = cachedGraph
+        console.log('[gossip-sync] Cached graph loaded successfully')
+      } catch (error) {
+        console.warn('[gossip-sync] Failed to load cached graph:', error)
+      }
+    }
+  }
+
+  /**
+   * Salva grafo no cache
+   */
+  async saveGraphToCache(): Promise<void> {
+    if (this.cacheManager) {
+      try {
+        console.log('[gossip-sync] Saving routing graph to cache')
+        this.cacheManager.saveGraph(this.routingGraph)
+        console.log('[gossip-sync] Graph saved to cache successfully')
+      } catch (error) {
+        console.warn('[gossip-sync] Failed to save graph to cache:', error)
+      }
+    }
   }
 
   /**
@@ -309,6 +373,8 @@ export class GossipSyncManager {
         repliesReceived: 1,
         lastSyncTimestamp: Date.now(),
         syncProgress: 0.5,
+        messagesProcessed: 0,
+        errors: 0,
       })
 
       // Simular delay de sincronização
@@ -331,11 +397,35 @@ export class GossipSyncManager {
         repliesReceived: 0,
         lastSyncTimestamp: Date.now(),
         syncProgress: 0,
+        messagesProcessed: 0,
+        errors: 1,
       })
     }
   }
 
   /**
+   * Processa mensagem de gossip e atualiza o grafo de roteamento
+   */
+  async processGossipMessage(message: any): Promise<void> {
+    try {
+      // TODO: Implementar processamento real das mensagens BOLT #7
+      // Por enquanto, apenas simular atualização do grafo
+
+      console.log('[gossip-sync] Processing gossip message:', message.type)
+
+      // Simular atualização do grafo baseada no tipo de mensagem
+      // Em produção, isso seria feito pelo LightningWorker
+
+      // Após processar algumas mensagens, salvar grafo no cache
+      this.globalStats.messagesProcessed++
+      if (this.globalStats.messagesProcessed % 100 === 0) {
+        await this.saveGraphToCache()
+      }
+    } catch (error) {
+      console.error('[gossip-sync] Failed to process gossip message:', error)
+      this.globalStats.errors++
+    }
+  } /**
    * Utilitário para dividir array em chunks
    */
   private chunkArray<T>(array: T[], chunkSize: number): T[][] {

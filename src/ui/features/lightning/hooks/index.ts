@@ -70,3 +70,11 @@ export {
   useRequiredAdditionalCapacity,
   useAutoChannelOpening,
 } from './useAutoChannel'
+
+// TrafficControl hooks
+export {
+  useTrafficControl,
+  useCanConnect,
+  useWalletAvailability,
+  useDisconnectCount,
+} from './useTrafficControl'

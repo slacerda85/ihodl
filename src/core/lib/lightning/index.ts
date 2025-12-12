@@ -107,7 +107,7 @@ export {
   GossipSyncManager,
   createGossipSyncManager,
   type SyncProgress,
-  type GossipSyncOptions,
+  // type GossipSyncOptions,
 } from './gossip-sync'
 
 // Graph Cache Manager
@@ -501,3 +501,12 @@ export {
   type SpliceEvent,
   type SpliceEventCallback,
 } from './splice'
+
+// DNS Bootstrap (BOLT #10)
+export {
+  getBootstrapPeers,
+  peerAddrToString,
+  isValidPeerAddr,
+  LN_DNS_SEEDS,
+  type LNPeerAddr,
+} from './dns-bootstrap'

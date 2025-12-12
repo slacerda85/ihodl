@@ -43,5 +43,15 @@ export {
   useAddressLoading,
 } from './AppProvider'
 
+// Lightning hooks
+export {
+  useLightningState,
+  useLightningReadinessState,
+  useLightningReadinessLevel,
+  useLightningActions,
+  useLightningInitialized,
+  useLightningLoading,
+} from './AppProvider'
+
 // Compatibility hooks (deprecated)
 export { useSettings } from './AppProvider'

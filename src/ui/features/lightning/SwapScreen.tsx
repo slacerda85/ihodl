@@ -19,7 +19,8 @@ import {
   ScrollView,
 } from 'react-native'
 
-import { useSubmarineSwap, useLightningBalance } from './hooks'
+import { useSubmarineSwap } from './hooks'
+import { useLightningBalance } from '@/ui/features/app-provider'
 import { SwapType } from '@/core/lib/lightning/submarineSwap'
 import { formatSats } from './utils'
 import SwapProgress from './SwapProgress'

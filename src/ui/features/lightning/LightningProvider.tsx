@@ -28,6 +28,8 @@ import LightningService, {
 } from '@/core/services/ln-service'
 import { walletService } from '@/core/services'
 import { useLightningStartup } from './hooks/useLightningStartup'
+import { getTrafficControl } from '@/core/services/ln-traffic-control-service'
+import { useSettingsStore } from '@/ui/features/settings'
 
 import { LightningContext, type LightningContextType } from './context'
 import type { LightningState, Invoice, Payment, Channel, Millisatoshis } from './types'
@@ -87,18 +89,23 @@ export default function LightningProvider({
   // Estado principal
   const [state, setState] = useState<LightningState>(INITIAL_LIGHTNING_STATE)
 
+  // Configurações
+  const settingsStore = useSettingsStore()
+  const trampolineEnabled = settingsStore.getTrampolineRoutingEnabled()
+
   // Hook para inicialização autônoma
   const { status: initStatus, start: startAutonomousInit } = useLightningStartup({
     autoStart: false, // Controlado manualmente
     config: {
-      enableGossipSync: true,
+      enableGossipSync: !trampolineEnabled, // Desabilitar gossip quando trampoline estiver ativo
       enablePeerConnectivity: true,
       enableHTLCMonitoring: true,
       enableWatchtower: true,
       enableLSPIntegration: true,
-      graphCacheEnabled: true,
-      maxPeers: 5,
+      graphCacheEnabled: !trampolineEnabled, // Desabilitar cache quando trampoline estiver ativo
+      maxPeers: trampolineEnabled ? 1 : 5, // Apenas 1 peer (trampoline) quando em trampoline mode
       syncTimeout: 120,
+      trampolineMode: trampolineEnabled, // Passar configuração de trampoline mode
     },
     onComplete: (success, error) => {
       if (!success) {
@@ -186,6 +193,28 @@ export default function LightningProvider({
       void startAutonomousInit()
     }
   }, [autoInitialize, initialize, startAutonomousInit])
+
+  // Integração com TrafficControl
+  useEffect(() => {
+    const trafficControl = getTrafficControl()
+
+    // Monitora disponibilidade da carteira
+    const checkWalletAvailability = () => {
+      const walletId = walletService.getActiveWalletId()
+      const isAvailable = !!walletId
+      trafficControl.setWalletAvailability(isAvailable)
+    }
+
+    // Verificação inicial
+    checkWalletAvailability()
+
+    // Monitora mudanças na carteira ativa
+    const unsubscribe = walletService.subscribe(() => {
+      checkWalletAvailability()
+    })
+
+    return unsubscribe
+  }, [])
 
   // ==========================================
   // INVOICES

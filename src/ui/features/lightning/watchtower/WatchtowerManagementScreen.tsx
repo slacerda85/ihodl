@@ -23,8 +23,11 @@ import { useRouter } from 'expo-router'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
-import { useActiveColorMode } from '@/ui/features/app-provider'
-import { useWatchtower } from '../useWatchtower'
+import {
+  useActiveColorMode,
+  useWatchtowerState,
+  useWatchtowerActions,
+} from '@/ui/features/app-provider'
 
 // ==========================================
 // TYPES
@@ -308,7 +311,8 @@ function AddWatchtowerForm({ colorMode, onAdd, onCancel }: AddWatchtowerFormProp
 export default function WatchtowerManagementScreen() {
   const router = useRouter()
   const colorMode = useActiveColorMode()
-  const { state, start, stop } = useWatchtower()
+  const state = useWatchtowerState()
+  const { start, stop } = useWatchtowerActions()
 
   // Local state for remote watchtowers (TODO: persist)
   const [remoteWatchtowers, setRemoteWatchtowers] = useState<RemoteWatchtower[]>([])

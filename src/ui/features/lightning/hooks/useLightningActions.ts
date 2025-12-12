@@ -5,8 +5,7 @@
  * para evitar re-renders desnecessários em componentes filhos
  */
 
-import { useLightningContext } from './useLightningContext'
-import type { LightningActions } from '../context'
+import { useLightningActions as useAppLightningActions } from '@/ui/features/app-provider'
 
 /**
  * Hook para acessar todas as ações Lightning
@@ -22,66 +21,59 @@ import type { LightningActions } from '../context'
  * ```
  */
 export function useLightningActions(): LightningActions {
-  const context = useLightningContext()
-
-  // Retorna apenas as ações, não o estado
-  return {
-    initialize: context.initialize,
-    generateInvoice: context.generateInvoice,
-    decodeInvoice: context.decodeInvoice,
-    sendPayment: context.sendPayment,
-    getBalance: context.getBalance,
-    refreshBalance: context.refreshBalance,
-    getChannels: context.getChannels,
-    hasChannels: context.hasChannels,
-    createChannel: context.createChannel,
-    closeChannel: context.closeChannel,
-    forceCloseChannel: context.forceCloseChannel,
-    refreshInvoices: context.refreshInvoices,
-    refreshPayments: context.refreshPayments,
-    connectToPeer: context.connectToPeer,
-    disconnect: context.disconnect,
-    sendPing: context.sendPing,
-  }
+  return useAppLightningActions()
 }
 
 /**
  * Hook para ações de invoice
  */
 export function useInvoiceActions() {
-  const { generateInvoice, decodeInvoice, refreshInvoices } = useLightningContext()
-  return { generateInvoice, decodeInvoice, refreshInvoices }
+  const actions = useAppLightningActions()
+  return {
+    generateInvoice: actions.generateInvoice,
+    decodeInvoice: actions.decodeInvoice,
+    refreshInvoices: actions.refreshInvoices,
+  }
 }
 
 /**
  * Hook para ações de pagamento
  */
 export function usePaymentActions() {
-  const { sendPayment, refreshPayments } = useLightningContext()
-  return { sendPayment, refreshPayments }
+  const actions = useAppLightningActions()
+  return { sendPayment: actions.sendPayment, refreshPayments: actions.refreshPayments }
 }
 
 /**
  * Hook para ações de saldo
  */
 export function useBalanceActions() {
-  const { getBalance, refreshBalance } = useLightningContext()
-  return { getBalance, refreshBalance }
+  const actions = useAppLightningActions()
+  return { getBalance: actions.getBalance, refreshBalance: actions.refreshBalance }
 }
 
 /**
  * Hook para ações de canal
  */
 export function useChannelActions() {
-  const { getChannels, hasChannels, createChannel, closeChannel, forceCloseChannel } =
-    useLightningContext()
-  return { getChannels, hasChannels, createChannel, closeChannel, forceCloseChannel }
+  const actions = useAppLightningActions()
+  return {
+    getChannels: actions.getChannels,
+    hasChannels: actions.hasChannels,
+    createChannel: actions.createChannel,
+    closeChannel: actions.closeChannel,
+    forceCloseChannel: actions.forceCloseChannel,
+  }
 }
 
 /**
  * Hook para ações de conexão (BOLT1)
  */
 export function useConnectionActions() {
-  const { connectToPeer, disconnect, sendPing } = useLightningContext()
-  return { connectToPeer, disconnect, sendPing }
+  const actions = useAppLightningActions()
+  return {
+    connectToPeer: actions.connectToPeer,
+    disconnect: actions.disconnect,
+    sendPing: actions.sendPing,
+  }
 }

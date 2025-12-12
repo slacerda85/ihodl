@@ -19,7 +19,7 @@ import {
   calculateSwapFee,
   MIN_SWAP_AMOUNT_SAT,
 } from '@/core/lib/lightning/submarineSwap'
-import { useLightningContext } from './useLightningContext'
+import { useLightningState } from '@/ui/features/app-provider'
 
 // ==========================================
 // TYPES
@@ -110,7 +110,7 @@ const DEFAULT_OFFER: SwapOffer = {
 // ==========================================
 
 export function useSubmarineSwap(network: 'mainnet' | 'testnet' = 'mainnet') {
-  const { state: lightningState } = useLightningContext()
+  const lightningState = useLightningState()
   const swapManagerRef = useRef<SwapManager | null>(null)
 
   const [state, setState] = useState<SubmarineSwapState>({

@@ -21,16 +21,17 @@ import {
 import { hexToUint8Array, uint8ArrayToHex } from '@/core/lib/utils'
 import { buildTransaction, sendTransaction, signTransaction } from '@/core/lib/transactions'
 import { getAddressTxHistory, getTransaction } from '@/core/lib/electrum'
+import { getNetworkConfig } from '@/config/network'
 
 // ============================================================================
 // Constantes
 // ============================================================================
 
 /** Base URL da API Boltz (mainnet) */
-export const BOLTZ_API_MAINNET = 'https://api.boltz.exchange'
+export const BOLTZ_API_MAINNET = getNetworkConfig('mainnet').endpoints.boltz
 
 /** Base URL da API Boltz (testnet) */
-export const BOLTZ_API_TESTNET = 'https://testnet.boltz.exchange/api'
+export const BOLTZ_API_TESTNET = getNetworkConfig('testnet').endpoints.boltz
 
 /** Pair padrão para swaps BTC */
 export const BTC_PAIR = 'BTC/BTC'

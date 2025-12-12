@@ -5,8 +5,8 @@ import { Point } from '@noble/secp256k1'
 import { uint8ArrayToHex } from './utils'
 import { Tx } from '../models/transaction'
 import { createPublicKey, deriveChildKey, splitMasterKey } from './key'
-import { P2WPKH_VERSION, HASH160_LENGTH } from '../models/address'
 import { encodeBase58 } from './utils/base58'
+import { getAllBech32Prefixes, getNetworkConfig } from '@/config/network'
 
 /** Used address information */
 export interface AddressDetails {
@@ -26,7 +26,11 @@ export interface Bech32Result {
   data: Uint8Array
 }
 
-function createAddress(publicKey: Uint8Array, version: number = 0): string {
+function createAddress(
+  publicKey: Uint8Array,
+  version: number = 0,
+  hrp: string = getNetworkConfig().bech32Hrp,
+): string {
   if (!publicKeyVerify(publicKey)) {
     throw new Error('Invalid public key')
   }
@@ -37,7 +41,7 @@ function createAddress(publicKey: Uint8Array, version: number = 0): string {
   // Prepend the version byte to the words array
   const words = [version, ...programWords]
   // Encode using Bech32
-  const segWitAddress = bech32.encode('bc', words)
+  const segWitAddress = bech32.encode(hrp, words)
 
   return segWitAddress
 }
@@ -63,10 +67,14 @@ function fromBech32(bech32Address: string): Bech32Result {
  * Converts a public key hash and version to a Bech32 address.
  * @param {Uint8Array} publicKeyHash - The hash160 of public key.
  * @param {number} version - The version byte (0 or 1).
- * @param {string} [prefix='bc'] - The prefix for the Bech32 address (default is 'bc' for Bitcoin).
+ * @param {string} [prefix] - The prefix for the Bech32 address (default from network config).
  * @returns {string} - The Bech32 address.
  */
-function toBech32(publicKeyHash: Uint8Array, version: number = 0, prefix: string = 'bc'): string {
+function toBech32(
+  publicKeyHash: Uint8Array,
+  version: number = 0,
+  prefix: string = getNetworkConfig().bech32Hrp,
+): string {
   try {
     const programWords = bech32.toWords(publicKeyHash)
     // Prepend the version byte to the words array
@@ -209,9 +217,12 @@ function createP2PKHAddress(publicKey: Uint8Array): string {
  * @param network - Network prefix ('bc' for mainnet, 'tb' for testnet)
  * @returns Taproot address (bech32m)
  */
-function createP2TRAddress(publicKey: Uint8Array, network: string = 'bc'): string {
+function createP2TRAddress(
+  publicKey: Uint8Array,
+  hrp: string = getNetworkConfig().bech32Hrp,
+): string {
   const outputKey = createTaprootOutputKey(publicKey)
-  return bech32m.encode(network, [0x01, ...bech32m.toWords(outputKey)])
+  return bech32m.encode(hrp, [0x01, ...bech32m.toWords(outputKey)])
 }
 
 /**
@@ -220,11 +231,6 @@ function createP2TRAddress(publicKey: Uint8Array, network: string = 'bc'): strin
  * @returns The P2SH address.
  */
 function createP2SHAddress(redeemScript: Uint8Array): string {
-  const scriptHash = hash160(redeemScript)
-  const version = new Uint8Array([0x05]) // Mainnet P2SH version
-  const payload = new Uint8Array([...version, ...scriptHash])
-  const checksum = sha256(sha256(payload)).subarray(0, 4)
-  const fullPayload = new Uint8Array([...payload, ...checksum])
   // Use base58 encoding (assuming available)
   // Placeholder: return base58 encoded
   throw new Error('P2SH address creation not fully implemented; needs base58')
@@ -239,7 +245,8 @@ function createP2WSHAddress(witnessScript: Uint8Array): string {
   const scriptHash = sha256(witnessScript)
   const programWords = bech32.toWords(scriptHash)
   const words = [0, ...programWords] // Version 0 for P2WSH
-  return bech32.encode('bc', words)
+  const hrp = getNetworkConfig().bech32Hrp
+  return bech32.encode(hrp, words)
 }
 
 /**
@@ -262,8 +269,11 @@ function isValidAddress(address: string): boolean {
  * @param address - The Bitcoin address.
  * @returns The scriptPubKey as Uint8Array.
  */
-function addressToScript(address: string): Uint8Array {
-  if (address.startsWith('bc1') || address.startsWith('tb1') || address.startsWith('bcrt1')) {
+function addressToScript(
+  address: string,
+  validHrps: string[] = getAllBech32Prefixes().map(prefix => `${prefix}1`),
+): Uint8Array {
+  if (validHrps.some(hrp => address.startsWith(hrp))) {
     const { version, data } = fromBech32(address)
     if (version === 0) {
       if (data.length === 20) {
@@ -441,14 +451,6 @@ function taprootTweakPublicKey(publicKey: Uint8Array, tweak: Uint8Array): Uint8A
 }
 
 /**
- * Script tree leaf for Taproot
- */
-interface TaprootScriptTree {
-  script: Uint8Array
-  controlBlock?: Uint8Array
-}
-
-/**
  * Builds a Taproot script tree and calculates the merkle root
  * @param scripts - Array of scripts for the tree leaves
  * @returns Merkle root hash (32 bytes)
@@ -568,7 +570,6 @@ function validateTaprootScriptPath(
       return false
     }
 
-    const parity = controlBlock[0]
     const internalKey = controlBlock.subarray(1, 33)
     const merkleProof = controlBlock.subarray(33)
 
@@ -590,7 +591,7 @@ function validateTaprootScriptPath(
 
     // Check if it matches
     return uint8ArrayToHex(expectedOutputKey) === uint8ArrayToHex(outputKey)
-  } catch (error) {
+  } catch {
     return false
   }
 }

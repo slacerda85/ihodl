@@ -22,7 +22,7 @@ import {
   createRestoreSummary,
   CHANNEL_BACKUP_VERSION,
 } from '@/core/lib/lightning/backup'
-import { useLightningContext } from './useLightningContext'
+import { useLightningState } from '@/ui/features/app-provider'
 
 // ==========================================
 // TYPES
@@ -61,7 +61,7 @@ export interface RestoreOperationResult {
 // ==========================================
 
 export function useChannelBackup() {
-  const { state: lightningState } = useLightningContext()
+  const lightningState = useLightningState()
 
   const [backupState, setBackupState] = useState<BackupState>({
     currentBackup: null,

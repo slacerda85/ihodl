@@ -4,6 +4,7 @@ import { encodeBase58, decodeBase58 } from '@/core/lib/utils/base58'
 import { entropyToMnemonic, mnemonicToSeedSync } from './bips/bip39'
 import wordList from 'bip39/src/wordlists/english.json'
 import { CURVE_ORDER } from '../models/key'
+import { getNetworkConfig } from '@/config/network'
 
 function toMnemonic(entropy: Uint8Array): string {
   // check if nBytes is a valid length of 128, 160, 192, 224, or 256 bits
@@ -284,8 +285,12 @@ function serializePublicKey(
   return serializedPublicKey
 }
 
-function privateKeyToWIF(privateKey: Uint8Array, compressed: boolean = true): string {
-  const version = new Uint8Array([0x80]) // Mainnet prefix
+function privateKeyToWIF(
+  privateKey: Uint8Array,
+  compressed: boolean = true,
+  wifPrefix: Uint8Array = getNetworkConfig().wifPrefix,
+): string {
+  const version = wifPrefix
   const compressedFlag = compressed ? new Uint8Array([0x01]) : new Uint8Array(0)
 
   // Combine arrays

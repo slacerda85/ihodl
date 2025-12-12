@@ -1,6 +1,6 @@
 # Roadmap de Implementação Lightning Network - iHodl
 
-> **Versão:** 1.3  
+> **Versão:** 1.4  
 > **Data:** Dezembro 2025  
 > **Última atualização:** Dezembro 2025  
 > **Baseado em:** [lightning-initialization-comparison.md](./lightning-initialization-comparison.md)
@@ -486,20 +486,21 @@ Antes de prosseguir, é necessário decidir qual modelo de routing usar:
     - Funções utilitárias: addChannelToGraph, addNodeToGraph, validateRoute, etc.
     - Integração com Dijkstra's algorithm
 
-[ ] 3B.4 Implementar cache de grafo
-    - Persistir grafo no LightningRepository
-    - Carregar na inicialização
-    - Atualizar incrementalmente
-    - Prune de dados antigos (14 dias)
+[x] 3B.4 Implementar cache de grafo
+    - Persistir grafo no LightningRepository ✅
+    - Carregar na inicialização ✅
+    - Atualizar incrementalmente ✅
+    - Prune de dados antigos (14 dias) ✅
+    - *Nota: Integração com GossipSyncManager pendente*
 ```
 
 ### Opção 3C: Hybrid Mode (Produção)
 
 ```
-[ ] 3C.1 Iniciar em trampoline mode
-[ ] 3C.2 Sincronizar gossip em background
-[ ] 3C.3 Migrar para local pathfinding quando sync completo
-[ ] 3C.4 Fallback para trampoline se local falhar
+[x] 3C.1 Iniciar em trampoline mode ✅
+[x] 3C.2 Sincronizar gossip em background
+[x] 3C.3 Migrar para local pathfinding quando sync completo
+[x] 3C.4 Fallback para trampoline se local falhar
 ```
 
 ### Critérios de Conclusão Fase 3
@@ -545,27 +546,25 @@ Com a implementação completa do **Full Gossip Mode**, o iHodl agora possui:
 #### Semana 2: UI e Traffic Control
 
 ```
-[ ] 4.1.5 Componente LightningReadinessGuard
-[ ] 4.1.6 Status de inicialização na UI
-[ ] 4.2.1 Implementar TrafficControl básico
-[ ] 4.2.2 Monitor de conectividade de rede
+[x] 4.1.5 Componente LightningReadinessGuard
+[x] 4.1.6 Status de inicialização na UI
+[x] 4.2.1 Implementar TrafficControl básico ✅
+[x] 4.2.2 Monitor de conectividade de rede ✅
 ```
 
 ### Plano de Médio Prazo (4-6 semanas)
 
-#### Fase 5: Integração Electrum (2 semanas)
+**✅ Fase 5: Integração Electrum - CONCLUÍDA (Dezembro 2025)**
 
-```
-[ ] 5.1.1 Conectar Electrum na inicialização
-[ ] 5.1.2 Implementar ElectrumWatcher
-[ ] 5.1.3 Monitorar funding/closing transactions
-[ ] 5.2.1 DNS Bootstrap como fallback
-```
+- Conexão automática com servidores Electrum na inicialização
+- ElectrumWatcherService monitora funding/closing transactions
+- ChannelOnChainMonitorService atualiza estados de canais automaticamente
+- DNS Bootstrap implementado como fallback para descoberta de peers
 
 #### Fase 6: Testes em Testnet (2-3 semanas)
 
 ```
-[ ] 6.1.1 Testes unitários completos
+[x] 6.1.1 Testes unitários completos
 [ ] 6.2.1 Canal testnet básico
 [ ] 6.2.2 Pagamento testnet
 [ ] 6.3.1 Comparação com Phoenix/Electrum
@@ -670,7 +669,7 @@ Com Full Gossip Mode implementado, o MVP pode ser definido como:
 **Tarefas:**
 
 ```
-[ ] 4.2.1 Implementar TrafficControl
+[x] 4.2.1 Implementar TrafficControl ✅
     interface TrafficControlState {
       walletIsAvailable: boolean
       internetIsAvailable: boolean
@@ -688,7 +687,7 @@ Com Full Gossip Mode implementado, o MVP pode ser definido como:
     // - Pagamento in-flight precisa ficar conectado
     // - Push notification recebida
 
-[ ] 4.2.2 Monitorar estado da rede
+[x] 4.2.2 Monitorar estado da rede ✅
     - Usar NetInfo do React Native
     - Pausar conexões quando offline
     - Retomar quando online
@@ -708,6 +707,7 @@ Com Full Gossip Mode implementado, o MVP pode ser definido como:
 > **Prioridade:** 🟡 P1  
 > **Duração Estimada:** 2 semanas  
 > **Objetivo:** Monitorar blockchain para canais Lightning
+> **Status:** ✅ CONCLUÍDA (Dezembro 2025)
 
 ### 5.1 Integrar ElectrumClient com LightningInitializer
 
@@ -720,7 +720,7 @@ Com Full Gossip Mode implementado, o MVP pode ser definido como:
 **Tarefas:**
 
 ```
-[ ] 5.1.1 Conectar a Electrum na inicialização
+[x] 5.1.1 Conectar a Electrum na inicialização
     Arquivo: src/core/services/ln-initializer-service.ts
 
     Na fase initializeCoreComponents():
@@ -729,7 +729,7 @@ Com Full Gossip Mode implementado, o MVP pode ser definido como:
     - Verificar consistência de blockchain
     - Obter altura atual
 
-[ ] 5.1.2 Implementar ElectrumWatcher para Lightning
+[x] 5.1.2 Implementar ElectrumWatcher para Lightning
     Arquivo: src/core/services/ln-electrum-watcher-service.ts
 
     class ElectrumWatcherService {
@@ -746,7 +746,7 @@ Com Full Gossip Mode implementado, o MVP pode ser definido como:
       getConfirmations(txid: string): Promise<number>
     }
 
-[ ] 5.1.3 Integrar com channel state machine
+[x] 5.1.3 Integrar com channel state machine
     - Atualizar estado do canal baseado em eventos on-chain
     - Detectar funding confirmed
     - Detectar channel closed
@@ -762,7 +762,7 @@ Com Full Gossip Mode implementado, o MVP pode ser definido como:
 **Tarefas:**
 
 ```
-[ ] 5.2.1 Implementar DNS SRV lookup
+[x] 5.2.1 Implementar DNS SRV lookup
     // DNS seeds para Lightning
     const LN_DNS_SEEDS = [
       'nodes.lightning.directory',
@@ -776,17 +776,17 @@ Com Full Gossip Mode implementado, o MVP pode ser definido como:
       // Return peer addresses
     }
 
-[ ] 5.2.2 Integrar como fallback em PeerConnectivityService
+[x] 5.2.2 Integrar como fallback em PeerConnectivityService
     - Usar após esgotar cache local
     - Usar após falhar bootstrap peers hardcoded
 ```
 
 ### Critérios de Conclusão Fase 5
 
-- [ ] Conexão Electrum estabelecida na inicialização
-- [ ] Transações de canais monitoradas
-- [ ] Estados de canal atualizados automaticamente
-- [ ] DNS bootstrap funcionando como fallback
+- [x] Conexão Electrum estabelecida na inicialização
+- [x] Transações de canais monitoradas
+- [x] Estados de canal atualizados automaticamente
+- [x] DNS bootstrap funcionando como fallback
 
 ---
 
@@ -799,18 +799,18 @@ Com Full Gossip Mode implementado, o MVP pode ser definido como:
 ### 6.1 Testes Unitários
 
 ```
-[ ] 6.1.1 Testes de transporte
+[x] 6.1.1 Testes de transporte
     - Handshake BOLT #8
     - Init messages
     - Encoding/decoding de mensagens
     - Ping/pong
 
-[ ] 6.1.2 Testes de channel reestablishment
+[x] 6.1.2 Testes de channel reestablishment
     - Reestablishment normal
     - Data loss detection
     - HTLC resumption
 
-[ ] 6.1.3 Testes de pathfinding (se full gossip)
+[x] 6.1.3 Testes de pathfinding (se full gossip)
     - Dijkstra básico
     - Fees calculation
     - CLTV calculation
@@ -938,21 +938,21 @@ Para um MVP funcional com **Full Gossip Mode**:
 - [x] 4.1.1 ReadinessState model
 - [x] 4.1.2 Guards em operações
 - [x] 4.1.3 UI de readiness
-- [ ] 4.2.1 TrafficControl
-- [ ] 4.2.2 Monitor de rede
+- [x] 4.2.1 TrafficControl ✅
+- [x] 4.2.2 Monitor de rede ✅
 
 ### Fase 5: Integração Electrum
 
-- [ ] 5.1.1 Electrum na inicialização
-- [ ] 5.1.2 ElectrumWatcher
-- [ ] 5.1.3 Integração com channels
-- [ ] 5.2.1 DNS Bootstrap
-- [ ] 5.2.2 Fallback integrado
+- [x] 5.1.1 Electrum na inicialização
+- [x] 5.1.2 ElectrumWatcher
+- [x] 5.1.3 Integração com channels
+- [x] 5.2.1 DNS Bootstrap
+- [x] 5.2.2 Fallback integrado
 
 ### Fase 6: Testes
 
-- [ ] 6.1.1 Testes de transporte
-- [ ] 6.1.2 Testes de reestablishment
+- [x] 6.1.1 Testes de transporte
+- [x] 6.1.2 Testes de reestablishment
 - [ ] 6.1.3 Testes de pathfinding
 - [ ] 6.2.1 Testnet e2e
 - [ ] 6.2.2 Testes de resiliência

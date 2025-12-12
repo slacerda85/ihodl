@@ -341,7 +341,7 @@ describe('RemoteWatchtowerClient', () => {
     })
   })
 
-  describe('events', () => {
+  describe('eventemitter3', () => {
     it('should emit connected event', async () => {
       const events: unknown[] = []
       client.onEvent(event => events.push(event))

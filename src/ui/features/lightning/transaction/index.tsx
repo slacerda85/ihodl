@@ -21,7 +21,11 @@ import { useRouter } from 'expo-router'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
-import { useLightningPayments, useLightningInvoices, useLightningActions } from '../hooks'
+import {
+  useLightningPayments,
+  useLightningInvoices,
+  useLightningActions,
+} from '@/ui/features/app-provider'
 import { useActiveColorMode } from '@/ui/features/app-provider'
 import type { PaymentStatus, PaymentDirection, InvoiceStatus, Millisatoshis } from '../types'
 

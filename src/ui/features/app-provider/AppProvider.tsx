@@ -50,6 +50,8 @@ import { walletStore, type WalletStoreActions } from '../wallet/store'
 import { settingsStore, type SettingsStoreActions, type ColorMode } from '../settings/store'
 import { addressStore } from '../address/store'
 import { networkStore, type NetworkStoreActions } from '../network/store'
+import { lightningStore, type LightningStoreActions } from '../lightning/store'
+import { watchtowerStore, type WatchtowerStoreActions } from '../lightning/watchtowerStore'
 
 // ==========================================
 // AUTH UTILS (autenticação biométrica)
@@ -225,6 +227,28 @@ interface AppContextType {
     getLightningWorker: typeof networkStore.getLightningWorker
     actions: NetworkStoreActions
   }
+
+  // ========== LIGHTNING STORE ==========
+  lightning: {
+    subscribe: typeof lightningStore.subscribe
+    getSnapshot: typeof lightningStore.getSnapshot
+    getReadinessState: typeof lightningStore.getReadinessState
+    getReadinessLevel: typeof lightningStore.getReadinessLevel
+    actions: LightningStoreActions
+  }
+
+  // ========== WATCHTOWER STORE ==========
+  watchtower: {
+    subscribe: typeof watchtowerStore.subscribe
+    getSnapshot: typeof watchtowerStore.getSnapshot
+    getIsInitialized: typeof watchtowerStore.getIsInitialized
+    getIsRunning: typeof watchtowerStore.getIsRunning
+    getStatus: typeof watchtowerStore.getStatus
+    getChannels: typeof watchtowerStore.getChannels
+    getEvents: typeof watchtowerStore.getEvents
+    getHasBreaches: typeof watchtowerStore.getHasBreaches
+    actions: WatchtowerStoreActions
+  }
 }
 
 const AppContext = createContext<AppContextType | null>(null)
@@ -276,18 +300,42 @@ export function AppProvider({ children }: AppProviderProps) {
         getAddressesSnapshot: addressStore.getAddressesSnapshot,
         getBalanceSnapshot: addressStore.getBalanceSnapshot,
         getNextAddressesSnapshot: addressStore.getNextAddressesSnapshot,
-        notify: addressStore.notify,
-        notifyLight: addressStore.notifyLight,
-        clear: addressStore.clear,
+        notify: addressStore.actions.notify,
+        notifyLight: addressStore.actions.notifyLight,
+        clear: addressStore.actions.clear,
       },
 
       // Network store
       network: {
         subscribe: networkStore.subscribe,
         getSnapshot: networkStore.getSnapshot,
-        getConnection: networkStore.getConnection,
-        getLightningWorker: networkStore.getLightningWorker,
+        getConnection: networkStore.actions.getConnection,
+        getLightningWorker: networkStore.actions.getLightningWorker,
+        reconnect: networkStore.actions.reconnect,
+        closeConnections: networkStore.actions.closeConnections,
         actions: networkStore.actions,
+      },
+
+      // Lightning store
+      lightning: {
+        subscribe: lightningStore.subscribe,
+        getSnapshot: lightningStore.getSnapshot,
+        getReadinessState: lightningStore.getReadinessState,
+        getReadinessLevel: lightningStore.getReadinessLevel,
+        actions: lightningStore.actions,
+      },
+
+      // Watchtower store
+      watchtower: {
+        subscribe: watchtowerStore.subscribe,
+        getSnapshot: watchtowerStore.getSnapshot,
+        getIsInitialized: watchtowerStore.getIsInitialized,
+        getIsRunning: watchtowerStore.getIsRunning,
+        getStatus: watchtowerStore.getStatus,
+        getChannels: watchtowerStore.getChannels,
+        getEvents: watchtowerStore.getEvents,
+        getHasBreaches: watchtowerStore.getHasBreaches,
+        actions: watchtowerStore.actions,
       },
     }),
     [state],
@@ -700,6 +748,174 @@ export function useLightningWorkerReady(): boolean {
  */
 export function useNetworkLoading(): boolean {
   return useLoading('lightningInit')
+}
+
+// ==========================================
+// LIGHTNING HOOKS
+// ==========================================
+
+/**
+ * Hook reativo para todo o estado do Lightning
+ */
+export function useLightningState() {
+  const { lightning } = useAppContext()
+  return useSyncExternalStore(lightning.subscribe, lightning.getSnapshot)
+}
+
+/**
+ * Hook reativo para readiness state do Lightning
+ */
+export function useLightningReadinessState() {
+  const { lightning } = useAppContext()
+  return useSyncExternalStore(lightning.subscribe, lightning.getReadinessState)
+}
+
+/**
+ * Hook reativo para readiness level do Lightning
+ */
+export function useLightningReadinessLevel() {
+  const { lightning } = useAppContext()
+  return useSyncExternalStore(lightning.subscribe, lightning.getReadinessLevel)
+}
+
+/**
+ * Hook para actions do Lightning store
+ */
+export function useLightningActions(): LightningStoreActions {
+  const { lightning } = useAppContext()
+  return lightning.actions
+}
+
+/**
+ * Hook para verificar se Lightning está inicializado
+ */
+export function useLightningInitialized(): boolean {
+  const lightningState = useLightningState()
+  return lightningState.isInitialized
+}
+
+/**
+ * Hook para verificar se Lightning está carregando
+ */
+export function useLightningLoading(): boolean {
+  const lightningState = useLightningState()
+  return lightningState.isLoading
+}
+
+/**
+ * Hook para obter erro do Lightning
+ */
+export function useLightningError(): string | null {
+  const lightningState = useLightningState()
+  return lightningState.error
+}
+
+/**
+ * Hook para obter saldo total do Lightning
+ */
+export function useLightningBalance() {
+  const lightningState = useLightningState()
+  return lightningState.totalBalance
+}
+
+/**
+ * Hook para obter canais do Lightning
+ */
+export function useLightningChannels() {
+  const lightningState = useLightningState()
+  return lightningState.channels
+}
+
+/**
+ * Hook para obter invoices do Lightning
+ */
+export function useLightningInvoices() {
+  const lightningState = useLightningState()
+  return lightningState.invoices
+}
+
+/**
+ * Hook para obter payments do Lightning
+ */
+export function useLightningPayments() {
+  const lightningState = useLightningState()
+  return lightningState.payments
+}
+
+/**
+ * Hook para obter status de conexão do Lightning
+ */
+export function useLightningConnection() {
+  const lightningState = useLightningState()
+  return lightningState.connection
+}
+
+// ==========================================
+// WATCHTOWER HOOKS
+// ==========================================
+
+/**
+ * Hook reativo para todo o estado do Watchtower
+ */
+export function useWatchtowerState() {
+  const { watchtower } = useAppContext()
+  return useSyncExternalStore(watchtower.subscribe, watchtower.getSnapshot)
+}
+
+/**
+ * Hook reativo para verificar se Watchtower está inicializado
+ */
+export function useWatchtowerInitialized(): boolean {
+  const { watchtower } = useAppContext()
+  return useSyncExternalStore(watchtower.subscribe, watchtower.getIsInitialized)
+}
+
+/**
+ * Hook reativo para verificar se Watchtower está rodando
+ */
+export function useWatchtowerRunning(): boolean {
+  const { watchtower } = useAppContext()
+  return useSyncExternalStore(watchtower.subscribe, watchtower.getIsRunning)
+}
+
+/**
+ * Hook reativo para status do Watchtower
+ */
+export function useWatchtowerStatus() {
+  const { watchtower } = useAppContext()
+  return useSyncExternalStore(watchtower.subscribe, watchtower.getStatus)
+}
+
+/**
+ * Hook reativo para canais monitorados
+ */
+export function useWatchtowerChannels() {
+  const { watchtower } = useAppContext()
+  return useSyncExternalStore(watchtower.subscribe, watchtower.getChannels)
+}
+
+/**
+ * Hook reativo para eventos do Watchtower
+ */
+export function useWatchtowerEvents() {
+  const { watchtower } = useAppContext()
+  return useSyncExternalStore(watchtower.subscribe, watchtower.getEvents)
+}
+
+/**
+ * Hook reativo para verificar se há breaches
+ */
+export function useWatchtowerHasBreaches(): boolean {
+  const { watchtower } = useAppContext()
+  return useSyncExternalStore(watchtower.subscribe, watchtower.getHasBreaches)
+}
+
+/**
+ * Hook para actions do Watchtower store
+ */
+export function useWatchtowerActions(): WatchtowerStoreActions {
+  const { watchtower } = useAppContext()
+  return watchtower.actions
 }
 
 // ==========================================

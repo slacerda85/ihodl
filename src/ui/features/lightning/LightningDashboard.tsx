@@ -38,12 +38,8 @@ import {
   useActiveColorMode,
   useSettingsActions,
 } from '@/ui/features/app-provider'
-import {
-  useLightningState,
-  useLightningActions,
-  useConnectionState,
-  useInboundBalance,
-} from './hooks'
+import { useLightningState, useLightningActions, useConnection } from '@/ui/features/app-provider'
+import { useInboundBalance } from './hooks'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 import Button from '@/ui/components/Button'
 import type {
@@ -170,7 +166,7 @@ export default function LightningDashboard() {
   const colorMode = useActiveColorMode()
   const lightningSettings = useLightningSettings()
   const settingsActions = useSettingsActions()
-  const connectionState = useConnectionState()
+  const connectionState = useConnection()
   const lightningState = useLightningState()
   const lightningActions = useLightningActions()
   const inboundBalance = useInboundBalance()
@@ -247,7 +243,7 @@ export default function LightningDashboard() {
   }
 
   const getConnectionStatus = (): 'connected' | 'disconnected' => {
-    if (connectionState.isConnected) return 'connected'
+    if (connectionState.lightning) return 'connected'
     return 'disconnected'
   }
 

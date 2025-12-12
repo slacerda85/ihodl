@@ -22,7 +22,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
-import { useLightningActions, useLightningBalance } from '../hooks'
+import { useLightningActions, useLightningBalance } from '@/ui/features/app-provider'
 import { useActiveColorMode } from '@/ui/features/app-provider'
 import type { DecodedInvoice, Millisatoshis } from '../types'
 

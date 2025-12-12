@@ -864,6 +864,25 @@ async function broadcastTransaction(rawTxHex: string, socket?: Connection): Prom
   }
 }
 
+/**
+ * Get the current block height from the Electrum server
+ * @param socket Optional socket to reuse
+ * @returns Current block height
+ */
+async function getCurrentBlockHeight(socket?: Connection): Promise<number> {
+  try {
+    const data = await callElectrumMethod<[number, string]>(
+      'blockchain.headers.subscribe',
+      [],
+      socket,
+    )
+    return data.result![0] // First element is the height
+  } catch (error) {
+    console.error('Error getting current block height:', error)
+    throw error
+  }
+}
+
 export {
   connect,
   getPeers,
@@ -885,4 +904,5 @@ export {
   getRecommendedFeeRates,
   getMempoolTransactions,
   broadcastTransaction,
+  getCurrentBlockHeight,
 }

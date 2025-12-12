@@ -13,7 +13,7 @@ import {
 
 jest.mock('react-native-tcp-socket', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const EventEmitter = require('events')
+  const EventEmitter = require('eventemitter3')
 
   // eslint-disable-next-line @typescript-eslint/no-extraneous-class
   class MockSocket extends EventEmitter {

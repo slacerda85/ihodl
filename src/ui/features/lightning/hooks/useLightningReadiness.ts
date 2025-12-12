@@ -4,8 +4,7 @@
  * Fornece acesso ao estado de prontidão do sistema Lightning
  */
 
-import { useLightningContext } from './useLightningContext'
-import type { ReadinessState, ReadinessLevel } from '@/core/models/lightning/readiness'
+import { useLightningReadinessState, useLightningReadinessLevel } from '@/ui/features/app-provider'
 
 /**
  * Hook para acessar o estado de readiness do Lightning
@@ -29,7 +28,8 @@ export function useLightningReadiness(): {
   readinessState: ReadinessState
   readinessLevel: ReadinessLevel
 } {
-  const { readinessState, readinessLevel } = useLightningContext()
+  const readinessState = useLightningReadinessState()
+  const readinessLevel = useLightningReadinessLevel()
 
   return {
     readinessState,

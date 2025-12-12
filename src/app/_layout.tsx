@@ -2,10 +2,11 @@ import { StrictMode, useEffect, useState } from 'react'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as SplashScreen from 'expo-splash-screen'
-import { AppProviders } from '@/ui/features/app/AppProviders'
 import InactivityOverlay from '@/ui/features/auth/InactivityOverlay'
 import AuthScreen from '@/ui/features/auth/AuthScreen'
 import ErrorBoundary from '@/ui/components/ErrorBoundary'
+import AppProvider from '@/ui/features/app-provider'
+import WalletChangeHandler from '@/ui/features/app/WalletChangeHandler'
 
 SplashScreen.preventAutoHideAsync()
 
@@ -40,12 +41,13 @@ export default function RootLayout() {
   return (
     <StrictMode>
       <ErrorBoundary>
-        <AppProviders>
+        <AppProvider>
+          <WalletChangeHandler />
           <AppContent />
           <InactivityOverlay />
           <AuthScreen />
           <StatusBar style="auto" />
-        </AppProviders>
+        </AppProvider>
       </ErrorBoundary>
     </StrictMode>
   )

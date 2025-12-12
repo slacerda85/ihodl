@@ -348,7 +348,7 @@ describe('Watchtower', () => {
     })
   })
 
-  describe('events', () => {
+  describe('eventemitter3', () => {
     it('should emit channel_added event', () => {
       const events: any[] = []
       watchtower.addEventListener(event => events.push(event))

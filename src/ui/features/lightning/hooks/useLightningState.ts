@@ -5,7 +5,7 @@
  * do estado que realmente precisam, otimizando re-renders
  */
 
-import { useLightningContext } from './useLightningContext'
+import { useLightningState as useAppLightningState } from '@/ui/features/app-provider'
 import type {
   LightningState,
   ConnectionState,
@@ -20,15 +20,14 @@ import type {
  * Use com cautela - causa re-render em qualquer mudança de estado
  */
 export function useLightningState(): LightningState {
-  const { state } = useLightningContext()
-  return state
+  return useAppLightningState()
 }
 
 /**
  * Hook para acessar estado de conexão BOLT1
  */
 export function useConnectionState(): ConnectionState {
-  const { state } = useLightningContext()
+  const state = useAppLightningState()
   return state.connection
 }
 
@@ -36,7 +35,7 @@ export function useConnectionState(): ConnectionState {
  * Hook para verificar se Lightning está inicializado
  */
 export function useLightningInitialized(): boolean {
-  const { state } = useLightningContext()
+  const state = useAppLightningState()
   return state.isInitialized
 }
 
@@ -44,7 +43,7 @@ export function useLightningInitialized(): boolean {
  * Hook para verificar se está carregando
  */
 export function useLightningLoading(): boolean {
-  const { state } = useLightningContext()
+  const state = useAppLightningState()
   return state.isLoading
 }
 
@@ -52,7 +51,7 @@ export function useLightningLoading(): boolean {
  * Hook para acessar erro atual
  */
 export function useLightningError(): string | null {
-  const { state } = useLightningContext()
+  const state = useAppLightningState()
   return state.error
 }
 
@@ -60,7 +59,7 @@ export function useLightningError(): string | null {
  * Hook para acessar saldo total
  */
 export function useLightningBalance(): Millisatoshis {
-  const { state } = useLightningContext()
+  const state = useAppLightningState()
   return state.totalBalance
 }
 
@@ -68,7 +67,7 @@ export function useLightningBalance(): Millisatoshis {
  * Hook para acessar lista de canais
  */
 export function useLightningChannels(): Channel[] {
-  const { state } = useLightningContext()
+  const state = useAppLightningState()
   return state.channels
 }
 
@@ -76,7 +75,7 @@ export function useLightningChannels(): Channel[] {
  * Hook para verificar se há canais ativos
  */
 export function useHasActiveChannels(): boolean {
-  const { state } = useLightningContext()
+  const state = useAppLightningState()
   return state.hasActiveChannels
 }
 
@@ -84,7 +83,7 @@ export function useHasActiveChannels(): boolean {
  * Hook para acessar lista de invoices
  */
 export function useLightningInvoices(): Invoice[] {
-  const { state } = useLightningContext()
+  const state = useAppLightningState()
   return state.invoices
 }
 
@@ -92,7 +91,7 @@ export function useLightningInvoices(): Invoice[] {
  * Hook para acessar lista de pagamentos
  */
 export function useLightningPayments(): Payment[] {
-  const { state } = useLightningContext()
+  const state = useAppLightningState()
   return state.payments
 }
 
@@ -100,6 +99,6 @@ export function useLightningPayments(): Payment[] {
  * Hook para verificar se está conectado a um peer
  */
 export function useIsConnected(): boolean {
-  const { state } = useLightningContext()
+  const state = useAppLightningState()
   return state.connection.isConnected
 }

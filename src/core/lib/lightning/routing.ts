@@ -278,12 +278,12 @@ export class RoutingGraph {
           continue
         }
 
+        // Use combined metric: prioritize lower fees, then lower CLTV
         const neighborFeeDist = feeDistances.get(neighborKey)!
         const neighborCltvDist = cltvDistances.get(neighborKey)!
 
-        // Use combined metric: prioritize lower fees, then lower CLTV
         const currentCombined = distances.get(current)!
-        const newCombined = newFeeDist + BigInt(newCltvDist * 1000) // Weight CLTV less
+        const newCombined = newFeeDist + BigInt(newCltvDist * 10) // Smaller weight for CLTV
         const neighborCombined = distances.get(neighborKey)!
 
         if (newCombined < neighborCombined) {
@@ -312,11 +312,15 @@ export class RoutingGraph {
     let totalCltvExpiry = 0
 
     // Reconstruct path in reverse
+    const visited = new Set<string>()
     while (previous.has(current)) {
+      if (visited.has(current)) {
+        console.error(`Loop detected in path reconstruction at ${current}`)
+        break
+      }
+      visited.add(current)
       const prev = previous.get(current)!
       const channel = this.channels.get(prev.channelId)!
-
-      // Determine direction (which node is the source for this hop)
       const currentNodeId = hexToUint8Array(current)
       const isNode1 = channel.nodeId1.every((b, i) => b === currentNodeId[i])
 

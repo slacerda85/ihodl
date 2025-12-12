@@ -30,8 +30,12 @@ import {
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
-import { useLightningSettings, useSettingsActions } from '@/ui/features/app-provider'
-import { useLightningState, useConnectionState } from '../lightning/hooks'
+import {
+  useLightningSettings,
+  useSettingsActions,
+  useConnection,
+  useLightningState,
+} from '@/ui/features/app-provider'
 import type {
   LightningNetwork,
   RoutingStrategy,
@@ -213,7 +217,7 @@ const NetworkSelector: React.FC<NetworkSelectorProps> = ({ value, onChange, isDa
 export default function LightningSettingsSection({ isDark }: LightningSettingsSectionProps) {
   const lightning = useLightningSettings()
   const { dispatch, actions } = useSettingsActions()
-  const connectionState = useConnectionState()
+  const connectionState = useConnection()
   const lightningState = useLightningState()
 
   // Handlers
@@ -270,7 +274,7 @@ export default function LightningSettingsSection({ isDark }: LightningSettingsSe
   }
 
   const getConnectionStatus = (): 'connected' | 'disconnected' => {
-    return connectionState.isConnected ? 'connected' : 'disconnected'
+    return connectionState.lightning ? 'connected' : 'disconnected'
   }
 
   return (

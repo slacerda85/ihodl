@@ -322,34 +322,34 @@ export function useWatchtower() {
 
 /**
  * Hook para verificar se há breaches detectados
+ * @deprecated Use useWatchtowerHasBreaches from AppProvider instead
  */
 export function useHasBreaches(): boolean {
-  const { state } = useWatchtower()
-  return state.hasBreaches
+  throw new Error('useHasBreaches is deprecated. Use useWatchtowerHasBreaches from AppProvider.')
 }
 
 /**
  * Hook para obter status do watchtower
+ * @deprecated Use useWatchtowerStatus from AppProvider instead
  */
 export function useWatchtowerStatus(): WatchtowerStatus {
-  const { state } = useWatchtower()
-  return state.status
+  throw new Error('useWatchtowerStatus is deprecated. Use useWatchtowerStatus from AppProvider.')
 }
 
 /**
  * Hook para obter canais monitorados
+ * @deprecated Use useWatchtowerChannels from AppProvider instead
  */
 export function useMonitoredChannels(): MonitoredChannel[] {
-  const { state } = useWatchtower()
-  return state.channels
+  throw new Error('useMonitoredChannels is deprecated. Use useWatchtowerChannels from AppProvider.')
 }
 
 /**
  * Hook para obter eventos do watchtower
+ * @deprecated Use useWatchtowerEvents from AppProvider instead
  */
 export function useWatchtowerEvents(): WatchtowerEventForUI[] {
-  const { state } = useWatchtower()
-  return state.events
+  throw new Error('useWatchtowerEvents is deprecated. Use useWatchtowerEvents from AppProvider.')
 }
 
 export default WatchtowerProvider

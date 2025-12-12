@@ -227,17 +227,17 @@ export function validateRoute(
 /**
  * Calcula custo total de uma rota
  */
-export function calculateRouteCost(route: Route): {
+export function calculateRouteCost(
+  route: Route,
+  amountMsat: bigint,
+): {
   totalFee: bigint
   totalAmount: bigint
   totalCltv: number
 } {
   return {
     totalFee: route.totalFee,
-    totalAmount: route.hops.reduce((sum, hop) => {
-      const fee = BigInt(hop.feeBaseMsat) + (sum * BigInt(hop.feeProportionalMillionths)) / 1000000n
-      return sum + fee
-    }, 0n),
+    totalAmount: amountMsat + route.totalFee,
     totalCltv: route.totalCltv,
   }
 }

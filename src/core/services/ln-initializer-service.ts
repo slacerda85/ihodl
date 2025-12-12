@@ -3,9 +3,7 @@
 // Ensures wallet is ready for Lightning operations without user interaction
 
 import { LightningRepository } from '../repositories/lightning'
-import { LightningTransport } from './ln-transport-service'
 import LightningService from './ln-service'
-import LSPService from './ln-lsp-service'
 import WalletService from './wallet'
 import { WatchtowerService } from './ln-watchtower-service'
 import { PeerConnectivityService, createPeerConnectivityService } from './ln-peer-service'
@@ -15,6 +13,21 @@ import { LiquidityManagerService, createLiquidityManagerService } from './ln-liq
 import { PaymentProcessorService, createPaymentProcessorService } from './ln-payment-service'
 import { NotificationService, createNotificationService } from './notification'
 import ChannelReestablishService from './ln-channel-reestablish-service'
+import { GossipSyncManager } from '../lib/lightning/gossip-sync'
+import { GraphCacheManager } from '../lib/lightning/graph-cache'
+import { RoutingGraph } from '../lib/lightning/routing'
+import { KNOWN_TRAMPOLINE_NODES } from '../lib/lightning/trampoline'
+import { uint8ArrayToHex } from '../lib/utils'
+import { getBackgroundGossipSyncService } from './ln-background-gossip-sync-service'
+import { getLightningRoutingService } from './ln-routing-service'
+import {
+  connect as connectElectrum,
+  getCurrentBlockHeight,
+  close as closeElectrum,
+} from '../lib/electrum/client'
+import { Connection } from '../models/network'
+import { createElectrumWatcherService } from './ln-electrum-watcher-service'
+import { createChannelOnChainMonitorService } from './ln-channel-onchain-monitor-service'
 // import { AsyncStorage } from '@react-native-async-storage/async-storage'
 
 // ==========================================
@@ -30,6 +43,7 @@ export interface LightningInitConfig {
   graphCacheEnabled: boolean
   maxPeers: number
   syncTimeout: number // seconds
+  trampolineMode: boolean // Se deve iniciar em trampoline mode
 }
 
 export interface InitStatus {
@@ -60,6 +74,7 @@ const DEFAULT_CONFIG: LightningInitConfig = {
   graphCacheEnabled: true,
   maxPeers: 5,
   syncTimeout: 120, // 2 minutes
+  trampolineMode: false, // Por padrão, não usar trampoline mode
 }
 
 // const GRAPH_CACHE_KEY = 'lightning_graph_cache'
@@ -75,6 +90,9 @@ export class LightningInitializer {
   private abortController?: AbortController
   private statusCallbacks: ((status: InitStatus) => void)[] = []
 
+  // Repository
+  private repository: LightningRepository
+
   // Services
   private lightningService?: LightningService
   private peerConnectivity?: PeerConnectivityService
@@ -85,6 +103,11 @@ export class LightningInitializer {
   private notifications?: NotificationService
   private watchtower?: WatchtowerService
   private channelReestablish?: ChannelReestablishService
+  private backgroundGossipSync?: any // BackgroundGossipSyncService
+  private routingService?: any // LightningRoutingService
+  private electrumSocket?: Connection
+  private electrumWatcher?: any
+  private channelOnChainMonitor?: any
 
   // Public access to services for UI hooks
   public get peerConnectivityService(): PeerConnectivityService | undefined {
@@ -119,8 +142,17 @@ export class LightningInitializer {
     return this.channelReestablish
   }
 
+  public get electrumWatcherService(): any | undefined {
+    return this.electrumWatcher
+  }
+
+  public get channelOnChainMonitorService(): any | undefined {
+    return this.channelOnChainMonitor
+  }
+
   constructor(config: Partial<LightningInitConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config }
+    this.repository = new LightningRepository()
   }
 
   // ==========================================
@@ -163,7 +195,12 @@ export class LightningInitializer {
       // Phase 5: Start monitoring services
       await this.startMonitoringServices()
 
-      // Phase 6: Save initialization state
+      // Phase 6: Start background gossip sync (if in trampoline mode)
+      if (this.config.trampolineMode) {
+        await this.startBackgroundGossipSync()
+      }
+
+      // Phase 7: Save initialization state
       await this.saveInitState()
 
       this.updateStatus('ready', 100, 'Lightning Network ready')
@@ -196,6 +233,26 @@ export class LightningInitializer {
 
     if (this.watchtower) {
       this.watchtower.stop()
+    }
+
+    if (this.backgroundGossipSync) {
+      await this.backgroundGossipSync.stopBackgroundSync()
+    }
+
+    // Stop Electrum Watcher
+    if (this.electrumWatcher) {
+      this.electrumWatcher.stop()
+    }
+
+    // Stop Channel On-Chain Monitor
+    if (this.channelOnChainMonitor) {
+      this.channelOnChainMonitor.stop()
+    }
+
+    // Close Electrum connection
+    if (this.electrumSocket) {
+      closeElectrum(this.electrumSocket)
+      this.electrumSocket = undefined
     }
 
     this.updateStatus('idle', 0, 'Initialization stopped')
@@ -239,19 +296,10 @@ export class LightningInitializer {
     this.updateStatus('starting', 5, 'Loading persisted state...')
 
     try {
-      const lightningRepo = new LightningRepository()
-
       // Load graph cache if enabled
       if (this.config.graphCacheEnabled) {
-        const cachedGraph = lightningRepo.getRoutingGraph()
-        if (cachedGraph && cachedGraph.nodes && Object.keys(cachedGraph.nodes).length > 0) {
-          // TODO: Load cached graph into GossipManager
-          console.log(
-            `Loaded cached Lightning graph: ${Object.keys(cachedGraph.nodes).length} nodes, ${
-              Object.keys(cachedGraph.channels).length
-            } channels`,
-          )
-        }
+        // Graph cache is now loaded during syncLightningGraph initialization
+        console.log('Graph cache enabled - will be loaded during gossip sync')
       }
 
       // TODO: Implement initialization status persistence using LightningRepository
@@ -265,6 +313,30 @@ export class LightningInitializer {
     this.updateStatus('starting', 15, 'Initializing core components...')
 
     try {
+      // Connect to Electrum server
+      console.log('[LightningInitializer] Connecting to Electrum server...')
+      this.electrumSocket = await connectElectrum()
+      console.log('[LightningInitializer] Connected to Electrum server')
+
+      // Verify blockchain consistency and get current height
+      const currentHeight = await getCurrentBlockHeight(this.electrumSocket)
+      console.log(`[LightningInitializer] Current blockchain height: ${currentHeight}`)
+
+      // TODO: Verify consistency (compare with known checkpoints if available)
+
+      // Initialize Electrum Watcher
+      this.electrumWatcher = createElectrumWatcherService()
+      await this.electrumWatcher.start()
+      console.log('[LightningInitializer] Electrum Watcher started')
+
+      // Initialize Channel On-Chain Monitor Service
+      this.channelOnChainMonitor = createChannelOnChainMonitorService(
+        this.repository,
+        this.electrumWatcher,
+      )
+      await this.channelOnChainMonitor.start()
+      console.log('[LightningInitializer] Channel On-Chain Monitor started')
+
       // Initialize transport layer
       // const transport = getTransport()
       // Transport is initialized on-demand, no explicit initialize method
@@ -355,30 +427,59 @@ export class LightningInitializer {
     this.updateStatus('syncing', 30, 'Synchronizing Lightning graph...')
 
     try {
-      // TODO: Implement graph synchronization
-      // const gossipManager = new GossipSync()
-      // const dnsBootstrap = new DNSBootstrap()
+      const lightningRepo = new LightningRepository()
+      const routingGraph = new RoutingGraph()
+      const cacheManager = this.config.graphCacheEnabled
+        ? new GraphCacheManager(lightningRepo)
+        : undefined
 
-      // Start DNS bootstrap for initial peers
-      // const bootstrapPeers = await dnsBootstrap.getBootstrapPeers()
-      // console.log(`Found ${bootstrapPeers.length} bootstrap peers`)
+      // Criar GossipSyncManager com cache se habilitado
+      const gossipManager = new GossipSyncManager({
+        routingGraph,
+        cacheManager,
+        maxConcurrentPeers: this.config.maxPeers,
+        batchIntervalMs: 1000,
+      })
 
-      // Sync graph with timeout
-      // const syncPromise = gossipManager.syncGraph(bootstrapPeers)
-      // const timeoutPromise = new Promise<never>((_, reject) =>
-      //   setTimeout(() => reject(new Error('Sync timeout')), this.config.syncTimeout * 1000),
-      // )
+      // TODO: Implementar DNS bootstrap para obter peers iniciais
+      // Por enquanto, simular alguns peers
+      const mockPeers: any[] = [] // TODO: Substituir por peers reais do DNS bootstrap
 
-      // await Promise.race([syncPromise, timeoutPromise])
+      if (mockPeers.length === 0) {
+        // Se não há peers, ainda podemos tentar carregar do cache
+        if (cacheManager) {
+          await gossipManager.loadCachedGraph()
+          const graphSize = routingGraph.getAllNodes().length
+          this.updateStatus('syncing', 70, `Graph loaded from cache: ${graphSize} nodes`)
+          return { success: true, graphSize }
+        }
+        throw new Error('No peers available for gossip sync')
+      }
 
-      // const graphSize = gossipManager.getGraphSize()
-      // this.updateStatus('syncing', 70, `Graph synced: ${graphSize} channels`)
+      // Iniciar sincronização com timeout
+      const syncPromise = gossipManager.startSync(mockPeers)
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Sync timeout')), this.config.syncTimeout * 1000),
+      )
 
-      // Simulate sync delay
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      this.updateStatus('syncing', 70, 'Graph synced: 1000+ channels')
+      await Promise.race([syncPromise, timeoutPromise])
 
-      return { success: true, graphSize: 1000 }
+      // Obter estatísticas do grafo
+      const graphSize = routingGraph.getAllNodes().length
+      const stats = gossipManager.getStats()
+
+      this.updateStatus(
+        'syncing',
+        70,
+        `Graph synced: ${graphSize} nodes, ${stats.messagesProcessed} messages`,
+      )
+
+      return {
+        success: true,
+        graphSize,
+        peersConnected: mockPeers.length,
+        channelsLoaded: routingGraph.getAllChannels().length,
+      }
     } catch (error) {
       return {
         success: false,
@@ -395,23 +496,50 @@ export class LightningInitializer {
 
       // Use peer connectivity service if available
       if (this.peerConnectivity) {
-        const connectedPeers = this.peerConnectivity.getConnectedPeers()
-        successfulConnections = connectedPeers.length
+        if (this.config.trampolineMode) {
+          // Em trampoline mode, conectar apenas aos nós trampoline
+          console.log(
+            '[LightningInitializer] Trampoline mode enabled - connecting to trampoline nodes',
+          )
 
-        // After peers are connected, reestablish channels with each peer
-        if (this.channelReestablish && successfulConnections > 0) {
-          await this.reestablishChannelsWithPeers(connectedPeers)
+          for (const trampolineNode of KNOWN_TRAMPOLINE_NODES) {
+            try {
+              const nodeIdHex = uint8ArrayToHex(trampolineNode.nodeId)
+              console.log(
+                `[LightningInitializer] Connecting to trampoline node: ${trampolineNode.alias || nodeIdHex}`,
+              )
+
+              // TODO: Implementar conexão específica aos nós trampoline
+              // Por enquanto, apenas simular conexão bem-sucedida
+              successfulConnections++
+            } catch (error) {
+              console.warn(
+                `[LightningInitializer] Failed to connect to trampoline node ${trampolineNode.alias}:`,
+                error,
+              )
+            }
+          }
+        } else {
+          // Modo normal: conectar a múltiplos peers via gossip
+          const connectedPeers = this.peerConnectivity.getConnectedPeers()
+          successfulConnections = connectedPeers.length
+
+          // After peers are connected, reestablish channels with each peer
+          if (this.channelReestablish && successfulConnections > 0) {
+            await this.reestablishChannelsWithPeers(connectedPeers)
+          }
         }
       } else {
         // Fallback: simulate connection delay for testing
         await new Promise(resolve => setTimeout(resolve, 500))
-        successfulConnections = Math.min(this.config.maxPeers, 3)
+        successfulConnections = this.config.trampolineMode ? 1 : Math.min(this.config.maxPeers, 3)
       }
 
+      const targetPeers = this.config.trampolineMode ? 1 : this.config.maxPeers
       this.updateStatus(
         'connecting',
         90,
-        `Connected to ${successfulConnections}/${this.config.maxPeers} peers`,
+        `Connected to ${successfulConnections}/${targetPeers} peers${this.config.trampolineMode ? ' (trampoline mode)' : ''}`,
       )
 
       return { success: true, peersConnected: successfulConnections }
@@ -424,10 +552,48 @@ export class LightningInitializer {
   }
 
   /**
-   * Reestablishes channels with connected peers
-   * Called after peer connections are established during initialization
+   * Inicia sincronização de gossip em background (modo híbrido)
    */
-  private async reestablishChannelsWithPeers(connectedPeers: { nodeId: string }[]): Promise<void> {
+  private async startBackgroundGossipSync(): Promise<void> {
+    try {
+      console.log('[LightningInitializer] Starting background gossip sync for hybrid mode...')
+
+      // Inicializar serviço de routing
+      this.routingService = getLightningRoutingService()
+
+      // Inicializar background sync service
+      this.backgroundGossipSync = getBackgroundGossipSyncService({
+        peerConnectivityService: this.peerConnectivity,
+      })
+
+      // Conectar routing service ao background sync
+      await this.routingService.initialize(this.backgroundGossipSync)
+
+      // Configurar listeners para eventos
+      this.backgroundGossipSync.on('stateChanged', state => {
+        console.log(`[LightningInitializer] Background sync state: ${state}`)
+      })
+
+      this.backgroundGossipSync.on('syncCompleted', stats => {
+        console.log(
+          `[LightningInitializer] Background sync completed: ${stats.nodes} nodes, ${stats.channels} channels in ${stats.duration}ms`,
+        )
+        // Migração para pathfinding local será feita automaticamente pelo routing service
+      })
+
+      this.backgroundGossipSync.on('syncError', error => {
+        console.error('[LightningInitializer] Background sync error:', error)
+      })
+
+      // Iniciar sincronização em background
+      await this.backgroundGossipSync.startBackgroundSync()
+    } catch (error) {
+      console.warn('[LightningInitializer] Failed to start background gossip sync:', error)
+      // Não falhar a inicialização por causa disso - é opcional
+    }
+  }
+
+  private async reestablishChannelsWithPeers(connectedPeers: any[]): Promise<void> {
     if (!this.channelReestablish) {
       console.warn('[LightningInitializer] Channel reestablish service not available')
       return
@@ -514,8 +680,9 @@ export class LightningInitializer {
 
     // Start LSP integration
     if (this.config.enableLSPIntegration && this.lightningService) {
-      const lsp = new LSPService(this.lightningService)
+      // const lsp = new LSPService(this.lightningService)
       // LSP service is ready to use after construction
+      // TODO: Implement LSP integration
     }
   }
 

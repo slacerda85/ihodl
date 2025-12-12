@@ -5,6 +5,7 @@ import { createPublicKey, deriveChildKey, splitMasterKey } from '@/core/lib/key'
 import { Utxo } from '@/core/models/transaction'
 import { fromBech32, deriveAddress } from '../address'
 import { connect, callElectrumMethod } from '../electrum'
+import { getAllBech32Prefixes } from '@/config/network'
 import {
   BuildTransactionParams,
   BuildTransactionResult,
@@ -407,7 +408,8 @@ function compactSignatureToDER(compactSignature: Uint8Array): Uint8Array {
 function createScriptPubKey(address: string): Uint8Array {
   try {
     // For Bech32 addresses (P2WPKH)
-    if (address.startsWith('bc1')) {
+    const bech32Prefixes = getAllBech32Prefixes().map(prefix => `${prefix}1`)
+    if (bech32Prefixes.some(prefix => address.startsWith(prefix))) {
       const { version, data } = fromBech32(address)
 
       if (version !== 0) {

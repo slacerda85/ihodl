@@ -15,7 +15,7 @@ import {
   ActivityIndicator,
 } from 'react-native'
 
-import { useLightningContext } from './hooks'
+import { useLightningState, useLightningActions } from '@/ui/features/app-provider'
 import { formatMsat, satToMsat } from './utils'
 import type { Invoice } from './types'
 
@@ -148,7 +148,8 @@ function LightningInvoiceGenerator({
   onInvoiceGenerated,
   onError,
 }: LightningInvoiceGeneratorProps) {
-  const { state, generateInvoice } = useLightningContext()
+  const state = useLightningState()
+  const { generateInvoice } = useLightningActions()
   const [amount, setAmount] = useState('')
   const [description, setDescription] = useState('')
   const [invoice, setInvoice] = useState<Invoice | null>(null)

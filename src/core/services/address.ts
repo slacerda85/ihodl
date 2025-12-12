@@ -15,6 +15,9 @@ import AddressRepository from '../repositories/address'
 import KeyService from './key'
 import SeedService from './seed'
 import { walletService } from './wallet'
+import { getAllBech32Prefixes, getNetworkConfig } from '../../config/network'
+
+const VALID_BECH32_HRPS = getAllBech32Prefixes().map(hrp => `${hrp}1`)
 
 // Lazy imports to avoid circular dependency
 // TransactionService and WalletService are imported dynamically where needed
@@ -51,7 +54,8 @@ export default class AddressService implements AddressServiceInterface {
 
   createAddress(publicKey: Uint8Array): string {
     // Implementation to create a single address
-    const address = createAddress(publicKey)
+    const config = getNetworkConfig()
+    const address = createAddress(publicKey, 0, config.bech32Hrp)
     return address
   }
 
@@ -60,12 +64,14 @@ export default class AddressService implements AddressServiceInterface {
   }
 
   createP2TRAddress(publicKey: Uint8Array): string {
-    return createP2TRAddress(publicKey)
+    const config = getNetworkConfig()
+    return createP2TRAddress(publicKey, config.bech32Hrp)
   }
 
   createManyAddresses(publicKeys: Uint8Array[]): string[] {
     // Implementation to create multiple addresses
-    return publicKeys.map(publicKey => createAddress(publicKey))
+    const config = getNetworkConfig()
+    return publicKeys.map(publicKey => createAddress(publicKey, 0, config.bech32Hrp))
   }
 
   getAccountKeys(): {
@@ -463,11 +469,12 @@ export default class AddressService implements AddressServiceInterface {
 
     const trimmedAddress = address.trim()
 
-    // Check if it's a Bech32 address (starts with bc1)
-    if (trimmedAddress.startsWith('bc1')) {
+    // Check if it's a Bech32 address
+    if (VALID_BECH32_HRPS.some(hrp1 => trimmedAddress.startsWith(hrp1))) {
+      const hrps = getAllBech32Prefixes()
       try {
-        fromBech32(trimmedAddress)
-        return true
+        const result = fromBech32(trimmedAddress)
+        return hrps.includes(result.prefix)
       } catch {
         return false
       }

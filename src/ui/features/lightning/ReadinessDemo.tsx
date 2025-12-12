@@ -7,15 +7,20 @@
 
 import React from 'react'
 import { View, Text, Button } from 'react-native'
-import { LightningReadinessGuard, LightningReadinessStatus } from '@/ui/features/lightning'
-import { useLightningReadiness } from './hooks'
+import {
+  LightningReadinessGuard,
+  LightningInitStatus,
+  LightningTrafficControlStatus,
+} from '@/ui/features/lightning'
+import { useLightningReadinessState, useLightningReadinessLevel } from '@/ui/features/app-provider'
 import { ReadinessLevel } from '@/core/models/lightning/readiness'
 
 /**
  * Exemplo de componente que usa o hook useLightningReadiness
  */
 function ReadinessAwareComponent() {
-  const { readinessState, readinessLevel } = useLightningReadiness()
+  const readinessState = useLightningReadinessState()
+  const readinessLevel = useLightningReadinessLevel()
 
   return (
     <View>
@@ -41,12 +46,23 @@ function SendPaymentButton() {
 }
 
 /**
- * Exemplo de componente que usa LightningReadinessStatus
+ * Exemplo de componente que usa LightningInitStatus
  */
-function StatusScreen() {
+function InitStatusScreen() {
   return (
     <View>
-      <LightningReadinessStatus />
+      <LightningInitStatus />
+    </View>
+  )
+}
+
+/**
+ * Exemplo de componente que usa LightningTrafficControlStatus
+ */
+function TrafficControlScreen() {
+  return (
+    <View>
+      <LightningTrafficControlStatus />
     </View>
   )
 }
@@ -68,7 +84,11 @@ export function ReadinessDemoScreen() {
       </View>
 
       <View style={{ marginTop: 20 }}>
-        <StatusScreen />
+        <InitStatusScreen />
+      </View>
+
+      <View style={{ marginTop: 20 }}>
+        <TrafficControlScreen />
       </View>
     </View>
   )
