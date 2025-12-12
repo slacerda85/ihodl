@@ -5,6 +5,7 @@ import SeedRepository from '@/core/repositories/seed'
 import { walletService } from '@/core/services'
 import LightningSettingsSection from './LightningSettingsSection'
 import CloudSyncSection from './CloudSyncSection'
+import LightningDebugPanel from '../lightning/components/LightningDebugPanel'
 
 export default function SettingsScreen() {
   const colorMode = useActiveColorMode()
@@ -44,6 +45,11 @@ export default function SettingsScreen() {
 
   return (
     <ScrollView style={styles[colorMode].container}>
+      {__DEV__ && (
+        <View style={styles[colorMode].section}>
+          <LightningDebugPanel />
+        </View>
+      )}
       <View style={styles[colorMode].section}>
         <Text style={styles[colorMode].subtitle}>Tema</Text>
         <View style={styles[colorMode].settingRow}>

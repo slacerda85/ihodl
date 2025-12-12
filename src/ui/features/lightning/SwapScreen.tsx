@@ -21,7 +21,7 @@ import {
 
 import { useSubmarineSwap } from './hooks'
 import { useLightningBalance } from '@/ui/features/app-provider'
-import { SwapType } from '@/core/lib/lightning/submarineSwap'
+import { SwapType } from '@/core/services/ln-submarine-swap-service'
 import { formatSats } from './utils'
 import SwapProgress from './SwapProgress'
 

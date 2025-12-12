@@ -2,9 +2,6 @@
  * Barrel export para hooks Lightning
  */
 
-// Context hook
-export { useLightningContext } from './useLightningContext'
-
 // Readiness hook
 export { useLightningReadiness } from './useLightningReadiness'
 

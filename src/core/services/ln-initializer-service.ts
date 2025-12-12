@@ -42,8 +42,12 @@ export interface LightningInitConfig {
   enableLSPIntegration: boolean
   graphCacheEnabled: boolean
   maxPeers: number
+  peerReconnectIntervalMs: number
+  peerMaxReconnectAttempts: number
   syncTimeout: number // seconds
   trampolineMode: boolean // Se deve iniciar em trampoline mode
+  electrumMaxRetries: number
+  electrumBackoffMs: number
 }
 
 export interface InitStatus {
@@ -73,8 +77,12 @@ const DEFAULT_CONFIG: LightningInitConfig = {
   enableLSPIntegration: true,
   graphCacheEnabled: true,
   maxPeers: 5,
+  peerReconnectIntervalMs: 30000,
+  peerMaxReconnectAttempts: 10,
   syncTimeout: 120, // 2 minutes
   trampolineMode: false, // Por padrão, não usar trampoline mode
+  electrumMaxRetries: 5,
+  electrumBackoffMs: 1000,
 }
 
 // const GRAPH_CACHE_KEY = 'lightning_graph_cache'
@@ -292,6 +300,64 @@ export class LightningInitializer {
     this.statusCallbacks.forEach(callback => callback(this.status))
   }
 
+  private async connectElectrumWithRetry(): Promise<Connection> {
+    if (this.electrumSocket) {
+      return this.electrumSocket
+    }
+
+    const maxAttempts = Math.max(1, this.config.electrumMaxRetries)
+    let attempt = 0
+    let lastError: unknown
+
+    while (attempt < maxAttempts) {
+      if (this.abortController?.signal.aborted) {
+        throw new Error('Initialization aborted during Electrum connection')
+      }
+
+      attempt += 1
+      try {
+        this.updateStatus('starting', 10 + attempt, `Connecting to Electrum (attempt ${attempt})`)
+        const socket = await connectElectrum()
+        this.electrumSocket = socket
+        return socket
+      } catch (error) {
+        lastError = error
+        console.warn(`[LightningInitializer] Electrum connection attempt ${attempt} failed:`, error)
+
+        if (attempt >= maxAttempts) {
+          break
+        }
+
+        const backoffMs = this.config.electrumBackoffMs * Math.pow(2, attempt - 1)
+        await new Promise(resolve => setTimeout(resolve, backoffMs))
+      }
+    }
+
+    throw lastError instanceof Error
+      ? lastError
+      : new Error('Failed to connect to Electrum after retries')
+  }
+
+  private async ensureElectrumWatcherStarted(): Promise<void> {
+    if (!this.electrumWatcher) {
+      this.electrumWatcher = createElectrumWatcherService()
+    }
+
+    // Service start is idempotent; safe to call multiple times
+    await this.electrumWatcher.start()
+  }
+
+  private async ensureChannelOnChainMonitorStarted(): Promise<void> {
+    if (!this.channelOnChainMonitor) {
+      this.channelOnChainMonitor = createChannelOnChainMonitorService(
+        this.repository,
+        this.electrumWatcher,
+      )
+    }
+
+    await this.channelOnChainMonitor.start()
+  }
+
   private async loadPersistedState(): Promise<void> {
     this.updateStatus('starting', 5, 'Loading persisted state...')
 
@@ -313,9 +379,9 @@ export class LightningInitializer {
     this.updateStatus('starting', 15, 'Initializing core components...')
 
     try {
-      // Connect to Electrum server
+      // Connect to Electrum server with retries/backoff
       console.log('[LightningInitializer] Connecting to Electrum server...')
-      this.electrumSocket = await connectElectrum()
+      this.electrumSocket = await this.connectElectrumWithRetry()
       console.log('[LightningInitializer] Connected to Electrum server')
 
       // Verify blockchain consistency and get current height
@@ -324,18 +390,11 @@ export class LightningInitializer {
 
       // TODO: Verify consistency (compare with known checkpoints if available)
 
-      // Initialize Electrum Watcher
-      this.electrumWatcher = createElectrumWatcherService()
-      await this.electrumWatcher.start()
-      console.log('[LightningInitializer] Electrum Watcher started')
+      // Initialize Electrum Watcher (idempotent start)
+      await this.ensureElectrumWatcherStarted()
 
-      // Initialize Channel On-Chain Monitor Service
-      this.channelOnChainMonitor = createChannelOnChainMonitorService(
-        this.repository,
-        this.electrumWatcher,
-      )
-      await this.channelOnChainMonitor.start()
-      console.log('[LightningInitializer] Channel On-Chain Monitor started')
+      // Initialize Channel On-Chain Monitor Service (idempotent start)
+      await this.ensureChannelOnChainMonitorStarted()
 
       // Initialize transport layer
       // const transport = getTransport()
@@ -349,6 +408,8 @@ export class LightningInitializer {
       if (this.config.enablePeerConnectivity) {
         this.peerConnectivity = createPeerConnectivityService({
           maxPeers: this.config.maxPeers,
+          reconnectInterval: this.config.peerReconnectIntervalMs,
+          maxReconnectAttempts: this.config.peerMaxReconnectAttempts,
         })
         await this.peerConnectivity.start()
       }
@@ -604,8 +665,11 @@ export class LightningInitializer {
     const repository = new LightningRepository()
     const allChannels = repository.findAllChannels()
 
+    this.channelReestablish.resetStats()
+
     let reestablishedCount = 0
     let failedCount = 0
+    let attemptedCount = 0
 
     for (const peer of connectedPeers) {
       // Find channels with this peer
@@ -633,6 +697,8 @@ export class LightningInitializer {
             peer.nodeId,
           )
 
+          attemptedCount += 1
+
           if (result.success) {
             reestablishedCount++
             console.log(`[LightningInitializer] Channel ${channel.channelId} reestablished`)
@@ -656,10 +722,18 @@ export class LightningInitializer {
       `[LightningInitializer] Channel reestablishment complete: ${reestablishedCount} succeeded, ${failedCount} failed`,
     )
 
+    const stats = this.channelReestablish.getStats()
+    const totalChannels = Object.keys(allChannels).length
+    const isChannelReady = totalChannels === 0 ? true : stats.failed === 0 && stats.attempted > 0
+
+    if (this.lightningService) {
+      this.lightningService.updateReadinessState({ isChannelReestablished: isChannelReady })
+    }
+
     this.updateStatus(
       'connecting',
       85,
-      `Reestablished ${reestablishedCount} channels${failedCount > 0 ? `, ${failedCount} failed` : ''}`,
+      `Reestablished ${reestablishedCount}/${attemptedCount || totalChannels} channels${failedCount > 0 ? `, ${failedCount} failed` : ''}`,
     )
   }
 

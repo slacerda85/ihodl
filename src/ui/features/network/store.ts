@@ -12,8 +12,7 @@
  */
 
 import { Connection } from '@/core/models/network'
-import { LightningWorker } from '@/core/lib/lightning/worker'
-import networkService from '@/core/services/network'
+import networkService, { type LightningWorker } from '@/core/services/network'
 
 // ==========================================
 // TYPES

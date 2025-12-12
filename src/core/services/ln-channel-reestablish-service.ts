@@ -37,12 +37,28 @@ export interface ChannelReestablishData {
   myCurrentPerCommitmentPoint: Uint8Array
 }
 
+export interface ChannelReestablishStats {
+  attempted: number
+  succeeded: number
+  failed: number
+  htlcsResumed: number
+  lastErrors: { channelId: string; nodeId: string; error: string }[]
+  lastRunAt?: number
+}
+
 // ==========================================
 // CHANNEL REESTABLISH SERVICE
 // ==========================================
 
 export class ChannelReestablishService {
   private readonly repository = lightningRepository
+  private stats: ChannelReestablishStats = {
+    attempted: 0,
+    succeeded: 0,
+    failed: 0,
+    htlcsResumed: 0,
+    lastErrors: [],
+  }
 
   /**
    * Reestablishes a channel after peer reconnection
@@ -50,10 +66,14 @@ export class ChannelReestablishService {
    */
   async reestablishChannel(channelId: ChannelId, nodeId: string): Promise<ReestablishResult> {
     try {
+      this.stats.attempted += 1
+      this.stats.lastRunAt = Date.now()
+
       // Load channel data from repository
       const channelIdHex = uint8ArrayToHex(channelId)
       const channelData = await this.repository.findChannelById(channelIdHex)
       if (!channelData) {
+        this.recordFailure(channelId, nodeId, 'Channel not found in repository')
         return {
           success: false,
           channelId,
@@ -66,6 +86,7 @@ export class ChannelReestablishService {
       // Get current channel state
       const currentState = channelData.state as ChannelState
       if (currentState === ChannelState.CLOSED || currentState === ChannelState.CLOSING) {
+        this.recordFailure(channelId, nodeId, 'Channel is closed or closing')
         return {
           success: false,
           channelId,
@@ -87,9 +108,12 @@ export class ChannelReestablishService {
       // For now, assume success and update state
       const result = await this.handleReestablishResponse(channelId, channelData)
 
+      this.recordSuccess(result.htlcsResumed)
+
       return result
     } catch (error) {
       console.error('Channel reestablishment failed:', error)
+      this.recordFailure(channelId, nodeId, error)
       return {
         success: false,
         channelId,
@@ -97,6 +121,21 @@ export class ChannelReestablishService {
         htlcsResumed: 0,
         error: error instanceof Error ? error.message : 'Unknown error',
       }
+    }
+  }
+
+  getStats(): ChannelReestablishStats {
+    return { ...this.stats, lastErrors: [...this.stats.lastErrors] }
+  }
+
+  resetStats(): void {
+    this.stats = {
+      attempted: 0,
+      succeeded: 0,
+      failed: 0,
+      htlcsResumed: 0,
+      lastErrors: [],
+      lastRunAt: undefined,
     }
   }
 
@@ -154,6 +193,24 @@ export class ChannelReestablishService {
       dataLoss,
       htlcsResumed,
     }
+  }
+
+  private recordSuccess(resumed: number): void {
+    this.stats.succeeded += 1
+    this.stats.htlcsResumed += resumed
+    this.stats.lastRunAt = Date.now()
+  }
+
+  private recordFailure(channelId: ChannelId, nodeId: string, error: unknown): void {
+    this.stats.failed += 1
+    this.stats.lastRunAt = Date.now()
+
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    const channelIdHex = uint8ArrayToHex(channelId)
+    this.stats.lastErrors = [
+      { channelId: channelIdHex, nodeId, error: message },
+      ...this.stats.lastErrors,
+    ].slice(0, 10)
   }
 
   /**

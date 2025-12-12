@@ -19,8 +19,9 @@ import watchtowerService, {
   WatchtowerEventForUI,
   MonitoredChannel,
   WatchtowerServiceConfig,
+  type BreachResult,
+  type ChannelInfo,
 } from '@/core/services/ln-watchtower-service'
-import { BreachResult, ChannelInfo } from '@/core/lib/lightning/watchtower'
 
 // ==========================================
 // TIPOS
@@ -133,7 +134,6 @@ export function WatchtowerProvider({ children, autoStart = false }: WatchtowerPr
           isRunning: status.isRunning,
           status,
           channels,
-          events,
           hasBreaches: status.breachesDetected > 0,
           lastBreachEvent: events.find(e => e.type === 'breach_detected'),
         })

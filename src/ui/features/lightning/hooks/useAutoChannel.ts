@@ -4,7 +4,6 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useLightningState } from './useLightningState'
-import { useLightningActions } from './useLightningActions'
 import { useIsAutoChannelEnabled } from './useLightningPolicy'
 import { useInboundBalance } from './useInboundBalance'
 import { useLiquidityPolicy } from './useLiquidityPolicy'
@@ -145,7 +144,6 @@ export function useLSPIntegration() {
  */
 export function useAutoChannelOpening() {
   const isAutoEnabled = useIsAutoChannelEnabled()
-  const { createChannel } = useLightningActions()
   const inboundCapacity = useInboundCapacity()
   const inboundBalance = useInboundBalance()
   const liquidityPolicy = useLiquidityPolicy()

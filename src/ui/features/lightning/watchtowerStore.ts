@@ -10,8 +10,9 @@ import watchtowerService, {
   WatchtowerEventForUI,
   MonitoredChannel,
   WatchtowerServiceConfig,
+  type BreachResult,
+  type ChannelInfo,
 } from '@/core/services/ln-watchtower-service'
-import { BreachResult, ChannelInfo } from '@/core/lib/lightning/watchtower'
 
 // ==========================================
 // TYPES
@@ -153,76 +154,78 @@ class WatchtowerStore {
   }
 
   // ==========================================
-  // ACTIONS
+  // ACTIONS GETTER
   // ==========================================
 
-  actions: WatchtowerStoreActions = {
-    initialize: async (config?: Partial<WatchtowerServiceConfig>): Promise<void> => {
-      try {
-        await watchtowerService.initialize({
-          autoStart: false,
-          ...config,
-        })
+  get actions(): WatchtowerStoreActions {
+    return {
+      initialize: async (config?: Partial<WatchtowerServiceConfig>): Promise<void> => {
+        try {
+          await watchtowerService.initialize({
+            autoStart: false,
+            ...config,
+          })
+          this.updateStateFromService()
+          this.notify()
+        } catch (error) {
+          console.error('[WatchtowerStore] Initialization failed:', error)
+          throw error
+        }
+      },
+
+      start: (): void => {
+        watchtowerService.start()
         this.updateStateFromService()
         this.notify()
-      } catch (error) {
-        console.error('[WatchtowerStore] Initialization failed:', error)
-        throw error
-      }
-    },
+      },
 
-    start: (): void => {
-      watchtowerService.start()
-      this.updateStateFromService()
-      this.notify()
-    },
-
-    stop: (): void => {
-      watchtowerService.stop()
-      this.updateStateFromService()
-      this.notify()
-    },
-
-    addChannel: (channelId: string, channelInfo: ChannelInfo, remotePubkey: Uint8Array): void => {
-      watchtowerService.addChannel(channelId, channelInfo, remotePubkey)
-      this.updateStateFromService()
-      this.notify()
-    },
-
-    removeChannel: (channelId: string): void => {
-      watchtowerService.removeChannel(channelId)
-      this.updateStateFromService()
-      this.notify()
-    },
-
-    refreshChannels: (): void => {
-      this.updateStateFromService()
-      this.notify()
-    },
-
-    checkChannel: (channelId: string, txHex: string): BreachResult => {
-      const result = watchtowerService.checkChannel(channelId, txHex)
-      if (result.breach) {
+      stop: (): void => {
+        watchtowerService.stop()
         this.updateStateFromService()
         this.notify()
-      }
-      return result
-    },
+      },
 
-    storeRevocationSecret: (
-      channelId: string,
-      commitmentNumber: bigint,
-      revocationSecret: Uint8Array,
-    ): void => {
-      watchtowerService.storeRevocationSecret(channelId, commitmentNumber, revocationSecret)
-      // No state update needed for this action
-    },
+      addChannel: (channelId: string, channelInfo: ChannelInfo, remotePubkey: Uint8Array): void => {
+        watchtowerService.addChannel(channelId, channelInfo, remotePubkey)
+        this.updateStateFromService()
+        this.notify()
+      },
 
-    clearEvents: (): void => {
-      watchtowerService.clearEvents()
-      this.updateStateFromService()
-      this.notify()
-    },
+      removeChannel: (channelId: string): void => {
+        watchtowerService.removeChannel(channelId)
+        this.updateStateFromService()
+        this.notify()
+      },
+
+      refreshChannels: (): void => {
+        this.updateStateFromService()
+        this.notify()
+      },
+
+      checkChannel: (channelId: string, txHex: string): BreachResult => {
+        const result = watchtowerService.checkChannel(channelId, txHex)
+        if (result.breach) {
+          this.updateStateFromService()
+          this.notify()
+        }
+        return result
+      },
+
+      storeRevocationSecret: (
+        channelId: string,
+        commitmentNumber: bigint,
+        revocationSecret: Uint8Array,
+      ): void => {
+        watchtowerService.storeRevocationSecret(channelId, commitmentNumber, revocationSecret)
+        // No state update needed for this action
+      },
+
+      clearEvents: (): void => {
+        watchtowerService.clearEvents()
+        this.updateStateFromService()
+        this.notify()
+      },
+    }
   }
 
   // ==========================================

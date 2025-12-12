@@ -7,7 +7,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react'
-import { HtlcMonitorState, HtlcAction } from '@/core/lib/lightning'
+import { HtlcMonitorState, HtlcAction } from '@/core/services/ln-htlc-service'
 import { useWorkerService } from './useWorkerService'
 
 // ============================================================================

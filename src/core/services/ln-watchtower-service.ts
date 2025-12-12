@@ -15,6 +15,9 @@ import Watchtower, {
   createWatchtower,
 } from '../lib/lightning/watchtower'
 
+// Reexport para consumo seguro pela UI via services
+export type { BreachResult, ChannelInfo }
+
 // ==========================================
 // TIPOS
 // ==========================================

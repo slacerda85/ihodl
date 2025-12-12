@@ -18,7 +18,7 @@ import {
   SwapManager,
   calculateSwapFee,
   MIN_SWAP_AMOUNT_SAT,
-} from '@/core/lib/lightning/submarineSwap'
+} from '@/core/services/ln-submarine-swap-service'
 import { useLightningState } from '@/ui/features/app-provider'
 
 // ==========================================

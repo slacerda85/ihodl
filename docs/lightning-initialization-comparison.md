@@ -64,25 +64,30 @@ O objetivo é identificar inconsistências na ordem de inicialização dos servi
 ### 1.3 iHodl
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                      LightningInitializer                        │
-├─────────────────────────────────────────────────────────────────┤
-│  LightningRepository    │  Persistência local                    │
-│  WalletService          │  Gerenciamento de carteiras           │
-├─────────────────────────┼───────────────────────────────────────┤
-│  LightningService       │  Serviço principal Lightning          │
-│  LightningTransport     │  Transporte P2P (WebSocket/TCP)       │
-├─────────────────────────┼───────────────────────────────────────┤
-│  PeerConnectivityService│  Gerenciamento de peers               │
-│  LightningMonitorService│  Monitoramento de HTLCs               │
-│  ErrorRecoveryService   │  Recuperação de erros                 │
-├─────────────────────────┼───────────────────────────────────────┤
-│  LiquidityManagerService│  Gerenciamento de liquidez            │
-│  PaymentProcessorService│  Processamento de pagamentos          │
-│  WatchtowerService      │  Monitoramento de canais              │
-│  NotificationService    │  Notificações                         │
-│  LSPService             │  Integração com LSP                   │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        LightningInitializer                              │
+├─────────────────────────────────────────────────────────────────────────┤
+│  LightningRepository      │  Persistência local / cache de grafo        │
+│  WalletService            │  Carteira ativa                              │
+├───────────────────────────┼─────────────────────────────────────────────┤
+│  LightningService         │  Serviço principal Lightning                 │
+│  Electrum Client/Watcher  │  Conexão + monitoramento on-chain            │
+│  Channel On-Chain Monitor │  Monitora funding/close                      │
+├───────────────────────────┼─────────────────────────────────────────────┤
+│  PeerConnectivityService  │  TCP + Noise + init BOLT1, DNS/bootstrap     │
+│  ChannelReestablishSvc    │  BOLT2 channel_reestablish                   │
+│  LightningMonitorService  │  HTLC monitoring (quando habilitado)         │
+│  ErrorRecoveryService     │  Recuperação de erros                        │
+├───────────────────────────┼─────────────────────────────────────────────┤
+│  LiquidityManagerService  │  Política de liquidez                        │
+│  PaymentProcessorService  │  Enfileira/processa pagamentos               │
+│  WatchtowerService        │  Monitoramento de canais                     │
+│  NotificationService      │  Notificações (best effort)                  │
+├───────────────────────────┼─────────────────────────────────────────────┤
+│  GossipSyncManager        │  Sync de grafo + GraphCache (cache-first)    │
+│  BackgroundGossipSync     │  Sync em background (modo híbrido/trampoline)│
+│  LightningRoutingService  │  Alterna trampoline ↔ pathfinding local      │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -312,11 +317,11 @@ PONTOS CRÍTICOS ELECTRUM:
 ✓ Dual mode: trampoline OU gossip (configurável)
 ```
 
-### 2.3 iHodl - Fluxo Sequencial
+### 2.3 iHodl - Fluxo Sequencial (atualizado)
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│                          IHODL INITIALIZATION FLOW                            │
+│                           IHODL INITIALIZATION FLOW                           │
 └──────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────┐
@@ -328,118 +333,97 @@ PONTOS CRÍTICOS ELECTRUM:
 │ FASE 1: React App Mount (_layout.tsx)                                       │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ 1.1 SplashScreen.preventAutoHideAsync()                                     │
-│ 1.2 AppProviders renderiza:                                                 │
-│     • AppProvider (stores singleton)                                        │
-│     • LightningProvider (estado Lightning)                                  │
-│     • WatchtowerProvider (monitoramento)                                    │
-│     • WalletChangeHandler (discover de endereços)                          │
-│ 1.3 SplashScreen.hideAsync()                                               │
+│ 1.2 Renderiza AppProvider + WalletChangeHandler + InactivityOverlay + Auth  │
+│     • ⚠ LightningProvider NÃO é montado no root; inicializa apenas          │
+│       quando algum screen/feature usar o provider.                         │
+│ 1.3 SplashScreen.hideAsync()                                                │
 └─────────────────────────────────────────────────────────────────────────────┘
-       │
+       │ (quando LightningProvider é montado)
        ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ FASE 2: LightningProvider Auto-Initialize                                   │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ 2.1 useEffect com autoInitialize = true                                     │
-│ 2.2 initialize() chamado:                                                   │
-│     • walletService.getActiveWalletId()                                     │
-│     • LightningService.initialize(walletId)                                │
-│     • Promise.all([getBalance, getChannels, getInvoices, getPayments])     │
-│ 2.3 startAutonomousInit() chamado (LightningInitializer)                   │
+│ 2.1 Config runtime derivada de Settings:                                    │
+│     • trampolineMode = settings.trampolineEnabled                           │
+│     • enableGossipSync = !trampolineMode                                    │
+│     • maxPeers = trampoline? 1 : 5                                          │
+│     • graphCacheEnabled = !trampolineMode                                   │
+│ 2.2 initialize():                                                           │
+│     • walletService.getActiveWalletId() (assert)                            │
+│     • LightningService.initialize(walletId)                                 │
+│     • Promise.all(getBalance, getChannels, getInvoices, getPayments,        │
+│       getReadinessState)                                                    │
+│     • readinessLevel calculado e salvo no estado do provider                │
+│ 2.3 startAutonomousInit() dispara LightningInitializer.initialize()         │
 └─────────────────────────────────────────────────────────────────────────────┘
        │
        ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ FASE 3: LightningInitializer.initialize()                                   │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ ┌─────────────────────────────────────────────────────────────────────────┐ │
-│ │ 3.1 loadPersistedState() [progress: 5%]                                 │ │
-│ │ • LightningRepository.getRoutingGraph()                                 │ │
-│ │ • Carrega grafo cacheado (se existir)                                   │ │
-│ └─────────────────────────────────────────────────────────────────────────┘ │
-│                              ▼                                              │
-│ ┌─────────────────────────────────────────────────────────────────────────┐ │
-│ │ 3.2 initializeCoreComponents() [progress: 15%]                          │ │
-│ │ • ErrorRecoveryService.start()                                          │ │
-│ │ • PeerConnectivityService.start() (se enablePeerConnectivity)          │ │
-│ │ • LightningService.initialize(activeWalletId)                          │ │
-│ │ • LightningMonitorService.start() (se enableHTLCMonitoring)            │ │
-│ │ • LiquidityManagerService.start()                                       │ │
-│ │ • PaymentProcessorService.start()                                       │ │
-│ │ • NotificationService.initialize()                                      │ │
-│ │ • WatchtowerService.initialize()                                        │ │
-│ └─────────────────────────────────────────────────────────────────────────┘ │
-│                              ▼                                              │
-│ ┌─────────────────────────────────────────────────────────────────────────┐ │
-│ │ 3.3 syncLightningGraph() [progress: 30%→70%]                            │ │
-│ │ • TODO: GossipSync.syncGraph(bootstrapPeers)                           │ │
-│ │ • Timeout: config.syncTimeout (120s default)                           │ │
-│ │ • ⚠ ATUALMENTE: simulado com delay de 1s                               │ │
-│ └─────────────────────────────────────────────────────────────────────────┘ │
-│                              ▼                                              │
-│ ┌─────────────────────────────────────────────────────────────────────────┐ │
-│ │ 3.4 establishPeerConnections() [progress: 75%→90%]                      │ │
-│ │ • TODO: transport.connect(peer.nodeId, peer.address)                   │ │
-│ │ • Limita a config.maxPeers (5 default)                                 │ │
-│ │ • ⚠ ATUALMENTE: simulado com delay de 0.5s                             │ │
-│ └─────────────────────────────────────────────────────────────────────────┘ │
-│                              ▼                                              │
-│ ┌─────────────────────────────────────────────────────────────────────────┐ │
-│ │ 3.5 startMonitoringServices() [progress: 95%]                           │ │
-│ │ • WatchtowerService.start()                                             │ │
-│ │ • LSPService criado                                                     │ │
-│ └─────────────────────────────────────────────────────────────────────────┘ │
-│                              ▼                                              │
-│ ┌─────────────────────────────────────────────────────────────────────────┐ │
-│ │ 3.6 saveInitState() [progress: 100%]                                    │ │
-│ │ • Persiste estado de inicialização                                      │ │
-│ │ • Status: 'ready'                                                       │ │
-│ └─────────────────────────────────────────────────────────────────────────┘ │
+│ 3.1 loadPersistedState() [5%]                                               │
+│     • Loga intenção de usar GraphCache (carregamento acontece na sync)      │
+│ 3.2 initializeCoreComponents() [15%]                                        │
+│     • Conecta ao Electrum server (connectElectrum) e lê block height        │
+│     • Cria ElectrumWatcher + inicia ChannelOnChainMonitor                   │
+│     • ErrorRecoveryService.start()                                          │
+│     • PeerConnectivityService.start(maxPeers)                               │
+│     • ChannelReestablishService instanciado                                 │
+│     • LightningService.initialize(activeWalletId)                           │
+│     • LightningMonitorService.start() se enableHTLCMonitoring               │
+│     • LiquidityManagerService.start()                                       │
+│     • PaymentProcessorService.start()                                       │
+│     • NotificationService.initialize() (best effort)                        │
+│     • WatchtowerService.initialize()                                        │
+│ 3.3 syncLightningGraph() [30%→70%]                                          │
+│     • GossipSyncManager + GraphCacheManager (cache-first)                   │
+│     • Sem peers reais ainda: se cache habilitado, carrega grafo do cache;   │
+│       caso contrário retorna erro "No peers available for gossip sync"     │
+│     • Timeout: config.syncTimeout (padrão 120s)                             │
+│ 3.4 establishPeerConnections() [75%→90%]                                    │
+│     • Usa PeerConnectivityService (TCP+Noise+init BOLT1)                    │
+│     • Pool de peers: trampoline (prioritário) + peers em cache + peers de   │
+│       canais persistidos + bootstrap list + DNS seeds BOLT-10              │
+│     • Reestabelece canais com ChannelReestablishService quando há peers     │
+│ 3.5 startMonitoringServices() [95%]                                         │
+│     • Watchtower.start(); HTLC monitor/LSP ainda TODO                      │
+│ 3.6 startBackgroundGossipSync() (se trampolineMode)                         │
+│     • Inicializa LightningRoutingService + BackgroundGossipSyncService      │
+│     • Escuta events stateChanged/syncCompleted                              │
+│ 3.7 saveInitState() [100%] (persistência ainda TODO)                        │
 └─────────────────────────────────────────────────────────────────────────────┘
        │
        ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ FASE 4: PeerConnectivityService                                             │
+│ FASE 4: PeerConnectivityService (detalhes)                                 │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ 4.1 loadInitialPeers():                                                     │
-│     • Carregar peers do cache (LightningRepository)                        │
-│     • Adicionar BOOTSTRAP_PEERS hardcoded:                                 │
-│       - ACINQ (03864ef...)                                                 │
-│       - WalletOfSatoshi (035e4ff...)                                       │
-│       - Kraken (02f1a8c...)                                                │
-│       - River (03037dc...)                                                 │
-│       - Bitfinex (033d865...)                                              │
-│ 4.2 connectToPeers():                                                       │
-│     • Conecta até maxPeers (5)                                             │
-│     • Retry com backoff                                                    │
-│ 4.3 startHealthMonitoring():                                                │
-│     • Health check a cada 60s                                              │
-│     • Ping a cada 5 min                                                    │
+│ • Health check 60s + ping 5min; reconexão com backoff até maxReconnect      │
+│ • ensureLocalKeyPair() deriva chave do seed da wallet ativa                │
+│ • loadInitialPeers(): trampoline fixo → peers em cache (LRU/24h) → peers de │
+│   canais existentes → bootstrap list → DNS seeds                            │
+│ • connectToPeer(): TcpTransport.connect → Noise handshake → init exchange   │
+│   BOLT1 (performInitExchange) → salva peer e pontua (score)                │
+│ • Cache de peers persistido no LightningRepository                          │
 └─────────────────────────────────────────────────────────────────────────────┘
        │
        ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ FASE 5: LightningService Pronto                                             │
+│ FASE 5: LightningService / Readiness                                        │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ 5.1 isInitialized() = true                                                  │
-│ 5.2 Operações disponíveis:                                                  │
-│     • generateInvoice()                                                     │
-│     • decodeInvoice()                                                       │
-│     • sendPayment()                                                         │
-│     • getBalance()                                                          │
-│     • getChannels()                                                         │
+│ • Provider guarda readinessState + readinessLevel (não bloqueia operações)  │
+│ • Operações expostas: generateInvoice / decodeInvoice / sendPayment /      │
+│   getBalance / getChannels / refreshBalance etc.                           │
 └─────────────────────────────────────────────────────────────────────────────┘
 
-PONTOS CRÍTICOS IHODL:
-━━━━━━━━━━━━━━━━━━━━━━━
-⚠ syncLightningGraph() NÃO IMPLEMENTADO (simulado)
-⚠ establishPeerConnections() NÃO IMPLEMENTADO (simulado)
-⚠ GossipManager e DNSBootstrap não existem
-⚠ Pagamentos PODEM ser tentados sem grafo completo
-✓ Estrutura de fases bem definida
-✓ Progress tracking implementado
-✓ Bootstrap peers hardcoded
-✓ ErrorRecoveryService para resiliência
+PONTOS CRÍTICOS IHODL (após atualização):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠ syncLightningGraph depende de cache; sem peers reais retorna erro (mock peers)
+⚠ BackgroundGossipSync ainda não envia/ouve mensagens (PeerAdapter TODO)
+⚠ Operações Lightning continuam sem gate explícito de prontidão/gossip
+⚠ LightningProvider não está no root; init roda apenas em telas que o usam
+✓ Conexão Electrum + watchers e ChannelOnChainMonitor adicionados
+✓ PeerConnectivity real (TCP + Noise + init BOLT1, DNS bootstrap, cache)
+✓ Channel reestablish presente via ChannelReestablishService
 ```
 
 ---
@@ -448,170 +432,113 @@ PONTOS CRÍTICOS IHODL:
 
 ### 3.1 Ordem de Inicialização
 
-| Etapa                            | Phoenix                      | Electrum                          | iHodl                              | Notas                     |
-| -------------------------------- | ---------------------------- | --------------------------------- | ---------------------------------- | ------------------------- |
-| **1. Carregar config/keys**      | ✅ WalletManager.keyManager  | ✅ xprv → node_keypair            | ✅ WalletService.getMasterKey      | Todas carregam primeiro   |
-| **2. Carregar canais do DB**     | ✅ bootChannelsFlow          | ✅ self.\_channels                | ⚠️ LightningRepository.getChannels | iHodl não prioriza        |
-| **3. Conectar Electrum/Bitcoin** | ✅ ElectrumClient.connect    | ✅ Network.start                  | ⚠️ Não implementado                | iHodl sem Electrum        |
-| **4. Sincronizar gossip**        | ❌ Usa trampoline            | ✅ LNGossip separado              | ⚠️ Simulado                        | iHodl precisa implementar |
-| **5. Conectar peers**            | ✅ Peer.connect (trampoline) | ✅ \_maintain_connectivity        | ⚠️ Simulado                        | iHodl precisa implementar |
-| **6. Reestabelecer canais**      | ✅ Implícito no Peer         | ✅ reestablish_peers_and_channels | ❌ Não implementado                | Crítico para iHodl        |
-| **7. Iniciar watchtower**        | ✅ Implícito                 | ✅ sync_with_remote_watchtower    | ✅ WatchtowerService               | OK                        |
-| **8. Pronto para pagamentos**    | ✅ mayDoPayments             | ✅ Após sync                      | ⚠️ Imediato                        | iHodl não aguarda         |
+| Etapa                            | Phoenix                      | Electrum                          | iHodl                                   | Notas                                      |
+| -------------------------------- | ---------------------------- | --------------------------------- | --------------------------------------- | ------------------------------------------ |
+| **1. Carregar config/keys**      | ✅ WalletManager.keyManager  | ✅ xprv → node_keypair            | ✅ WalletService.getMasterKey           | Todas carregam primeiro                    |
+| **2. Carregar canais do DB**     | ✅ bootChannelsFlow          | ✅ self.\_channels                | 🟡 LightningService.initialize usa repo | Depende do repo; não força antes de peers  |
+| **3. Conectar Electrum/Bitcoin** | ✅ ElectrumClient.connect    | ✅ Network.start                  | ✅ connectElectrum + watcher            | Inclui ChannelOnChainMonitor               |
+| **4. Sincronizar gossip**        | ❌ Usa trampoline            | ✅ LNGossip separado              | ⚠️ GossipSyncManager cache-first        | Sem peers reais; pode falhar sem cache     |
+| **5. Conectar peers**            | ✅ Peer.connect (trampoline) | ✅ \_maintain_connectivity        | ✅ PeerConnectivity (Noise+BOLT1)       | Trampoline + cache + bootstrap + DNS       |
+| **6. Reestabelecer canais**      | ✅ Implícito no Peer         | ✅ reestablish_peers_and_channels | 🟡 ChannelReestablishService            | Só executa se houver peers conectados      |
+| **7. Iniciar watchtower**        | ✅ Implícito                 | ✅ sync_with_remote_watchtower    | ✅ WatchtowerService                    | Ok                                         |
+| **8. Pronto para pagamentos**    | ✅ mayDoPayments             | ✅ Após sync                      | ⚠️ Imediato (sem gate)                  | Provider não bloqueia por gossip/readiness |
 
 ### 3.2 Proteções contra Operações Prematuras
 
-| Proteção                | Phoenix                           | Electrum                  | iHodl                   | Risco se Ausente |
-| ----------------------- | --------------------------------- | ------------------------- | ----------------------- | ---------------- |
-| **Gate de conexão**     | ✅ TrafficControl.canConnect      | ✅ network.is_connected() | ⚠️ isConnected simples  | Enviar para void |
-| **Gate de gossip sync** | ❌ N/A (trampoline)               | ✅ channel_db.data_loaded | ❌ Não existe           | Rota incorreta   |
-| **Gate de canais**      | ✅ channels.any { Normal }        | ✅ get_channels() check   | ⚠️ hasActiveChannels    | Falha silenciosa |
-| **Timeout de sync**     | ✅ Backoff exponencial            | ✅ wait_for_sync()        | ⚠️ syncTimeout config   | Travamento       |
-| **Recuperação de erro** | ✅ TrafficControl.disconnectCount | ✅ NetworkRetryManager    | ✅ ErrorRecoveryService | Loop infinito    |
+| Proteção                | Phoenix                           | Electrum                  | iHodl                                              | Risco se Ausente    |
+| ----------------------- | --------------------------------- | ------------------------- | -------------------------------------------------- | ------------------- |
+| **Gate de conexão**     | ✅ TrafficControl.canConnect      | ✅ network.is_connected() | ⚠️ PeerConnectivity roda, mas operações não checam | Enviar para void    |
+| **Gate de gossip sync** | ❌ N/A (trampoline)               | ✅ channel_db.data_loaded | ❌ Sem verificação no provider                     | Rota incorreta      |
+| **Gate de canais**      | ✅ channels.any { Normal }        | ✅ get_channels() check   | 🟡 Reestablish tenta, mas sendPayment não bloqueia | Falha silenciosa    |
+| **Timeout de sync**     | ✅ Backoff exponencial            | ✅ wait_for_sync()        | ✅ syncTimeout config                              | Travamento mitigado |
+| **Recuperação de erro** | ✅ TrafficControl.disconnectCount | ✅ NetworkRetryManager    | ✅ ErrorRecoveryService                            | Loop infinito       |
 
 ### 3.3 Estratégia de Descoberta de Peers
 
-| Aspecto              | Phoenix               | Electrum                   | iHodl                     |
-| -------------------- | --------------------- | -------------------------- | ------------------------- |
-| **Fonte primária**   | ACINQ trampoline node | recent_peers do channel_db | BOOTSTRAP_PEERS hardcoded |
-| **Fonte secundária** | N/A                   | random peer do graph       | Cache local               |
-| **Fallback**         | Onion se Tor          | FALLBACK_LN_NODES          | N/A                       |
-| **DNS Seeds**        | ❌                    | ✅ BOLT-10                 | ❌                        |
-| **Número de peers**  | 1 (trampoline)        | NUM_PEERS_TARGET = 4       | maxPeers = 5              |
+| Aspecto              | Phoenix               | Electrum                   | iHodl                                             |
+| -------------------- | --------------------- | -------------------------- | ------------------------------------------------- |
+| **Fonte primária**   | ACINQ trampoline node | recent_peers do channel_db | Trampoline + peers em cache + peers de canais     |
+| **Fonte secundária** | N/A                   | random peer do graph       | Lista de bootstrap públicos (ACINQ/WoS/Kraken...) |
+| **Fallback**         | Onion se Tor          | FALLBACK_LN_NODES          | DNS seeds BOLT-10 (getBootstrapPeers)             |
+| **DNS Seeds**        | ❌                    | ✅ BOLT-10                 | ✅ Implementado via getBootstrapPeers             |
+| **Número de peers**  | 1 (trampoline)        | NUM_PEERS_TARGET = 4       | maxPeers = 1 (trampoline) ou 5 (gossip)           |
 
 ---
 
 ## 4. Inconsistências Identificadas no iHodl
 
-### 4.1 🔴 Crítico: Gossip Sync Não Implementado
+### 4.1 🔴 Crítico: Gossip Sync depende somente de cache
 
 **Problema:**
 
 ```typescript
-// ln-initializer-service.ts, linha 340-356
-private async syncLightningGraph(): Promise<LightningInitResult> {
-  // TODO: Implement graph synchronization
-  // Simulate sync delay
-  await new Promise(resolve => setTimeout(resolve, 1000))
-  this.updateStatus('syncing', 70, 'Graph synced: 1000+ channels')
-  return { success: true, graphSize: 1000 }
+// ln-initializer-service.ts (syncLightningGraph)
+const mockPeers: any[] = [] // TODO: Substituir por peers reais do DNS bootstrap
+
+if (mockPeers.length === 0) {
+       if (cacheManager) {
+              await gossipManager.loadCachedGraph()
+              ...
+              return { success: true, graphSize }
+       }
+       throw new Error('No peers available for gossip sync')
 }
 ```
 
 **Impacto:**
 
-- Pagamentos podem falhar por rota não encontrada
-- Pathfinding impossível sem grafo
-- Usuário pode perder fundos em HTLCs não roteáveis
+- Sem peers de gossip, o grafo é apenas o cache (pode estar desatualizado) ou a init falha.
+- Pathfinding local nunca recebe updates em tempo real; risco de rota inválida.
 
-**Solução do Electrum:**
-
-```python
-# lnworker.py, linha 1710-1714
-if not self.uses_trampoline():
-    self.logger.info(
-        f"gossip_db status. sync progress: {self.network.lngossip.get_sync_progress_estimate()}. "
-        f"num_nodes={self.channel_db.num_nodes}, "
-        f"num_channels={self.channel_db.num_channels}")
-```
-
-### 4.2 🔴 Crítico: Estabelecimento de Conexão Peer Simulado
+### 4.2 🔴 Crítico: BackgroundGossipSync sem transporte
 
 **Problema:**
 
 ```typescript
-// ln-initializer-service.ts, linha 372-388
-private async establishPeerConnections(): Promise<LightningInitResult> {
-  // Simulate connection delay
-  await new Promise(resolve => setTimeout(resolve, 500))
-  const successfulConnections = Math.min(this.config.maxPeers, 3)
-  return { success: true, peersConnected: successfulConnections }
-}
+// ln-background-gossip-sync-service.ts (PeerAdapter)
+sendMessage() { /* TODO: Implementar envio */ }
+onMessage() { /* TODO: Implementar listener */ }
+const transport = null // peerService.getPeerTransport(peerInfo.nodeId)
 ```
 
 **Impacto:**
 
-- Nenhuma conexão P2P real estabelecida
-- Init messages (BOLT1) não trocados
-- Features não negociados
+- Modo híbrido (trampoline + gossip) não troca mensagens reais.
+- Mesmo com peers conectados, background sync não progride → routing service não migra para pathfinding local.
 
-**Solução do Phoenix:**
-
-```kotlin
-// AppConnectionsDaemon.kt, linha 217-228
-peer.socketBuilder = tcpSocketBuilder()
-val res = peer.connect(connectTimeout = connectTimeout, handshakeTimeout = handshakeTimeout)
-```
-
-### 4.3 🟡 Alto: Falta de Channel Reestablishment
-
-**Problema:**
-
-- Não há implementação de `channel_reestablish` (BOLT2)
-- Canais existentes não são reconectados
-
-**Electrum faz:**
-
-```python
-# lnworker.py, linha 1052-1055
-async def reestablish_peers_and_channels(self):
-    # Reconecta a peers com canais existentes
-    # Channel reestablishment protocol
-```
-
-### 4.4 🟡 Alto: Pagamento Sem Verificar Estado de Sync
+### 4.3 🟡 Alto: Operações sem gate de prontidão
 
 **Problema:**
 
 ```typescript
-// ln-service.ts, linha 285-288
-async sendPayment(params: SendPaymentParams): Promise<SendPaymentResult> {
-  if (!this.isInitialized()) {
-    throw new Error('Lightning service not initialized')
-  }
-  // Não verifica se gossip está sincronizado!
+// LightningProvider.tsx (sendPayment)
+const service = getService()
+assertServiceInitialized(service)
+const result = await service.sendPayment({ invoice, maxFee })
+// Não checa peers conectados, gossip ou readinessLevel
 ```
 
-**Electrum faz:**
+**Impacto:**
 
-```python
-# lnworker.py, linha 1659-1661
-except ChannelDBNotLoaded as e:
-    self.logger.info(f'payment failure: {e!r}')
-    reason = str(e)
-```
+- Pagamentos podem ser tentados antes de peer/grafo prontos, gerando falhas silenciosas ou latência extra.
 
-### 4.5 🟡 Médio: DNS Bootstrap Não Implementado
+### 4.4 🟡 Alto: LightningProvider não está no root
 
 **Problema:**
 
-- iHodl usa apenas BOOTSTRAP_PEERS hardcoded
-- Não implementa BOLT-10 DNS seeds
-
-**Electrum faz:**
-
-```python
-# lnworker.py, linha 481-510
-async def _get_peers_from_dns_seeds(self) -> Sequence[LNPeerAddr]:
-    dns_seed = random.choice(constants.net.LN_DNS_SEEDS)
-    srv_answers = await resolve_dns_srv('r{}.{}'.format(
-        constants.net.LN_REALM_BYTE, dns_seed))
+```tsx
+// src/app/_layout.tsx
+<AppProvider>
+  <WalletChangeHandler />
+  <AppContent />
+  <InactivityOverlay />
+  <AuthScreen />
+</AppProvider>
 ```
 
-### 4.6 🟢 Baixo: Falta de Integração com Electrum
+**Impacto:**
 
-**Problema:**
-
-- iHodl não tem conexão com servidor Electrum
-- Não monitora transações on-chain de canais
-
-**Phoenix faz:**
-
-```kotlin
-// PhoenixBusiness.kt, linha 56-57
-val electrumClient = ElectrumClient(...)
-val electrumWatcher = ElectrumWatcher(client = electrumClient, ...)
-```
+- LightningInitializer só roda se alguma tela montar o LightningProvider; em rotas que não usam o provider, serviços de Electrum/peers/watchtower não iniciam.
 
 ---
 
@@ -729,25 +656,22 @@ const TRAMPOLINE_NODE = {
 
 ### Resumo das Inconsistências
 
-| Severidade | Descrição                    | Ação Requerida                 |
-| ---------- | ---------------------------- | ------------------------------ |
-| 🔴 Crítico | Gossip sync simulado         | Implementar ou usar trampoline |
-| 🔴 Crítico | Peer connection simulada     | Implementar handshake BOLT1    |
-| 🟡 Alto    | Sem channel reestablishment  | Implementar BOLT2 reestablish  |
-| 🟡 Alto    | Pagamento sem verificar sync | Adicionar gate de prontidão    |
-| 🟡 Médio   | Sem DNS bootstrap            | Implementar BOLT-10            |
-| 🟢 Baixo   | Sem integração Electrum      | Avaliar necessidade            |
+| Severidade | Descrição                                 | Ação Requerida                            |
+| ---------- | ----------------------------------------- | ----------------------------------------- |
+| 🔴 Crítico | Gossip sync depende só de cache           | Conectar peers reais no GossipSyncManager |
+| 🔴 Crítico | BackgroundGossipSync sem transporte       | Integrar PeerAdapter ao TcpTransport      |
+| 🟡 Alto    | Operações sem gate de prontidão/gossip    | Bloquear sendPayment até readiness ok     |
+| 🟡 Alto    | LightningProvider não montado globalmente | Definir ponto único de montagem do prov.  |
 
 ### Próximos Passos Recomendados
 
-1. **Decisão arquitetural:** Trampoline mode vs Full gossip
-2. **Implementar conexão P2P real** com handshake BOLT1
-3. **Implementar channel reestablishment** (BOLT2)
-4. **Adicionar gates de prontidão** antes de operações
-5. **Implementar gossip sync** OU **integrar trampoline**
-6. **Testes de integração** com testnet
+1. Conectar GossipSyncManager a peers reais (via PeerConnectivity + DNS seeds) em vez de mockPeers/cache-only.
+2. Implementar transporte real no BackgroundGossipSync (PeerAdapter ↔ TcpTransport) e integrar ao routing service.
+3. Adicionar gates de prontidão (peers/gossip/channel reestablish) em LightningProvider/ln-service antes de pagamentos.
+4. Definir onde LightningProvider deve ser montado (root ou layout Lightning) para garantir inicialização consistente.
+5. Testar em testnet: Electrum+watcher + peer handshake + gossip/backgroud sync.
 
 ---
 
 _Documento gerado em: Dezembro 2025_
-_Versão: 1.0_
+_Versão: 1.1_

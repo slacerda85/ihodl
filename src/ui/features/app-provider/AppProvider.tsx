@@ -10,6 +10,7 @@
  * 2. Lógica de cada feature isolada em seu próprio arquivo store.ts
  * 3. Hooks especializados para cada domínio
  * 4. useSyncExternalStore para reatividade sem re-renders desnecessários
+ * 5. Tipos derivados diretamente dos stores usando Pick para reduzir duplicação
  *
  * ESTRUTURA:
  * - stores/wallet → walletStore (carteiras, wallet ativa)
@@ -192,63 +193,54 @@ interface AppContextType {
   hasErrors: () => boolean
 
   // ========== WALLET STORE ==========
-  wallet: {
-    subscribe: typeof walletStore.subscribe
-    getWalletsSnapshot: typeof walletStore.getWalletsSnapshot
-    getActiveWalletIdSnapshot: typeof walletStore.getActiveWalletIdSnapshot
-    actions: WalletStoreActions
-  }
+  wallet: Pick<
+    typeof walletStore,
+    'subscribe' | 'getWalletsSnapshot' | 'getActiveWalletIdSnapshot' | 'actions'
+  >
 
   // ========== SETTINGS STORE ==========
-  settings: {
-    subscribe: typeof settingsStore.subscribe
-    getSnapshot: typeof settingsStore.getSnapshot
-    getColorMode: typeof settingsStore.getColorMode
-    getLightningSettings: typeof settingsStore.getLightningSettings
-    actions: SettingsStoreActions
-  }
+  settings: Pick<
+    typeof settingsStore,
+    'subscribe' | 'getSnapshot' | 'getColorMode' | 'getLightningSettings' | 'actions'
+  >
 
   // ========== ADDRESS STORE ==========
-  address: {
-    subscribe: typeof addressStore.subscribe
-    getAddressesSnapshot: typeof addressStore.getAddressesSnapshot
-    getBalanceSnapshot: typeof addressStore.getBalanceSnapshot
-    getNextAddressesSnapshot: typeof addressStore.getNextAddressesSnapshot
-    notify: typeof addressStore.notify
-    notifyLight: typeof addressStore.notifyLight
-    clear: typeof addressStore.clear
-  }
+  address: Pick<
+    typeof addressStore,
+    | 'subscribe'
+    | 'getAddressesSnapshot'
+    | 'getBalanceSnapshot'
+    | 'getNextAddressesSnapshot'
+    | 'notify'
+    | 'notifyLight'
+    | 'clear'
+  >
 
   // ========== NETWORK STORE ==========
-  network: {
-    subscribe: typeof networkStore.subscribe
-    getSnapshot: typeof networkStore.getSnapshot
-    getConnection: typeof networkStore.getConnection
-    getLightningWorker: typeof networkStore.getLightningWorker
-    actions: NetworkStoreActions
-  }
+  network: Pick<
+    typeof networkStore,
+    'subscribe' | 'getSnapshot' | 'getConnection' | 'getLightningWorker' | 'actions'
+  >
 
   // ========== LIGHTNING STORE ==========
-  lightning: {
-    subscribe: typeof lightningStore.subscribe
-    getSnapshot: typeof lightningStore.getSnapshot
-    getReadinessState: typeof lightningStore.getReadinessState
-    getReadinessLevel: typeof lightningStore.getReadinessLevel
-    actions: LightningStoreActions
-  }
+  lightning: Pick<
+    typeof lightningStore,
+    'subscribe' | 'getSnapshot' | 'getReadinessState' | 'getReadinessLevel' | 'actions'
+  >
 
   // ========== WATCHTOWER STORE ==========
-  watchtower: {
-    subscribe: typeof watchtowerStore.subscribe
-    getSnapshot: typeof watchtowerStore.getSnapshot
-    getIsInitialized: typeof watchtowerStore.getIsInitialized
-    getIsRunning: typeof watchtowerStore.getIsRunning
-    getStatus: typeof watchtowerStore.getStatus
-    getChannels: typeof watchtowerStore.getChannels
-    getEvents: typeof watchtowerStore.getEvents
-    getHasBreaches: typeof watchtowerStore.getHasBreaches
-    actions: WatchtowerStoreActions
-  }
+  watchtower: Pick<
+    typeof watchtowerStore,
+    | 'subscribe'
+    | 'getSnapshot'
+    | 'getIsInitialized'
+    | 'getIsRunning'
+    | 'getStatus'
+    | 'getChannels'
+    | 'getEvents'
+    | 'getHasBreaches'
+    | 'actions'
+  >
 }
 
 const AppContext = createContext<AppContextType | null>(null)
@@ -278,65 +270,22 @@ export function AppProvider({ children }: AppProviderProps) {
       hasErrors: () => state.errors.size > 0,
 
       // Wallet store
-      wallet: {
-        subscribe: walletStore.subscribe,
-        getWalletsSnapshot: walletStore.getWalletsSnapshot,
-        getActiveWalletIdSnapshot: walletStore.getActiveWalletIdSnapshot,
-        actions: walletStore.actions,
-      },
+      wallet: walletStore,
 
       // Settings store
-      settings: {
-        subscribe: settingsStore.subscribe,
-        getSnapshot: settingsStore.getSnapshot,
-        getColorMode: settingsStore.getColorMode,
-        getLightningSettings: settingsStore.getLightningSettings,
-        actions: settingsStore.actions,
-      },
+      settings: settingsStore,
 
       // Address store
-      address: {
-        subscribe: addressStore.subscribe,
-        getAddressesSnapshot: addressStore.getAddressesSnapshot,
-        getBalanceSnapshot: addressStore.getBalanceSnapshot,
-        getNextAddressesSnapshot: addressStore.getNextAddressesSnapshot,
-        notify: addressStore.actions.notify,
-        notifyLight: addressStore.actions.notifyLight,
-        clear: addressStore.actions.clear,
-      },
+      address: addressStore,
 
       // Network store
-      network: {
-        subscribe: networkStore.subscribe,
-        getSnapshot: networkStore.getSnapshot,
-        getConnection: networkStore.actions.getConnection,
-        getLightningWorker: networkStore.actions.getLightningWorker,
-        reconnect: networkStore.actions.reconnect,
-        closeConnections: networkStore.actions.closeConnections,
-        actions: networkStore.actions,
-      },
+      network: networkStore,
 
       // Lightning store
-      lightning: {
-        subscribe: lightningStore.subscribe,
-        getSnapshot: lightningStore.getSnapshot,
-        getReadinessState: lightningStore.getReadinessState,
-        getReadinessLevel: lightningStore.getReadinessLevel,
-        actions: lightningStore.actions,
-      },
+      lightning: lightningStore,
 
       // Watchtower store
-      watchtower: {
-        subscribe: watchtowerStore.subscribe,
-        getSnapshot: watchtowerStore.getSnapshot,
-        getIsInitialized: watchtowerStore.getIsInitialized,
-        getIsRunning: watchtowerStore.getIsRunning,
-        getStatus: watchtowerStore.getStatus,
-        getChannels: watchtowerStore.getChannels,
-        getEvents: watchtowerStore.getEvents,
-        getHasBreaches: watchtowerStore.getHasBreaches,
-        actions: watchtowerStore.actions,
-      },
+      watchtower: watchtowerStore,
     }),
     [state],
   )

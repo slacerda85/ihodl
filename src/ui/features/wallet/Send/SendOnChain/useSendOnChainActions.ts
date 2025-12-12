@@ -20,17 +20,18 @@ interface UseSendOnChainActionsReturn {
 export function useSendOnChainActions(): UseSendOnChainActionsReturn {
   const getConnection = useNetworkConnection()
   const state = useSendOnChainState()
+  const { recipientAddress, amount, setSubmitting } = state
 
   const { feeRate } = useFeeRates()
-  const { batchTransactions, clearBatch } = useBatchTransactions()
+  const { batchTransactions } = useBatchTransactions()
 
   const validateTransaction = useCallback(() => {
-    if (!state.recipientAddress.trim()) {
+    if (!recipientAddress.trim()) {
       // setError('Recipient address is required')
       return false
     }
 
-    if (!state.amount || state.amount <= 0) {
+    if (!amount || amount <= 0) {
       // setError('Amount must be greater than 0')
       return false
     }
@@ -41,25 +42,25 @@ export function useSendOnChainActions(): UseSendOnChainActionsReturn {
     }
 
     return true
-  }, [state.recipientAddress, state.amount, feeRate])
+  }, [recipientAddress, amount, feeRate])
 
   const buildTransaction = useCallback(async () => {
     if (!validateTransaction()) return
 
-    state.setSubmitting(true)
+    setSubmitting(true)
     // setError(null)
 
     try {
       console.log('[SendOnChain] Building transaction...')
-      const connection = await getConnection()
+      await getConnection()
 
       // TODO: Get UTXOs and change address from wallet service
       const utxos: any[] = []
       const changeAddress = ''
 
-      const result = await transactionService.buildTransaction({
-        recipientAddress: state.recipientAddress,
-        amount: Math.floor(state.amount * 100000000), // Convert to satoshis
+      await transactionService.buildTransaction({
+        recipientAddress,
+        amount: Math.floor(amount * 100000000), // Convert to satoshis
         feeRate,
         utxos,
         changeAddress,
@@ -71,9 +72,9 @@ export function useSendOnChainActions(): UseSendOnChainActionsReturn {
       console.error('[SendOnChain] Failed to build transaction:', error)
       // setError(error instanceof Error ? error.message : 'Failed to build transaction')
     } finally {
-      state.setSubmitting(false)
+      setSubmitting(false)
     }
-  }, [validateTransaction, state, getConnection, feeRate])
+  }, [validateTransaction, getConnection, feeRate, recipientAddress, amount, setSubmitting])
 
   const sendTransaction = useCallback(async () => {
     // if (!transaction) {
@@ -81,12 +82,12 @@ export function useSendOnChainActions(): UseSendOnChainActionsReturn {
     //   return
     // }
 
-    state.setSubmitting(true)
+    setSubmitting(true)
     // setError(null)
 
     try {
       console.log('[SendOnChain] Sending transaction...')
-      const connection = await getConnection()
+      await getConnection()
 
       // TODO: Get signed transaction and txHex
       const signedTransaction: any = null
@@ -104,9 +105,9 @@ export function useSendOnChainActions(): UseSendOnChainActionsReturn {
       console.error('[SendOnChain] Failed to send transaction:', error)
       // setError(error instanceof Error ? error.message : 'Failed to send transaction')
     } finally {
-      state.setSubmitting(false)
+      setSubmitting(false)
     }
-  }, [getConnection, state.setSubmitting])
+  }, [getConnection, setSubmitting])
 
   const buildBatchTransaction = useCallback(async () => {
     if (batchTransactions.length === 0) {
@@ -114,18 +115,18 @@ export function useSendOnChainActions(): UseSendOnChainActionsReturn {
       return
     }
 
-    state.setSubmitting(true)
+    setSubmitting(true)
     // setError(null)
 
     try {
       console.log('[SendOnChain] Building batch transaction...')
-      const connection = await getConnection()
+      await getConnection()
 
       // TODO: Get UTXOs and change address from wallet service
       const utxos: any[] = []
       const changeAddress = ''
 
-      const result = await transactionService.buildBatchTransaction({
+      await transactionService.buildBatchTransaction({
         transactions: batchTransactions.map(tx => ({
           recipientAddress: tx.recipient,
           amount: tx.amount,
@@ -142,9 +143,9 @@ export function useSendOnChainActions(): UseSendOnChainActionsReturn {
       console.error('[SendOnChain] Failed to build batch transaction:', error)
       // setError(error instanceof Error ? error.message : 'Failed to build batch transaction')
     } finally {
-      state.setSubmitting(false)
+      setSubmitting(false)
     }
-  }, [batchTransactions, feeRate, getConnection, state.setSubmitting])
+  }, [batchTransactions, feeRate, getConnection, setSubmitting])
 
   const sendBatchTransactions = useCallback(async () => {
     // if (!transaction) {
@@ -152,12 +153,12 @@ export function useSendOnChainActions(): UseSendOnChainActionsReturn {
     //   return
     // }
 
-    state.setSubmitting(true)
+    setSubmitting(true)
     // setError(null)
 
     try {
       console.log('[SendOnChain] Sending batch transaction...')
-      const connection = await getConnection()
+      await getConnection()
 
       // TODO: Get signed transaction and txHex
       const signedTransaction: any = null
@@ -176,9 +177,9 @@ export function useSendOnChainActions(): UseSendOnChainActionsReturn {
       console.error('[SendOnChain] Failed to send batch transaction:', error)
       // setError(error instanceof Error ? error.message : 'Failed to send batch transaction')
     } finally {
-      state.setSubmitting(false)
+      setSubmitting(false)
     }
-  }, [getConnection, state.setSubmitting])
+  }, [getConnection, setSubmitting])
 
   return {
     sendTransaction,

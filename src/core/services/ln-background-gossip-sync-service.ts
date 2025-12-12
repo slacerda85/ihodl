@@ -14,6 +14,9 @@ import { GraphCacheManager } from '../lib/lightning/graph-cache'
 import { LightningRepository } from '../repositories/lightning'
 import { PeerConnectivityService, PeerInfo } from './ln-peer-service'
 
+// Exposição de tipo para consumo via camada de serviços
+export type { SyncProgress }
+
 // ==========================================
 // TIPOS
 // ==========================================

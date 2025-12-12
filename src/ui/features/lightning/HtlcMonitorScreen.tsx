@@ -23,7 +23,7 @@ import {
   type MonitoredHtlcInfo,
   type HtlcMonitorConfig,
 } from './hooks/useHtlcMonitor'
-import { HtlcMonitorState, HtlcAction } from '@/core/lib/lightning'
+import { HtlcMonitorState, HtlcAction } from '@/core/services/ln-htlc-service'
 
 // ============================================================================
 // Tipos

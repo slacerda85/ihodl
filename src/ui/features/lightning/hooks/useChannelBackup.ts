@@ -21,7 +21,7 @@ import {
   prepareChannelRestore,
   createRestoreSummary,
   CHANNEL_BACKUP_VERSION,
-} from '@/core/lib/lightning/backup'
+} from '@/core/services/ln-backup-service'
 import { useLightningState } from '@/ui/features/app-provider'
 
 // ==========================================

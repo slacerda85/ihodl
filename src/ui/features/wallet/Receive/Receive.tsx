@@ -2,7 +2,6 @@ import { useState, useMemo } from 'react'
 import {
   View,
   Text,
-  ScrollView,
   Pressable,
   StyleSheet,
   Alert,

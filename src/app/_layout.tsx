@@ -6,7 +6,7 @@ import InactivityOverlay from '@/ui/features/auth/InactivityOverlay'
 import AuthScreen from '@/ui/features/auth/AuthScreen'
 import ErrorBoundary from '@/ui/components/ErrorBoundary'
 import AppProvider from '@/ui/features/app-provider'
-import WalletChangeHandler from '@/ui/features/app/WalletChangeHandler'
+import WalletChangeHandler from '@/ui/features/wallet/WalletChangeHandler'
 
 SplashScreen.preventAutoHideAsync()
 

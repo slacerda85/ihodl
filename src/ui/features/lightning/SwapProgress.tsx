@@ -10,7 +10,7 @@
 import { memo, useMemo, useCallback } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native'
 
-import { SwapData, SwapState, SwapType } from '@/core/lib/lightning/submarineSwap'
+import { SwapData, SwapState, SwapType } from '@/core/services/ln-submarine-swap-service'
 import { formatSats } from './utils'
 
 // ==========================================

@@ -14,10 +14,12 @@ import {
   decodeOffer as coreDecodeOffer,
   validateOffer as coreValidateOffer,
   getOfferExpiryStatus,
+  uint8ArrayToHex,
   type CreateOfferParams,
-} from '@/core/lib/lightning/negotiation'
-import type { Offer, OfferValidation, OfferExpiryStatus } from '@/core/models/lightning/negotiation'
-import { uint8ArrayToHex } from '@/core/lib/utils'
+  type Offer,
+  type OfferValidation,
+  type OfferExpiryStatus,
+} from '@/core/services/ln-offer-service'
 
 // ============================================================================
 // Types

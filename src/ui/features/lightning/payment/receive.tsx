@@ -219,7 +219,7 @@ export default function PaymentReceiveScreen() {
         message: state.invoice.invoice,
         title: 'Invoice Lightning',
       })
-    } catch (error) {
+    } catch {
       // User cancelled share
     }
   }, [state.invoice])

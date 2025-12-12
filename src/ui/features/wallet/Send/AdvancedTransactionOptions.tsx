@@ -52,8 +52,6 @@ export default function AdvancedTransactionOptions({
     },
   ]
 
-  const selectedSighashInfo = sighashTypes.find(t => t.key === selectedSighashType)
-
   return (
     <View style={styles.container}>
       <Pressable

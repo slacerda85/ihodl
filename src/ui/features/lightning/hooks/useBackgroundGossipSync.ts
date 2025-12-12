@@ -11,7 +11,7 @@ import {
   BackgroundSyncState,
   type BackgroundGossipSyncService,
 } from '@/core/services/ln-background-gossip-sync-service'
-import { SyncProgress } from '@/core/lib/lightning/gossip-sync'
+import { SyncProgress } from '@/core/services/ln-background-gossip-sync-service'
 
 /**
  * Hook para acessar o estado da sincronização em background

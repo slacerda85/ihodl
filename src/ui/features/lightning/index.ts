@@ -4,10 +4,6 @@
  * Exports principais para funcionalidades Lightning Network
  */
 
-// Provider
-export { default as LightningProvider } from './LightningProvider'
-export type { LightningProviderProps } from './LightningProvider'
-
 // Components
 export { LightningReadinessGuard } from './LightningReadinessGuard'
 export { LightningReadinessStatus } from './LightningReadinessStatus'
@@ -37,7 +33,6 @@ export { INITIAL_CONNECTION_STATE, INITIAL_LIGHTNING_STATE } from './types'
 
 // Hooks
 export {
-  useLightningContext,
   useLightningState,
   useConnectionState,
   useLightningInitialized,

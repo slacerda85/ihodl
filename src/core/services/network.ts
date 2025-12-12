@@ -3,6 +3,9 @@ import { connect as connectElectrum } from '@/core/lib/electrum'
 import { LightningClientConfig, ChannelOpeningFeeConfig } from '@/core/models/lightning/client'
 import LightningWorker from '@/core/lib/lightning/worker'
 
+// Reexporta o tipo para consumo pela UI via camada de services (evita imports diretos da lib)
+export type { LightningWorker }
+
 interface NetworkServiceInterface {
   connect(): Promise<Connection>
   createLightningWorker(

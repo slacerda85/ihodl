@@ -24,7 +24,7 @@ import { alpha } from '@/ui/utils'
 import { IconSymbol } from '@/ui/components/IconSymbol/IconSymbol'
 import { useLightningActions, useLightningBalance } from '@/ui/features/app-provider'
 import { useActiveColorMode } from '@/ui/features/app-provider'
-import type { DecodedInvoice, Millisatoshis } from '../types'
+import type { DecodedInvoice } from '../types'
 
 // ==========================================
 // TYPES
@@ -88,25 +88,10 @@ export default function PaymentSendScreen() {
 
   const [isDecoding, setIsDecoding] = useState(false)
 
-  // ==========================================
-  // EFFECTS
-  // ==========================================
-
-  // Auto-decode if invoice passed via params
-  useEffect(() => {
-    if (params.invoice && isValidBolt11(params.invoice)) {
-      handleDecodeInvoice(params.invoice)
-    }
-  }, [params.invoice])
-
-  // ==========================================
-  // ACTIONS
-  // ==========================================
-
   const handleDecodeInvoice = useCallback(
     async (invoiceStr?: string) => {
-      const invoice = invoiceStr || state.invoice
-      if (!invoice.trim()) {
+      const invoice = (invoiceStr || state.invoice).trim()
+      if (!invoice) {
         setState(prev => ({ ...prev, error: 'Digite ou escaneie uma invoice' }))
         return
       }
@@ -123,7 +108,7 @@ export default function PaymentSendScreen() {
       setState(prev => ({ ...prev, error: null }))
 
       try {
-        const decoded = await decodeInvoice(invoice.trim())
+        const decoded = await decodeInvoice(invoice)
 
         if (decoded.isExpired) {
           setState(prev => ({ ...prev, error: 'Esta invoice expirou' }))
@@ -132,7 +117,7 @@ export default function PaymentSendScreen() {
 
         setState(prev => ({
           ...prev,
-          invoice: invoice.trim(),
+          invoice,
           decodedInvoice: decoded,
           step: 'confirm',
           error: null,
@@ -148,6 +133,17 @@ export default function PaymentSendScreen() {
     },
     [state.invoice, decodeInvoice],
   )
+
+  // ==========================================
+  // EFFECTS
+  // ==========================================
+
+  // Auto-decode if invoice passed via params
+  useEffect(() => {
+    if (params.invoice && isValidBolt11(params.invoice)) {
+      handleDecodeInvoice(params.invoice)
+    }
+  }, [params.invoice, handleDecodeInvoice])
 
   const handleSendPayment = useCallback(async () => {
     if (!state.decodedInvoice) return

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native'
 import colors from '@/ui/colors'
 import { alpha } from '@/ui/utils'
@@ -55,14 +55,14 @@ export default function AdvancedFeeEstimation({
   const [showDetails, setShowDetails] = useState<boolean>(false)
 
   // Fetch fee estimation data
-  const fetchFeeEstimation = async () => {
+  const fetchFeeEstimation = useCallback(async () => {
     setLoading(true)
     try {
       const connection = await getConnection()
       const rates = await transactionService.getFeeRates(connection)
 
       // Estimate confirmation times based on fee rates
-      const feeData: FeeEstimationData = {
+      const nextFeeData: FeeEstimationData = {
         slow: {
           feeRate: rates.slow,
           estimatedBlocks: 20,
@@ -85,10 +85,10 @@ export default function AdvancedFeeEstimation({
         },
       }
 
-      setFeeData(feeData)
+      setFeeData(nextFeeData)
     } catch (error) {
       console.error('Failed to fetch fee estimation:', error)
-      // Fallback data
+      // Fallback data when network request fails
       const fallbackData: FeeEstimationData = {
         slow: { feeRate: 1, estimatedBlocks: 20, estimatedTime: '~3-4 hours' },
         normal: { feeRate: 2, estimatedBlocks: 6, estimatedTime: '~1 hour' },
@@ -99,11 +99,11 @@ export default function AdvancedFeeEstimation({
     } finally {
       setLoading(false)
     }
-  }
+  }, [getConnection])
 
   useEffect(() => {
     fetchFeeEstimation()
-  }, [])
+  }, [fetchFeeEstimation])
 
   if (loading) {
     return (

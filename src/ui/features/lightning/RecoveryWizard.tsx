@@ -23,7 +23,7 @@ import {
 } from 'react-native'
 
 import { useChannelBackup } from './hooks'
-import { RestoreState, RestoreContext, ChannelBackupData } from '@/core/lib/lightning/backup'
+import { RestoreState, RestoreContext, ChannelBackupData } from '@/core/services/ln-backup-service'
 
 // ==========================================
 // TYPES

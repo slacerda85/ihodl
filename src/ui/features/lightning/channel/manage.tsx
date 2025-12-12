@@ -294,6 +294,7 @@ export default function ChannelManageScreen() {
                 Alert.alert('Erro', 'Falha ao abrir canal. Tente novamente.')
               }
             } catch (error) {
+              console.error('[ChannelManage] Failed to open channel with on-chain funds:', error)
               Alert.alert('Erro', 'Erro inesperado ao abrir canal.')
             }
           },

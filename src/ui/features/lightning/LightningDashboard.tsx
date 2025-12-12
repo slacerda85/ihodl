@@ -247,6 +247,36 @@ export default function LightningDashboard() {
     return 'disconnected'
   }
 
+  const getInitializationLogMessage = (): string => {
+    const readiness = lightningState.readinessState
+
+    if (!readiness.isWalletLoaded) {
+      return 'Aguardando carregamento da carteira...'
+    }
+
+    if (!readiness.isTransportConnected) {
+      return 'Conectando ao transporte de rede...'
+    }
+
+    if (!readiness.isPeerConnected) {
+      return 'Conectando a peers da rede...'
+    }
+
+    if (!readiness.isGossipSynced) {
+      return 'Sincronizando grafo de rede...'
+    }
+
+    if (!readiness.isChannelReestablished) {
+      return 'Reestabelecendo canais...'
+    }
+
+    if (!readiness.isWatcherRunning) {
+      return 'Iniciando monitoramento de canais...'
+    }
+
+    return 'Lightning pronto para uso'
+  }
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background[colorMode] }]}
@@ -259,6 +289,13 @@ export default function LightningDashboard() {
           <StatusBadge status={getConnectionStatus()} />
           <Text style={[styles.networkLabel, { color: colors.textSecondary[colorMode] }]}>
             Rede: {lightningSettings.network?.toUpperCase() ?? 'MAINNET'}
+          </Text>
+        </View>
+
+        {/* Initialization Log */}
+        <View style={styles.initLogContainer}>
+          <Text style={[styles.initLogText, { color: colors.text[colorMode] }]}>
+            {getInitializationLogMessage()}
           </Text>
         </View>
 
@@ -1647,5 +1684,18 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 14,
     fontWeight: '600',
+  } as TextStyle,
+  initLogContainer: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: alpha(colors.info, 0.1),
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.info,
+  } as ViewStyle,
+  initLogText: {
+    fontSize: 14,
+    fontStyle: 'italic',
+    textAlign: 'center',
   } as TextStyle,
 })
