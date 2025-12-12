@@ -11,7 +11,7 @@
  */
 
 import { sha256, hmacSha256 } from '../crypto/crypto'
-import { uint8ArrayToHex, concatUint8Arrays } from '../utils'
+import { uint8ArrayToHex, concatUint8Arrays } from '../utils/utils'
 import * as secp from '@noble/secp256k1'
 
 // ============================================================================

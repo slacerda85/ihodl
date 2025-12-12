@@ -64,30 +64,6 @@ function saveSettings(state: SettingsState): void {
 // TYPES
 // ==========================================
 
-export interface SettingsStoreActions {
-  setColorMode: (mode: ColorMode) => void
-  setMaxBlockchainSize: (size: number) => void
-  setTrampolineRouting: (enabled: boolean) => void
-  setLightningNetwork: (network: LightningNetwork) => void
-  setZeroConfEnabled: (enabled: boolean) => void
-  setMppEnabled: (enabled: boolean) => void
-  setLightningFeeConfig: (config: Partial<LightningFeeConfig>) => void
-  setAutoChannelManagement: (enabled: boolean) => void
-  setMaxHtlcCount: (count: number) => void
-  setDefaultCltvExpiry: (expiry: number) => void
-  // Additional actions
-  setTrampolineNodes: (nodes: TrampolineNodePreference[]) => void
-  updateTrampolineNode: (node: TrampolineNodePreference) => void
-  setWatchtowerConfig: (config: Partial<WatchtowerConfig>) => void
-  setBackupConfig: (config: Partial<BackupConfig>) => void
-  setPrivacyConfig: (config: Partial<PrivacyConfig>) => void
-  setSwapLimits: (config: Partial<SwapLimitsConfig>) => void
-  setAdvancedConfig: (config: Partial<AdvancedConfig>) => void
-  setRoutingStrategy: (strategy: RoutingStrategy) => void
-  setLiquidityConfig: (config: Partial<LiquidityConfig>) => void
-  setSwapInConfig: (config: Partial<SwapInConfig>) => void
-}
-
 // ==========================================
 // STORE CLASS
 // ==========================================
@@ -226,7 +202,7 @@ class SettingsStore {
   // ACTIONS OBJECT (para context)
   // ==========================================
 
-  get actions(): SettingsStoreActions {
+  get actions() {
     return {
       setColorMode: this.setColorMode,
       setMaxBlockchainSize: this.setMaxBlockchainSize,
@@ -252,10 +228,6 @@ class SettingsStore {
     }
   }
 }
-
-// ==========================================
-// SINGLETON EXPORT
-// ==========================================
 
 export const settingsStore = new SettingsStore()
 

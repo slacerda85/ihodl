@@ -3,7 +3,7 @@
 
 import * as secp from '@noble/secp256k1'
 import { sha256 } from '../crypto'
-import { concatUint8Arrays } from '../utils'
+import { concatUint8Arrays } from '../utils/utils'
 
 // BIP-340 uses 32-byte public keys (x-only) and 64-byte signatures (r || s)
 export type SchnorrPublicKey = Uint8Array // 32 bytes (x-coordinate only)

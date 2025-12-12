@@ -10,7 +10,7 @@ import {
   getGraphStats,
 } from '../pathfinding'
 import { RoutingGraph } from '../routing'
-import { hexToUint8Array } from '@/core/lib/utils'
+import { hexToUint8Array } from '@/core/lib/utils/utils'
 
 // Mock console methods to avoid noise in tests
 const mockConsoleLog = jest.spyOn(console, 'log').mockImplementation()

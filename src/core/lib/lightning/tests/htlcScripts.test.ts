@@ -3,7 +3,7 @@
 
 import { offeredHtlcScript, receivedHtlcScript } from '../commitment'
 import { createOfferedHtlcScript, createReceivedHtlcScript } from '../transaction'
-import { uint8ArrayToHex } from '@/core/lib/utils'
+import { uint8ArrayToHex } from '@/core/lib/utils/utils'
 import { OpCode } from '@/core/models/opcodes'
 import { hash160 } from '@/core/lib/crypto'
 

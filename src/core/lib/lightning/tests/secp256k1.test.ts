@@ -20,7 +20,7 @@ import {
   generatePrivateKey,
   getCurveOrder,
 } from '../../crypto/secp256k1'
-import { uint8ArrayToHex, hexToUint8Array } from '../../utils'
+import { uint8ArrayToHex, hexToUint8Array } from '../../utils/utils'
 import { sha256 } from '../../crypto/crypto'
 
 // ==========================================

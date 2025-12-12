@@ -9,7 +9,7 @@
  */
 
 import { sha256 } from '../crypto'
-import { uint8ArrayToHex, hexToUint8Array } from '../utils'
+import { uint8ArrayToHex, hexToUint8Array } from '../utils/utils'
 import lightningRepository from '../../repositories/lightning'
 import * as secp from '@noble/secp256k1'
 import {

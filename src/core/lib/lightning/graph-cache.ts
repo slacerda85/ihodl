@@ -9,7 +9,7 @@
 
 import { LightningRepository } from '@/core/repositories/lightning'
 import { RoutingGraph, RoutingNode, RoutingChannel } from './routing'
-import { uint8ArrayToHex, hexToUint8Array } from '@/core/lib/utils'
+import { uint8ArrayToHex, hexToUint8Array } from '@/core/lib/utils/utils'
 
 /**
  * Configuração do cache de grafo

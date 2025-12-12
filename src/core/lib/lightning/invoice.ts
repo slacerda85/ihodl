@@ -38,7 +38,7 @@ import {
   writeUint16BE,
   readUint32BE,
   readUint16BE,
-} from '../utils'
+} from '../utils/utils'
 import secp256k1 from 'secp256k1'
 
 /**

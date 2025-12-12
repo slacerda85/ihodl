@@ -1,4 +1,4 @@
-import { uint8ArrayToHex } from '../../utils'
+import { uint8ArrayToHex } from '../../utils/utils'
 import { encodeBech32NodeId, decodeBech32NodeId } from '../../address'
 import { generateTestNodeId } from '../test-utils'
 import {

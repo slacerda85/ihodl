@@ -25,7 +25,7 @@ import {
   createRemoteWatchtowerManager,
   type RemoteWatchtowerClientConfig,
 } from '../remoteWatchtower'
-import { uint8ArrayToHex } from '@/core/lib/utils'
+import { uint8ArrayToHex } from '@/core/lib/utils/utils'
 
 // ==========================================
 // HELPERS

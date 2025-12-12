@@ -10,7 +10,7 @@ import {
   getMempoolTransactions,
 } from '@/core/lib/electrum'
 // import { sha256 } from '@noble/hashes/sha2.js'
-import { hexToUint8Array, uint8ArrayToHex, concatUint8Arrays } from '../lib/utils'
+import { hexToUint8Array, uint8ArrayToHex, concatUint8Arrays } from '../lib/utils/utils'
 import { AddressDetails, Change } from '../models/address'
 import {
   buildBatchTransactions,

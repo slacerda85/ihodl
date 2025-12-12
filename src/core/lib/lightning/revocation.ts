@@ -2,7 +2,7 @@
 // Baseado em electrum/lnutil.py RevocationStore
 
 import { sha256 } from '../crypto/crypto'
-import { uint8ArrayToHex, hexToUint8Array } from '../utils'
+import { uint8ArrayToHex, hexToUint8Array } from '../utils/utils'
 import * as secp from '@noble/secp256k1'
 
 // ==========================================

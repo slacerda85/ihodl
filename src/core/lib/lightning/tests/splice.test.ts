@@ -30,7 +30,7 @@ import {
   type SpliceConfig,
 } from '../splice'
 import type { LocalConfig, RemoteConfig } from '../commitment'
-import { uint8ArrayToHex } from '@/core/lib/utils'
+import { uint8ArrayToHex } from '@/core/lib/utils/utils'
 
 // ==========================================
 // HELPERS

@@ -5,6 +5,7 @@
  * Abstrai a lib do watchtower para o frontend, seguindo o padrão:
  * lib (funções puras) -> services (lógica de negócio) -> UI
  */
+import { uint8ArrayToHex } from '@/core/lib/utils'
 
 import Watchtower, {
   WatchtowerConfig,
@@ -241,7 +242,7 @@ class WatchtowerService implements WatchtowerServiceInterface {
       if (info) {
         channels.push({
           channelId: info.channelId,
-          remotePubkey: this.uint8ArrayToHex(info.remotePubkey),
+          remotePubkey: uint8ArrayToHex(info.remotePubkey),
           fundingTxid: info.fundingTxid,
           localBalance: info.localBalance.toString(),
           remoteBalance: info.remoteBalance.toString(),
@@ -458,11 +459,11 @@ class WatchtowerService implements WatchtowerServiceInterface {
   /**
    * Converte Uint8Array para hex
    */
-  private uint8ArrayToHex(arr: Uint8Array): string {
+  /* private uint8ArrayToHex(arr: Uint8Array): string {
     return Array.from(arr)
       .map(b => b.toString(16).padStart(2, '0'))
       .join('')
-  }
+  } */
 }
 
 // ==========================================

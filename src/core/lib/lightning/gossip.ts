@@ -27,7 +27,7 @@ import {
   ChannelUpdateChecksum,
 } from '@/core/models/lightning/p2p'
 import { ShortChannelId, ChainHash } from '@/core/models/lightning/base'
-import { uint8ArrayToHex } from '@/core/lib/utils'
+import { uint8ArrayToHex } from '@/core/lib/utils/utils'
 import { sha256, verifyMessage } from '@/core/lib/crypto/crypto'
 
 // Constantes de sincronização

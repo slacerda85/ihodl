@@ -12,7 +12,7 @@
 
 import { Point } from '@/core/models/lightning/base'
 import { PayloadType } from '@/core/models/lightning/routing'
-import { uint8ArrayToHex, hexToUint8Array, concatUint8Arrays } from '@/core/lib/utils'
+import { uint8ArrayToHex, hexToUint8Array, concatUint8Arrays } from '@/core/lib/utils/utils'
 import { sha256 } from '@noble/hashes/sha2.js'
 import * as secp256k1 from '@noble/secp256k1'
 import { hkdf } from '@noble/hashes/hkdf.js'

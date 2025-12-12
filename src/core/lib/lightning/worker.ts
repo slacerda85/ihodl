@@ -76,7 +76,7 @@ import { PaymentHash } from '@/core/models/lightning/transaction'
 import { PaymentSecret } from '@/core/models/lightning/invoice'
 import { CoinType } from '@/core/models/address'
 import { LnVersion, NodeIndex, constructChannelIndex } from '@/core/models/lightning/lnpbp42'
-import { hexToUint8Array, uint8ArrayToHex } from '../utils'
+import { hexToUint8Array, uint8ArrayToHex } from '../utils/utils'
 import { fromBech32, toBech32 } from '../address'
 import lightningRepository from '../../repositories/lightning'
 import {

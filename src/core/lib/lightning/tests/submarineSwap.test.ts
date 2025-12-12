@@ -46,7 +46,7 @@ import {
   SwapManager,
   createSwapManager,
 } from '../submarineSwap'
-import { uint8ArrayToHex } from '@/core/lib/utils'
+import { uint8ArrayToHex } from '@/core/lib/utils/utils'
 
 describe('submarineSwap', () => {
   // ============================================================================

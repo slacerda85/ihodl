@@ -30,7 +30,7 @@ import {
   ChannelFlag,
   MessageFlag,
 } from '@/core/models/lightning/p2p'
-import { uint8ArrayToHex, hexToUint8Array } from '@/core/lib/utils'
+import { uint8ArrayToHex, hexToUint8Array } from '@/core/lib/utils/utils'
 import { sha256, signMessage } from '@/core/lib/crypto/crypto'
 import * as secp256k1 from 'secp256k1'
 import * as Crypto from 'expo-crypto'

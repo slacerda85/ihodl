@@ -13,7 +13,7 @@ import { sha256 } from '@noble/hashes/sha2.js'
 import { ripemd160 } from '@noble/hashes/legacy.js'
 import * as secp256k1 from '@noble/secp256k1'
 import { OpCode } from '@/core/models/opcodes'
-import { uint8ArrayToHex } from '@/core/lib/utils'
+import { uint8ArrayToHex } from '@/core/lib/utils/utils'
 
 // ============================================================================
 // Constantes

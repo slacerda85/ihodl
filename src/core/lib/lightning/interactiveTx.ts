@@ -10,7 +10,7 @@
  */
 
 import { sha256, randomBytes } from '../crypto/crypto'
-import { uint8ArrayToHex } from '../utils'
+import { uint8ArrayToHex } from '../utils/utils'
 import {
   TxAddInputMessage,
   TxAddOutputMessage,

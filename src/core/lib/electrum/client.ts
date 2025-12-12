@@ -12,7 +12,7 @@ import { fromBech32, toScriptHash /* legacyToScriptHash */ } from '@/core/lib/ad
 import { initialPeers } from './constants'
 import electrumRepository from '@/core/repositories/electrum'
 import { sha256 } from '@noble/hashes/sha2.js'
-import { hexToUint8Array, uint8ArrayToHex } from '../utils'
+import { hexToUint8Array, uint8ArrayToHex } from '../utils/utils'
 import { createElectrumSocket } from '@/core/lib/network/socket'
 import { Connection } from '@/core/models/network'
 import { ConnectionOptions } from 'react-native-tcp-socket/lib/types/Socket'
@@ -871,12 +871,18 @@ async function broadcastTransaction(rawTxHex: string, socket?: Connection): Prom
  */
 async function getCurrentBlockHeight(socket?: Connection): Promise<number> {
   try {
-    const data = await callElectrumMethod<[number, string]>(
-      'blockchain.headers.subscribe',
-      [],
-      socket,
-    )
-    return data.result![0] // First element is the height
+    const data = await callElectrumMethod<any>('blockchain.headers.subscribe', [], socket)
+    const result = data.result
+
+    if (typeof result?.height === 'number') {
+      return result.height
+    }
+
+    if (Array.isArray(result) && typeof result[0] === 'number') {
+      return result[0]
+    }
+
+    throw new Error('Unexpected Electrum height response')
   } catch (error) {
     console.error('Error getting current block height:', error)
     throw error

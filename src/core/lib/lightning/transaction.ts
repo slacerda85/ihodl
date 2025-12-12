@@ -5,7 +5,7 @@ import { createPublicKey } from '@/core/lib/key'
 import { createP2WPKHScript } from '@/core/lib/address'
 import * as secp from '@noble/secp256k1'
 import { encodeU16, encodeU32, encodeU64 } from './base'
-import { uint8ArrayToHex } from '@/core/lib/utils'
+import { uint8ArrayToHex } from '@/core/lib/utils/utils'
 import {
   Satoshis,
   CltvExpiry,

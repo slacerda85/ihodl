@@ -29,20 +29,6 @@ export interface NetworkStoreState {
   lastError?: string
 }
 
-export interface NetworkStoreActions {
-  /** Obtém conexão Electrum saudável */
-  getConnection(): Promise<Connection>
-  /** Obtém Lightning Worker saudável */
-  getLightningWorker(
-    masterKey: Uint8Array,
-    network?: 'mainnet' | 'testnet' | 'regtest',
-  ): Promise<LightningWorker>
-  /** Força reconexão */
-  reconnect(): Promise<void>
-  /** Fecha todas as conexões */
-  closeConnections(): Promise<void>
-}
-
 // ==========================================
 // STORE CLASS
 // ==========================================
@@ -264,7 +250,7 @@ class NetworkStore {
   // ACTIONS OBJECT (para context)
   // ==========================================
 
-  get actions(): NetworkStoreActions {
+  get actions() {
     return {
       getConnection: this.getConnection.bind(this),
       getLightningWorker: this.getLightningWorker.bind(this),
@@ -273,9 +259,5 @@ class NetworkStore {
     }
   }
 }
-
-// ==========================================
-// SINGLETON EXPORT
-// ==========================================
 
 export const networkStore = new NetworkStore()

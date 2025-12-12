@@ -5,6 +5,7 @@ import { alpha } from '@/ui/utils'
 import { useActiveColorMode, useConnection } from '@/ui/features/app-provider'
 import { useAppContext } from '@/ui/features/app-provider/AppProvider'
 import { useLightningReadiness } from '@/ui/features/lightning/hooks/useLightningReadiness'
+import { useLightningDebugSnapshot } from '@/ui/features/lightning/hooks/useLightningDebugSnapshot'
 import type { LightningStoreState } from '../store'
 
 /**
@@ -19,6 +20,7 @@ export default function LightningDebugPanel() {
   const colorMode = useActiveColorMode()
   const connection = useConnection()
   const { readinessState, readinessLevel } = useLightningReadiness()
+  const debug = useLightningDebugSnapshot()
   const { lightning } = useAppContext()
 
   const lightningState = useSyncExternalStore(
@@ -51,6 +53,20 @@ export default function LightningDebugPanel() {
     { step: 'Watcher', ok: readinessState.isWatcherRunning },
   ]
 
+  const workerMetrics = useMemo(() => debug.workerMetrics ?? {}, [debug.workerMetrics])
+  const retryMetrics = useMemo(
+    () => ({
+      electrumAttempts: workerMetrics.electrumAttempts ?? 0,
+      electrumFailures: workerMetrics.electrumFailures ?? 0,
+      peerStartAttempts: workerMetrics.peerStartAttempts ?? 0,
+      peerStartFailures: workerMetrics.peerStartFailures ?? 0,
+      disconnectCount: workerMetrics.disconnectCount ?? 0,
+      gossipSyncAttempts: workerMetrics.gossipSyncAttempts ?? 0,
+      gossipTimeouts: workerMetrics.gossipTimeouts ?? 0,
+    }),
+    [workerMetrics],
+  )
+
   const palette = styles[colorMode]
 
   if (!isDev) return null
@@ -59,11 +75,15 @@ export default function LightningDebugPanel() {
     <View style={palette.card}>
       <Text style={palette.title}>Lightning Debug (dev)</Text>
 
-      <View style={palette.row}>
-        <View style={palette.badge}>
-          <Text style={palette.badgeText}>Init</Text>
-        </View>
-        <Text style={palette.value}>{lightningState.initStatus}</Text>
+      <View style={palette.rowBetween}>
+        <Text style={palette.sectionTitle}>Worker</Text>
+        <Text style={palette.value}>{debug.workerStatus?.phase ?? '-'}</Text>
+      </View>
+
+      <View style={palette.section}>
+        <Text style={palette.line}>Init phase: {debug.workerStatus?.phase ?? '-'}</Text>
+        <Text style={palette.line}>Progress: {debug.workerStatus?.progress ?? 0}%</Text>
+        <Text style={palette.line}>Message: {debug.workerStatus?.message ?? '-'}</Text>
       </View>
 
       <View style={palette.rowBetween}>
@@ -92,6 +112,27 @@ export default function LightningDebugPanel() {
         </Text>
         <Text style={palette.line}>Invoices: {lightningState.invoices.length}</Text>
         <Text style={palette.line}>Payments: {lightningState.payments.length}</Text>
+        <Text style={palette.line}>Electrum height: {workerMetrics.electrumHeight ?? '-'}</Text>
+        <Text style={palette.line}>Peers: {workerMetrics.connectedPeers ?? '-'}</Text>
+        <Text style={palette.line}>
+          Gossip complete: {workerMetrics.gossipCompleted ? 'yes' : 'no'}
+        </Text>
+      </View>
+
+      <View style={palette.section}>
+        <Text style={palette.sectionTitle}>Retries & Errors</Text>
+        <Text style={palette.line}>
+          Electrum attempts/failures: {retryMetrics.electrumAttempts}/
+          {retryMetrics.electrumFailures}
+        </Text>
+        <Text style={palette.line}>
+          Peer start attempts/failures: {retryMetrics.peerStartAttempts}/
+          {retryMetrics.peerStartFailures}
+        </Text>
+        <Text style={palette.line}>Peer disconnects: {retryMetrics.disconnectCount}</Text>
+        <Text style={palette.line}>
+          Gossip attempts/timeouts: {retryMetrics.gossipSyncAttempts}/{retryMetrics.gossipTimeouts}
+        </Text>
       </View>
 
       <View style={palette.section}>

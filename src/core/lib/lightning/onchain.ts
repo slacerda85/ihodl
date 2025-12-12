@@ -2,7 +2,7 @@
 // Baseado em electrum/lnsweep.py
 
 import { sha256, hash160 } from '@/core/lib/crypto'
-import { uint8ArrayToHex, hexToUint8Array } from '@/core/lib/utils'
+import { uint8ArrayToHex, hexToUint8Array } from '@/core/lib/utils/utils'
 import {
   CommitmentOutputType,
   PaymentPreimage,

@@ -49,7 +49,7 @@ import {
   SchnorrPrivateKey,
 } from '../bips/bip340'
 import { toWords, fromWords } from '../bips/bech32'
-import { concatUint8Arrays } from '../utils'
+import { concatUint8Arrays } from '../utils/utils'
 
 // ============================================================================
 // TLV Encoding/Decoding Functions

@@ -11,10 +11,7 @@ import { EventEmitter } from 'eventemitter3'
 import { RoutingGraph } from '../lib/lightning/routing'
 import { GraphCacheManager } from '../lib/lightning/graph-cache'
 import { LightningRepository } from '../repositories/lightning'
-import {
-  BackgroundGossipSyncService,
-  BackgroundSyncState,
-} from './ln-background-gossip-sync-service'
+import { BackgroundSyncState } from './ln-background-gossip-sync-service'
 
 // ==========================================
 // TIPOS
@@ -48,7 +45,7 @@ export class LightningRoutingService extends EventEmitter {
   private state: RoutingServiceState
   private routingGraph?: RoutingGraph
   private graphCacheManager?: GraphCacheManager
-  private backgroundSyncService?: BackgroundGossipSyncService
+  private backgroundSyncSource?: EventEmitter
   private isInitialized = false
 
   constructor() {
@@ -67,15 +64,15 @@ export class LightningRoutingService extends EventEmitter {
   // ==========================================
 
   /** Inicializa o serviço de routing */
-  async initialize(backgroundSyncService?: BackgroundGossipSyncService): Promise<void> {
+  async initialize(backgroundSyncSource?: EventEmitter): Promise<void> {
     if (this.isInitialized) return
 
     console.log('[LightningRouting] Initializing routing service...')
 
     // Configurar background sync service se fornecido
-    if (backgroundSyncService) {
-      this.backgroundSyncService = backgroundSyncService
-      this.setupBackgroundSyncListeners()
+    if (backgroundSyncSource) {
+      this.backgroundSyncSource = backgroundSyncSource
+      this.setupBackgroundSyncListeners(backgroundSyncSource)
     }
 
     // Inicializar componentes de routing local
@@ -93,8 +90,8 @@ export class LightningRoutingService extends EventEmitter {
     if (!this.isInitialized) return
 
     // Remover listeners
-    if (this.backgroundSyncService) {
-      this.backgroundSyncService.removeAllListeners()
+    if (this.backgroundSyncSource?.removeAllListeners) {
+      this.backgroundSyncSource.removeAllListeners()
     }
 
     this.isInitialized = false
@@ -180,28 +177,40 @@ export class LightningRoutingService extends EventEmitter {
     }
   }
 
-  private setupBackgroundSyncListeners(): void {
-    if (!this.backgroundSyncService) return
-
-    this.backgroundSyncService.on('stateChanged', (state: BackgroundSyncState) => {
+  private setupBackgroundSyncListeners(source: EventEmitter): void {
+    const handleState = (state: BackgroundSyncState) => {
       this.state.backgroundSyncState = state
 
-      // Quando sync completa, verificar se podemos mudar para local routing
       if (state === BackgroundSyncState.COMPLETED) {
         this.checkLocalRoutingAvailability()
       }
-    })
+    }
 
-    this.backgroundSyncService.on('syncCompleted', async stats => {
+    const handleCompleted = async (stats: {
+      nodes: number
+      channels: number
+      duration?: number
+    }) => {
       console.log(
         `[LightningRouting] Background sync completed: ${stats.nodes} nodes, ${stats.channels} channels`,
       )
 
-      // Verificar se grafo tem dados suficientes para routing local
-      if (stats.nodes > 1000 && stats.channels > 5000) {
-        await this.enableLocalRouting()
-      }
-    })
+      await this.updateRoutingAvailability()
+    }
+
+    const handleError = (error: Error) => {
+      console.error('[LightningRouting] Background sync error:', error)
+    }
+
+    // Suporte aos eventos legados e novos emitidos pelo WorkerService
+    if ((source as any).on) {
+      ;(source as any).on('stateChanged', handleState)
+      ;(source as any).on('backgroundSyncState', handleState)
+      ;(source as any).on('syncCompleted', handleCompleted)
+      ;(source as any).on('backgroundSyncCompleted', handleCompleted)
+      ;(source as any).on('syncError', handleError)
+      ;(source as any).on('backgroundSyncError', handleError)
+    }
   }
 
   private async checkLocalRoutingAvailability(): Promise<void> {

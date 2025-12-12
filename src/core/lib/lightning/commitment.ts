@@ -2,7 +2,7 @@
 // Constrói commitment transactions para canais Lightning
 
 import { sha256, ripemd160, hash160, signMessage, verifyMessage } from '../crypto/crypto'
-import { uint8ArrayToHex } from '../utils'
+import { uint8ArrayToHex } from '../utils/utils'
 import { HTLCManager, HTLCOwner, UpdateAddHtlc } from './htlc'
 import {
   RevocationStore,

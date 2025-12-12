@@ -15,7 +15,7 @@
  */
 
 import * as secp from '@noble/secp256k1'
-import { uint8ArrayToHex, hexToUint8Array } from '../utils'
+import { uint8ArrayToHex, hexToUint8Array } from '../utils/utils'
 import { sha256 } from './crypto'
 
 // Configurar hash functions para @noble/secp256k1 v3

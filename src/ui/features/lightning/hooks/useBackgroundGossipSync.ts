@@ -6,12 +6,8 @@
  */
 
 import { useEffect, useState } from 'react'
-import {
-  getBackgroundGossipSyncService,
-  BackgroundSyncState,
-  type BackgroundGossipSyncService,
-} from '@/core/services/ln-background-gossip-sync-service'
-import { SyncProgress } from '@/core/services/ln-background-gossip-sync-service'
+import { BackgroundSyncState, type SyncProgress } from '@/core/services/ln-worker-service'
+import { useWorkerService } from './useWorkerService'
 
 /**
  * Hook para acessar o estado da sincronização em background
@@ -23,34 +19,36 @@ export function useBackgroundGossipSync(): {
   isCompleted: boolean
   isSyncing: boolean
   progress?: SyncProgress
-  service: BackgroundGossipSyncService
+  service: ReturnType<typeof useWorkerService>
 } {
-  const service = getBackgroundGossipSyncService()
-  const [state, setState] = useState<BackgroundSyncState>(() => service.getState())
-  const [progress, setProgress] = useState<SyncProgress | undefined>()
+  const service = useWorkerService()
+  const [state, setState] = useState<BackgroundSyncState>(() => service.getBackgroundSyncState())
+  const [progress, setProgress] = useState<SyncProgress | undefined>(() =>
+    service.getBackgroundSyncProgress(),
+  )
 
   useEffect(() => {
     const handleStateChanged = (newState: BackgroundSyncState) => {
       setState(newState)
     }
 
-    const handleProgressUpdated = (newProgress: SyncProgress) => {
+    const handleProgressUpdated = (newProgress?: SyncProgress) => {
       setProgress(newProgress)
     }
 
-    service.on('stateChanged', handleStateChanged)
-    service.on('progressUpdated', handleProgressUpdated)
+    service.on('backgroundSyncState', handleStateChanged)
+    service.on('backgroundSyncProgress', handleProgressUpdated)
 
     return () => {
-      service.off('stateChanged', handleStateChanged)
-      service.off('progressUpdated', handleProgressUpdated)
+      service.off('backgroundSyncState', handleStateChanged)
+      service.off('backgroundSyncProgress', handleProgressUpdated)
     }
   }, [service])
 
   return {
     state,
-    isCompleted: service.isSyncCompleted(),
-    isSyncing: service.isSyncing(),
+    isCompleted: state === BackgroundSyncState.COMPLETED,
+    isSyncing: state === BackgroundSyncState.SYNCING,
     progress,
     service,
   }

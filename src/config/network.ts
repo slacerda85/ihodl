@@ -1,4 +1,4 @@
-import { hexToUint8Array } from '@/core/lib/utils'
+import { hexToUint8Array } from '@/core/lib/utils/utils'
 
 export type NetworkType = 'mainnet' | 'testnet' | 'regtest'
 

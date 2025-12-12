@@ -2,7 +2,7 @@
 // Gerencia o estado completo de um canal Lightning
 
 import { sha256 } from '../crypto/crypto'
-import { uint8ArrayToHex } from '../utils'
+import { uint8ArrayToHex } from '../utils/utils'
 import { HTLCManager, HTLCOwner, UpdateAddHtlc } from './htlc'
 import { RevocationStore, getPerCommitmentSecretFromSeed, secretToPoint } from './revocation'
 import {

@@ -12,7 +12,7 @@ import { gcm } from '@noble/ciphers/aes.js'
 import { sha256 } from '@noble/hashes/sha2.js'
 import { pbkdf2 } from '@noble/hashes/pbkdf2.js'
 import * as Crypto from 'expo-crypto'
-import { hexToUint8Array, uint8ArrayToHex } from '@/core/lib/utils'
+import { hexToUint8Array, uint8ArrayToHex } from '@/core/lib/utils/utils'
 import { createPublicKey } from '@/core/lib/key'
 import { bech32 } from '@/core/lib/bips'
 

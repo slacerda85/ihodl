@@ -16,7 +16,7 @@ import { getNodeKey } from '@/core/lib/lightning/keys'
 import { createPublicKey, splitMasterKey } from '@/core/lib/key'
 import type { KeyPair } from '@/core/models/lightning/transport'
 import { performInitExchange } from './ln-transport-service'
-import { uint8ArrayToHex } from '@/core/lib/utils'
+import { uint8ArrayToHex } from '@/core/lib/utils/utils'
 import { getBootstrapPeers } from '@/core/lib/lightning/dns-bootstrap'
 
 interface PeerRepository {

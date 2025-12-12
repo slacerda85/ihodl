@@ -11,7 +11,7 @@
  * Referência: https://github.com/lightning/bolts/pull/863
  */
 
-import { uint8ArrayToHex, concatUint8Arrays } from '../utils'
+import { uint8ArrayToHex, concatUint8Arrays } from '../utils/utils'
 import { encodeTlvStream, decodeTlvStream } from './onion'
 import {
   InteractiveTxNegotiator,

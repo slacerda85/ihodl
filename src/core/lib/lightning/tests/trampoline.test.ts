@@ -21,7 +21,7 @@ import {
   TrampolineRoute,
   TrampolineTlvType,
 } from '../trampoline'
-import { uint8ArrayToHex, hexToUint8Array } from '@/core/lib/utils'
+import { uint8ArrayToHex, hexToUint8Array } from '@/core/lib/utils/utils'
 import * as secp256k1 from '@noble/secp256k1'
 
 // Helper: Create valid test node ID from private key (33-byte compressed pubkey)

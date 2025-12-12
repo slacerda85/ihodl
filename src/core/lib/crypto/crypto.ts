@@ -8,7 +8,7 @@ import secp256k1 from 'secp256k1'
 import { schnorr } from '@noble/secp256k1'
 import { pbkdf2 } from '@noble/hashes/pbkdf2.js'
 import { gcm } from '@noble/ciphers/aes.js'
-import { hexToUint8Array, toBytes, uint8ArrayToHex } from '../utils'
+import { hexToUint8Array, toBytes, uint8ArrayToHex } from '../utils/utils'
 
 // hash functions
 function createEntropy(size: number): Uint8Array {
@@ -57,6 +57,19 @@ function createChecksum(key: Uint8Array): Uint8Array {
 
 function randomUUID() {
   return expoRandomUUID()
+}
+
+// Ensure global crypto.getRandomValues exists for noble libs (React Native lacks it by default)
+function ensureGlobalCrypto(): void {
+  const globalCrypto = (globalThis as any).crypto
+  if (globalCrypto && typeof globalCrypto.getRandomValues === 'function') {
+    return
+  }
+
+  ;(globalThis as any).crypto = {
+    ...(globalCrypto || {}),
+    getRandomValues: (array: Uint8Array) => Crypto.getRandomValues(array),
+  }
 }
 
 function encryptSeed(password: string, seed: string): string {
@@ -363,4 +376,8 @@ export {
   schnorrSign,
   schnorrVerify,
   calculateTaprootSighash,
+  ensureGlobalCrypto,
 }
+
+// Initialize polyfill on module load to satisfy noble-secp256k1 entropy requirements
+ensureGlobalCrypto()

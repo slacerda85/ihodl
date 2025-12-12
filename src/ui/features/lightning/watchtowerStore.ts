@@ -28,22 +28,6 @@ export interface WatchtowerStoreState {
   lastBreachEvent?: WatchtowerEventForUI
 }
 
-export interface WatchtowerStoreActions {
-  initialize: (config?: Partial<WatchtowerServiceConfig>) => Promise<void>
-  start: () => void
-  stop: () => void
-  addChannel: (channelId: string, channelInfo: ChannelInfo, remotePubkey: Uint8Array) => void
-  removeChannel: (channelId: string) => void
-  refreshChannels: () => void
-  checkChannel: (channelId: string, txHex: string) => BreachResult
-  storeRevocationSecret: (
-    channelId: string,
-    commitmentNumber: bigint,
-    revocationSecret: Uint8Array,
-  ) => void
-  clearEvents: () => void
-}
-
 // ==========================================
 // INITIAL STATE
 // ==========================================
@@ -157,7 +141,7 @@ class WatchtowerStore {
   // ACTIONS GETTER
   // ==========================================
 
-  get actions(): WatchtowerStoreActions {
+  get actions() {
     return {
       initialize: async (config?: Partial<WatchtowerServiceConfig>): Promise<void> => {
         try {
@@ -240,10 +224,6 @@ class WatchtowerStore {
     this.subscribers.clear()
   }
 }
-
-// ==========================================
-// SINGLETON INSTANCE
-// ==========================================
 
 export const watchtowerStore = new WatchtowerStore()
 

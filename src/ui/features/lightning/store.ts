@@ -8,12 +8,21 @@
 import { LightningState, Invoice, Payment, Channel, Millisatoshis, DecodedInvoice } from './types'
 import { INITIAL_LIGHTNING_STATE } from './types'
 import { mapServiceInvoices, mapServicePayments } from './utils'
-import { getReadinessLevel, type ReadinessState } from '@/core/models/lightning/readiness'
+import {
+  createInitialReadinessState,
+  getReadinessLevel,
+  type ReadinessState,
+} from '@/core/models/lightning/readiness'
 import LightningService, {
   connectToPeer as connectToPeerService,
   disconnect as disconnectService,
   sendPing as sendPingService,
 } from '@/core/services/ln-service'
+import type {
+  WorkerInitStatus,
+  WorkerReadiness,
+  WorkerMetrics,
+} from '@/core/services/ln-worker-service'
 import { walletService } from '@/core/services'
 import { walletStore } from '../wallet/store'
 import { getTrafficControl } from '@/core/services/ln-traffic-control-service'
@@ -52,30 +61,9 @@ function assertConnected(isConnected: boolean): void {
 
 export interface LightningStoreState extends LightningState {
   initStatus: 'idle' | 'initializing' | 'ready' | 'error'
-}
-
-export interface LightningStoreActions {
-  initialize: () => Promise<void>
-  generateInvoice: (amount: Millisatoshis, description?: string) => Promise<Invoice>
-  decodeInvoice: (invoice: string) => Promise<DecodedInvoice>
-  sendPayment: (invoice: string, maxFee?: bigint) => Promise<Payment>
-  getBalance: () => Promise<Millisatoshis>
-  refreshBalance: () => Promise<void>
-  getChannels: () => Promise<Channel[]>
-  hasChannels: () => Promise<boolean>
-  createChannel: (params: {
-    peerId: string
-    capacitySat: bigint
-    pushMsat?: bigint
-    feeRatePerKw?: number
-  }) => Promise<Channel>
-  closeChannel: (channelId: string) => Promise<void>
-  forceCloseChannel: (channelId: string) => Promise<void>
-  refreshInvoices: () => Promise<void>
-  refreshPayments: () => Promise<void>
-  connectToPeer: (peerId: string) => Promise<void>
-  disconnect: () => Promise<void>
-  sendPing: () => Promise<void>
+  workerStatus?: WorkerInitStatus
+  workerReadiness?: WorkerReadiness
+  workerMetrics?: WorkerMetrics
 }
 
 // ==========================================
@@ -128,6 +116,18 @@ class LightningStore {
 
   private unsubscribeWallet?: () => void
 
+  private mapWorkerReadiness(readiness: WorkerReadiness): ReadinessState {
+    return {
+      ...this.state.readinessState,
+      isWalletLoaded: readiness.walletLoaded,
+      isTransportConnected: readiness.transportConnected || readiness.electrumReady,
+      isPeerConnected: readiness.peerConnected,
+      isChannelReestablished: readiness.channelsReestablished,
+      isGossipSynced: readiness.gossipSynced,
+      isWatcherRunning: readiness.watcherRunning,
+    }
+  }
+
   private updateReadiness(updates: Partial<ReadinessState>): void {
     if (!this.service) return
 
@@ -154,6 +154,46 @@ class LightningStore {
 
   private notify = (): void => {
     this.subscribers.forEach(callback => callback())
+  }
+
+  private setWorkerStatus = (status: WorkerInitStatus): void => {
+    this.state = { ...this.state, workerStatus: status }
+    this.notify()
+  }
+
+  private setWorkerMetrics = (metrics: WorkerMetrics): void => {
+    this.state = {
+      ...this.state,
+      workerMetrics: { ...this.state.workerMetrics, ...metrics },
+    }
+    this.notify()
+  }
+
+  private syncWorkerReadiness = (readiness: WorkerReadiness): void => {
+    const mapped = this.mapWorkerReadiness(readiness)
+    this.updateReadiness(mapped)
+    this.state = { ...this.state, workerReadiness: readiness }
+    this.notify()
+  }
+
+  private resetForWalletChange = (): void => {
+    const readinessState = createInitialReadinessState()
+
+    if (this.service) {
+      this.service.updateReadinessState(readinessState)
+    }
+
+    this.state = {
+      ...INITIAL_LIGHTNING_STATE,
+      readinessState,
+      readinessLevel: getReadinessLevel(readinessState),
+      initStatus: 'idle',
+      workerStatus: undefined,
+      workerReadiness: undefined,
+      workerMetrics: undefined,
+    }
+
+    this.notify()
   }
 
   // ==========================================
@@ -192,16 +232,12 @@ class LightningStore {
         service.getReadinessState(),
       ])
 
-      // Marcar readiness básico: carteira carregada e transporte disponível (para receber invoices)
-      const baselineReadiness: ReadinessState = {
+      // Usar readiness real reportado pelo serviço (sem defaults otimistas)
+      const resolvedReadiness: ReadinessState = {
         ...readinessState,
         isWalletLoaded: true,
-        // Mantém transporte pronto para invoice; peer será marcado em connectToPeer
-        isTransportConnected: readinessState.isTransportConnected || true,
-        // Trampoline flow não depende de gossip completo; assume pronto para permitir envio quando peer conectar
-        isGossipSynced: readinessState.isGossipSynced || true,
       }
-      this.updateReadiness(baselineReadiness)
+      this.updateReadiness(resolvedReadiness)
 
       this.state = {
         ...this.state,
@@ -269,9 +305,17 @@ class LightningStore {
 
     const result = await service.sendPayment({ invoice, maxFee })
 
+    let amountMsat: Millisatoshis = 0n
+    try {
+      const decoded = await service.decodeInvoice(invoice)
+      amountMsat = decoded.amount
+    } catch (err) {
+      console.warn('[LightningStore] Failed to decode invoice for amount:', err)
+    }
+
     const payment: Payment = {
       paymentHash: result.paymentHash,
-      amount: ZERO_BIGINT,
+      amount: amountMsat,
       status: result.success ? 'succeeded' : 'failed',
       direction: 'sent',
       createdAt: Date.now(),
@@ -533,7 +577,7 @@ class LightningStore {
   // ACTIONS GETTER
   // ==========================================
 
-  get actions(): LightningStoreActions {
+  get actions() {
     return {
       initialize: this.initialize,
       generateInvoice: this.generateInvoice,
@@ -551,12 +595,12 @@ class LightningStore {
       connectToPeer: this.connectToPeer,
       disconnect: this.disconnect,
       sendPing: this.sendPing,
+      setWorkerStatus: this.setWorkerStatus,
+      setWorkerMetrics: this.setWorkerMetrics,
+      syncWorkerReadiness: this.syncWorkerReadiness,
+      resetForWalletChange: this.resetForWalletChange,
     }
   }
 }
-
-// ==========================================
-// SINGLETON INSTANCE
-// ==========================================
 
 export const lightningStore = new LightningStore()

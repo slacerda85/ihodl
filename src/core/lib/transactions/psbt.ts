@@ -3,7 +3,7 @@
  * Based on BIP-174, inspired by Electrum's PartialTransaction.
  */
 
-import { uint8ArrayToHex, hexToUint8Array } from '@/core/lib/utils'
+import { uint8ArrayToHex, hexToUint8Array } from '@/core/lib/utils/utils'
 
 // PSBT Global Types
 export const PSBT_GLOBAL_TYPES = {

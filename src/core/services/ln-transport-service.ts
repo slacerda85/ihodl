@@ -19,7 +19,7 @@ import {
   FEATURE_BITS,
 } from '../lib/lightning/bolt1'
 import type { InitMessage, PongMessage } from '../models/lightning/base'
-import { uint8ArrayToHex, hexToUint8Array } from '../lib/utils'
+import { uint8ArrayToHex, hexToUint8Array } from '../lib/utils/utils'
 import { TcpTransport, TcpTransportEvent } from '@/core/lib/lightning/tcpTransport'
 
 // ==========================================

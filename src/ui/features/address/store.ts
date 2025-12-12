@@ -157,7 +157,7 @@ class AddressStore {
   // ACTIONS OBJECT (para context)
   // ==========================================
 
-  get actions(): AddressStoreActions {
+  get actions() {
     return {
       notify: this.notify.bind(this),
       notifyLight: this.notifyLight.bind(this),
@@ -165,19 +165,5 @@ class AddressStore {
     }
   }
 }
-
-// ==========================================
-// ACTIONS INTERFACE
-// ==========================================
-
-export interface AddressStoreActions {
-  notify: () => void
-  notifyLight: () => void
-  clear: () => void
-}
-
-// ==========================================
-// SINGLETON EXPORT
-// ==========================================
 
 export const addressStore = new AddressStore()

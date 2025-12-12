@@ -79,7 +79,7 @@ import {
 import { encodeInitMessage, decodeInitMessage, encodePingMessage, decodePongMessage } from './base'
 import { KeyPair, HandshakeState, TransportKeys } from '@/core/models/lightning/transport'
 import { LightningMessageType, InitMessage, PingMessage } from '@/core/models/lightning/base'
-import { hexToUint8Array } from '../utils'
+import { hexToUint8Array } from '../utils/utils'
 import lightningRepository, { PersistedPeer } from '../../repositories/lightning'
 
 class BufferReader {

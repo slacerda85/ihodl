@@ -45,7 +45,7 @@ import {
 } from '@/core/models/lightning/onchain'
 import { CommitmentOutputType } from '@/core/models/lightning/transaction'
 import { Tx } from '@/core/models/transaction'
-import { uint8ArrayToHex, hexToUint8Array } from '@/core/lib/utils'
+import { uint8ArrayToHex, hexToUint8Array } from '@/core/lib/utils/utils'
 
 // Test data fixtures
 const mockSha256 = new Uint8Array(32).fill(1)

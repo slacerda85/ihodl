@@ -3,7 +3,7 @@
 import { ChannelReestablishService } from '../ln-channel-reestablish-service'
 import { ChannelState } from '@/core/models/lightning/channel'
 import lightningRepository from '@/core/repositories/lightning'
-import { hexToUint8Array } from '@/core/lib/utils'
+import { hexToUint8Array } from '@/core/lib/utils/utils'
 
 // Mock the repository
 jest.mock('@/core/repositories/lightning')

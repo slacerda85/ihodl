@@ -1,4 +1,4 @@
-import { uint8ArrayToHex, hexToUint8Array } from '../../utils'
+import { uint8ArrayToHex, hexToUint8Array } from '../../utils/utils'
 import {
   encodeU16,
   decodeU16,

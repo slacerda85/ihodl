@@ -22,14 +22,6 @@ export interface WalletStoreState {
   activeWalletId: string | undefined
 }
 
-export interface WalletStoreActions {
-  createWallet: (params: Parameters<typeof walletService.createWallet>[0]) => Wallet
-  deleteWallet: (walletId: string) => void
-  setActiveWallet: (walletId: string) => void
-  editWallet: (walletId: string, updates: Partial<Omit<Wallet, 'id'>>) => void
-  getMasterKey: (walletId: string, password?: string) => Uint8Array
-}
-
 // ==========================================
 // STORE CLASS
 // ==========================================
@@ -118,7 +110,7 @@ class WalletStore {
   // ACTIONS OBJECT (para context)
   // ==========================================
 
-  get actions(): WalletStoreActions {
+  get actions() {
     return {
       createWallet: this.createWallet,
       deleteWallet: this.deleteWallet,
@@ -128,9 +120,5 @@ class WalletStore {
     }
   }
 }
-
-// ==========================================
-// SINGLETON EXPORT
-// ==========================================
 
 export const walletStore = new WalletStore()

@@ -10,7 +10,7 @@
 import { sha256, randomBytes, hmacSha256 } from '../crypto/crypto'
 import { chacha20 } from '@noble/ciphers/chacha.js'
 import { constructOnionPacket, decryptOnion } from './routing'
-import { uint8ArrayToHex, hexToUint8Array } from '../utils'
+import { uint8ArrayToHex, hexToUint8Array } from '../utils/utils'
 import type { OnionPacket, PayloadTlv } from '@/core/models/lightning/routing'
 
 // ==========================================

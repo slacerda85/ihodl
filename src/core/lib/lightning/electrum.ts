@@ -22,7 +22,7 @@ import {
 import type { Connection } from '@/core/models/network'
 import type { Tx } from '@/core/models/transaction'
 import { toScriptHash } from '../address'
-import { hexToUint8Array, uint8ArrayToHex } from '../utils'
+import { hexToUint8Array, uint8ArrayToHex } from '../utils/utils'
 import { sha256 } from '../crypto'
 
 // ==========================================

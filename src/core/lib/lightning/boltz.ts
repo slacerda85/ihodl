@@ -18,7 +18,7 @@ import {
   generateSwapKeyPair,
   generatePreimage,
 } from './submarineSwap'
-import { hexToUint8Array, uint8ArrayToHex } from '@/core/lib/utils'
+import { hexToUint8Array, uint8ArrayToHex } from '@/core/lib/utils/utils'
 import { buildTransaction, sendTransaction, signTransaction } from '@/core/lib/transactions'
 import { getAddressTxHistory, getTransaction } from '@/core/lib/electrum'
 import { getNetworkConfig } from '@/config/network'

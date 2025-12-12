@@ -23,7 +23,7 @@ import {
 } from './transport'
 import type { KeyPair, TransportKeys, HandshakeState } from '@/core/models/lightning/transport'
 import { ACT_ONE_SIZE, ACT_TWO_SIZE, ACT_THREE_SIZE } from '@/core/models/lightning/transport'
-import { uint8ArrayToHex, hexToUint8Array } from '../utils'
+import { uint8ArrayToHex, hexToUint8Array } from '../utils/utils'
 
 // ============================================================================
 // CONSTANTS
@@ -338,8 +338,20 @@ export class TcpTransport extends EventEmitter {
   private setupSocketListeners(): void {
     if (!this.socket) return
 
-    this.socket.on('data', (data: Buffer | string) => {
-      const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : new Uint8Array(data)
+    this.socket.on('data', (data: ArrayBuffer | ArrayBufferView | string) => {
+      let bytes: Uint8Array
+
+      if (typeof data === 'string') {
+        bytes = new TextEncoder().encode(data)
+      } else if (data instanceof ArrayBuffer) {
+        bytes = new Uint8Array(data)
+      } else if (ArrayBuffer.isView(data)) {
+        bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+      } else {
+        console.warn('[TcpTransport] Received unknown data type from socket')
+        return
+      }
+
       this.onSocketData(bytes)
     })
 
@@ -846,9 +858,45 @@ export class TcpTransport extends EventEmitter {
       throw new Error('Socket not connected')
     }
 
-    // Converter Uint8Array para Buffer para react-native-tcp-socket
-    const buffer = Buffer.from(data)
-    this.socket.write(buffer)
+    const base64 = this.uint8ToBase64(data)
+    this.socket.write(base64, 'base64')
+  }
+
+  private uint8ToBase64(data: Uint8Array): string {
+    let binary = ''
+    const chunkSize = 0x8000
+
+    for (let i = 0; i < data.length; i += chunkSize) {
+      const subarray = data.subarray(i, i + chunkSize)
+      binary += String.fromCharCode(...subarray)
+    }
+
+    if (typeof globalThis.btoa === 'function') {
+      return globalThis.btoa(binary)
+    }
+
+    // Fallback for environments without btoa
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+    let output = ''
+    let padding = ''
+    const remainder = binary.length % 3
+
+    if (remainder === 1) {
+      binary += '\0\0'
+      padding = '=='
+    } else if (remainder === 2) {
+      binary += '\0'
+      padding = '='
+    }
+
+    for (let i = 0; i < binary.length; i += 3) {
+      const n =
+        (binary.charCodeAt(i) << 16) | (binary.charCodeAt(i + 1) << 8) | binary.charCodeAt(i + 2)
+      output +=
+        chars[(n >>> 18) & 63] + chars[(n >>> 12) & 63] + chars[(n >>> 6) & 63] + chars[n & 63]
+    }
+
+    return output.slice(0, output.length - padding.length) + padding
   }
 
   private cleanup(): void {

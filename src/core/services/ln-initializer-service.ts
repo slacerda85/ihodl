@@ -17,9 +17,7 @@ import { GossipSyncManager } from '../lib/lightning/gossip-sync'
 import { GraphCacheManager } from '../lib/lightning/graph-cache'
 import { RoutingGraph } from '../lib/lightning/routing'
 import { KNOWN_TRAMPOLINE_NODES } from '../lib/lightning/trampoline'
-import { uint8ArrayToHex } from '../lib/utils'
-import { getBackgroundGossipSyncService } from './ln-background-gossip-sync-service'
-import { getLightningRoutingService } from './ln-routing-service'
+import { uint8ArrayToHex } from '../lib/utils/utils'
 import {
   connect as connectElectrum,
   getCurrentBlockHeight,
@@ -111,8 +109,6 @@ export class LightningInitializer {
   private notifications?: NotificationService
   private watchtower?: WatchtowerService
   private channelReestablish?: ChannelReestablishService
-  private backgroundGossipSync?: any // BackgroundGossipSyncService
-  private routingService?: any // LightningRoutingService
   private electrumSocket?: Connection
   private electrumWatcher?: any
   private channelOnChainMonitor?: any
@@ -241,10 +237,6 @@ export class LightningInitializer {
 
     if (this.watchtower) {
       this.watchtower.stop()
-    }
-
-    if (this.backgroundGossipSync) {
-      await this.backgroundGossipSync.stopBackgroundSync()
     }
 
     // Stop Electrum Watcher
@@ -616,42 +608,9 @@ export class LightningInitializer {
    * Inicia sincronização de gossip em background (modo híbrido)
    */
   private async startBackgroundGossipSync(): Promise<void> {
-    try {
-      console.log('[LightningInitializer] Starting background gossip sync for hybrid mode...')
-
-      // Inicializar serviço de routing
-      this.routingService = getLightningRoutingService()
-
-      // Inicializar background sync service
-      this.backgroundGossipSync = getBackgroundGossipSyncService({
-        peerConnectivityService: this.peerConnectivity,
-      })
-
-      // Conectar routing service ao background sync
-      await this.routingService.initialize(this.backgroundGossipSync)
-
-      // Configurar listeners para eventos
-      this.backgroundGossipSync.on('stateChanged', state => {
-        console.log(`[LightningInitializer] Background sync state: ${state}`)
-      })
-
-      this.backgroundGossipSync.on('syncCompleted', stats => {
-        console.log(
-          `[LightningInitializer] Background sync completed: ${stats.nodes} nodes, ${stats.channels} channels in ${stats.duration}ms`,
-        )
-        // Migração para pathfinding local será feita automaticamente pelo routing service
-      })
-
-      this.backgroundGossipSync.on('syncError', error => {
-        console.error('[LightningInitializer] Background sync error:', error)
-      })
-
-      // Iniciar sincronização em background
-      await this.backgroundGossipSync.startBackgroundSync()
-    } catch (error) {
-      console.warn('[LightningInitializer] Failed to start background gossip sync:', error)
-      // Não falhar a inicialização por causa disso - é opcional
-    }
+    console.log(
+      '[LightningInitializer] Background gossip sync agora é gerenciado pelo WorkerService; nenhuma ação necessária aqui.',
+    )
   }
 
   private async reestablishChannelsWithPeers(connectedPeers: any[]): Promise<void> {

@@ -32,7 +32,7 @@
  * ```
  */
 
-import React, {
+import {
   createContext,
   useContext,
   useReducer,
@@ -40,6 +40,7 @@ import React, {
   useCallback,
   ReactNode,
   useSyncExternalStore,
+  Dispatch,
 } from 'react'
 import { useColorScheme } from 'react-native'
 
@@ -47,18 +48,13 @@ import { useColorScheme } from 'react-native'
 // STORES (importados de cada feature)
 // ==========================================
 
-import { walletStore, type WalletStoreActions } from '../wallet/store'
-import { settingsStore, type SettingsStoreActions, type ColorMode } from '../settings/store'
+import { walletStore } from '../wallet/store'
+import { authStore } from '../auth/store'
+import { settingsStore, type ColorMode } from '../settings/store'
 import { addressStore } from '../address/store'
-import { networkStore, type NetworkStoreActions } from '../network/store'
-import { lightningStore, type LightningStoreActions } from '../lightning/store'
-import { watchtowerStore, type WatchtowerStoreActions } from '../lightning/watchtowerStore'
-
-// ==========================================
-// AUTH UTILS (autenticação biométrica)
-// ==========================================
-
-import { checkHardware, checkPermissions, authenticate } from '../auth/utils'
+import { networkStore } from '../network/store'
+import { lightningStore } from '../lightning/store'
+import { watchtowerStore } from '../lightning/watchtowerStore'
 
 // ==========================================
 // TYPES (estado efêmero - não persistido)
@@ -72,6 +68,7 @@ import {
   AuthState,
   ConnectionState,
 } from '../../state/types'
+import { appReducer } from './reducer'
 
 // ==========================================
 // WALLET HOOKS
@@ -92,90 +89,12 @@ import type { SettingsState, LightningSettings } from '../settings/store'
 import { AddressDetails } from '@/core/models/address'
 import { Utxo } from '@/core/models/transaction'
 
-// ==========================================
-// REDUCER (para estado efêmero)
-// ==========================================
-
-function appReducer(state: AppState, action: AppAction): AppState {
-  switch (action.type) {
-    // Auth
-    case 'AUTH_SUCCESS':
-      return { ...state, auth: { ...state.auth, authenticated: true } }
-    case 'AUTH_LOGOUT':
-      return { ...state, auth: { ...state.auth, authenticated: false } }
-    case 'SET_INACTIVE':
-      return { ...state, auth: { ...state.auth, inactive: action.payload } }
-
-    // Electrum Connection
-    case 'ELECTRUM_CONNECTED':
-      return { ...state, connection: { ...state.connection, electrum: { connected: true } } }
-    case 'ELECTRUM_DISCONNECTED':
-      return { ...state, connection: { ...state.connection, electrum: { connected: false } } }
-    case 'ELECTRUM_PING':
-      return {
-        ...state,
-        connection: {
-          ...state.connection,
-          electrum: { ...state.connection.electrum, lastPing: action.payload },
-        },
-      }
-
-    // Lightning Connection
-    case 'LIGHTNING_CONNECTED':
-      return {
-        ...state,
-        connection: {
-          ...state.connection,
-          lightning: { connected: true, peerId: action.payload.peerId },
-        },
-      }
-    case 'LIGHTNING_DISCONNECTED':
-      return {
-        ...state,
-        connection: { ...state.connection, lightning: { connected: false, peerId: undefined } },
-      }
-    case 'LIGHTNING_PING':
-      return {
-        ...state,
-        connection: {
-          ...state.connection,
-          lightning: { ...state.connection.lightning, lastPing: action.payload },
-        },
-      }
-
-    // Loading
-    case 'SET_LOADING': {
-      const newLoading = new Map(state.loading)
-      if (action.payload.loading) {
-        newLoading.set(action.payload.key, true)
-      } else {
-        newLoading.delete(action.payload.key)
-      }
-      return { ...state, loading: newLoading }
-    }
-
-    // Errors
-    case 'SET_ERROR': {
-      const newErrors = new Map(state.errors)
-      if (action.payload.error) {
-        newErrors.set(action.payload.key, action.payload.error)
-      } else {
-        newErrors.delete(action.payload.key)
-      }
-      return { ...state, errors: newErrors }
-    }
-    case 'CLEAR_ERROR': {
-      const newErrors = new Map(state.errors)
-      newErrors.delete(action.payload)
-      return { ...state, errors: newErrors }
-    }
-    case 'CLEAR_ALL_ERRORS':
-      return { ...state, errors: new Map() }
-
-    default:
-      return state
-  }
-}
+type WalletStoreActions = typeof walletStore.actions
+type SettingsStoreActions = typeof settingsStore.actions
+type AddressStoreActions = typeof addressStore.actions
+type NetworkStoreActions = typeof networkStore.actions
+type LightningStoreActions = typeof lightningStore.actions
+type WatchtowerStoreActions = typeof watchtowerStore.actions
 
 // ==========================================
 // CONTEXT TYPE
@@ -184,7 +103,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
 interface AppContextType {
   // ========== ESTADO EFÊMERO (não persistido) ==========
   state: AppState
-  dispatch: React.Dispatch<AppAction>
+  dispatch: Dispatch<AppAction>
 
   // Helpers para loading/error
   isLoading: (key: LoadingKey) => boolean
@@ -192,55 +111,26 @@ interface AppContextType {
   getError: (key: LoadingKey) => string | null
   hasErrors: () => boolean
 
+  // ========== AUTH STORE ==========
+  auth: typeof authStore
+
   // ========== WALLET STORE ==========
-  wallet: Pick<
-    typeof walletStore,
-    'subscribe' | 'getWalletsSnapshot' | 'getActiveWalletIdSnapshot' | 'actions'
-  >
+  wallet: typeof walletStore
 
   // ========== SETTINGS STORE ==========
-  settings: Pick<
-    typeof settingsStore,
-    'subscribe' | 'getSnapshot' | 'getColorMode' | 'getLightningSettings' | 'actions'
-  >
+  settings: typeof settingsStore
 
   // ========== ADDRESS STORE ==========
-  address: Pick<
-    typeof addressStore,
-    | 'subscribe'
-    | 'getAddressesSnapshot'
-    | 'getBalanceSnapshot'
-    | 'getNextAddressesSnapshot'
-    | 'notify'
-    | 'notifyLight'
-    | 'clear'
-  >
+  address: typeof addressStore
 
   // ========== NETWORK STORE ==========
-  network: Pick<
-    typeof networkStore,
-    'subscribe' | 'getSnapshot' | 'getConnection' | 'getLightningWorker' | 'actions'
-  >
+  network: typeof networkStore
 
   // ========== LIGHTNING STORE ==========
-  lightning: Pick<
-    typeof lightningStore,
-    'subscribe' | 'getSnapshot' | 'getReadinessState' | 'getReadinessLevel' | 'actions'
-  >
+  lightning: typeof lightningStore
 
   // ========== WATCHTOWER STORE ==========
-  watchtower: Pick<
-    typeof watchtowerStore,
-    | 'subscribe'
-    | 'getSnapshot'
-    | 'getIsInitialized'
-    | 'getIsRunning'
-    | 'getStatus'
-    | 'getChannels'
-    | 'getEvents'
-    | 'getHasBreaches'
-    | 'actions'
-  >
+  watchtower: typeof watchtowerStore
 }
 
 const AppContext = createContext<AppContextType | null>(null)
@@ -268,6 +158,9 @@ export function AppProvider({ children }: AppProviderProps) {
       isAnyLoading: () => state.loading.size > 0,
       getError: (key: LoadingKey) => state.errors.get(key) ?? null,
       hasErrors: () => state.errors.size > 0,
+
+      // Auth store
+      auth: authStore,
 
       // Wallet store
       wallet: walletStore,
@@ -309,90 +202,31 @@ export function useAppContext(): AppContextType {
 // AUTH HOOKS
 // ==========================================
 
-/**
- * Performs biometric authentication
- */
-async function performBiometricAuth(): Promise<boolean> {
-  // Check if running on web platform - bypass authentication
-  if (typeof window !== 'undefined' && navigator?.userAgent?.includes('Chrome')) {
-    return true
-  }
-
-  try {
-    // Check if hardware supports biometric authentication
-    const hardwareSupported = await checkHardware()
-    if (!hardwareSupported) {
-      console.warn('Hardware não suporta autenticação biométrica')
-      return false
-    }
-
-    // Check if user has configured biometric authentication
-    const securityLevel = await checkPermissions()
-    if (securityLevel === 0) {
-      console.warn('Usuário não configurou autenticação biométrica')
-      return false
-    }
-
-    // Perform biometric authentication
-    const { success } = await authenticate()
-    if (!success) {
-      console.warn('Autenticação falhou')
-      return false
-    }
-
-    return true
-  } catch (error) {
-    console.warn('Erro de autenticação:', error)
-    return false
-  }
-}
-
 export function useAuth(): AuthState & {
   auth: () => Promise<boolean>
   login: () => void
   logout: () => void
   setInactive: (inactive: boolean) => void
 } {
-  const { state, dispatch } = useAppContext()
-
-  const auth = useCallback(async (): Promise<boolean> => {
-    try {
-      const success = await performBiometricAuth()
-      if (!success) {
-        dispatch({ type: 'AUTH_LOGOUT' })
-        return false
-      }
-      dispatch({ type: 'AUTH_SUCCESS' })
-      return true
-    } catch (error) {
-      console.warn('Authentication error:', error)
-      dispatch({ type: 'AUTH_LOGOUT' })
-      return false
-    }
-  }, [dispatch])
-
-  const login = useCallback(() => dispatch({ type: 'AUTH_SUCCESS' }), [dispatch])
-  const logout = useCallback(() => dispatch({ type: 'AUTH_LOGOUT' }), [dispatch])
-  const setInactive = useCallback(
-    (inactive: boolean) => dispatch({ type: 'SET_INACTIVE', payload: inactive }),
-    [dispatch],
-  )
+  const { auth } = useAppContext()
+  const authState = useSyncExternalStore(auth.subscribe, auth.getSnapshot, auth.getSnapshot)
+  const actions = auth.actions
 
   return useMemo(
     () => ({
-      ...state.auth,
-      auth,
-      login,
-      logout,
-      setInactive,
+      ...authState,
+      auth: actions.auth,
+      login: actions.login,
+      logout: actions.logout,
+      setInactive: actions.setInactive,
     }),
-    [state.auth, auth, login, logout, setInactive],
+    [authState, actions],
   )
 }
 
 export function useIsAuthenticated(): boolean {
-  const { state } = useAppContext()
-  return state.auth.authenticated
+  const { auth } = useAppContext()
+  return useSyncExternalStore(auth.subscribe, () => auth.getSnapshot().authenticated)
 }
 
 // ==========================================
@@ -587,7 +421,7 @@ export function useAddressesByType(type: 'receiving' | 'change'): AddressDetails
 /**
  * Hook para notificar mudanças no address store
  */
-export function useAddressStoreActions() {
+export function useAddressStoreActions(): AddressStoreActions {
   const { address } = useAppContext()
   return {
     notify: address.notify,

@@ -10,7 +10,7 @@ import {
   decodeChannelReestablishMessage,
 } from '@/core/lib/lightning/peer'
 import { getPerCommitmentSecretFromSeed } from '@/core/lib/lightning/revocation'
-import { uint8ArrayToHex } from '@/core/lib/utils'
+import { uint8ArrayToHex } from '@/core/lib/utils/utils'
 
 // ==========================================
 // TYPES & INTERFACES

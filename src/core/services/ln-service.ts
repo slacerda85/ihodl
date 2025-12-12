@@ -11,7 +11,7 @@ import {
   getInvoiceExpiryStatus,
 } from '../lib/lightning/invoice'
 import { sha256, randomBytes } from '../lib/crypto/crypto'
-import { uint8ArrayToHex, hexToUint8Array } from '../lib/utils'
+import { uint8ArrayToHex, hexToUint8Array } from '../lib/utils/utils'
 import {
   CurrencyPrefix,
   DEFAULT_EXPIRY_SECONDS,
