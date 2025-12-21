@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useCallback, useSyncExternalStore } from 'react'
 import {
-  WorkerService,
   type WorkerInitStatus,
   type WorkerReadiness,
   type WorkerMetrics,
@@ -16,6 +15,10 @@ export interface LightningWorkerSnapshot {
 export interface UseLightningWorkerOptions {
   walletId?: string
   masterKey?: Uint8Array
+  /**
+   * @deprecated Auto-start foi removido. A inicialização é gerenciada pelo AppProvider.
+   * @see docs/lightning-worker-consolidation-plan.md - Fase 2.2
+   */
   autoStart?: boolean
 }
 
@@ -30,73 +33,51 @@ const INITIAL_READINESS: WorkerReadiness = {
   watcherRunning: false,
 }
 
-export function useLightningStartupWorker(options: UseLightningWorkerOptions) {
-  const { walletId, masterKey, autoStart = true } = options
-  const workerRef = useRef<WorkerService | null>(null)
-  const [status, setStatus] = useState<WorkerInitStatus>(INITIAL_STATUS)
-  const [readiness, setReadiness] = useState<WorkerReadiness>(INITIAL_READINESS)
-  const [metrics, setMetrics] = useState<WorkerMetrics>({})
+/**
+ * Hook para observar o status do Lightning Worker.
+ *
+ * IMPORTANTE: Este hook NÃO inicia automaticamente o worker.
+ * A inicialização é gerenciada centralmente pelo AppProvider.
+ * Use `lightningStore.actions.initialize()` para iniciar manualmente se necessário.
+ *
+ * @see docs/lightning-worker-consolidation-plan.md - Fase 2.2
+ */
+export function useLightningStartupWorker(options: UseLightningWorkerOptions = {}) {
+  const { walletId } = options
 
-  useEffect(() => {
-    if (!walletId || !masterKey) return
+  // Emit warning se autoStart for passado (deprecated)
+  if (__DEV__ && options.autoStart !== undefined) {
+    console.warn(
+      '[useLightningStartupWorker] autoStart is deprecated. Initialization is managed by AppProvider.',
+    )
+  }
 
-    const worker = new WorkerService()
-    workerRef.current = worker
+  const snapshot = useSyncExternalStore(
+    lightningStore.subscribe,
+    lightningStore.getSnapshot,
+    lightningStore.getSnapshot,
+  )
 
-    const handleStatus = (nextStatus: WorkerInitStatus) => {
-      setStatus(nextStatus)
-      lightningStore.actions.setWorkerStatus(nextStatus)
-    }
+  const status = snapshot.workerStatus ?? INITIAL_STATUS
+  const readiness = snapshot.workerReadiness ?? INITIAL_READINESS
+  const metrics = snapshot.workerMetrics ?? {}
 
-    const handleReadiness = (nextReadiness: WorkerReadiness) => {
-      setReadiness(nextReadiness)
-      lightningStore.actions.syncWorkerReadiness(nextReadiness)
-    }
-
-    const handleMetrics = (nextMetrics: WorkerMetrics) => {
-      setMetrics(prev => ({ ...prev, ...nextMetrics }))
-      lightningStore.actions.setWorkerMetrics(nextMetrics)
-    }
-
-    worker.on('status', handleStatus)
-    worker.on('readiness', handleReadiness)
-    worker.on('metrics', handleMetrics)
-
-    const startIfNeeded = async () => {
-      if (!autoStart) return
-      await worker.initialize(masterKey, walletId)
-    }
-
-    startIfNeeded()
-
-    return () => {
-      worker.off('status', handleStatus)
-      worker.off('readiness', handleReadiness)
-      worker.off('metrics', handleMetrics)
-      void worker.stop()
-      workerRef.current = null
-      lightningStore.actions.resetForWalletChange()
-      setStatus(INITIAL_STATUS)
-      setReadiness(INITIAL_READINESS)
-      setMetrics({})
-    }
-  }, [autoStart, masterKey, walletId])
+  // REMOVIDO: useEffect com autoStart - inicialização centralizada no AppProvider
 
   const start = useCallback(async () => {
-    const current = workerRef.current
-    if (!current || !walletId || !masterKey) {
-      return { success: false, error: 'Missing wallet or key' }
+    if (!walletId) {
+      return { success: false, error: 'Missing walletId' }
     }
-    return current.initialize(masterKey, walletId)
-  }, [masterKey, walletId])
+    await lightningStore.actions.initialize()
+    return { success: true }
+  }, [walletId])
 
   const stop = useCallback(async () => {
-    const current = workerRef.current
-    if (!current) return
-    await current.stop()
+    const worker = lightningStore.actions.getWorker()
+    await worker.stop()
   }, [])
 
-  const getWorker = useCallback(() => workerRef.current, [])
+  const getWorker = useCallback(() => lightningStore.actions.getWorker(), [])
 
   return {
     getWorker,

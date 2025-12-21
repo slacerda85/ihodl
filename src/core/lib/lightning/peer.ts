@@ -75,6 +75,8 @@ import {
   actThreeSend,
   encryptMessage,
   decryptMessage,
+  decryptLengthPrefix,
+  decryptMessageBody,
 } from './transport'
 import { encodeInitMessage, decodeInitMessage, encodePingMessage, decodePongMessage } from './base'
 import { KeyPair, HandshakeState, TransportKeys } from '@/core/models/lightning/transport'
@@ -1167,6 +1169,8 @@ export class PeerManager {
   private reconnectionTimers: Map<string, ReturnType<typeof setTimeout>> = new Map()
   private reconnectionAttempts: Map<string, number> = new Map()
   private connectedAt: Map<string, number> = new Map()
+  // Buffer for leftover bytes from TCP reads (key is socket reference)
+  private socketReceiveBuffers: WeakMap<object, Uint8Array> = new WeakMap()
 
   /**
    * Conecta a um peer específico da rede Lightning
@@ -1349,42 +1353,67 @@ export class PeerManager {
   private async performNoiseHandshake(
     socket: any,
     peerPubKey: Uint8Array,
+    timeout: number = 10000,
   ): Promise<{ transportKeys: TransportKeys; peerPubKey: Uint8Array }> {
+    console.log(`[${new Date().toISOString()}] [lightning] Starting Noise handshake (BOLT #8)...`)
+
     // Gerar chave local efêmera para handshake
     const localKeyPair: KeyPair = generateKey()
+    console.log(`[${new Date().toISOString()}] [lightning] Generated local ephemeral key pair`)
 
     // Inicializar estado do handshake
     const handshakeState: HandshakeState = initializeHandshakeState(peerPubKey, localKeyPair)
+    console.log(`[${new Date().toISOString()}] [lightning] Initialized handshake state`)
 
     // Act One: Enviar chave efêmera
     const { message: actOneMsg, newState: stateAfterActOne } = actOneSend(
       handshakeState,
-      peerPubKey,
       localKeyPair,
     )
+    console.log(
+      `[${new Date().toISOString()}] [lightning] Sending Act One message:`,
+      actOneMsg.length,
+      'bytes',
+    )
     await this.sendRaw(socket, actOneMsg)
-    console.log('[lightning] Act One sent')
+    console.log(`[${new Date().toISOString()}] [lightning] Act One sent successfully`)
 
     // Act Two: Receber chave efêmera do responder
-    const actTwoMsg = await this.receiveRaw(socket, 50)
+    console.log(`[${new Date().toISOString()}] [lightning] Waiting for Act Two response...`)
+    const actTwoMsg = await this.receiveRaw(socket, 50, timeout)
+    console.log(
+      `[${new Date().toISOString()}] [lightning] Received Act Two message:`,
+      actTwoMsg.length,
+      'bytes',
+    )
+
     const actTwoResult = actTwoReceive(stateAfterActOne, actTwoMsg, localKeyPair)
     if ('error' in actTwoResult) {
+      console.error(`[${new Date().toISOString()}] [lightning] Act Two failed:`, actTwoResult.error)
       throw new Error(`Handshake Act Two failed: ${actTwoResult.error}`)
     }
-    console.log('[lightning] Act Two received')
+    console.log(`[${new Date().toISOString()}] [lightning] Act Two processed successfully`)
 
     // Extrair chave pública efêmera do responder do Act Two
     const responderEphemeralPubkey = actTwoMsg.subarray(1, 34)
+    console.log(`[${new Date().toISOString()}] [lightning] Extracted responder ephemeral pubkey`)
 
     // Act Three: Initiator ENVIA sua chave estática criptografada
+    console.log(`[${new Date().toISOString()}] [lightning] Preparing Act Three...`)
     const actThreeResult = actThreeSend(
       actTwoResult.newState,
       localKeyPair, // nossa chave estática
       responderEphemeralPubkey, // chave efêmera do responder
     )
+    console.log(
+      `[${new Date().toISOString()}] [lightning] Sending Act Three message:`,
+      actThreeResult.message.length,
+      'bytes',
+    )
     await this.sendRaw(socket, actThreeResult.message)
-    console.log('[lightning] Act Three sent')
+    console.log(`[${new Date().toISOString()}] [lightning] Act Three sent successfully`)
 
+    console.log(`[${new Date().toISOString()}] [lightning] Noise handshake completed successfully`)
     return {
       transportKeys: actThreeResult.keys,
       peerPubKey,
@@ -1394,7 +1423,15 @@ export class PeerManager {
   /**
    * Troca mensagens Init (BOLT #1)
    */
-  private async exchangeInitMessages(socket: any, transportKeys: TransportKeys): Promise<void> {
+  private async exchangeInitMessages(
+    socket: any,
+    transportKeys: TransportKeys,
+    timeout: number = 10000,
+  ): Promise<void> {
+    console.log(
+      `[${new Date().toISOString()}] [lightning] Starting Init message exchange (BOLT #1)...`,
+    )
+
     // Criar mensagem Init local (features básicas)
     const initMsg: InitMessage = {
       type: LightningMessageType.INIT,
@@ -1405,21 +1442,89 @@ export class PeerManager {
       tlvs: [],
     }
 
+    console.log(`[${new Date().toISOString()}] [lightning] Created local Init message:`, {
+      type: initMsg.type,
+      globalFeaturesLength: initMsg.gflen,
+      featuresLength: initMsg.flen,
+    })
+
     // Codificar e enviar Init
     const encodedInit = encodeInitMessage(initMsg)
-    const { encrypted: encryptedInit } = encryptMessage(transportKeys, encodedInit)
-    await this.sendRaw(socket, encryptedInit)
+    console.log(
+      `[${new Date().toISOString()}] [lightning] Encoded Init message:`,
+      encodedInit.length,
+      'bytes',
+    )
 
-    // Receber e decodificar Init do peer
-    const encryptedPeerInit = await this.receiveRaw(socket, 18 + 2 + 16) // length prefix + min init + tag
-    const decryptedPeerInit = decryptMessage(transportKeys, encryptedPeerInit)
-    if ('error' in decryptedPeerInit) {
-      throw new Error(`Failed to decrypt peer Init: ${decryptedPeerInit.error}`)
+    const { encrypted: encryptedInit } = encryptMessage(transportKeys, encodedInit)
+    console.log(
+      `[${new Date().toISOString()}] [lightning] Encrypted Init message:`,
+      encryptedInit.length,
+      'bytes',
+    )
+
+    await this.sendRaw(socket, encryptedInit)
+    console.log(`[${new Date().toISOString()}] [lightning] Sent local Init message`)
+
+    // Receber e decodificar Init do peer (two-step receive for streaming)
+    console.log(`[${new Date().toISOString()}] [lightning] Waiting for peer Init message...`)
+
+    // Step 1: Receive encrypted length prefix (18 bytes)
+    const encryptedLength = await this.receiveRaw(socket, 18, timeout)
+    console.log(
+      `[${new Date().toISOString()}] [lightning] Received encrypted length:`,
+      encryptedLength.length,
+      'bytes',
+    )
+
+    // Decrypt length to know how many more bytes to receive
+    const lengthResult = decryptLengthPrefix(transportKeys, encryptedLength)
+    if ('error' in lengthResult) {
+      console.error(
+        `[${new Date().toISOString()}] [lightning] Failed to decrypt length prefix:`,
+        lengthResult.error,
+      )
+      throw new Error(`Failed to decrypt length prefix: ${lengthResult.error}`)
     }
+    const { length: messageLength, newKeys: keysAfterLength } = lengthResult
+    console.log(
+      `[${new Date().toISOString()}] [lightning] Decrypted message length:`,
+      messageLength,
+      'bytes',
+    )
+
+    // Step 2: Receive encrypted message body (messageLength + 16 bytes for MAC)
+    const encryptedBody = await this.receiveRaw(socket, messageLength + 16, timeout)
+    console.log(
+      `[${new Date().toISOString()}] [lightning] Received encrypted body:`,
+      encryptedBody.length,
+      'bytes',
+    )
+
+    // Decrypt message body
+    const bodyResult = decryptMessageBody(keysAfterLength, encryptedBody, messageLength)
+    if ('error' in bodyResult) {
+      console.error(
+        `[${new Date().toISOString()}] [lightning] Failed to decrypt message body:`,
+        bodyResult.error,
+      )
+      throw new Error(`Failed to decrypt message body: ${bodyResult.error}`)
+    }
+    console.log(
+      `[${new Date().toISOString()}] [lightning] Successfully decrypted peer Init:`,
+      bodyResult.message.length,
+      'bytes',
+    )
 
     // Decodificar Init do peer (não usado por enquanto)
-    decodeInitMessage(decryptedPeerInit.message)
-    console.log('[lightning] Init exchange completed')
+    const peerInit = decodeInitMessage(bodyResult.message)
+    console.log('[lightning] Decoded peer Init:', {
+      type: peerInit.type,
+      globalFeaturesLength: peerInit.gflen,
+      featuresLength: peerInit.flen,
+    })
+
+    console.log('[lightning] Init exchange completed successfully')
   }
 
   /**
@@ -1513,23 +1618,58 @@ export class PeerManager {
   ): Promise<LightningConnection> {
     const finalConfig: LightningClientConfig = { ...DEFAULT_CLIENT_CONFIG, ...config }
 
-    // Chave pública do peer (parâmetro opcional ou dummy para teste)
-    const peerPubKey = finalConfig.peerPubKey || new Uint8Array(33) // 33 bytes compressed pubkey
     if (!finalConfig.peerPubKey) {
-      peerPubKey[0] = 0x02 // compressed prefix dummy
+      throw new Error('Peer public key is required for Lightning connection')
     }
 
+    const peerPubKey = finalConfig.peerPubKey
+    console.log(
+      `[${new Date().toISOString()}] [lightning] Creating Lightning connection to peer:`,
+      {
+        host: finalConfig.peer.host,
+        port: finalConfig.peer.port,
+        hasPubKey: !!peerPubKey,
+      },
+    )
+
     try {
-      // 1. Conexão TLS
+      // 1. Conexão TCP (não TLS - Lightning usa Noise para criptografia)
+      console.log(
+        `[${new Date().toISOString()}] [lightning] Step 1: Establishing TCP connection...`,
+      )
       const socket = await this.createConnection(finalConfig.peer, finalConfig.timeout)
-      // 2. Handshake BOLT #8
-      const handshakeResult = await this.performNoiseHandshake(socket, peerPubKey)
+      console.log(
+        `[${new Date().toISOString()}] [lightning] TCP connection established successfully`,
+      )
 
-      // 3. Troca de Init messages
-      await this.exchangeInitMessages(socket, handshakeResult.transportKeys)
+      // 2. Handshake BOLT #8 (Noise_XK_secp256k1_ChaChaPoly_SHA256)
+      console.log(
+        `[${new Date().toISOString()}] [lightning] Step 2: Performing BOLT #8 Noise handshake...`,
+      )
+      const handshakeResult = await this.performNoiseHandshake(
+        socket,
+        peerPubKey,
+        finalConfig.timeout,
+      )
+      console.log(
+        `[${new Date().toISOString()}] [lightning] Noise handshake completed successfully`,
+      )
 
-      // 4. Iniciar Ping/Pong
+      // 3. Troca de Init messages (BOLT #1)
+      console.log(
+        `[${new Date().toISOString()}] [lightning] Step 3: Exchanging BOLT #1 Init messages...`,
+      )
+      await this.exchangeInitMessages(socket, handshakeResult.transportKeys, finalConfig.timeout)
+      console.log(
+        `[${new Date().toISOString()}] [lightning] Init message exchange completed successfully`,
+      )
+
+      // 4. Iniciar Ping/Pong (BOLT #1)
+      console.log(
+        `[${new Date().toISOString()}] [lightning] Step 4: Starting BOLT #1 Ping/Pong keep-alive...`,
+      )
       const cleanupPingPong = this.startPingPong(socket, handshakeResult.transportKeys)
+      console.log(`[${new Date().toISOString()}] [lightning] Ping/Pong keep-alive started`)
 
       // 5. Retornar conexão com estado de transporte
       const lightningConnection: LightningConnection = Object.assign(socket, {
@@ -1543,10 +1683,12 @@ export class PeerManager {
       }
       extendedConnection.cleanup = cleanupPingPong
 
-      console.log('[lightning] Lightning connection established')
+      console.log(
+        `[${new Date().toISOString()}] [lightning] Lightning connection established successfully`,
+      )
       return extendedConnection
     } catch (error) {
-      console.error('[lightning] Connection failed:', error)
+      console.error(`[${new Date().toISOString()}] [lightning] Connection failed:`, error)
       throw error
     }
   }
@@ -1566,9 +1708,57 @@ export class PeerManager {
   /**
    * Recebe dados brutos do socket
    */
-  private receiveRaw(socket: any, expectedLength: number): Promise<Uint8Array> {
+  private receiveRaw(
+    socket: any,
+    expectedLength: number,
+    timeout: number = 10000,
+  ): Promise<Uint8Array> {
     return new Promise((resolve, reject) => {
-      const chunks: Uint8Array[] = []
+      // Start with any leftover data from previous reads
+      const existingBuffer = this.socketReceiveBuffers.get(socket) || new Uint8Array(0)
+      const chunks: Uint8Array[] = existingBuffer.length > 0 ? [existingBuffer] : []
+      this.socketReceiveBuffers.delete(socket)
+
+      let timeoutId: ReturnType<typeof setTimeout> | null = null
+
+      const cleanup = () => {
+        if (timeoutId) clearTimeout(timeoutId)
+        socket.removeListener('data', onData)
+        socket.removeListener('error', onError)
+      }
+
+      const tryResolve = () => {
+        const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
+        if (totalLength >= expectedLength) {
+          cleanup()
+
+          // Combine all chunks into one buffer
+          const combined = new Uint8Array(totalLength)
+          let writeOffset = 0
+          for (const chunk of chunks) {
+            combined.set(chunk, writeOffset)
+            writeOffset += chunk.length
+          }
+
+          // Extract the requested bytes
+          const result = combined.subarray(0, expectedLength)
+
+          // Save any excess bytes for the next receive call
+          if (totalLength > expectedLength) {
+            const excess = combined.subarray(expectedLength)
+            this.socketReceiveBuffers.set(socket, excess)
+          }
+
+          resolve(result)
+          return true
+        }
+        return false
+      }
+
+      // Check if we already have enough data from the buffer
+      if (tryResolve()) {
+        return
+      }
 
       const onData = (data: string | Buffer) => {
         const dataBuffer =
@@ -1576,27 +1766,21 @@ export class PeerManager {
             ? new TextEncoder().encode(data)
             : new Uint8Array(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength))
         chunks.push(dataBuffer)
-        const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
-        if (totalLength >= expectedLength) {
-          socket.removeListener('data', onData)
-          socket.removeListener('error', onError)
-          const result = new Uint8Array(expectedLength)
-          let offset = 0
-          for (const chunk of chunks) {
-            const remaining = expectedLength - offset
-            if (remaining <= 0) break
-            const copyLength = Math.min(chunk.length, remaining)
-            result.set(chunk.subarray(0, copyLength), offset)
-            offset += copyLength
-          }
-          resolve(result)
-        }
+        tryResolve()
       }
 
       const onError = (err: Error) => {
-        socket.removeListener('data', onData)
+        cleanup()
         reject(err)
       }
+
+      const onTimeout = () => {
+        cleanup()
+        reject(new Error(`Receive timeout after ${timeout}ms waiting for ${expectedLength} bytes`))
+      }
+
+      // Set timeout
+      timeoutId = setTimeout(onTimeout, timeout)
 
       socket.on('data', onData)
       socket.on('error', onError)

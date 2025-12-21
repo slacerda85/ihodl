@@ -157,11 +157,21 @@ class NetworkStore {
 
   /**
    * Obtém Lightning Worker saudável
+   *
+   * @deprecated Use `lightningStore.getWorker()` em vez deste método.
+   * Este método cria uma instância separada de LightningWorker que não está
+   * sincronizada com o WorkerService gerenciado pelo lightningStore.
+   * Será removido em versão futura.
+   *
+   * @see docs/lightning-worker-consolidation-plan.md - Fase 1.3
    */
   async getLightningWorker(
     masterKey: Uint8Array,
     network: 'mainnet' | 'testnet' | 'regtest' = 'mainnet',
   ): Promise<LightningWorker> {
+    console.warn(
+      '[NetworkStore] getLightningWorker is deprecated. Use lightningStore.getWorker() instead.',
+    )
     try {
       // Verificar se já existe um worker ativo
       if (this.lightningWorkerRef) {

@@ -75,7 +75,7 @@ export default function PaymentSendScreen() {
   const params = useLocalSearchParams<{ invoice?: string }>()
   const colorMode = useActiveColorMode()
   const balance = useLightningBalance()
-  const { decodeInvoice, sendPayment } = useLightningActions()
+  const { decodeInvoice, sendPayment, canSendPayment } = useLightningActions()
 
   const [state, setState] = useState<PaymentState>({
     step: 'input',
@@ -87,6 +87,7 @@ export default function PaymentSendScreen() {
   })
 
   const [isDecoding, setIsDecoding] = useState(false)
+  const canSend = canSendPayment()
 
   const handleDecodeInvoice = useCallback(
     async (invoiceStr?: string) => {
@@ -326,8 +327,17 @@ export default function PaymentSendScreen() {
               >
                 <Text style={[styles.secondaryButtonText, { color: textColor }]}>Voltar</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.primaryButton} onPress={handleSendPayment}>
-                <Text style={styles.primaryButtonText}>Enviar</Text>
+              <TouchableOpacity
+                style={[
+                  styles.primaryButton,
+                  (!canSend.ok || state.step === 'sending') && styles.buttonDisabled,
+                ]}
+                onPress={handleSendPayment}
+                disabled={!canSend.ok || state.step === 'sending'}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {canSend.ok ? 'Enviar' : canSend.reason || 'Indisponível'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -375,8 +385,14 @@ export default function PaymentSendScreen() {
               >
                 <Text style={[styles.secondaryButtonText, { color: textColor }]}>Cancelar</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.primaryButton} onPress={handleSendPayment}>
-                <Text style={styles.primaryButtonText}>Tentar novamente</Text>
+              <TouchableOpacity
+                style={[styles.primaryButton, !canSend.ok && styles.buttonDisabled]}
+                onPress={handleSendPayment}
+                disabled={!canSend.ok}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {canSend.ok ? 'Tentar novamente' : canSend.reason || 'Indisponível'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>

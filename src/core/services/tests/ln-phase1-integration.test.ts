@@ -114,8 +114,8 @@ describe('Phase 1 Integration Tests', () => {
       // Note: This test may fail if the peer is offline or network issues occur
 
       const testPeer = {
-        nodeId: '03864ef025fde8fb587d989186ce6a4a186895ee44a926bfc370e2c366597a3f8f',
-        address: '34.239.230.56',
+        nodeId: '035e4ff418fc8b5554c5d9eea66396c227bd429a3251c8cbc711002ba215bfc226',
+        address: '170.75.163.209',
         port: 9735,
       }
 

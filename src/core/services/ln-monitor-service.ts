@@ -3,7 +3,7 @@
 // Implements autonomous monitoring with error recovery and alerts
 
 import EventEmitter from 'eventemitter3'
-import LightningService from './ln-service'
+import WorkerService from './ln-worker-service'
 import { ChannelManager } from '../lib/lightning/channel'
 import { HTLCManager, HTLCOwner } from '../lib/lightning/htlc'
 import { Watchtower } from '../lib/lightning/watchtower'
@@ -85,7 +85,7 @@ const DEFAULT_CONFIG: LightningMonitorConfig = {
 
 export class LightningMonitorService extends EventEmitter {
   private config: LightningMonitorConfig
-  private lightningService: LightningService
+  private workerService: WorkerService
   private channelManager: ChannelManager | null
   private htlcManager: HTLCManager
   private watchtowerClient: Watchtower
@@ -101,10 +101,10 @@ export class LightningMonitorService extends EventEmitter {
   private lastChannelCheck: number = 0
   private lastWatchtowerSync: number = 0
 
-  constructor(lightningService: LightningService, config: Partial<LightningMonitorConfig> = {}) {
+  constructor(workerService: WorkerService, config: Partial<LightningMonitorConfig> = {}) {
     super()
     this.config = { ...DEFAULT_CONFIG, ...config }
-    this.lightningService = lightningService
+    this.workerService = workerService
     this.channelManager = null // TODO: Initialize with proper parameters
     this.htlcManager = new HTLCManager()
     this.watchtowerClient = new Watchtower()
@@ -344,7 +344,7 @@ export class LightningMonitorService extends EventEmitter {
 
     try {
       // Get channels from service
-      const channels = await this.lightningService.getChannels()
+      const channels = await this.workerService.getChannels()
       const alerts: ChannelAlert[] = []
 
       for (const channel of channels) {
@@ -477,8 +477,8 @@ export class LightningMonitorService extends EventEmitter {
 // ==========================================
 
 export function createLightningMonitorService(
-  lightningService: LightningService,
+  workerService: WorkerService,
   config?: Partial<LightningMonitorConfig>,
 ): LightningMonitorService {
-  return new LightningMonitorService(lightningService, config)
+  return new LightningMonitorService(workerService, config)
 }

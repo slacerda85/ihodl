@@ -91,10 +91,18 @@ interface ElectrumWatcherServiceInterface {
   }
 }
 
+export interface ElectrumWatcherOptions extends Partial<ElectrumWatcherConfig> {
+  socket?: Connection | null
+  connect?: () => Promise<Connection>
+  onHeight?: (height: number) => void
+}
+
 class ElectrumWatcherService implements ElectrumWatcherServiceInterface {
   private config: ElectrumWatcherConfig = DEFAULT_CONFIG
   private isServiceRunning: boolean = false
   private socket: Connection | null = null
+  private connectFn: () => Promise<Connection>
+  private onHeight?: (height: number) => void
   private checkInterval: NodeJS.Timeout | null = null
   private currentBlockHeight: number = 0
   private lastCheck: number = 0
@@ -102,6 +110,17 @@ class ElectrumWatcherService implements ElectrumWatcherServiceInterface {
   // Watched items
   private watchedFundingTxs: Map<string, WatchedFundingTx> = new Map()
   private watchedChannelPoints: Map<string, WatchedChannelPoint> = new Map()
+
+  constructor(options: ElectrumWatcherOptions = {}) {
+    const { socket, connect, onHeight, ...configOverrides } = options
+    this.socket = socket ?? null
+    this.connectFn = connect ?? connectElectrum
+    this.onHeight = onHeight
+
+    if (Object.keys(configOverrides).length > 0) {
+      this.config = { ...DEFAULT_CONFIG, ...configOverrides }
+    }
+  }
 
   // ==========================================
   // LIFECYCLE
@@ -119,12 +138,15 @@ class ElectrumWatcherService implements ElectrumWatcherServiceInterface {
     console.log('[ElectrumWatcher] Starting service...')
 
     try {
-      // Conectar ao Electrum
-      this.socket = await connectElectrum()
+      // Conectar ao Electrum (reutiliza socket existente se fornecido)
+      if (!this.socket) {
+        this.socket = await this.connectFn()
+      }
       console.log('[ElectrumWatcher] Connected to Electrum')
 
       // Obter altura atual
       this.currentBlockHeight = await getCurrentBlockHeight(this.socket)
+      this.onHeight?.(this.currentBlockHeight)
       console.log(`[ElectrumWatcher] Current block height: ${this.currentBlockHeight}`)
 
       // Iniciar monitoramento periódico
@@ -321,6 +343,7 @@ class ElectrumWatcherService implements ElectrumWatcherServiceInterface {
 
       // Atualizar altura atual
       this.currentBlockHeight = await getCurrentBlockHeight(this.socket)
+      this.onHeight?.(this.currentBlockHeight)
 
       // Verificar funding transactions
       await this.checkFundingTransactions()
@@ -342,7 +365,7 @@ class ElectrumWatcherService implements ElectrumWatcherServiceInterface {
 
       // Tentar reconectar
       try {
-        this.socket = await connectElectrum()
+        this.socket = await this.connectFn()
         console.log('[ElectrumWatcher] Reconnected to Electrum after error')
       } catch (reconnectError) {
         console.error('[ElectrumWatcher] Failed to reconnect:', reconnectError)
@@ -427,13 +450,9 @@ class ElectrumWatcherService implements ElectrumWatcherServiceInterface {
  * Cria uma instância do ElectrumWatcherService
  */
 export function createElectrumWatcherService(
-  config?: Partial<ElectrumWatcherConfig>,
+  options?: ElectrumWatcherOptions,
 ): ElectrumWatcherService {
-  const service = new ElectrumWatcherService()
-  if (config) {
-    service['config'] = { ...DEFAULT_CONFIG, ...config }
-  }
-  return service
+  return new ElectrumWatcherService(options)
 }
 
 // ==========================================

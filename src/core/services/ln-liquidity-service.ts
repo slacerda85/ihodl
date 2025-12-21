@@ -3,7 +3,7 @@
 // Handles automatic channel opening, LSP integration, and balance optimization
 
 import EventEmitter from 'eventemitter3'
-import LightningService from './ln-service'
+import WorkerService from './ln-worker-service'
 import LSPService from './ln-lsp-service'
 import { LightningRepository } from '../repositories/lightning'
 
@@ -92,21 +92,21 @@ const DEFAULT_CONFIG: LiquidityConfig = {
 
 export class LiquidityManagerService extends EventEmitter {
   private config: LiquidityConfig
-  private lightningService?: LightningService
+  private workerService?: WorkerService
   private lspService?: LSPService
   private repository: LightningRepository
   private checkTimer?: number
   private isRunning: boolean = false
   private operations: Map<string, LiquidityOperation> = new Map()
 
-  constructor(lightningService?: LightningService, config: Partial<LiquidityConfig> = {}) {
+  constructor(workerService?: WorkerService, config: Partial<LiquidityConfig> = {}) {
     super()
     this.config = { ...DEFAULT_CONFIG, ...config }
-    this.lightningService = lightningService
+    this.workerService = workerService
     this.repository = new LightningRepository()
 
     if (this.config.enableLSPIntegration) {
-      this.lspService = new LSPService(this.lightningService!)
+      this.lspService = new LSPService()
     }
   }
 
@@ -156,12 +156,12 @@ export class LiquidityManagerService extends EventEmitter {
    * Get current liquidity status
    */
   async getLiquidityStatus(): Promise<LiquidityStatus> {
-    if (!this.lightningService) {
-      throw new Error('LightningService not available')
+    if (!this.workerService) {
+      throw new Error('Lightning worker service not available')
     }
 
-    const channels = await this.lightningService.getChannels()
-    const balance = await this.lightningService.getBalance()
+    const channels = await this.workerService.getChannels()
+    const balance = await this.workerService.getBalance()
 
     let inboundCapacity = BigInt(0)
     let outboundCapacity = BigInt(0)
@@ -283,7 +283,7 @@ export class LiquidityManagerService extends EventEmitter {
   }
 
   private async performLiquidityCheck(): Promise<void> {
-    if (!this.lightningService) return
+    if (!this.workerService) return
 
     const status = await this.getLiquidityStatus()
 
@@ -395,8 +395,8 @@ export class LiquidityManagerService extends EventEmitter {
    * Open a direct channel (not via LSP)
    */
   private async openDirectChannel(amount: bigint): Promise<string> {
-    if (!this.lightningService) {
-      throw new Error('Lightning service not available')
+    if (!this.workerService) {
+      throw new Error('Lightning worker service not available')
     }
 
     // For now, this is a placeholder - would need peer discovery
@@ -431,10 +431,10 @@ export class LiquidityManagerService extends EventEmitter {
 // ==========================================
 
 export function createLiquidityManagerService(
-  lightningService?: LightningService,
+  workerService?: WorkerService,
   config?: Partial<LiquidityConfig>,
 ): LiquidityManagerService {
-  return new LiquidityManagerService(lightningService, config)
+  return new LiquidityManagerService(workerService, config)
 }
 
 // ==========================================

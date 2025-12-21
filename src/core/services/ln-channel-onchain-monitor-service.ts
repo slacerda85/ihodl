@@ -277,8 +277,6 @@ class ChannelOnChainMonitorService implements ChannelOnChainMonitorServiceInterf
         blockHeight: confirmations, // Aproximado
         timestamp: Date.now(),
       })
-
-      // TODO: Iniciar monitoramento de HTLCs pendentes se houver
     }
   }
 
@@ -302,7 +300,6 @@ class ChannelOnChainMonitorService implements ChannelOnChainMonitorServiceInterf
     })
 
     // TODO: Iniciar processo de sweep de outputs
-    // TODO: Resolver HTLCs pendentes
   }
 
   /**

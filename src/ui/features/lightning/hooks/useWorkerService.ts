@@ -3,29 +3,62 @@
  *
  * Fornece acesso ao WorkerService que centraliza todas as funcionalidades
  * Lightning Network (monitor, conectividade, watchtower, etc.)
+ *
+ * IMPORTANTE: Este hook agora usa o singleton gerenciado pelo lightningStore,
+ * eliminando múltiplas instâncias de WorkerService que causavam estado dessincronizado.
+ *
+ * @see docs/lightning-worker-consolidation-plan.md - Fase 1
  */
 
-import { WorkerService, createWorkerService } from '@/core/services/ln-worker-service'
-
-// Instância singleton do WorkerService criada na importação
-const workerServiceInstance = createWorkerService({
-  network: 'testnet',
-  maxPeers: 5,
-  enableWatchtower: true,
-  enableGossip: true,
-  enableTrampoline: true,
-})
+import type { WorkerService } from '@/core/services/ln-worker-service'
+import { lightningStore } from '../store'
 
 /**
  * Hook para acessar o WorkerService
  *
- * Retorna uma instância singleton do WorkerService que centraliza
- * todas as funcionalidades Lightning Network.
+ * Retorna a instância singleton do WorkerService gerenciada pelo lightningStore.
+ * Isso garante que toda a aplicação use a mesma instância do worker.
  *
  * @returns Instância do WorkerService
+ * @throws Error se chamado antes do lightningStore estar disponível
  */
 export function useWorkerService(): WorkerService {
-  return workerServiceInstance
+  return lightningStore.getWorker()
+}
+
+/**
+ * Hook para acessar o WorkerService de forma segura (sem exceção)
+ *
+ * Retorna a instância do WorkerService ou null se não estiver disponível/inicializado.
+ * Útil em componentes que podem renderizar antes do Lightning estar pronto.
+ *
+ * @returns Instância do WorkerService ou null se não disponível
+ *
+ * @see docs/lightning-worker-consolidation-plan.md - Fase 2.1
+ */
+export function useWorkerServiceSafe(): WorkerService | null {
+  try {
+    const worker = lightningStore.getWorker()
+    return worker.isInitialized() ? worker : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Hook para verificar se o WorkerService está inicializado
+ *
+ * @returns true se o worker está pronto para uso
+ *
+ * @see docs/lightning-worker-consolidation-plan.md - Fase 2.1
+ */
+export function useWorkerReady(): boolean {
+  try {
+    const worker = lightningStore.getWorker()
+    return worker.isInitialized()
+  } catch {
+    return false
+  }
 }
 
 /**

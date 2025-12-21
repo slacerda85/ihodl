@@ -463,8 +463,14 @@ export function extractSwapScriptParams(script: Uint8Array): {
     // Formato: OP_HASH160 <20 bytes> OP_EQUALVERIFY
     let offset = 0
 
-    // Pular OP_SIZE <32> OP_EQUAL OP_IF OP_HASH160
-    offset = 5
+    // Pular OP_SIZE <32> OP_EQUAL OP_IF
+    offset = 4
+
+    // Verificar OP_IF e OP_HASH160
+    if (script[offset] !== OpCode.OP_IF) return null
+    offset++
+    if (script[offset] !== OpCode.OP_HASH160) return null
+    offset++
 
     // Ler payment hash (20 bytes após push opcode)
     if (script[offset] !== 0x14) return null // PUSH 20 bytes

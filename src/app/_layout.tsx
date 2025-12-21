@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useMemo, useState } from 'react'
+import { StrictMode, useEffect, useState } from 'react'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as SplashScreen from 'expo-splash-screen'
@@ -7,9 +7,6 @@ import AuthScreen from '@/ui/features/auth/AuthScreen'
 import ErrorBoundary from '@/ui/components/ErrorBoundary'
 import AppProvider from '@/ui/features/app-provider'
 import WalletChangeHandler from '@/ui/features/wallet/WalletChangeHandler'
-import { useActiveWalletId, useWalletActions } from '@/ui/features/app-provider/AppProvider'
-import { useLightningStartupWorker } from '@/ui/hooks/use-lightning-worker'
-import { isLightningWorkerEnabled } from '@/config/feature-flags'
 
 SplashScreen.preventAutoHideAsync()
 
@@ -26,24 +23,6 @@ function AppContent() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
     </Stack>
   )
-}
-
-function LightningWorkerBootstrap() {
-  const activeWalletId = useActiveWalletId()
-  const { getMasterKey } = useWalletActions()
-  const masterKey = useMemo(() => {
-    if (!activeWalletId) return undefined
-    try {
-      return getMasterKey(activeWalletId)
-    } catch (err) {
-      console.warn('[LightningWorkerBootstrap] Failed to get master key:', err)
-      return undefined
-    }
-  }, [activeWalletId, getMasterKey])
-
-  useLightningStartupWorker({ walletId: activeWalletId, masterKey, autoStart: true })
-
-  return null
 }
 
 export default function RootLayout() {
@@ -63,7 +42,6 @@ export default function RootLayout() {
     <StrictMode>
       <ErrorBoundary>
         <AppProvider>
-          {isLightningWorkerEnabled() ? <LightningWorkerBootstrap /> : null}
           <WalletChangeHandler />
           <AppContent />
           <InactivityOverlay />

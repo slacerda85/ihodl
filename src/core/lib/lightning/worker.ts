@@ -9,6 +9,8 @@ import {
   actThreeSend,
   encryptMessage,
   decryptMessage,
+  decryptLengthPrefix,
+  decryptMessageBody,
 } from './transport'
 import { encodeInitMessage, decodeInitMessage, encodePingMessage, decodePongMessage } from './base'
 import { KeyPair, HandshakeState, TransportKeys } from '@/core/models/lightning/transport'
@@ -250,6 +252,9 @@ export class LightningWorker {
       console.log(`[lightning] Retry attempt ${attempt}, waiting ${delayMs}ms: ${error.message}`)
     },
   }
+
+  // Buffer for leftover bytes from TCP reads (key is socket reference)
+  private socketReceiveBuffers: WeakMap<object, Uint8Array> = new WeakMap()
 
   constructor(
     connection: LightningConnection,
@@ -1043,15 +1048,24 @@ export class LightningWorker {
     const { encrypted: encryptedInit } = encryptMessage(transportKeys, encodedInit)
     await this.sendRaw(socket, encryptedInit)
 
-    // Receber e decodificar Init do peer
-    const encryptedPeerInit = await this.receiveRaw(socket, 18 + 2 + 16) // length prefix + min init + tag
-    const decryptedPeerInit = decryptMessage(transportKeys, encryptedPeerInit)
-    if ('error' in decryptedPeerInit) {
-      throw new Error(`Failed to decrypt peer Init: ${decryptedPeerInit.error}`)
+    // Receber e decodificar Init do peer (two-step receive for streaming)
+    // Step 1: Receive encrypted length prefix (18 bytes)
+    const encryptedLength = await this.receiveRaw(socket, 18)
+    const lengthResult = decryptLengthPrefix(transportKeys, encryptedLength)
+    if ('error' in lengthResult) {
+      throw new Error(`Failed to decrypt length prefix: ${lengthResult.error}`)
+    }
+    const { length: messageLength, newKeys: keysAfterLength } = lengthResult
+
+    // Step 2: Receive encrypted message body (messageLength + 16 bytes for MAC)
+    const encryptedBody = await this.receiveRaw(socket, messageLength + 16)
+    const bodyResult = decryptMessageBody(keysAfterLength, encryptedBody, messageLength)
+    if ('error' in bodyResult) {
+      throw new Error(`Failed to decrypt message body: ${bodyResult.error}`)
     }
 
     // Decodificar Init do peer e armazenar features
-    const peerInitMessage = decodeInitMessage(decryptedPeerInit.message)
+    const peerInitMessage = decodeInitMessage(bodyResult.message)
     if (peerInitMessage && peerInitMessage.features) {
       // Armazenar features do peer no PeerManager
       // Nota: precisamos identificar o peer pelo pubkey ou connection
@@ -1251,7 +1265,48 @@ export class LightningWorker {
 
   private receiveRaw(socket: Socket, expectedLength: number): Promise<Uint8Array> {
     return new Promise((resolve, reject) => {
-      const chunks: Uint8Array[] = []
+      // Start with any leftover data from previous reads
+      const existingBuffer = this.socketReceiveBuffers.get(socket) || new Uint8Array(0)
+      const chunks: Uint8Array[] = existingBuffer.length > 0 ? [existingBuffer] : []
+      this.socketReceiveBuffers.delete(socket)
+
+      const cleanup = () => {
+        socket.removeListener('data', onData)
+        socket.removeListener('error', onError)
+      }
+
+      const tryResolve = () => {
+        const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
+        if (totalLength >= expectedLength) {
+          cleanup()
+
+          // Combine all chunks into one buffer
+          const combined = new Uint8Array(totalLength)
+          let writeOffset = 0
+          for (const chunk of chunks) {
+            combined.set(chunk, writeOffset)
+            writeOffset += chunk.length
+          }
+
+          // Extract the requested bytes
+          const result = combined.subarray(0, expectedLength)
+
+          // Save any excess bytes for the next receive call
+          if (totalLength > expectedLength) {
+            const excess = combined.subarray(expectedLength)
+            this.socketReceiveBuffers.set(socket, excess)
+          }
+
+          resolve(result)
+          return true
+        }
+        return false
+      }
+
+      // Check if we already have enough data from the buffer
+      if (tryResolve()) {
+        return
+      }
 
       const onData = (data: string | Buffer) => {
         const dataBuffer =
@@ -1259,25 +1314,11 @@ export class LightningWorker {
             ? new TextEncoder().encode(data)
             : new Uint8Array(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength))
         chunks.push(dataBuffer)
-        const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
-        if (totalLength >= expectedLength) {
-          socket.removeListener('data', onData)
-          socket.removeListener('error', onError)
-          const result = new Uint8Array(expectedLength)
-          let offset = 0
-          for (const chunk of chunks) {
-            const remaining = expectedLength - offset
-            if (remaining <= 0) break
-            const copyLength = Math.min(chunk.length, remaining)
-            result.set(chunk.subarray(0, copyLength), offset)
-            offset += copyLength
-          }
-          resolve(result)
-        }
+        tryResolve()
       }
 
       const onError = (err: Error) => {
-        socket.removeListener('data', onData)
+        cleanup()
         reject(err)
       }
 
@@ -3405,7 +3446,7 @@ export class LightningWorker {
    * @param paymentSecret - Payment secret do invoice (opcional, para BOLT #11)
    * @returns Promise<bigint> - ID do HTLC criado
    */
-  private async sendHTLC(
+  async sendHTLC(
     route: any,
     amount: bigint,
     paymentHash: Uint8Array,
@@ -3756,7 +3797,7 @@ export class LightningWorker {
    * Aguarda resultado do HTLC com tracking real
    * Monitora estado do HTLC até fulfillment ou timeout
    */
-  private async waitForHTLCResult(
+  async waitForHTLCResult(
     channelId: string,
     htlcId: bigint,
     paymentHash: Uint8Array,
@@ -4365,6 +4406,55 @@ export class LightningWorker {
     }
 
     return totalBalance
+  }
+
+  /**
+   * Retorna todos os HTLCs pendentes por canal
+   *
+   * Como usar:
+   * const pendingHtlcs = worker.getPendingHtlcs()
+   * console.log(`Total de HTLCs pendentes: ${pendingHtlcs.size}`)
+   *
+   * @returns Map<string, HtlcInfo[]> - Mapa de channelId para lista de HTLCs pendentes
+   */
+  getPendingHtlcs(): Map<string, HtlcInfo[]> {
+    const pending = new Map<string, HtlcInfo[]>()
+
+    for (const [channelId, htlcList] of this.htlcs) {
+      const pendingHtlcs = htlcList.filter(htlc => htlc.state === 'pending')
+      if (pendingHtlcs.length > 0) {
+        pending.set(channelId, pendingHtlcs)
+      }
+    }
+
+    return pending
+  }
+
+  /**
+   * Verifica se há HTLCs pendentes em qualquer canal
+   *
+   * @returns boolean - true se houver HTLCs pendentes
+   */
+  hasPendingHtlcs(): boolean {
+    for (const htlcList of this.htlcs.values()) {
+      if (htlcList.some(htlc => htlc.state === 'pending')) {
+        return true
+      }
+    }
+    return false
+  }
+
+  /**
+   * Conta o total de HTLCs pendentes em todos os canais
+   *
+   * @returns number - Número total de HTLCs pendentes
+   */
+  countPendingHtlcs(): number {
+    let count = 0
+    for (const htlcList of this.htlcs.values()) {
+      count += htlcList.filter(htlc => htlc.state === 'pending').length
+    }
+    return count
   }
 
   /**
@@ -6483,7 +6573,7 @@ export class LightningWorker {
    * Envia transação de penalidade para a blockchain
    *
    * Como usar:
-   * const success = await client.broadcastPenaltyTransaction(breachResult)
+   * const success = await client.broadcastPenaltyTransaction(channelId, breachResult)
    * if (success) {
    *   console.log('Penalty transaction broadcasted')
    * }
@@ -6491,26 +6581,30 @@ export class LightningWorker {
    * @param breachResult - Resultado da detecção de breach
    * @returns Promise<boolean> - true se broadcast foi bem-sucedido
    */
-  async broadcastPenaltyTransaction(breachResult: BreachResult): Promise<boolean> {
+  async broadcastPenaltyTransaction(
+    channelId: string,
+    breachResult: BreachResult,
+  ): Promise<boolean> {
     if (!breachResult.breach || !breachResult.penaltyTx) {
       console.error('[watchtower] Invalid breach result for penalty broadcast')
       return false
     }
 
     try {
-      // TODO: Implementar broadcast real para a blockchain
-      // Por enquanto, simular broadcast
-      console.log(
-        `[watchtower] Broadcasting penalty transaction: ${uint8ArrayToHex(breachResult.penaltyTx)}`,
-      )
+      const txHex = uint8ArrayToHex(breachResult.penaltyTx)
+      const txid = await broadcastTransaction(txHex)
 
-      // Simular delay de broadcast
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      const channel = this.channels.get(channelId)
+      if (channel) {
+        this.channels.set(channelId, {
+          ...channel,
+          state: ChannelState.CLOSED,
+          lastActivity: Date.now(),
+        })
+      }
+      this.channelStates.set(channelId, ChannelState.CLOSED)
 
-      // Marcar canal como penalizado
-      // TODO: Atualizar estado do canal
-
-      console.log('[watchtower] Penalty transaction broadcasted successfully')
+      console.log('[watchtower] Penalty transaction broadcasted successfully', txid)
       return true
     } catch (error) {
       console.error('[watchtower] Failed to broadcast penalty transaction:', error)
@@ -6542,7 +6636,7 @@ export class LightningWorker {
             const breach = this.watchtower.checkForBreach(channelId, txHex)
             if (breach.breach) {
               console.warn(`[watchtower] Breach detected: ${breach.reason}`)
-              await this.broadcastPenaltyTransaction(breach)
+              await this.broadcastPenaltyTransaction(channelId, breach)
             }
           }
         }
@@ -7315,6 +7409,7 @@ export class LightningWorker {
 
   /**
    * Cria conexão Lightning completa (helper para create)
+   * Tenta conectar a múltiplos peers se o primeiro falhar
    */
   private static async createConnection(
     config: LightningClientConfig,
@@ -7322,23 +7417,110 @@ export class LightningWorker {
     network: 'mainnet' | 'testnet' | 'regtest',
     channelFeeConfig?: ChannelOpeningFeeConfig,
   ): Promise<LightningConnection> {
-    // Implementar conexão real usando PeerManager
+    // Lista de peers para tentar (peer fornecido + fallbacks)
+    const FALLBACK_PEERS: Array<{ host: string; port: number; pubkey: string; name: string }> = [
+      // ACINQ trampoline - reliable for incoming connections
+      {
+        host: '13.248.222.197',
+        port: 9735,
+        pubkey: '03933884aaf1d6b108397e5efe5c86bcf2d8ca8d2f700eda99db9214fc2712b134',
+        name: 'ACINQ Trampoline',
+      },
+      // ACINQ main node
+      {
+        host: '3.33.236.230',
+        port: 9735,
+        pubkey: '03864ef025fde8fb587d989186ce6a4a186895ee44a926bfc370e2c366597a3f8f',
+        name: 'ACINQ',
+      },
+      // River Financial
+      {
+        host: '54.187.31.40',
+        port: 9735,
+        pubkey: '03037dc08e9ac63b82581f79b662a4d0ceca8a8ca162b1af3551595b452a302d0f',
+        name: 'River',
+      },
+      // Kraken
+      {
+        host: '52.13.118.208',
+        port: 9735,
+        pubkey: '02f1a8c87607f415c8f22c00593002775941dea48869ce23096af27b0cfdcc0b69',
+        name: 'Kraken',
+      },
+    ]
+
     const peerManager = new PeerManager()
+    const errors: string[] = []
 
-    // Tentar conectar ao peer
-    const peer: PeerWithPubkey = {
-      host: config.peer.host,
-      port: config.peer.port,
-      pubkey: config.peerPubKey ? uint8ArrayToHex(config.peerPubKey) : undefined,
+    // Primeiro, tentar o peer fornecido no config
+    if (config.peer && config.peerPubKey) {
+      const peer: PeerWithPubkey = {
+        host: config.peer.host,
+        port: config.peer.port,
+        pubkey: uint8ArrayToHex(config.peerPubKey),
+      }
+
+      console.log(
+        `[${new Date().toISOString()}] [lightning] Trying configured peer: ${peer.host}:${peer.port}`,
+      )
+
+      try {
+        const result = await peerManager.connectPeer(peer)
+        if (result.success && result.connection) {
+          console.log(
+            `[${new Date().toISOString()}] [lightning] Connected to configured peer: ${peer.host}:${peer.port}`,
+          )
+          return result.connection
+        }
+        errors.push(`${peer.host}:${peer.port}: ${result.error?.message || result.message}`)
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error)
+        errors.push(`${peer.host}:${peer.port}: ${errorMsg}`)
+        console.warn(
+          `[${new Date().toISOString()}] [lightning] Failed to connect to configured peer: ${errorMsg}`,
+        )
+      }
     }
 
-    const result = await peerManager.connectPeer(peer)
+    // Se o peer configurado falhou, tentar fallbacks
+    for (const fallback of FALLBACK_PEERS) {
+      // Pular se for o mesmo peer que já tentamos
+      if (config.peer && fallback.host === config.peer.host && fallback.port === config.peer.port) {
+        continue
+      }
 
-    if (!result.success || !result.connection) {
-      throw new Error(`Failed to connect to peer: ${result.error?.message || result.message}`)
+      const peer: PeerWithPubkey = {
+        host: fallback.host,
+        port: fallback.port,
+        pubkey: fallback.pubkey,
+      }
+
+      console.log(
+        `[${new Date().toISOString()}] [lightning] Trying fallback peer ${fallback.name}: ${peer.host}:${peer.port}`,
+      )
+
+      try {
+        const result = await peerManager.connectPeer(peer)
+        if (result.success && result.connection) {
+          console.log(
+            `[${new Date().toISOString()}] [lightning] Connected to fallback peer ${fallback.name}: ${peer.host}:${peer.port}`,
+          )
+          return result.connection
+        }
+        errors.push(
+          `${fallback.name} (${peer.host}:${peer.port}): ${result.error?.message || result.message}`,
+        )
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error)
+        errors.push(`${fallback.name} (${peer.host}:${peer.port}): ${errorMsg}`)
+        console.warn(
+          `[${new Date().toISOString()}] [lightning] Failed to connect to fallback peer ${fallback.name}: ${errorMsg}`,
+        )
+      }
     }
 
-    return result.connection
+    // Todos os peers falharam
+    throw new Error(`Failed to connect to any peer. Errors: ${errors.join('; ')}`)
   }
 
   // ==========================================

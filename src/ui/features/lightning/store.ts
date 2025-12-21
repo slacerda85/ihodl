@@ -13,16 +13,11 @@ import {
   getReadinessLevel,
   type ReadinessState,
 } from '@/core/models/lightning/readiness'
-import LightningService, {
-  connectToPeer as connectToPeerService,
-  disconnect as disconnectService,
-  sendPing as sendPingService,
-} from '@/core/services/ln-service'
-import type {
-  WorkerInitStatus,
-  WorkerReadiness,
-  WorkerMetrics,
-} from '@/core/services/ln-worker-service'
+import { getInvoiceExpiryStatus } from '@/core/lib/lightning/invoice'
+import { uint8ArrayToHex } from '@/core/lib/utils/utils'
+import { getTransport } from '@/core/services/ln-transport-service'
+import { createWorkerService, type WorkerService } from '@/core/services/ln-worker-service'
+import type { WorkerInitStatus, WorkerMetrics } from '@/core/services/ln-worker-service'
 import { walletService } from '@/core/services'
 import { walletStore } from '../wallet/store'
 import { getTrafficControl } from '@/core/services/ln-traffic-control-service'
@@ -36,12 +31,6 @@ const ZERO_BIGINT = BigInt(0)
 // ==========================================
 // HELPER FUNCTIONS
 // ==========================================
-
-function assertServiceInitialized(service: LightningService): void {
-  if (!service.isInitialized()) {
-    throw new Error('Lightning not initialized')
-  }
-}
 
 function assertWalletId(walletId: string | undefined): asserts walletId is string {
   if (!walletId) {
@@ -59,11 +48,16 @@ function assertConnected(isConnected: boolean): void {
 // TYPES
 // ==========================================
 
+/**
+ * Estado do LightningStore
+ *
+ * @see docs/lightning-worker-consolidation-plan.md - Fase 4
+ */
 export interface LightningStoreState extends LightningState {
   initStatus: 'idle' | 'initializing' | 'ready' | 'error'
   workerStatus?: WorkerInitStatus
-  workerReadiness?: WorkerReadiness
   workerMetrics?: WorkerMetrics
+  // workerReadiness removido - usar readinessState (Fase 4)
 }
 
 // ==========================================
@@ -76,24 +70,59 @@ class LightningStore {
     ...INITIAL_LIGHTNING_STATE,
     initStatus: 'idle',
   }
-  private service: LightningService | null = null
+  private workerService: WorkerService | null = null
+  private workerUnsubscribe: Array<() => void> = []
 
   constructor() {
     this.initializeService()
+    this.attachWorkerListeners()
     this.setupTrafficControl()
   }
 
   private initializeService(): void {
-    if (!this.service) {
-      this.service = new LightningService()
+    if (!this.workerService) {
+      this.workerService = createWorkerService()
     }
   }
 
-  private getService(): LightningService {
-    if (!this.service) {
+  private getWorkerService(): WorkerService {
+    if (!this.workerService) {
       this.initializeService()
+      this.attachWorkerListeners()
     }
-    return this.service!
+    return this.workerService!
+  }
+
+  private attachWorkerListeners(): void {
+    if (!this.workerService) return
+
+    this.detachWorkerListeners()
+
+    const statusHandler = (status: WorkerInitStatus) => this.setWorkerStatus(status)
+    // Agora o worker emite ReadinessState diretamente (não WorkerReadiness)
+    const readinessHandler = (readiness: ReadinessState) => this.syncWorkerReadiness(readiness)
+    const metricsHandler = (metrics: WorkerMetrics) => this.setWorkerMetrics(metrics)
+
+    this.workerService.on('status', statusHandler)
+    this.workerService.on('readiness', readinessHandler)
+    this.workerService.on('metrics', metricsHandler)
+
+    this.workerUnsubscribe = [
+      () => this.workerService?.off('status', statusHandler),
+      () => this.workerService?.off('readiness', readinessHandler),
+      () => this.workerService?.off('metrics', metricsHandler),
+    ]
+
+    // Seed UI with latest metrics/status immediately
+    const currentMetrics = this.workerService.getMetrics?.()
+    if (currentMetrics) {
+      this.setWorkerMetrics(currentMetrics)
+    }
+  }
+
+  private detachWorkerListeners(): void {
+    this.workerUnsubscribe.forEach(off => off())
+    this.workerUnsubscribe = []
   }
 
   private setupTrafficControl(): void {
@@ -116,30 +145,9 @@ class LightningStore {
 
   private unsubscribeWallet?: () => void
 
-  private mapWorkerReadiness(readiness: WorkerReadiness): ReadinessState {
-    return {
-      ...this.state.readinessState,
-      isWalletLoaded: readiness.walletLoaded,
-      isTransportConnected: readiness.transportConnected || readiness.electrumReady,
-      isPeerConnected: readiness.peerConnected,
-      isChannelReestablished: readiness.channelsReestablished,
-      isGossipSynced: readiness.gossipSynced,
-      isWatcherRunning: readiness.watcherRunning,
-    }
-  }
-
-  private updateReadiness(updates: Partial<ReadinessState>): void {
-    if (!this.service) return
-
-    const nextState = { ...this.state.readinessState, ...updates }
-    this.service.updateReadinessState(nextState)
-
-    this.state = {
-      ...this.state,
-      readinessState: nextState,
-      readinessLevel: getReadinessLevel(nextState),
-    }
-  }
+  // mapWorkerReadiness removido - worker agora emite ReadinessState diretamente
+  // updateReadiness removido - fluxo agora é unidirecional (worker -> store)
+  // @see docs/lightning-worker-consolidation-plan.md - Fase 4
 
   // ==========================================
   // SUBSCRIPTION
@@ -169,18 +177,48 @@ class LightningStore {
     this.notify()
   }
 
-  private syncWorkerReadiness = (readiness: WorkerReadiness): void => {
-    const mapped = this.mapWorkerReadiness(readiness)
-    this.updateReadiness(mapped)
-    this.state = { ...this.state, workerReadiness: readiness }
-    this.notify()
+  /**
+   * Sincroniza o estado de readiness do WorkerService.
+   *
+   * Recebe ReadinessState diretamente do worker (sem necessidade de mapeamento).
+   *
+   * @see docs/lightning-worker-consolidation-plan.md - Fase 4.2b
+   */
+  private syncWorkerReadiness = (readiness: ReadinessState): void => {
+    const previousLevel = this.state.readinessLevel
+    const newLevel = getReadinessLevel(readiness)
+
+    // Atualizar estado diretamente
+    this.state = {
+      ...this.state,
+      readinessState: readiness,
+      readinessLevel: newLevel,
+    }
+
+    // Notificar apenas se houve mudança
+    if (previousLevel !== newLevel || this.hasReadinessChanged(readiness)) {
+      this.notify()
+    }
+  }
+
+  private hasReadinessChanged(newReadiness: ReadinessState): boolean {
+    const current = this.state.readinessState
+    return (
+      current.isWalletLoaded !== newReadiness.isWalletLoaded ||
+      current.isTransportConnected !== newReadiness.isTransportConnected ||
+      current.isPeerConnected !== newReadiness.isPeerConnected ||
+      current.isChannelReestablished !== newReadiness.isChannelReestablished ||
+      current.isGossipSynced !== newReadiness.isGossipSynced ||
+      current.isWatcherRunning !== newReadiness.isWatcherRunning
+    )
   }
 
   private resetForWalletChange = (): void => {
+    this.detachWorkerListeners()
     const readinessState = createInitialReadinessState()
 
-    if (this.service) {
-      this.service.updateReadinessState(readinessState)
+    if (this.workerService) {
+      this.attachWorkerListeners()
     }
 
     this.state = {
@@ -189,7 +227,6 @@ class LightningStore {
       readinessLevel: getReadinessLevel(readinessState),
       initStatus: 'idle',
       workerStatus: undefined,
-      workerReadiness: undefined,
       workerMetrics: undefined,
     }
 
@@ -207,6 +244,19 @@ class LightningStore {
   getReadinessState = () => this.state.readinessState
   getReadinessLevel = () => this.state.readinessLevel
 
+  canSendPayment = (): { ok: boolean; reason?: string } => {
+    const worker = this.getWorkerService()
+    return worker.canSendPayment()
+  }
+
+  canReceivePayment = (): { ok: boolean; reason?: string } => {
+    const worker = this.getWorkerService()
+    return worker.canReceivePayment()
+  }
+
+  // Expose worker instance for global access (AppProvider/hooks)
+  getWorker = (): WorkerService => this.getWorkerService()
+
   // ==========================================
   // ACTIONS
   // ==========================================
@@ -221,15 +271,15 @@ class LightningStore {
       const walletId = walletService.getActiveWalletId()
       assertWalletId(walletId)
 
-      const service = this.getService()
-      await service.initialize(walletId)
+      const workerService = this.getWorkerService()
+      await workerService.initFromWallet(walletId)
 
       const [balance, channels, invoices, payments, readinessState] = await Promise.all([
-        service.getBalance(),
-        service.getChannels(),
-        service.getInvoices(),
-        service.getPayments(),
-        service.getReadinessState(),
+        workerService.getBalance(),
+        workerService.getChannels(),
+        workerService.getInvoices(),
+        workerService.getPayments(),
+        workerService.getReadinessState(),
       ])
 
       // Usar readiness real reportado pelo serviço (sem defaults otimistas)
@@ -237,7 +287,8 @@ class LightningStore {
         ...readinessState,
         isWalletLoaded: true,
       }
-      this.updateReadiness(resolvedReadiness)
+      // Sincronizar estado inicial de readiness
+      this.syncWorkerReadiness(resolvedReadiness)
 
       this.state = {
         ...this.state,
@@ -267,10 +318,8 @@ class LightningStore {
   }
 
   generateInvoice = async (amount: Millisatoshis, description?: string): Promise<Invoice> => {
-    const service = this.getService()
-    assertServiceInitialized(service)
-
-    const result = await service.generateInvoice({ amount, description })
+    const workerService = this.getWorkerService()
+    const result = await workerService.generateInvoice({ amount, description })
 
     const invoice: Invoice = {
       paymentHash: result.paymentHash,
@@ -294,21 +343,26 @@ class LightningStore {
   }
 
   decodeInvoice = async (invoice: string): Promise<DecodedInvoice> => {
-    const service = this.getService()
-    assertServiceInitialized(service)
-    return service.decodeInvoice(invoice)
+    const workerService = this.getWorkerService()
+    const decoded = await workerService.decodeInvoice(invoice)
+    const expiryStatus = getInvoiceExpiryStatus(decoded)
+
+    return {
+      amount: decoded.amount ?? 0n,
+      description: decoded.taggedFields.description ?? '',
+      paymentHash: uint8ArrayToHex(decoded.taggedFields.paymentHash),
+      isExpired: expiryStatus.isExpired,
+    }
   }
 
   sendPayment = async (invoice: string, maxFee?: bigint): Promise<Payment> => {
-    const service = this.getService()
-    assertServiceInitialized(service)
-
-    const result = await service.sendPayment({ invoice, maxFee })
+    const workerService = this.getWorkerService()
+    const result = await workerService.sendPayment({ invoice, maxFee })
 
     let amountMsat: Millisatoshis = 0n
     try {
-      const decoded = await service.decodeInvoice(invoice)
-      amountMsat = decoded.amount
+      const decoded = await workerService.decodeInvoice(invoice)
+      amountMsat = decoded.amount ?? 0n
     } catch (err) {
       console.warn('[LightningStore] Failed to decode invoice for amount:', err)
     }
@@ -331,7 +385,7 @@ class LightningStore {
     this.notify()
 
     if (result.success) {
-      service.getBalance().then(balance => {
+      workerService.getBalance().then(balance => {
         this.state = { ...this.state, totalBalance: balance }
         this.notify()
       })
@@ -341,17 +395,17 @@ class LightningStore {
   }
 
   getBalance = async (): Promise<Millisatoshis> => {
-    const service = this.getService()
-    if (!service.isInitialized()) return ZERO_BIGINT
-    return service.getBalance()
+    const workerService = this.getWorkerService()
+    if (!workerService.isInitialized()) return ZERO_BIGINT
+    return workerService.getBalance()
   }
 
   refreshBalance = async (): Promise<void> => {
-    const service = this.getService()
-    if (!service.isInitialized()) return
+    const workerService = this.getWorkerService()
+    if (!workerService.isInitialized()) return
 
     try {
-      const balance = await service.getBalance()
+      const balance = await workerService.getBalance()
       this.state = { ...this.state, totalBalance: balance }
       this.notify()
     } catch (error) {
@@ -360,10 +414,10 @@ class LightningStore {
   }
 
   getChannels = async (): Promise<Channel[]> => {
-    const service = this.getService()
-    if (!service.isInitialized()) return []
+    const workerService = this.getWorkerService()
+    if (!workerService.isInitialized()) return []
 
-    const channels = await service.getChannels()
+    const channels = await workerService.getChannels()
     this.state = {
       ...this.state,
       channels,
@@ -375,9 +429,9 @@ class LightningStore {
   }
 
   hasChannels = async (): Promise<boolean> => {
-    const service = this.getService()
-    if (!service.isInitialized()) return false
-    return service.hasActiveChannels()
+    const workerService = this.getWorkerService()
+    if (!workerService.isInitialized()) return false
+    return workerService.hasActiveChannels()
   }
 
   createChannel = async (params: {
@@ -386,9 +440,6 @@ class LightningStore {
     pushMsat?: bigint
     feeRatePerKw?: number
   }): Promise<Channel> => {
-    const service = this.getService()
-    assertServiceInitialized(service)
-
     this.state = { ...this.state, isLoading: true, error: null }
     this.notify()
 
@@ -420,9 +471,6 @@ class LightningStore {
   }
 
   closeChannel = async (channelId: string): Promise<void> => {
-    const service = this.getService()
-    assertServiceInitialized(service)
-
     this.state = { ...this.state, isLoading: true, error: null }
     this.notify()
 
@@ -444,9 +492,6 @@ class LightningStore {
   }
 
   forceCloseChannel = async (channelId: string): Promise<void> => {
-    const service = this.getService()
-    assertServiceInitialized(service)
-
     this.state = { ...this.state, isLoading: true, error: null }
     this.notify()
 
@@ -468,11 +513,11 @@ class LightningStore {
   }
 
   refreshInvoices = async (): Promise<void> => {
-    const service = this.getService()
-    if (!service.isInitialized()) return
+    const workerService = this.getWorkerService()
+    if (!workerService.isInitialized()) return
 
     try {
-      const invoices = await service.getInvoices()
+      const invoices = await workerService.getInvoices()
       this.state = {
         ...this.state,
         invoices: mapServiceInvoices(invoices),
@@ -484,11 +529,11 @@ class LightningStore {
   }
 
   refreshPayments = async (): Promise<void> => {
-    const service = this.getService()
-    if (!service.isInitialized()) return
+    const workerService = this.getWorkerService()
+    if (!workerService.isInitialized()) return
 
     try {
-      const payments = await service.getPayments()
+      const payments = await workerService.getPayments()
       this.state = {
         ...this.state,
         payments: mapServicePayments(payments),
@@ -499,13 +544,23 @@ class LightningStore {
     }
   }
 
+  /**
+   * @deprecated Use `workerService.addPeer()` ou `workerService.getPeerConnectivityService()` em vez deste método.
+   * A gestão de peers está sendo consolidada no WorkerService.
+   *
+   * @see docs/lightning-worker-consolidation-plan.md - Fase 5.1
+   */
   connectToPeer = async (peerId: string): Promise<void> => {
+    console.warn(
+      '[LightningStore] connectToPeer is deprecated. Use workerService.addPeer() instead.',
+    )
     this.state = { ...this.state, isLoading: true, error: null }
     this.notify()
 
     try {
-      await connectToPeerService(peerId)
-      this.updateReadiness({ isTransportConnected: true, isPeerConnected: true })
+      const transport = getTransport()
+      await transport.connect(peerId)
+      // Readiness é atualizado pelo WorkerService via eventos
       this.state = {
         ...this.state,
         isLoading: false,
@@ -531,13 +586,21 @@ class LightningStore {
     }
   }
 
+  /**
+   * @deprecated Use `workerService.stop()` ou gestão de peers via WorkerService.
+   * A gestão de peers está sendo consolidada no WorkerService.
+   *
+   * @see docs/lightning-worker-consolidation-plan.md - Fase 5.1
+   */
   disconnect = async (): Promise<void> => {
+    console.warn('[LightningStore] disconnect is deprecated. Use workerService methods instead.')
     this.state = { ...this.state, isLoading: true }
     this.notify()
 
     try {
-      await disconnectService()
-      this.updateReadiness({ isPeerConnected: false })
+      const transport = getTransport()
+      await transport.disconnect()
+      // Readiness é atualizado pelo WorkerService via eventos
       this.state = {
         ...this.state,
         isLoading: false,
@@ -555,11 +618,18 @@ class LightningStore {
     }
   }
 
+  /**
+   * @deprecated Ping é gerenciado internamente pelo WorkerService/PeerConnectivityService.
+   *
+   * @see docs/lightning-worker-consolidation-plan.md - Fase 5.1
+   */
   sendPing = async (): Promise<void> => {
+    console.warn('[LightningStore] sendPing is deprecated. Ping is managed by WorkerService.')
     assertConnected(this.state.connection.isConnected)
 
     try {
-      await sendPingService()
+      const transport = getTransport()
+      await transport.sendPing()
       this.state = {
         ...this.state,
         connection: {
@@ -599,8 +669,14 @@ class LightningStore {
       setWorkerMetrics: this.setWorkerMetrics,
       syncWorkerReadiness: this.syncWorkerReadiness,
       resetForWalletChange: this.resetForWalletChange,
+      getWorker: this.getWorker,
+      canSendPayment: this.canSendPayment,
+      canReceivePayment: this.canReceivePayment,
     }
   }
 }
 
 export const lightningStore = new LightningStore()
+
+// Helper to fetch the shared worker instance without reaching into the store internals
+export const getLightningWorker = (): WorkerService => lightningStore.getWorker()

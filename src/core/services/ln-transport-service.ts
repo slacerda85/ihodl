@@ -20,7 +20,7 @@ import {
 } from '../lib/lightning/bolt1'
 import type { InitMessage, PongMessage } from '../models/lightning/base'
 import { uint8ArrayToHex, hexToUint8Array } from '../lib/utils/utils'
-import { TcpTransport, TcpTransportEvent } from '@/core/lib/lightning/tcpTransport'
+import { TcpTransport, TcpTransportEvent } from '@/core/lib/lightning/transport'
 
 // ==========================================
 // TYPES
@@ -130,7 +130,12 @@ export class LightningTransport {
   /**
    * Conecta a um peer Lightning via WebSocket
    *
+   * @internal Este método deve ser usado apenas internamente pelo WorkerService.
+   * Não chame diretamente de componentes de UI.
+   *
    * @param peerId - ID do peer (nodeId@host:port)
+   *
+   * @see docs/lightning-worker-consolidation-plan.md - Fase 5.3
    */
   async connect(peerId: string): Promise<void> {
     if (this.state.status === 'connected' || this.state.status === 'connecting') {
@@ -161,6 +166,11 @@ export class LightningTransport {
 
   /**
    * Desconecta do peer atual
+   *
+   * @internal Este método deve ser usado apenas internamente pelo WorkerService.
+   * Não chame diretamente de componentes de UI.
+   *
+   * @see docs/lightning-worker-consolidation-plan.md - Fase 5.3
    */
   async disconnect(): Promise<void> {
     if (this.state.pingTimer) {
@@ -184,6 +194,11 @@ export class LightningTransport {
 
   /**
    * Envia um ping para o peer
+   *
+   * @internal Este método é gerenciado automaticamente pelo WorkerService.
+   * Não chame diretamente de componentes de UI.
+   *
+   * @see docs/lightning-worker-consolidation-plan.md - Fase 5.3
    */
   async sendPing(): Promise<void> {
     if (this.state.status !== 'connected' || !this.state.socket) {
@@ -507,8 +522,12 @@ export async function performInitExchange(
   const initMsg = createInitMessage(localFeatureVector, chainHashes)
   const encodedInit = encodeInitMessage(initMsg)
 
-  // Enviar init logo após handshake
-  transport.sendMessage(encodedInit)
+  // Enviar init apenas quando transporte estiver pronto (handshake completo)
+  try {
+    transport.sendMessage(encodedInit)
+  } catch (error) {
+    throw new Error('Transport not ready for init exchange')
+  }
 
   return new Promise<InitNegotiationResult>((resolve, reject) => {
     const timeout = setTimeout(() => {

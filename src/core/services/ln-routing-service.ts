@@ -218,8 +218,7 @@ export class LightningRoutingService extends EventEmitter {
 
     try {
       // Verificar se temos dados suficientes no grafo
-      const nodeCount = this.routingGraph.getNodeCount()
-      const channelCount = this.routingGraph.getChannelCount()
+      const { nodes: nodeCount, channels: channelCount } = this.routingGraph.getStats()
 
       // Thresholds mínimos para considerar routing local viável
       const minNodes = 1000

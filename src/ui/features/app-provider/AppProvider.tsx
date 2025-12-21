@@ -38,11 +38,13 @@ import {
   useReducer,
   useMemo,
   useCallback,
+  useEffect,
+  useRef,
   ReactNode,
   useSyncExternalStore,
   Dispatch,
 } from 'react'
-import { useColorScheme } from 'react-native'
+import { AppState as RNAppState, useColorScheme } from 'react-native'
 
 // ==========================================
 // STORES (importados de cada feature)
@@ -145,6 +147,117 @@ interface AppProviderProps {
 
 export function AppProvider({ children }: AppProviderProps) {
   const [state, dispatch] = useReducer(appReducer, initialAppState)
+  const currentWalletIdRef = useRef<string | undefined>(undefined)
+  const isSyncingWorkerRef = useRef(false)
+
+  // Auto-initialize the shared Lightning worker when a wallet is active; stop on logout/background.
+  useEffect(() => {
+    const worker = lightningStore.actions.getWorker()
+
+    const syncWorkerWithWallet = async () => {
+      if (isSyncingWorkerRef.current) return
+      isSyncingWorkerRef.current = true
+
+      try {
+        const nextWalletId = walletStore.getActiveWalletIdSnapshot()
+
+        if (!nextWalletId) {
+          currentWalletIdRef.current = undefined
+          await worker.stop()
+          lightningStore.actions.resetForWalletChange()
+          return
+        }
+
+        if (currentWalletIdRef.current === nextWalletId) return
+
+        // Stop previous worker session before switching wallets
+        await worker.stop()
+        lightningStore.actions.resetForWalletChange()
+
+        currentWalletIdRef.current = nextWalletId
+        await lightningStore.actions.initialize()
+      } finally {
+        isSyncingWorkerRef.current = false
+      }
+    }
+
+    // Initial sync
+    void syncWorkerWithWallet()
+
+    const unsubscribeWallet = walletStore.subscribe(() => {
+      void syncWorkerWithWallet()
+    })
+
+    return () => {
+      unsubscribeWallet()
+    }
+  }, [])
+
+  /**
+   * Handler para mudanças de estado do app (foreground/background).
+   *
+   * Implementa graceful shutdown quando o app vai para background,
+   * aguardando HTLCs pendentes antes de parar o worker.
+   *
+   * @see docs/lightning-worker-consolidation-plan.md - Fase 3.3, 3.4
+   */
+  useEffect(() => {
+    const worker = lightningStore.actions.getWorker()
+
+    // Listener para warnings do worker (ex: HTLCs não resolvidos)
+    const handleWorkerWarning = (warning: { type: string; channels?: string[] }) => {
+      if (warning.type === 'unresolved_htlcs' && warning.channels?.length) {
+        // TODO: Integrar com sistema de notificações do app
+        // Por enquanto, apenas logamos - pode ser expandido para Alert/Toast
+        console.warn(
+          `[AppProvider] ⚠️ ${warning.channels.length} canais têm HTLCs pendentes não resolvidos. ` +
+            'Estes podem expirar on-chain se não forem resolvidos.',
+        )
+        // Disparar evento para UI mostrar notificação
+        dispatch({
+          type: 'SET_ERROR',
+          key: 'htlcWarning',
+          error: `${warning.channels.length} canal(is) com HTLCs pendentes`,
+        })
+      }
+    }
+
+    worker.on('warning', handleWorkerWarning)
+
+    const handleAppStateChange = async (nextState: string) => {
+      if (nextState === 'background') {
+        // Verificar HTLCs pendentes ANTES de parar
+        const pendingCount = worker.countPendingHtlcs()
+        if (pendingCount > 0) {
+          console.warn(
+            `[AppProvider] ⚠️ App indo para background com ${pendingCount} HTLCs pendentes!`,
+          )
+        }
+
+        console.log(
+          '[AppProvider] App going to background, stopping Lightning worker gracefully...',
+        )
+        currentWalletIdRef.current = undefined
+
+        // Graceful shutdown: worker.stop() agora aguarda HTLCs pendentes
+        try {
+          await worker.stop()
+        } catch (error) {
+          console.error('[AppProvider] Error stopping worker:', error)
+        }
+
+        lightningStore.actions.resetForWalletChange()
+        console.log('[AppProvider] Lightning worker stopped')
+      }
+    }
+
+    const subscription = RNAppState.addEventListener('change', handleAppStateChange)
+
+    return () => {
+      worker.off('warning', handleWorkerWarning)
+      subscription.remove()
+    }
+  }, [])
 
   // Memoizar contexto para evitar re-renders desnecessários
   const contextValue = useMemo<AppContextType>(
@@ -493,11 +606,20 @@ export function useNetworkConnection() {
 
 /**
  * Hook para obter o worker Lightning (requer masterKey e network)
+ *
+ * @deprecated Use `lightningStore.getWorker()` ou o hook `useWorkerService()` em vez deste.
+ * Este hook usa networkStore.getLightningWorker que cria instâncias separadas.
+ * Será removido em versão futura.
+ *
+ * @see docs/lightning-worker-consolidation-plan.md - Fase 1.3
  */
 export function useLightningWorker(
   masterKey: Uint8Array,
   network?: 'mainnet' | 'testnet' | 'regtest',
 ) {
+  console.warn(
+    '[useLightningWorker] This hook is deprecated. Use lightningStore.getWorker() or useWorkerService() instead.',
+  )
   const { network: networkStore } = useAppContext()
   return networkStore.getLightningWorker(masterKey, network)
 }

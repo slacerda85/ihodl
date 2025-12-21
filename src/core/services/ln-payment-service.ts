@@ -3,7 +3,7 @@
 // Handles background invoice monitoring and automatic payment fulfillment
 
 import EventEmitter from 'eventemitter3'
-import LightningService from './ln-service'
+import WorkerService from './ln-worker-service'
 import { LightningRepository } from '../repositories/lightning'
 
 // ==========================================
@@ -75,17 +75,17 @@ const DEFAULT_CONFIG: PaymentProcessorConfig = {
 
 export class PaymentProcessorService extends EventEmitter {
   private config: PaymentProcessorConfig
-  private lightningService?: LightningService
+  private workerService?: WorkerService
   private repository: LightningRepository
   private invoiceCheckTimer?: ReturnType<typeof setInterval>
   private paymentQueue: PaymentJob[] = []
   private activePayments: Set<string> = new Set()
   private isRunning: boolean = false
 
-  constructor(lightningService?: LightningService, config: Partial<PaymentProcessorConfig> = {}) {
+  constructor(workerService?: WorkerService, config: Partial<PaymentProcessorConfig> = {}) {
     super()
     this.config = { ...DEFAULT_CONFIG, ...config }
-    this.lightningService = lightningService
+    this.workerService = workerService
     this.repository = new LightningRepository()
   }
 
@@ -145,8 +145,8 @@ export class PaymentProcessorService extends EventEmitter {
     invoice: string,
     priority: 'low' | 'normal' | 'high' = 'normal',
   ): Promise<string> {
-    if (!this.lightningService) {
-      throw new Error('LightningService not available')
+    if (!this.workerService) {
+      throw new Error('Lightning worker service not available')
     }
 
     const jobId = this.generateJobId()
@@ -230,7 +230,7 @@ export class PaymentProcessorService extends EventEmitter {
     console.log('[PaymentProcessor] Starting invoice monitoring...')
 
     this.invoiceCheckTimer = setInterval(async () => {
-      if (!this.isRunning || !this.lightningService) return
+      if (!this.isRunning || !this.workerService) return
 
       try {
         await this.checkInvoices()
@@ -253,10 +253,10 @@ export class PaymentProcessorService extends EventEmitter {
   }
 
   private async checkInvoices(): Promise<void> {
-    if (!this.lightningService) return
+    if (!this.workerService) return
 
     try {
-      const invoices = await this.lightningService.getInvoices()
+      const invoices = await this.workerService.getInvoices()
 
       for (const invoice of invoices) {
         const result: InvoiceMonitorResult = {
@@ -283,7 +283,7 @@ export class PaymentProcessorService extends EventEmitter {
   }
 
   private async processPaymentQueue(): Promise<void> {
-    if (!this.lightningService || this.activePayments.size >= this.config.maxConcurrentPayments) {
+    if (!this.workerService || this.activePayments.size >= this.config.maxConcurrentPayments) {
       return
     }
 
@@ -318,13 +318,13 @@ export class PaymentProcessorService extends EventEmitter {
   }
 
   private async processPayment(job: PaymentJob): Promise<PaymentResult> {
-    if (!this.lightningService || !job.invoice) {
+    if (!this.workerService || !job.invoice) {
       return { success: false, error: 'Invalid payment job' }
     }
 
     try {
       // Decode invoice first
-      const decoded = await this.lightningService.decodeInvoice(job.invoice)
+      const decoded = await this.workerService.decodeInvoice(job.invoice)
 
       // Check if expired
       if (decoded.isExpired) {
@@ -332,7 +332,7 @@ export class PaymentProcessorService extends EventEmitter {
       }
 
       // Attempt payment
-      const paymentResult = await this.lightningService.sendPayment({
+      const paymentResult = await this.workerService.sendPayment({
         invoice: job.invoice,
         maxFee: decoded.amount ? decoded.amount / 100n : undefined, // Max 1% fee
       })
@@ -404,10 +404,10 @@ export class PaymentProcessorService extends EventEmitter {
 // ==========================================
 
 export function createPaymentProcessorService(
-  lightningService?: LightningService,
+  workerService?: WorkerService,
   config?: Partial<PaymentProcessorConfig>,
 ): PaymentProcessorService {
-  return new PaymentProcessorService(lightningService, config)
+  return new PaymentProcessorService(workerService, config)
 }
 
 // ==========================================

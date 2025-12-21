@@ -25,9 +25,9 @@ export interface SecureSocketConfig extends SocketConfig {
  * @returns Promise resolving to a Socket
  */
 export function createTCPSocket(config: SocketConfig): Promise<TcpSocket.Socket> {
-  const { host, port, timeout = 10000 } = config
+  const { host, port, timeout = 20000 } = config
 
-  console.log(`[tcp-socket] Connecting to ${host}:${port}`)
+  console.log(`[${new Date().toISOString()}] [tcp-socket] Connecting to ${host}:${port}`)
 
   return new Promise((resolve, reject) => {
     // Create TCP connection using react-native-tcp-socket API
@@ -51,7 +51,7 @@ export function createTCPSocket(config: SocketConfig): Promise<TcpSocket.Socket>
     const onConnect = () => {
       cleanup()
       socket.setTimeout(0) // Disable timeout after successful connection
-      console.log(`[tcp-socket] Connected to ${host}:${port}`)
+      console.log(`[${new Date().toISOString()}] [tcp-socket] Connected to ${host}:${port}`)
       resolve(socket)
     }
 
@@ -82,7 +82,7 @@ export function createTCPSocket(config: SocketConfig): Promise<TcpSocket.Socket>
  * @returns Promise resolving to a secure TLSSocket
  */
 export function createSecureTLSSocket(config: SecureSocketConfig): Promise<TcpSocket.TLSSocket> {
-  const { host, port, timeout = 10000, ca, cert, key, rejectUnauthorized } = config
+  const { host, port, timeout = 20000, ca, cert, key, rejectUnauthorized } = config
 
   console.log(`[tls-socket] Connecting to ${host}:${port}`)
 
@@ -167,8 +167,12 @@ export function createLightningSocket(
   peer: Peer,
   timeout: number = 10000,
 ): Promise<TcpSocket.Socket> {
-  console.log(`[lightning-socket] Creating Lightning TCP connection to ${peer.host}:${peer.port}`)
-  console.log('[lightning-socket] Note: Encryption provided by BOLT #8 Noise handshake, not TLS')
+  console.log(
+    `[${new Date().toISOString()}] [lightning-socket] Creating Lightning TCP connection to ${peer.host}:${peer.port}`,
+  )
+  console.log(
+    `[${new Date().toISOString()}] [lightning-socket] Note: Encryption provided by BOLT #8 Noise handshake, not TLS`,
+  )
 
   return createTCPSocket({
     host: peer.host,

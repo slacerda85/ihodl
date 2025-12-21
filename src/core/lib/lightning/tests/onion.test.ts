@@ -1,9 +1,10 @@
 // BOLT #4: Onion Routing Protocol - Unit Tests
 
 import {
+  /* 
   createOnionPacket,
   decodeOnionPacket,
-  createHopPayload,
+  createHopPayload, */
   encodeTlvStream,
   decodeTlvStream,
   encodeBigSize,
@@ -13,7 +14,7 @@ import {
   encodeTu32,
   decodeTu32,
   validateOnionPacket,
-  serializeOnionPacket,
+  // serializeOnionPacket,
   // New BOLT #4 payload functions
   decodePayloadTlv,
   validatePayload,
@@ -21,7 +22,7 @@ import {
   createIntermediateHopPayload,
   createBlindedHopPayload,
   createOnionErrorMessage,
-  PayloadTlvType,
+  // PayloadTlvType,
   FailureCode,
   ONION_PACKET_SIZE,
 } from '../onion'

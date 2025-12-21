@@ -108,7 +108,7 @@ export default function PaymentReceiveScreen() {
   const router = useRouter()
   const colorMode = useActiveColorMode()
   const hasActiveChannels = useHasActiveChannels()
-  const { generateInvoice } = useLightningActions()
+  const { generateInvoice, canReceivePayment } = useLightningActions()
   const { openChannelIfNeeded, isAutoEnabled } = useAutoChannelOpening()
   const inboundCapacity = useInboundCapacity()
   const inboundBalance = useInboundBalance()
@@ -132,6 +132,15 @@ export default function PaymentReceiveScreen() {
 
     if (state.amount && amountMsat <= 0n) {
       setState(prev => ({ ...prev, error: 'Valor deve ser maior que 0' }))
+      return
+    }
+
+    const readiness = canReceivePayment()
+    if (!readiness.ok) {
+      setState(prev => ({
+        ...prev,
+        error: readiness.reason || 'Lightning indisponível para receber',
+      }))
       return
     }
 

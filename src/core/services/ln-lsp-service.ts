@@ -5,7 +5,6 @@
  * estimativa de taxas e anúncios de liquidez.
  */
 
-import LightningService from './ln-service'
 import type { Satoshis } from '@/ui/features/lightning/types'
 
 // ==========================================
@@ -73,11 +72,9 @@ export interface LSPChannelOpeningResult {
 // ==========================================
 
 export default class LSPService {
-  private lightningService: LightningService
   private availableLSPs: LiquidityAd[] = []
 
-  constructor(lightningService: LightningService) {
-    this.lightningService = lightningService
+  constructor() {
     this.initializeDefaultLSPs()
   }
 

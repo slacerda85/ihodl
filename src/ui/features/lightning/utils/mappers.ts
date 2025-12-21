@@ -3,7 +3,7 @@
  */
 
 import type { Invoice, Payment } from '../types'
-import type { InvoiceState, PaymentState } from '@/core/services/ln-service'
+import type { InvoiceState, PaymentState } from '@/core/services/ln-types'
 
 /**
  * Mapeia uma InvoiceState do service para Invoice da UI

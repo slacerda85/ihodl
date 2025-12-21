@@ -31,6 +31,7 @@ export interface HandshakeState {
   tempK3?: Sha256
   e?: KeyPair // ephemeral keypair
   s?: KeyPair // static keypair (ls for local, rs for remote)
+  rs?: Point // remote static public key
 }
 
 // Act One Message (50 bytes)

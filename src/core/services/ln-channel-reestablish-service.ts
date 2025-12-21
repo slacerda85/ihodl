@@ -10,6 +10,8 @@ import {
   decodeChannelReestablishMessage,
 } from '@/core/lib/lightning/peer'
 import { getPerCommitmentSecretFromSeed } from '@/core/lib/lightning/revocation'
+import { broadcastTransaction } from '@/core/lib/electrum/client'
+import { getTransport } from './ln-transport-service'
 import { uint8ArrayToHex } from '@/core/lib/utils/utils'
 
 // ==========================================
@@ -69,6 +71,9 @@ export class ChannelReestablishService {
       this.stats.attempted += 1
       this.stats.lastRunAt = Date.now()
 
+      // Ensure we have transport connectivity before proceeding
+      this.requireConnectedTransport(nodeId)
+
       // Load channel data from repository
       const channelIdHex = uint8ArrayToHex(channelId)
       const channelData = await this.repository.findChannelById(channelIdHex)
@@ -101,8 +106,8 @@ export class ChannelReestablishService {
 
       // Send channel_reestablish message
       const message = encodeChannelReestablishMessage(reestablishData)
-      // TODO: Send message via transport service
-      console.log('Sending channel_reestablish to', nodeId, message)
+      await this.sendMessageToPeer(nodeId, message)
+      console.log('Sending channel_reestablish to', nodeId, uint8ArrayToHex(channelId))
 
       // Wait for peer's response (this would be handled by the peer message handler)
       // For now, assume success and update state
@@ -137,6 +142,35 @@ export class ChannelReestablishService {
       lastErrors: [],
       lastRunAt: undefined,
     }
+  }
+
+  private requireConnectedTransport(nodeId: string) {
+    const transport = getTransport()
+    if (!transport.isConnected) {
+      throw new Error(`Transport not connected; cannot communicate with ${nodeId}`)
+    }
+    return transport
+  }
+
+  private async sendMessageToPeer(nodeId: string, payload: Uint8Array): Promise<void> {
+    const transport = this.requireConnectedTransport(nodeId)
+
+    try {
+      transport.sendMessage(payload)
+    } catch (error) {
+      console.error('Failed to send channel_reestablish message to', nodeId, error)
+      throw error instanceof Error ? error : new Error('Failed to send channel_reestablish message')
+    }
+  }
+
+  private extractCommitmentTxHex(channel: any): string {
+    if (typeof channel.commitmentTxHex === 'string') return channel.commitmentTxHex
+    if (typeof channel.localCommitmentTxHex === 'string') return channel.localCommitmentTxHex
+    if (typeof channel.localCommitmentTx === 'string') return channel.localCommitmentTx
+    if (channel.localCommitmentTx instanceof Uint8Array)
+      return uint8ArrayToHex(channel.localCommitmentTx)
+
+    throw new Error('Missing commitment transaction for force close; store commitmentTxHex first')
   }
 
   /**
@@ -398,8 +432,8 @@ export class ChannelReestablishService {
     // Send our reestablish response
     const responseData = await this.prepareReestablishData(channelData)
     const response = encodeChannelReestablishMessage(responseData)
-    // TODO: Send message via transport service
-    console.log('Sending reestablish response to', nodeId, response)
+    await this.sendMessageToPeer(nodeId, response)
+    console.log('Sending reestablish response to', nodeId, channelIdHex)
 
     // Update channel state
     // TODO: Implement updateChannelState in repository
@@ -489,32 +523,31 @@ export class ChannelReestablishService {
    * 3. Update channel state to closed
    */
   private async initiateForceClose(channelId: ChannelId): Promise<void> {
-    console.log('Initiating force close for channel', uint8ArrayToHex(channelId))
+    const channelIdHex = uint8ArrayToHex(channelId)
+    console.log('Initiating force close for channel', channelIdHex)
 
     try {
+      this.requireConnectedTransport(channelIdHex)
+
       // Get channel state
-      const channel = this.repository.findChannelById(uint8ArrayToHex(channelId))
+      const channel = this.repository.findChannelById(channelIdHex)
       if (!channel) {
         throw new Error('Channel not found for force close')
       }
 
-      // In a real implementation, this would:
-      // 1. Sign and broadcast the commitment transaction
-      // 2. Handle any pending HTLCs
-      // 3. Update channel state to force-closed
-      // 4. Notify the peer
-
-      // For now, we'll just log and update the channel state
-      console.log('Would broadcast commitment transaction for channel', uint8ArrayToHex(channelId))
+      const commitmentTxHex = this.extractCommitmentTxHex(channel)
+      const txid = await broadcastTransaction(commitmentTxHex)
+      console.log('Broadcasted commitment transaction for channel', channelIdHex, txid)
 
       // Update channel state to indicate force close initiated
       const updatedChannel = {
         ...channel,
         state: 'force_closing',
+        commitmentTxid: channel.commitmentTxid ?? txid,
+        lastActivity: Date.now(),
       }
       this.repository.saveChannel(updatedChannel)
 
-      // TODO: Implement actual transaction broadcasting
       // TODO: Handle HTLC resolution
       // TODO: Send error message to peer
     } catch (error) {

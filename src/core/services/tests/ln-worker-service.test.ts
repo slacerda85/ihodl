@@ -11,12 +11,18 @@ jest.mock('../../lib/electrum/client', () => ({
 
 jest.mock('../ln-electrum-watcher-service', () => ({
   __esModule: true,
-  createElectrumWatcherService: jest.fn(() => ({ start: jest.fn() })),
+  createElectrumWatcherService: jest.fn(() => ({
+    start: jest.fn(),
+    getConfirmations: jest.fn(async () => 1),
+  })),
 }))
 
 jest.mock('../ln-channel-onchain-monitor-service', () => ({
   __esModule: true,
-  createChannelOnChainMonitorService: jest.fn(() => ({ start: jest.fn() })),
+  createChannelOnChainMonitorService: jest.fn(() => ({
+    start: jest.fn(),
+    onChannelEvent: jest.fn(() => jest.fn()),
+  })),
 }))
 
 jest.mock('../ln-watchtower-service', () => ({
@@ -131,6 +137,9 @@ jest.mock('../../repositories/lightning', () => ({
       'channel-1': { channelId: 'abcd', nodeId: 'node-1' },
     })),
     findAllPeers: jest.fn(() => []),
+    findChannelById: jest.fn(() => undefined),
+    loadInitState: jest.fn(() => undefined),
+    saveInitState: jest.fn(() => undefined),
   })),
 }))
 
@@ -242,5 +251,57 @@ describe('WorkerService initialization and lifecycle', () => {
     expect(readiness.electrumReady).toBe(true)
     expect(readiness.peerConnected).toBe(true)
     expect(readiness.gossipSynced).toBe(true)
+  })
+
+  it('handles multiple simultaneous initialize() calls with mutex (only one runs)', async () => {
+    const service = new WorkerService()
+    let initCount = 0
+
+    // Spy on doInitialize to count actual executions
+    const originalDoInit = (service as any).doInitialize.bind(service)
+    jest.spyOn(service as any, 'doInitialize').mockImplementation(async (...args: any[]) => {
+      initCount++
+      // Simulate some async work
+      await new Promise(resolve => setTimeout(resolve, 50))
+      return { success: true, message: 'Initialized' }
+    })
+
+    // Start 3 concurrent initializations
+    const promises = [
+      service.initialize(MASTER_KEY, 'wallet-concurrent'),
+      service.initialize(MASTER_KEY, 'wallet-concurrent'),
+      service.initialize(MASTER_KEY, 'wallet-concurrent'),
+    ]
+
+    const results = await Promise.all(promises)
+
+    // All should succeed
+    expect(results.every(r => r.success)).toBe(true)
+
+    // But doInitialize should only be called ONCE due to mutex
+    expect(initCount).toBe(1)
+  })
+
+  it('allows new initialize() after previous completes', async () => {
+    const service = new WorkerService()
+    let initCount = 0
+
+    jest.spyOn(service as any, 'doInitialize').mockImplementation(async () => {
+      initCount++
+      await new Promise(resolve => setTimeout(resolve, 10))
+      return { success: true, message: 'Initialized' }
+    })
+
+    // First init
+    await service.initialize(MASTER_KEY, 'wallet-1')
+    expect(initCount).toBe(1)
+
+    // Reset running state (simulate stop)
+    ;(service as any).isRunning = false
+    ;(service as any).initializationPromise = null
+
+    // Second init should run again
+    await service.initialize(MASTER_KEY, 'wallet-2')
+    expect(initCount).toBe(2)
   })
 })

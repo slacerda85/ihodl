@@ -279,10 +279,10 @@ export class RoutingGraph {
         }
 
         // Use combined metric: prioritize lower fees, then lower CLTV
-        const neighborFeeDist = feeDistances.get(neighborKey)!
-        const neighborCltvDist = cltvDistances.get(neighborKey)!
+        // const neighborFeeDist = feeDistances.get(neighborKey)!
+        // const neighborCltvDist = cltvDistances.get(neighborKey)!
 
-        const currentCombined = distances.get(current)!
+        // const currentCombined = distances.get(current)!
         const newCombined = newFeeDist + BigInt(newCltvDist * 10) // Smaller weight for CLTV
         const neighborCombined = distances.get(neighborKey)!
 

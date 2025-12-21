@@ -70,6 +70,7 @@ export interface MonitorOptions {
   pollIntervalMs?: number
   onStatusChange?: TxStatusCallback
   onNewTx?: NewTxCallback
+  poll?: () => Promise<void>
 }
 
 // ==========================================
@@ -213,6 +214,7 @@ export class LightningElectrumManager {
 
     return () => {
       this.monitoredTxs.delete(fundingTxid)
+      this.maybeStopPolling()
       console.log(`[lightning-electrum] Stopped monitoring funding tx: ${fundingTxid}`)
     }
   }
@@ -485,6 +487,7 @@ export class LightningElectrumManager {
 
     return () => {
       this.monitoredAddresses.delete(address)
+      this.maybeStopPolling()
       console.log(`[lightning-electrum] Stopped monitoring address: ${address}`)
     }
   }
@@ -525,7 +528,7 @@ export class LightningElectrumManager {
     // Adicionar ao polling
     const options: MonitorOptions = {
       pollIntervalMs: DEFAULT_POLL_INTERVAL_MS,
-      onStatusChange: async () => {
+      poll: async () => {
         await checkSpent()
       },
     }
@@ -535,6 +538,7 @@ export class LightningElectrumManager {
 
     return () => {
       this.monitoredTxs.delete(outpoint)
+      this.maybeStopPolling()
       console.log(`[lightning-electrum] Stopped monitoring funding output: ${outpoint}`)
     }
   }
@@ -638,28 +642,48 @@ export class LightningElectrumManager {
    * @returns true se válido
    */
   verifyMerkleProof(txid: string, merkle: string[], pos: number, merkleRoot: string): boolean {
-    let hash = hexToUint8Array(txid)
-
-    for (let i = 0; i < merkle.length; i++) {
-      const sibling = hexToUint8Array(merkle[i])
-
-      // Determinar ordem de concatenação baseado na posição
-      const isLeft = (pos >> i) & 1
-
-      const concat = new Uint8Array(64)
-      if (isLeft) {
-        concat.set(sibling, 0)
-        concat.set(hash, 32)
-      } else {
-        concat.set(hash, 0)
-        concat.set(sibling, 32)
+    try {
+      const isHex = (value: string): boolean =>
+        value.length % 2 === 0 && /^[0-9a-fA-F]*$/.test(value)
+      if (!isHex(txid) || !isHex(merkleRoot)) {
+        console.warn('[lightning-electrum] verifyMerkleProof invalid txid/root hex')
+        return false
+      }
+      if (!Array.isArray(merkle) || merkle.some(hash => !isHex(hash))) {
+        console.warn('[lightning-electrum] verifyMerkleProof invalid merkle array')
+        return false
+      }
+      if (!Number.isInteger(pos) || pos < 0) {
+        return false
       }
 
-      // Double SHA256
-      hash = sha256(sha256(concat))
-    }
+      let hash = hexToUint8Array(txid)
 
-    return uint8ArrayToHex(hash) === merkleRoot
+      for (let i = 0; i < merkle.length; i++) {
+        const sibling = hexToUint8Array(merkle[i])
+
+        // Determinar ordem de concatenação baseado na posição
+        const isLeft = (pos >> i) & 1
+
+        const concat = new Uint8Array(64)
+        if (isLeft) {
+          concat.set(sibling, 0)
+          concat.set(hash, 32)
+        } else {
+          concat.set(hash, 0)
+          concat.set(sibling, 32)
+        }
+
+        // Double SHA256
+        hash = sha256(sha256(concat))
+      }
+
+      return uint8ArrayToHex(hash) === merkleRoot
+    } catch (error) {
+      // Para ambientes de teste com dados não-hex, retornar false ao invés de lançar
+      console.warn('[lightning-electrum] verifyMerkleProof invalid input:', error)
+      return false
+    }
   }
 
   // ==========================================
@@ -705,15 +729,19 @@ export class LightningElectrumManager {
       await this.updateBlockHeight()
 
       // Verificar transações monitoradas
-      for (const [txid, options] of this.monitoredTxs) {
-        if (txid.includes(':')) {
-          // É um outpoint, não um txid
+      for (const [identifier, options] of this.monitoredTxs) {
+        if (options.poll) {
+          await options.poll()
           continue
         }
 
-        const status = await this.getTxStatus(txid)
+        if (identifier.includes(':')) {
+          continue
+        }
+
+        const status = await this.getTxStatus(identifier)
         if (options.onStatusChange) {
-          options.onStatusChange(txid, status)
+          options.onStatusChange(identifier, status)
         }
       }
 
@@ -743,6 +771,15 @@ export class LightningElectrumManager {
    */
   isActive(): boolean {
     return this.isConnected
+  }
+
+  /**
+   * Interrompe polling quando não há itens monitorados
+   */
+  private maybeStopPolling(): void {
+    if (this.monitoredTxs.size === 0 && this.monitoredAddresses.size === 0) {
+      this.stopPolling()
+    }
   }
 
   /**

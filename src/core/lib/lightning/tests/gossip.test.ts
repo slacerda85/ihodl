@@ -11,13 +11,7 @@
  * Reference: https://github.com/lightning/bolts/blob/master/07-routing-gossip.md
  */
 
-import {
-  GossipSync,
-  GossipSyncState,
-  createGossipSync,
-  GossipPeerInterface,
-  GossipSyncOptions,
-} from '../gossip'
+import { GossipSync, GossipSyncState, createGossipSync, GossipPeerInterface } from '../gossip'
 import {
   GossipMessageType,
   EncodingType,
@@ -30,15 +24,19 @@ import {
   ChannelFlag,
   MessageFlag,
 } from '@/core/models/lightning/p2p'
-import { uint8ArrayToHex, hexToUint8Array } from '@/core/lib/utils/utils'
 import { sha256, signMessage } from '@/core/lib/crypto/crypto'
 import * as secp256k1 from 'secp256k1'
 import * as Crypto from 'expo-crypto'
+import { randomFillSync } from 'crypto'
 
-// Helper: Create test chain hash
-function createTestChainHash(): Uint8Array {
-  return BITCOIN_CHAIN_HASH
-}
+// Lightweight Crypto mock to avoid heavy Expo/Node bridges during Jest
+jest.mock('expo-crypto', () => {
+  return {
+    getRandomValues: (arr: Uint8Array) => randomFillSync(arr),
+  }
+})
+
+jest.setTimeout(20000)
 
 // Helper: Create test short channel ID
 function createTestShortChannelId(
@@ -47,7 +45,7 @@ function createTestShortChannelId(
   outputIndex: number,
 ): Uint8Array {
   const scid = new Uint8Array(8)
-  const view = new DataView(scid.buffer)
+  // const view = new DataView(scid.buffer)
   // Pack block_height (3 bytes) | tx_index (3 bytes) | output_index (2 bytes)
   scid[0] = (blockHeight >> 16) & 0xff
   scid[1] = (blockHeight >> 8) & 0xff
@@ -662,7 +660,7 @@ describe('GossipSync State Management', () => {
 
   it('should track known channels', () => {
     const scid1 = createTestShortChannelId(700000, 1, 0)
-    const scid2 = createTestShortChannelId(700000, 2, 1)
+    // const scid2 = createTestShortChannelId(700000, 2, 1)
 
     // Initially no channels known
     expect(gossipSync.getKnownChannelCount()).toBe(0)

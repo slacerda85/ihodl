@@ -102,6 +102,7 @@ const STORAGE_KEYS = {
   LAST_BACKUP_TIME: 'last_backup_time',
   LAST_PEER_UPDATE: 'last_peer_update',
   PEER_STATS: 'peer_stats',
+  INIT_STATE: 'init_state',
 } as const
 
 // Watchtower types
@@ -399,6 +400,24 @@ export class LightningRepository implements LightningRepositoryInterface {
   }
 
   // Utility methods
+  saveInitState(state: any): void {
+    try {
+      lightningStorage.set(STORAGE_KEYS.INIT_STATE, JSON.stringify(state))
+    } catch (error) {
+      console.error('[lightning-repo] Failed to save init state:', error)
+    }
+  }
+
+  loadInitState(): any | null {
+    try {
+      const data = lightningStorage.getString(STORAGE_KEYS.INIT_STATE)
+      return data ? JSON.parse(data) : null
+    } catch (error) {
+      console.error('[lightning-repo] Failed to load init state:', error)
+      return null
+    }
+  }
+
   clearAll(): void {
     lightningStorage.clearAll()
   }

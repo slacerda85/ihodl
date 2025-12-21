@@ -6,13 +6,23 @@ import { useActiveColorMode, useConnection } from '@/ui/features/app-provider'
 import { useAppContext } from '@/ui/features/app-provider/AppProvider'
 import { useLightningReadiness } from '@/ui/features/lightning/hooks/useLightningReadiness'
 import { useLightningDebugSnapshot } from '@/ui/features/lightning/hooks/useLightningDebugSnapshot'
+import { useBackgroundGossipSync } from '@/ui/features/lightning/hooks/useBackgroundGossipSync'
 import type { LightningStoreState } from '../store'
+
+type InitPhase = {
+  id: string
+  label: string
+  status: 'pending' | 'running' | 'ok' | 'error'
+  detail?: string
+}
 
 /**
  * LightningDebugPanel
  *
  * Dev-only panel to visualize Lightning initialization/telemetry.
- * Shows readiness, connectivity, channel counts, and service status in flow order.
+ * Shows initialization flow based on the correct boot graph:
+ *
+ * 1. Load State → 2. Electrum → 3. Peers → 4. Channels → 5. Gossip → 6. Watcher → 7. READY
  */
 export default function LightningDebugPanel() {
   const isDev = __DEV__
@@ -22,11 +32,14 @@ export default function LightningDebugPanel() {
   const { readinessState, readinessLevel } = useLightningReadiness()
   const debug = useLightningDebugSnapshot()
   const { lightning } = useAppContext()
+  const { progress: gossipProgress, state: gossipState } = useBackgroundGossipSync()
 
   const lightningState = useSyncExternalStore(
     lightning.subscribe,
     lightning.getSnapshot,
   ) as LightningStoreState
+
+  const workerMetrics = useMemo(() => debug.workerMetrics ?? {}, [debug.workerMetrics])
 
   const channelStats = useMemo(() => {
     const total = lightningState.channels.length
@@ -34,38 +47,126 @@ export default function LightningDebugPanel() {
     return { total, active }
   }, [lightningState.channels])
 
-  const readinessBlocks = useMemo(() => {
+  const graphStats = useMemo(() => {
+    const overall = gossipProgress?.overall ?? 0
+    const percent = Math.round(overall * 100)
+    return {
+      percent,
+      nodes: gossipProgress?.nodesDiscovered ?? 0,
+      channels: gossipProgress?.channelsDiscovered ?? 0,
+    }
+  }, [gossipProgress])
+
+  // Determine current phase based on worker status
+  const currentPhase = debug.workerStatus?.phase ?? 'idle'
+
+  // Build initialization flow phases following the correct boot graph
+  const initPhases: InitPhase[] = useMemo(() => {
+    const isElectrumOk = readinessState.isTransportConnected || connection.electrum.connected
+    const isPeerOk = readinessState.isPeerConnected ?? false
+    const isChannelsOk = readinessState.isChannelReestablished ?? false
+    const isGossipOk =
+      (readinessState.isGossipSynced ?? false) || (workerMetrics.gossipCompleted ?? false)
+    const isWatcherOk = readinessState.isWatcherRunning ?? false
+
+    // Helper to determine status based on sequence
+    const getStatus = (
+      isOk: boolean,
+      prevOk: boolean,
+      phaseKeywords: string[],
+    ): 'pending' | 'running' | 'ok' | 'error' => {
+      if (isOk) return 'ok'
+      if (!prevOk) return 'pending'
+      // Check if current phase matches any keyword
+      const phaseStr = currentPhase.toLowerCase()
+      if (phaseKeywords.some(kw => phaseStr.includes(kw))) return 'running'
+      return 'pending'
+    }
+
     return [
-      { label: 'Wallet loaded', value: readinessState.isWalletLoaded },
-      { label: 'Transport connected', value: readinessState.isTransportConnected },
-      { label: 'Peer connected', value: readinessState.isPeerConnected },
-      { label: 'Channels reestablished', value: readinessState.isChannelReestablished },
-      { label: 'Gossip synced / trampoline ready', value: readinessState.isGossipSynced },
-      { label: 'Watcher running', value: readinessState.isWatcherRunning },
+      {
+        id: 'load',
+        label: '1. Load State',
+        status: readinessState.isWalletLoaded ? 'ok' : 'running',
+        detail: readinessState.isWalletLoaded ? 'Wallet carregada' : 'Carregando...',
+      },
+      {
+        id: 'electrum',
+        label: '2. Electrum Connect',
+        status: getStatus(isElectrumOk, readinessState.isWalletLoaded ?? false, [
+          'electrum',
+          'connect',
+        ]),
+        detail: isElectrumOk ? `height ${workerMetrics.electrumHeight ?? '-'}` : 'Conectando...',
+      },
+      {
+        id: 'peers',
+        label: '3. Peer Connect (BOLT #8)',
+        status: getStatus(isPeerOk, isElectrumOk, ['peer', 'noise', 'handshake']),
+        detail: isPeerOk
+          ? `${workerMetrics.connectedPeers ?? 0} peer(s) conectado(s)`
+          : 'Handshake Noise XK...',
+      },
+      {
+        id: 'channels',
+        label: '4. Channel Reestablish',
+        status: getStatus(isChannelsOk, isPeerOk, ['channel', 'reestablish']),
+        detail: isChannelsOk
+          ? `${channelStats.active}/${channelStats.total} ativos`
+          : channelStats.total > 0
+            ? 'Reestabelecendo...'
+            : 'Sem canais',
+      },
+      {
+        id: 'gossip',
+        label: '5. Gossip Sync',
+        status: getStatus(isGossipOk, isChannelsOk || channelStats.total === 0, [
+          'gossip',
+          'routing',
+          'graph',
+        ]),
+        detail: isGossipOk
+          ? `${graphStats.nodes} nós · ${graphStats.channels} canais`
+          : `${graphStats.percent}% sincronizado`,
+      },
+      {
+        id: 'watcher',
+        label: '6. Watchtower Start',
+        status: getStatus(isWatcherOk, isGossipOk, ['watcher', 'monitor', 'watchtower']),
+        detail: isWatcherOk ? 'Rodando' : 'Iniciando...',
+      },
+      {
+        id: 'ready',
+        label: '7. READY',
+        status:
+          isWatcherOk && isGossipOk && (isChannelsOk || channelStats.total === 0)
+            ? 'ok'
+            : 'pending',
+        detail:
+          isWatcherOk && isGossipOk && (isChannelsOk || channelStats.total === 0)
+            ? ReadinessLevelLabel[readinessLevel] || 'Pronto'
+            : 'Aguardando etapas anteriores',
+      },
     ]
-  }, [readinessState])
+  }, [
+    readinessState,
+    connection.electrum.connected,
+    workerMetrics,
+    channelStats,
+    graphStats,
+    currentPhase,
+    readinessLevel,
+  ])
 
-  const initFlow = [
-    { step: 'Electrum connect', ok: connection.electrum.connected },
-    { step: 'Peer connectivity', ok: readinessState.isPeerConnected },
-    { step: 'Channel reestablish', ok: readinessState.isChannelReestablished },
-    { step: 'Gossip / trampoline', ok: readinessState.isGossipSynced },
-    { step: 'Watcher', ok: readinessState.isWatcherRunning },
-  ]
-
-  const workerMetrics = useMemo(() => debug.workerMetrics ?? {}, [debug.workerMetrics])
-  const retryMetrics = useMemo(
-    () => ({
-      electrumAttempts: workerMetrics.electrumAttempts ?? 0,
-      electrumFailures: workerMetrics.electrumFailures ?? 0,
-      peerStartAttempts: workerMetrics.peerStartAttempts ?? 0,
-      peerStartFailures: workerMetrics.peerStartFailures ?? 0,
-      disconnectCount: workerMetrics.disconnectCount ?? 0,
-      gossipSyncAttempts: workerMetrics.gossipSyncAttempts ?? 0,
-      gossipTimeouts: workerMetrics.gossipTimeouts ?? 0,
-    }),
-    [workerMetrics],
-  )
+  // Live logger message
+  const liveLogger = () => {
+    if (debug.workerStatus?.message) return debug.workerStatus.message
+    const runningPhase = initPhases.find(p => p.status === 'running')
+    if (runningPhase) return runningPhase.detail ?? runningPhase.label
+    const allOk = initPhases.every(p => p.status === 'ok')
+    if (allOk) return 'Worker ocioso - pronto para operações'
+    return 'Inicializando Lightning...'
+  }
 
   const palette = styles[colorMode]
 
@@ -73,120 +174,115 @@ export default function LightningDebugPanel() {
 
   return (
     <View style={palette.card}>
-      <Text style={palette.title}>Lightning Debug (dev)</Text>
+      <Text style={palette.title}>⚡ Lightning Debug</Text>
 
-      <View style={palette.rowBetween}>
-        <Text style={palette.sectionTitle}>Worker</Text>
-        <Text style={palette.value}>{debug.workerStatus?.phase ?? '-'}</Text>
+      {/* Live Logger */}
+      <View style={palette.logger}>
+        <Text style={palette.loggerLabel}>Live Logger</Text>
+        <Text style={palette.loggerText}>{liveLogger()}</Text>
       </View>
 
+      {/* Initialization Flow */}
       <View style={palette.section}>
-        <Text style={palette.line}>Init phase: {debug.workerStatus?.phase ?? '-'}</Text>
-        <Text style={palette.line}>Progress: {debug.workerStatus?.progress ?? 0}%</Text>
-        <Text style={palette.line}>Message: {debug.workerStatus?.message ?? '-'}</Text>
-      </View>
-
-      <View style={palette.rowBetween}>
-        <Text style={palette.label}>Readiness</Text>
-        <Text style={palette.value}>{ReadinessLevelLabel[readinessLevel] || readinessLevel}</Text>
-      </View>
-
-      <View style={palette.section}>
-        <Text style={palette.sectionTitle}>Connectivity</Text>
-        <Text style={palette.line}>
-          Electrum: {connection.electrum.connected ? 'connected' : 'offline'}
-        </Text>
-        <Text style={palette.line}>
-          Peer:{' '}
-          {connection.lightning.connected || readinessState.isPeerConnected
-            ? 'connected'
-            : 'offline'}
-        </Text>
-        <Text style={palette.line}>PeerId: {connection.lightning.peerId ?? '-'}</Text>
-      </View>
-
-      <View style={palette.section}>
-        <Text style={palette.sectionTitle}>Channels & Graph</Text>
-        <Text style={palette.line}>
-          Channels: {channelStats.active}/{channelStats.total} active
-        </Text>
-        <Text style={palette.line}>Invoices: {lightningState.invoices.length}</Text>
-        <Text style={palette.line}>Payments: {lightningState.payments.length}</Text>
-        <Text style={palette.line}>Electrum height: {workerMetrics.electrumHeight ?? '-'}</Text>
-        <Text style={palette.line}>Peers: {workerMetrics.connectedPeers ?? '-'}</Text>
-        <Text style={palette.line}>
-          Gossip complete: {workerMetrics.gossipCompleted ? 'yes' : 'no'}
-        </Text>
-      </View>
-
-      <View style={palette.section}>
-        <Text style={palette.sectionTitle}>Retries & Errors</Text>
-        <Text style={palette.line}>
-          Electrum attempts/failures: {retryMetrics.electrumAttempts}/
-          {retryMetrics.electrumFailures}
-        </Text>
-        <Text style={palette.line}>
-          Peer start attempts/failures: {retryMetrics.peerStartAttempts}/
-          {retryMetrics.peerStartFailures}
-        </Text>
-        <Text style={palette.line}>Peer disconnects: {retryMetrics.disconnectCount}</Text>
-        <Text style={palette.line}>
-          Gossip attempts/timeouts: {retryMetrics.gossipSyncAttempts}/{retryMetrics.gossipTimeouts}
-        </Text>
-      </View>
-
-      <View style={palette.section}>
-        <Text style={palette.sectionTitle}>Readiness Flags</Text>
-        {readinessBlocks.map(item => (
-          <View key={item.label} style={palette.rowBetween}>
-            <Text style={palette.label}>{item.label}</Text>
-            <Text style={[palette.value, item.value ? palette.ok : palette.warn]}>
-              {item.value ? 'ok' : 'pending'}
-            </Text>
+        <Text style={palette.sectionTitle}>Fluxo de Inicialização</Text>
+        {initPhases.map(phase => (
+          <View key={phase.id} style={palette.phaseRow}>
+            <View style={palette.phaseLeft}>
+              <Text style={[palette.phaseIcon, palette[phase.status]]}>
+                {phase.status === 'ok' ? '✓' : phase.status === 'running' ? '◌' : '○'}
+              </Text>
+              <Text style={[palette.phaseLabel, phase.status === 'ok' && palette.phaseLabelDone]}>
+                {phase.label}
+              </Text>
+            </View>
+            <Text style={[palette.phaseDetail, palette[phase.status]]}>{phase.detail}</Text>
           </View>
         ))}
       </View>
 
+      {/* Quick Stats */}
       <View style={palette.section}>
-        <Text style={palette.sectionTitle}>Init Flow</Text>
-        {initFlow.map(step => (
-          <View key={step.step} style={palette.rowBetween}>
-            <Text style={palette.label}>{step.step}</Text>
-            <Text style={[palette.value, step.ok ? palette.ok : palette.warn]}>
-              {step.ok ? 'done' : 'waiting'}
-            </Text>
+        <Text style={palette.sectionTitle}>Status Rápido</Text>
+        <View style={palette.statsGrid}>
+          <View style={palette.statBox}>
+            <Text style={palette.statValue}>{workerMetrics.electrumHeight ?? '-'}</Text>
+            <Text style={palette.statLabel}>Block Height</Text>
           </View>
-        ))}
+          <View style={palette.statBox}>
+            <Text style={palette.statValue}>{workerMetrics.connectedPeers ?? 0}</Text>
+            <Text style={palette.statLabel}>Peers</Text>
+          </View>
+          <View style={palette.statBox}>
+            <Text style={palette.statValue}>
+              {channelStats.active}/{channelStats.total}
+            </Text>
+            <Text style={palette.statLabel}>Canais</Text>
+          </View>
+          <View style={palette.statBox}>
+            <Text style={palette.statValue}>{lightningState.payments.length}</Text>
+            <Text style={palette.statLabel}>Pagamentos</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Readiness Level */}
+      <View style={palette.section}>
+        <View style={palette.rowBetween}>
+          <Text style={palette.label}>Readiness Level</Text>
+          <Text style={[palette.value, palette[readinessLevel >= 3 ? 'ok' : 'pending']]}>
+            {ReadinessLevelLabel[readinessLevel] || readinessLevel}
+          </Text>
+        </View>
+        <View style={palette.rowBetween}>
+          <Text style={palette.label}>Worker Phase</Text>
+          <Text style={palette.value}>{currentPhase}</Text>
+        </View>
+        <View style={palette.rowBetween}>
+          <Text style={palette.label}>Gossip State</Text>
+          <Text style={palette.value}>{gossipState?.toLowerCase?.() ?? '-'}</Text>
+        </View>
       </View>
     </View>
   )
 }
 
-const ReadinessLevelLabel: Record<string, string> = {
+const ReadinessLevelLabel: Record<string | number, string> = {
   NOT_READY: 'Not ready',
   CAN_RECEIVE: 'Can receive',
   CAN_SEND: 'Can send',
   FULLY_READY: 'Fully ready',
-  '0': 'Not ready',
-  '1': 'Can receive',
-  '2': 'Can send',
-  '3': 'Fully ready',
+  0: 'Not ready',
+  1: 'Can receive',
+  2: 'Can send',
+  3: 'Fully ready',
 }
 
 type Palette = {
   card: ViewStyle
   title: TextStyle
+  logger: ViewStyle
+  loggerLabel: TextStyle
+  loggerText: TextStyle
   section: ViewStyle
   sectionTitle: TextStyle
   row: ViewStyle
   rowBetween: ViewStyle
+  phaseRow: ViewStyle
+  phaseLeft: ViewStyle
+  phaseIcon: TextStyle
+  phaseLabel: TextStyle
+  phaseLabelDone: TextStyle
+  phaseDetail: TextStyle
+  statsGrid: ViewStyle
+  statBox: ViewStyle
+  statValue: TextStyle
+  statLabel: TextStyle
   label: TextStyle
   value: TextStyle
-  line: TextStyle
-  badge: ViewStyle
-  badgeText: TextStyle
   ok: TextStyle
-  warn: TextStyle
+  running: TextStyle
+  pending: TextStyle
+  error: TextStyle
 }
 
 const base: Palette = {
@@ -199,55 +295,117 @@ const base: Palette = {
   title: {
     fontSize: 18,
     fontWeight: '700' as TextStyle['fontWeight'],
-    marginBottom: 8,
+    marginBottom: 12,
+  },
+  logger: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  loggerLabel: {
+    fontSize: 11,
+    fontWeight: '600' as TextStyle['fontWeight'],
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  loggerText: {
+    fontSize: 14,
+    fontWeight: '500' as TextStyle['fontWeight'],
   },
   section: {
-    marginTop: 12,
+    marginTop: 16,
   },
   sectionTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700' as TextStyle['fontWeight'],
-    marginBottom: 6,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 4,
   },
   rowBetween: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginTop: 6,
+  },
+  phaseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    marginBottom: 4,
+  },
+  phaseLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  phaseIcon: {
+    fontSize: 16,
+    fontWeight: '700' as TextStyle['fontWeight'],
+    width: 20,
+    textAlign: 'center',
+  },
+  phaseLabel: {
+    fontSize: 13,
+    fontWeight: '500' as TextStyle['fontWeight'],
+  },
+  phaseLabelDone: {
+    opacity: 0.7,
+  },
+  phaseDetail: {
+    fontSize: 12,
+    fontWeight: '400' as TextStyle['fontWeight'],
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     marginTop: 4,
   },
-  label: {
-    fontSize: 14,
-    color: colors.textSecondary.light,
-  },
-  value: {
-    fontSize: 14,
-    color: colors.text.light,
-  },
-  line: {
-    fontSize: 14,
-    color: colors.text.light,
-    marginTop: 2,
-  },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+  statBox: {
+    flex: 1,
+    minWidth: 70,
+    alignItems: 'center',
+    paddingVertical: 10,
     borderRadius: 8,
   },
-  badgeText: {
-    fontSize: 12,
+  statValue: {
+    fontSize: 18,
     fontWeight: '700' as TextStyle['fontWeight'],
+  },
+  statLabel: {
+    fontSize: 11,
+    fontWeight: '500' as TextStyle['fontWeight'],
+    marginTop: 2,
+  },
+  label: {
+    fontSize: 13,
+  },
+  value: {
+    fontSize: 13,
+    fontWeight: '500' as TextStyle['fontWeight'],
   },
   ok: {
     color: colors.success,
   },
-  warn: {
-    color: colors.warning,
+  running: {
+    color: colors.primary,
+  },
+  pending: {
+    color: colors.textSecondary.light,
+  },
+  error: {
+    color: colors.error,
   },
 }
 
@@ -262,8 +420,46 @@ const light = StyleSheet.create<Palette>({
     ...base.title,
     color: colors.text.light,
   },
+  logger: {
+    ...base.logger,
+    backgroundColor: alpha(colors.primary, 0.08),
+    borderColor: alpha(colors.primary, 0.15),
+    borderWidth: 1,
+  },
+  loggerLabel: {
+    ...base.loggerLabel,
+    color: colors.textSecondary.light,
+  },
+  loggerText: {
+    ...base.loggerText,
+    color: colors.text.light,
+  },
   sectionTitle: {
     ...base.sectionTitle,
+    color: colors.textSecondary.light,
+  },
+  phaseRow: {
+    ...base.phaseRow,
+    backgroundColor: alpha(colors.textSecondary.light, 0.05),
+  },
+  phaseLabel: {
+    ...base.phaseLabel,
+    color: colors.text.light,
+  },
+  phaseDetail: {
+    ...base.phaseDetail,
+    color: colors.textSecondary.light,
+  },
+  statBox: {
+    ...base.statBox,
+    backgroundColor: alpha(colors.textSecondary.light, 0.08),
+  },
+  statValue: {
+    ...base.statValue,
+    color: colors.text.light,
+  },
+  statLabel: {
+    ...base.statLabel,
     color: colors.textSecondary.light,
   },
   label: {
@@ -274,25 +470,9 @@ const light = StyleSheet.create<Palette>({
     ...base.value,
     color: colors.text.light,
   },
-  line: {
-    ...base.line,
-    color: colors.text.light,
-  },
-  badge: {
-    ...base.badge,
-    backgroundColor: alpha(colors.primary, 0.1),
-  },
-  badgeText: {
-    ...base.badgeText,
-    color: colors.primary,
-  },
-  ok: {
-    ...base.ok,
-    color: colors.success,
-  },
-  warn: {
-    ...base.warn,
-    color: colors.warning,
+  pending: {
+    ...base.pending,
+    color: colors.textSecondary.light,
   },
 })
 
@@ -307,8 +487,46 @@ const dark = StyleSheet.create<Palette>({
     ...base.title,
     color: colors.text.dark,
   },
+  logger: {
+    ...base.logger,
+    backgroundColor: alpha(colors.primary, 0.12),
+    borderColor: alpha(colors.textSecondary.dark, 0.25),
+    borderWidth: 1,
+  },
+  loggerLabel: {
+    ...base.loggerLabel,
+    color: colors.textSecondary.dark,
+  },
+  loggerText: {
+    ...base.loggerText,
+    color: colors.text.dark,
+  },
   sectionTitle: {
     ...base.sectionTitle,
+    color: colors.textSecondary.dark,
+  },
+  phaseRow: {
+    ...base.phaseRow,
+    backgroundColor: alpha(colors.textSecondary.dark, 0.1),
+  },
+  phaseLabel: {
+    ...base.phaseLabel,
+    color: colors.text.dark,
+  },
+  phaseDetail: {
+    ...base.phaseDetail,
+    color: colors.textSecondary.dark,
+  },
+  statBox: {
+    ...base.statBox,
+    backgroundColor: alpha(colors.textSecondary.dark, 0.15),
+  },
+  statValue: {
+    ...base.statValue,
+    color: colors.text.dark,
+  },
+  statLabel: {
+    ...base.statLabel,
     color: colors.textSecondary.dark,
   },
   label: {
@@ -319,25 +537,9 @@ const dark = StyleSheet.create<Palette>({
     ...base.value,
     color: colors.text.dark,
   },
-  line: {
-    ...base.line,
-    color: colors.text.dark,
-  },
-  badge: {
-    ...base.badge,
-    backgroundColor: alpha(colors.primary, 0.15),
-  },
-  badgeText: {
-    ...base.badgeText,
-    color: colors.primary,
-  },
-  ok: {
-    ...base.ok,
-    color: colors.success,
-  },
-  warn: {
-    ...base.warn,
-    color: colors.warning,
+  pending: {
+    ...base.pending,
+    color: colors.textSecondary.dark,
   },
 })
 

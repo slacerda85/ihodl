@@ -3,14 +3,25 @@
 import { ChannelReestablishService } from '../ln-channel-reestablish-service'
 import { ChannelState } from '@/core/models/lightning/channel'
 import lightningRepository from '@/core/repositories/lightning'
+import { broadcastTransaction } from '@/core/lib/electrum/client'
 import { hexToUint8Array } from '@/core/lib/utils/utils'
 
 // Mock the repository
 jest.mock('@/core/repositories/lightning')
+jest.mock('@/core/lib/electrum/client', () => ({
+  broadcastTransaction: jest.fn(),
+}))
+jest.mock('../ln-transport-service', () => ({
+  getTransport: () => ({
+    isConnected: true,
+    sendMessage: jest.fn(),
+  }),
+}))
 
 describe('ChannelReestablishService', () => {
   let service: ChannelReestablishService
   let mockRepository: jest.Mocked<typeof lightningRepository>
+  let mockBroadcastTransaction: jest.MockedFunction<typeof broadcastTransaction>
 
   const mockChannelId = hexToUint8Array(
     '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
@@ -19,6 +30,10 @@ describe('ChannelReestablishService', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockRepository = lightningRepository as jest.Mocked<typeof lightningRepository>
+    mockBroadcastTransaction = broadcastTransaction as jest.MockedFunction<
+      typeof broadcastTransaction
+    >
+    mockBroadcastTransaction.mockResolvedValue('mock-txid')
     service = new ChannelReestablishService()
   })
 
@@ -31,7 +46,7 @@ describe('ChannelReestablishService', () => {
 
   describe('Normal Reestablishment', () => {
     it('should fail reestablishment for non-existent channel', async () => {
-      mockRepository.findChannelById.mockResolvedValue(null)
+      mockRepository.findChannelById.mockReturnValue(null)
 
       const result = await service.reestablishChannel(mockChannelId, 'test-peer')
 
@@ -42,7 +57,7 @@ describe('ChannelReestablishService', () => {
 
     it('should fail reestablishment for closed channel', async () => {
       const closedChannelData = { state: ChannelState.CLOSED }
-      mockRepository.findChannelById.mockResolvedValue(closedChannelData)
+      mockRepository.findChannelById.mockReturnValue(closedChannelData)
 
       const result = await service.reestablishChannel(mockChannelId, 'test-peer')
 
@@ -54,7 +69,9 @@ describe('ChannelReestablishService', () => {
 
   describe('Error Handling', () => {
     it('should handle repository errors gracefully', async () => {
-      mockRepository.findChannelById.mockRejectedValue(new Error('Database error'))
+      mockRepository.findChannelById.mockImplementation(() => {
+        throw new Error('Database error')
+      })
 
       const result = await service.reestablishChannel(mockChannelId, 'test-peer')
 
@@ -67,7 +84,7 @@ describe('ChannelReestablishService', () => {
   describe('Force Close Handling', () => {
     it('should not force close channel without funding tx', async () => {
       const channelData = { fundingTxid: undefined }
-      mockRepository.findChannelById.mockResolvedValue(channelData)
+      mockRepository.findChannelById.mockReturnValue(channelData)
 
       const canForceClose = await (service as any).canSafelyForceClose(mockChannelId, 5n)
 
@@ -75,15 +92,17 @@ describe('ChannelReestablishService', () => {
     })
 
     it('should initiate force close when requested', async () => {
-      const channelData = { fundingTxid: 'valid-txid' }
-      mockRepository.findChannelById.mockResolvedValue(channelData)
+      const channelData = { fundingTxid: 'valid-txid', commitmentTxHex: 'deadbeef' }
+      mockRepository.findChannelById.mockReturnValue(channelData)
       mockRepository.saveChannel = jest.fn()
 
       await (service as any).initiateForceClose(mockChannelId)
 
+      expect(mockBroadcastTransaction).toHaveBeenCalledWith('deadbeef')
       expect(mockRepository.saveChannel).toHaveBeenCalledWith(
         expect.objectContaining({
           state: 'force_closing',
+          commitmentTxid: 'mock-txid',
         }),
       )
     })

@@ -12,7 +12,7 @@ import {
   CommitmentTx,
   ChannelType,
   DUST_LIMIT_P2WPKH,
-  fundingOutputScript,
+  // fundingOutputScript,
 } from './commitment'
 import { LightningMessageType } from '../../models/lightning/base'
 import {
@@ -27,7 +27,6 @@ import {
   encodeShutdownMessage,
   encodeChannelReestablishMessage,
 } from './peer'
-import { signMessage, verifyMessage, hash256 } from '../crypto/crypto'
 import { BITCOIN_CHAIN_HASH } from '../../models/lightning/p2p'
 
 // ==========================================
