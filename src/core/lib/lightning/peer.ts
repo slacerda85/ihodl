@@ -1223,6 +1223,34 @@ export class PeerManager {
   }
 
   /**
+   * Registra uma conexão já estabelecida no PeerManager
+   * Usado pelo LightningWorker.create() para transferir conexão do PeerManager temporário
+   */
+  registerConnection(peerId: string, connection: LightningConnection, peer: PeerWithPubkey): void {
+    // Verificar se já existe
+    if (this.connectedPeers.has(peerId)) {
+      console.log(`[lightning] Peer ${peerId} already registered, skipping`)
+      return
+    }
+
+    // Registrar conexão
+    this.connectedPeers.set(peerId, connection)
+    this.peerStates.set(peerId, PeerState.CONNECTED)
+    this.connectedAt.set(peerId, Date.now())
+
+    // Persistir
+    lightningRepository.savePeer({
+      nodeId: peerId,
+      host: peer.host,
+      port: peer.port,
+      pubkey: peer.pubkey || '',
+      lastConnected: Date.now(),
+    })
+
+    console.log(`[lightning] Registered existing connection for peer: ${peerId}`)
+  }
+
+  /**
    * Desconecta de um peer específico
    * Fecha conexão graceful e limpa estado
    */

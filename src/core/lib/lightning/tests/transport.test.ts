@@ -65,12 +65,7 @@ describe('Transport Protocol Tests', () => {
       // The BOLT #8 shows: after mixing e.pub into h, we get 0x9e0e7de8...
       // So h_init || e.pub hashed should give 0x9e0e7de8...
       // e.pub = 0x036360e856310ce5d294e8be33fc807077dc56ac80d95d9cd4ddbd21325eff73f7
-      const ePub = hexToBytes(
-        '0x036360e856310ce5d294e8be33fc807077dc56ac80d95d9cd4ddbd21325eff73f7',
-      )
-
       // Compute SHA256(h || e.pub) and check if it matches expected
-      const hAfterEPub = new Uint8Array(32)
       // We can't easily test this without importing sha256, so let's just verify lengths
       expect(state.h).toHaveLength(32)
       expect(state.ck).toHaveLength(32)

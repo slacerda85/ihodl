@@ -18,10 +18,9 @@ import {
   DEFAULT_FEE_LEVELS,
   KNOWN_TRAMPOLINE_NODES,
   TrampolineNode,
-  TrampolineRoute,
   TrampolineTlvType,
 } from '../trampoline'
-import { uint8ArrayToHex, hexToUint8Array } from '@/core/lib/utils/utils'
+import { uint8ArrayToHex } from '@/core/lib/utils/utils'
 import * as secp256k1 from '@noble/secp256k1'
 
 // Helper: Create valid test node ID from private key (33-byte compressed pubkey)

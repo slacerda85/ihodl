@@ -9,6 +9,8 @@ export { LightningReadinessGuard } from './LightningReadinessGuard'
 export { LightningReadinessStatus } from './LightningReadinessStatus'
 export { LightningInitStatus } from './LightningInitStatus'
 export { LightningTrafficControlStatus } from './LightningTrafficControlStatus'
+export { default as GossipSyncProgress } from './components/GossipSyncProgress'
+export { default as LightningDebugPanel } from './components/LightningDebugPanel'
 
 // Context
 export { LightningContext } from './context'

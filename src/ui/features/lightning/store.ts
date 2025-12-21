@@ -71,7 +71,7 @@ class LightningStore {
     initStatus: 'idle',
   }
   private workerService: WorkerService | null = null
-  private workerUnsubscribe: Array<() => void> = []
+  private workerUnsubscribe: (() => void)[] = []
 
   constructor() {
     this.initializeService()
@@ -545,10 +545,8 @@ class LightningStore {
   }
 
   /**
-   * @deprecated Use `workerService.addPeer()` ou `workerService.getPeerConnectivityService()` em vez deste método.
-   * A gestão de peers está sendo consolidada no WorkerService.
-   *
-   * @see docs/lightning-worker-consolidation-plan.md - Fase 5.1
+   * @deprecated Use `workerService.addPeer()` em vez deste método.
+   * A gestão de peers está consolidada no LightningWorker.peerManager.
    */
   connectToPeer = async (peerId: string): Promise<void> => {
     console.warn(

@@ -21,6 +21,12 @@ import {
 import { secretToPoint, derivePubkey, deriveRevocationPubkey } from './revocation'
 import * as secp from '@noble/secp256k1'
 import {
+  scalarMultiply,
+  scalarAdd,
+  secretToPoint as scalarToPoint,
+  pointsEqual,
+} from '@/core/lib/crypto/secp256k1'
+import {
   OnChainResolutionContext,
   OutputResolutionResult,
   OutputResolutionState,
@@ -1926,8 +1932,7 @@ export function deriveRevocationPrivkey(
   revocationBasepoint: Uint8Array,
   perCommitmentPoint: Uint8Array,
 ): Uint8Array {
-  // Import secp256k1 functions for modular arithmetic
-  const { scalarMultiply, scalarAdd } = require('@/core/lib/crypto/secp256k1')
+  // secp256k1 functions for modular arithmetic (imported at top of file)
 
   // Hash: SHA256(revocation_basepoint || per_commitment_point)
   const combined = new Uint8Array(66)
@@ -2062,8 +2067,7 @@ export function detectRevokedCommitment(
   perCommitmentSecret: Uint8Array,
   expectedPerCommitmentPoint: Uint8Array,
 ): boolean {
-  // Import secp256k1 functions
-  const { secretToPoint: scalarToPoint, pointsEqual } = require('@/core/lib/crypto/secp256k1')
+  // secp256k1 functions are imported at top of file as scalarToPoint and pointsEqual
 
   // Verificar se o secret não é zero
   const isZero = perCommitmentSecret.every(b => b === 0)
@@ -2186,7 +2190,7 @@ export function serializeSweepTransaction(tx: SweepTransaction | JusticeTransact
 
   // Witness data (a ser adicionado após assinatura)
   // Por enquanto, apenas placeholder
-  for (const _input of tx.inputs) {
+  for (let i = 0; i < tx.inputs.length; i++) {
     parts.push(new Uint8Array([0x00])) // Número de witness items (placeholder)
   }
 
@@ -2456,7 +2460,7 @@ export function sweepOurCtx(
     })
 
     if (htlcTxResult) {
-      const { htlcTx, htlcTxWitnessScript } = htlcTxResult
+      const { htlcTx } = htlcTxResult
       const prevout = ctx.txid + ':' + htlcOutputIdx
       const name = htlc.direction === 'SENT' ? 'offered-htlc' : 'received-htlc'
 
@@ -2584,7 +2588,6 @@ export function sweepTheirCtx(
 
   // 4. Sweep HTLCs
   const ourHtlcPrivkey = derivePrivkey(ourConfig.htlcBasepointPrivkey!, theirPcp)
-  const theirHtlcPubkey = derivePubkey(theirConfig.htlcBasepoint, theirPcp)
 
   for (const htlc of htlcs) {
     const isReceivedHtlc = htlc.direction === 'RECEIVED'
@@ -2602,13 +2605,8 @@ export function sweepTheirCtx(
 
     // Criar witness script do HTLC
     const htlcWitnessScript = makeHtlcOutputWitnessScript({
-      isReceivedHtlc,
       remoteRevocationPubkey: ourRevocationPubkey,
       remoteHtlcPubkey: new Uint8Array(secp.getPublicKey(ourHtlcPrivkey, true)),
-      localHtlcPubkey: theirHtlcPubkey,
-      paymentHash: htlc.paymentHash,
-      cltvAbs: htlc.cltvExpiry,
-      hasAnchors: ourConfig.hasAnchors,
     })
 
     const privkeyToUse =
@@ -2697,19 +2695,13 @@ export function sweepTheirCtxWatchtower(
   }
 
   // 2. Justice txs para HTLCs do breacher
-  const breacherHtlcPubkey = derivePubkey(theirConfig.htlcBasepoint, pcp)
   const watcherHtlcPubkey = derivePubkey(ourConfig.htlcBasepoint, pcp)
 
   for (const htlc of htlcs) {
     const isReceivedHtlc = htlc.direction === 'RECEIVED'
     const htlcWitnessScript = makeHtlcOutputWitnessScript({
-      isReceivedHtlc,
       remoteRevocationPubkey: revocationPubkey,
       remoteHtlcPubkey: watcherHtlcPubkey,
-      localHtlcPubkey: breacherHtlcPubkey,
-      paymentHash: htlc.paymentHash,
-      cltvAbs: htlc.cltvExpiry,
-      hasAnchors: ourConfig.hasAnchors,
     })
 
     const htlcOutputIdx = findHtlcOutput(ctx, htlc, ourConfig, theirConfig, pcp)
@@ -2814,11 +2806,9 @@ function sweepTheirCtxHtlc(params: {
   outputIdx: number
   privkey: Uint8Array
   isRevocation: boolean
-  cltvAbs: number
   hasAnchors: boolean
 }): PartialTxInput | null {
-  const { ctx, witnessScript, preimage, outputIdx, privkey, isRevocation, cltvAbs, hasAnchors } =
-    params
+  const { ctx, witnessScript, preimage, outputIdx, privkey, isRevocation, hasAnchors } = params
 
   if (!ctx.vout[outputIdx]) return null
   const valueSats = BigInt(Math.floor(ctx.vout[outputIdx].value * 100000000))
@@ -2987,28 +2977,14 @@ function makeAnchorWitnessScript(fundingPubkey: Uint8Array): Uint8Array {
  * Cria witness script para HTLC output
  */
 function makeHtlcOutputWitnessScript(params: {
-  isReceivedHtlc: boolean
   remoteRevocationPubkey: Uint8Array
   remoteHtlcPubkey: Uint8Array
-  localHtlcPubkey: Uint8Array
-  paymentHash: Uint8Array
-  cltvAbs: number
-  hasAnchors: boolean
 }): Uint8Array {
   // Implementação simplificada - ver commitment.ts para versão completa
-  const {
-    isReceivedHtlc,
-    remoteRevocationPubkey,
-    remoteHtlcPubkey,
-    localHtlcPubkey,
-    paymentHash,
-    cltvAbs,
-    hasAnchors,
-  } = params
+  const { remoteRevocationPubkey, remoteHtlcPubkey } = params
 
   // Placeholder - usa offered/received HTLC script do commitment.ts
   const revPubkeyHash = hash160(remoteRevocationPubkey)
-  const paymentHashRipemd = hash160(paymentHash)
 
   // Simplified script construction
   const script = new Uint8Array(200)

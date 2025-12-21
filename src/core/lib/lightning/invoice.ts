@@ -46,8 +46,6 @@ import secp256k1 from 'secp256k1'
  * The signature is over the SHA256 hash of the human-readable part + data part
  * Recovery ID is appended as a single byte (0-3)
  */
-const SIGNATURE_SIZE = 65 // 64 bytes r,s + 1 byte recovery id
-const SIGNATURE_WORDS = 104 // 520 bits / 5 = 104 words
 
 /**
  * Converts amount with multiplier to millisatoshis

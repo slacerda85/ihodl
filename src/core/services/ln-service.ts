@@ -23,8 +23,6 @@ export default class LightningService {
   private readinessState: ReadinessState = createInitialReadinessState()
   private initialized = false
 
-  constructor() {}
-
   isInitialized(): boolean {
     return this.initialized
   }

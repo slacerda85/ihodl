@@ -111,7 +111,6 @@ describe('secp256k1 - BOLT-3 Test Vectors', () => {
     })
 
     it('scalarMod should reduce large scalars', () => {
-      const n = getCurveOrder()
       const largeScalar = new Uint8Array(32)
       largeScalar[31] = 0xff // valor maior que n
 
@@ -260,7 +259,6 @@ describe('secp256k1 - BOLT-3 Test Vectors', () => {
 
     it('should not detect revoked commitment for zero secret', () => {
       const zeroSecret = new Uint8Array(32).fill(0)
-      const somePoint = hexToBytes(BOLT3_VECTORS.perCommitment.point)
 
       // Zero secret não deve ser considerado revogado
       expect(zeroSecret.every(b => b === 0)).toBe(true)
@@ -296,7 +294,6 @@ describe('secp256k1 - BOLT-3 Test Vectors', () => {
 
   describe('Edge Cases', () => {
     it('should handle scalar overflow correctly', () => {
-      const n = getCurveOrder()
       const maxScalar = new Uint8Array(32)
       maxScalar[31] = 0xff
 

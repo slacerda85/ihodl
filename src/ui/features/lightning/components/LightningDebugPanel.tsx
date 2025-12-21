@@ -7,6 +7,7 @@ import { useAppContext } from '@/ui/features/app-provider/AppProvider'
 import { useLightningReadiness } from '@/ui/features/lightning/hooks/useLightningReadiness'
 import { useLightningDebugSnapshot } from '@/ui/features/lightning/hooks/useLightningDebugSnapshot'
 import { useBackgroundGossipSync } from '@/ui/features/lightning/hooks/useBackgroundGossipSync'
+import GossipSyncProgress from './GossipSyncProgress'
 import type { LightningStoreState } from '../store'
 
 type InitPhase = {
@@ -198,6 +199,12 @@ export default function LightningDebugPanel() {
             <Text style={[palette.phaseDetail, palette[phase.status]]}>{phase.detail}</Text>
           </View>
         ))}
+      </View>
+
+      {/* Gossip Sync Progress */}
+      <View style={palette.section}>
+        <Text style={palette.sectionTitle}>Sync do Grafo (Gossip)</Text>
+        <GossipSyncProgress compact />
       </View>
 
       {/* Quick Stats */}

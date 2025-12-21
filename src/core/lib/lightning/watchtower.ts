@@ -18,7 +18,6 @@ import {
   serializeSweepTransaction,
   ChannelConfig,
   HtlcForSweep,
-  PartialTxInput,
   PenaltyParams,
   RevokedOutput,
 } from './onchain'

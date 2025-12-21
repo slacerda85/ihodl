@@ -253,8 +253,8 @@ const blockers = useReadinessBlockers()
 | 2.6.3 | ✅ TCP puro (não TLS) para Lightning         | `src/core/lib/lightning/peer.ts`                  | ✅     | `createLightningSocket` usa TCP puro           |
 | 2.6.4 | ✅ Exchange de Init messages (BOLT #1)       | `src/core/lib/lightning/peer.ts`                  | ✅     | Sequence correta com timeout e logs            |
 | 2.6.5 | Setar `transportConnected` e `peerConnected` | `src/core/services/ln-worker-service.ts` L304-305 | ✅     | Gates setados                                  |
-| 2.6.6 | 🟡 Persistir peers com score/LRU             | `src/core/repositories/lightning.ts`              | ❌     | Não implementado                               |
-| 2.6.7 | 🟡 Backoff exponencial para reconexão        | `src/core/services/ln-peer-service.ts`            | 🔄     | Implementação parcial                          |
+| 2.6.6 | ✅ Persistir peers com score/LRU             | `src/core/services/ln-peer-service.ts`            | ✅     | Score ±1, LRU 50 peers, 24h cache age          |
+| 2.6.7 | ✅ Backoff exponencial para reconexão        | `src/core/services/ln-peer-service.ts`            | ✅     | Phoenix-style: 1s→2s→4s→7s→10s                 |
 
 **✅ RESOLVIDO - Problema identificado e corrigido (21/12/2025):**
 
@@ -270,6 +270,33 @@ const blockers = useReadinessBlockers()
 - ✅ Atualizado `receiveRaw` em PeerManager e LightningWorker para usar buffering
 
 **Resultado:** Handshake BOLT #8 e Init BOLT #1 agora funcionam corretamente, com conexões peer estabelecidas com sucesso. Todos os testes de transporte passam (14/14).
+
+**✅ IMPLEMENTADO - Persistência de Peers e Backoff (21/12/2025):**
+
+**2.6.6 - Score System para Peers:**
+
+- `incrementPeerScore()` — incrementa score em +1 (cap 100) ao conectar com sucesso
+- `decrementPeerScore()` — decrementa score em -1 (floor -10) ao falhar conexão
+- `getPeersByReliability()` — retorna peers ordenados por score (maior primeiro)
+- LRU cache: limite de 50 peers, cache age máximo de 24h
+- Persistência via `savePeerStats()` e `savePeer()` no LightningRepository
+
+**2.6.7 - Backoff Exponencial (Phoenix-style):**
+
+- `scheduleReconnect()` — implementa backoff exponencial
+- Delays: 1s → 2s → 4s → 7s → 10s (5 níveis)
+- Cap em `maxReconnectAttempts` (default: 2)
+- Timer cleanup automático ao reconectar
+
+**2.11.4 - Repository de Peers:**
+
+- `savePeer()` — persiste peer com host, port, pubkey, lastConnected
+- `findPeerById()` — busca peer por nodeId
+- `findAllPeers()` — lista todos os peers persistidos
+- `savePeerStats()` — persiste score e estatísticas
+- `getPeerStats()` — obtém estatísticas de um peer
+- `getAllPeerStats()` — lista todas as estatísticas
+- `setLastPeerUpdate()` / `getLastPeerUpdate()` — timestamp de cache
 
 ---
 
@@ -297,22 +324,47 @@ const channelIdBytes = hexToUint8Array(channel.channelId!)
 
 ### 2.8 Gossip Sync e Routing
 
-| #     | Tarefa                                       | Arquivo(s)                                        | Status | Descrição                  |
-| ----- | -------------------------------------------- | ------------------------------------------------- | ------ | -------------------------- |
-| 2.8.1 | `GossipSyncManager` inicializado             | `src/core/services/ln-worker-service.ts` L703     | ✅     | Manager criado             |
-| 2.8.2 | Sync com retries                             | `src/core/services/ln-worker-service.ts` L693-723 | ✅     | 3 retries com backoff      |
-| 2.8.3 | Setar `gossipSynced`                         | `src/core/services/ln-worker-service.ts` L363     | ✅     | Gate setado                |
-| 2.8.4 | Routing mode para LOCAL quando sync completo | `src/core/services/ln-worker-service.ts` L367-368 | ✅     | `RoutingMode.LOCAL` setado |
-| 2.8.5 | Fallback para TRAMPOLINE se sync falhar      | `src/core/services/ln-worker-service.ts` L484-485 | ✅     | Modo trampoline na init    |
-| 2.8.6 | 🟡 Cache em disco (`GraphCacheManager`)      | `src/core/lib/lightning/graph-cache.ts`           | 🔄     | Existe mas verificar uso   |
-| 2.8.7 | 🟡 UI exibir progresso de gossip             | `src/ui/features/lightning/`                      | ❌     | Não implementado           |
+| #     | Tarefa                                       | Arquivo(s)                                                     | Status | Descrição                          |
+| ----- | -------------------------------------------- | -------------------------------------------------------------- | ------ | ---------------------------------- |
+| 2.8.1 | `GossipSyncManager` inicializado             | `src/core/services/ln-worker-service.ts` L703                  | ✅     | Manager criado                     |
+| 2.8.2 | Sync com retries                             | `src/core/services/ln-worker-service.ts` L693-723              | ✅     | 3 retries com backoff              |
+| 2.8.3 | Setar `gossipSynced`                         | `src/core/services/ln-worker-service.ts` L363                  | ✅     | Gate setado                        |
+| 2.8.4 | Routing mode para LOCAL quando sync completo | `src/core/services/ln-worker-service.ts` L367-368              | ✅     | `RoutingMode.LOCAL` setado         |
+| 2.8.5 | Fallback para TRAMPOLINE se sync falhar      | `src/core/services/ln-worker-service.ts` L484-485              | ✅     | Modo trampoline na init            |
+| 2.8.6 | ✅ Cache em disco (`GraphCacheManager`)      | `src/core/lib/lightning/graph-cache.ts`                        | ✅     | Manager implementado e sendo usado |
+| 2.8.7 | ✅ UI exibir progresso de gossip             | `src/ui/features/lightning/components/GossipSyncProgress.tsx`  | ✅     | Componente criado e integrado      |
+| 2.8.8 | ✅ Hook retorna dados reais                  | `src/ui/features/lightning/hooks/useBackgroundGossipSync.ts`   | ✅     | `useBackgroundSyncStats` corrigido |
+| 2.8.9 | ✅ Integração no LightningDebugPanel         | `src/ui/features/lightning/components/LightningDebugPanel.tsx` | ✅     | Mostra progresso no fluxo de init  |
 
-**Ação 2.8.7:**
+**✅ IMPLEMENTADO - Componente GossipSyncProgress (21/12/2025):**
+
+**Arquivos criados/modificados:**
+
+- ✅ `src/ui/features/lightning/components/GossipSyncProgress.tsx` — Componente dedicado para exibir progresso do gossip
+- ✅ `src/ui/features/lightning/hooks/useBackgroundGossipSync.ts` — Hook `useBackgroundSyncStats` agora retorna dados reais
+- ✅ `src/ui/features/lightning/components/LightningDebugPanel.tsx` — Integração do GossipSyncProgress no painel de debug
+- ✅ `src/ui/features/lightning/index.ts` — Exportação do componente
+
+**Funcionalidades do GossipSyncProgress:**
+
+- Exibe estado atual: Aguardando, Inicializando, Sincronizando, Concluído, Erro, Pausado
+- Barra de progresso visual com porcentagem
+- Estatísticas em tempo real: Nós descobertos, Canais descobertos, Último bloco
+- Dois modos: `compact` (linha única) e `full` (card detalhado)
+- Suporte a light/dark mode
+- Mensagens de status contextuais
+
+**Uso:**
 
 ```tsx
-// Criar: src/ui/features/lightning/components/GossipProgress.tsx
-// Usar: useLightningState().workerMetrics?.gossipCompleted
-// Mostrar: "Sincronizando grafo Lightning... X%" ou "Grafo sincronizado ✓"
+// Modo compacto (para LightningDebugPanel)
+<GossipSyncProgress compact />
+
+// Modo completo (para tela dedicada)
+<GossipSyncProgress />
+
+// Ocultar quando concluído
+<GossipSyncProgress hideWhenCompleted />
 ```
 
 ---
@@ -356,13 +408,46 @@ export default function PaymentSendScreen() {
 
 ### 2.11 Persistência e Recuperação
 
-| #      | Tarefa                         | Arquivo(s)                                        | Status | Descrição                               |
-| ------ | ------------------------------ | ------------------------------------------------- | ------ | --------------------------------------- |
-| 2.11.1 | `loadPersistedState()` na init | `src/core/services/ln-worker-service.ts` L399-444 | ✅     | Restaura readiness, metrics, sync state |
-| 2.11.2 | `saveInitState()` no shutdown  | `src/core/services/ln-worker-service.ts`          | 🔄     | Verificar se chamado no stop()          |
-| 2.11.3 | Repository para canais         | `src/core/repositories/lightning.ts`              | ✅     | `findAllChannels()` existe              |
-| 2.11.4 | 🟡 Repository para peers       | `src/core/repositories/lightning.ts`              | ❌     | Peers não persistidos                   |
-| 2.11.5 | 🟡 Repository para invoices    | `src/core/repositories/lightning.ts`              | 🔄     | Verificar implementação                 |
+| #       | Tarefa                          | Arquivo(s)                                        | Status | Descrição                                   |
+| ------- | ------------------------------- | ------------------------------------------------- | ------ | ------------------------------------------- |
+| 2.11.1  | `loadPersistedState()` na init  | `src/core/services/ln-worker-service.ts` L399-444 | ✅     | Restaura readiness, metrics, sync state     |
+| 2.11.2  | `saveInitState()` no shutdown   | `src/core/services/ln-worker-service.ts`          | 🔄     | Verificar se chamado no stop()              |
+| 2.11.3  | Repository para canais próprios | `src/core/repositories/lightning.ts`              | ✅     | `findAllChannels()` salva canais do usuário |
+| 2.11.3a | 🔴 **Gossip Graph DB (SQLite)** | Não implementado                                  | ❌     | Crítico - ver análise abaixo                |
+| 2.11.4  | ✅ Repository para peers        | `src/core/repositories/lightning.ts`              | ✅     | `savePeer`, `getPeersByReliability`, score  |
+| 2.11.5  | 🟡 Repository para invoices     | `src/core/repositories/lightning.ts`              | 🔄     | Verificar implementação                     |
+
+#### 2.11.3a - Análise: Gossip Graph Database
+
+**Problema Crítico**: O grafo de roteamento atual usa MMKV com JSON, que **NÃO ESCALA** para o volume da rede Lightning.
+
+**Comparativo Electrum (`channel_db.py`):**
+| Métrica | Electrum | iHodl Atual |
+|----------------------|-----------------|----------------------|
+| Nodes suportados | 12.000+ | ~500 (limite prático)|
+| Channels suportados | 40.000+ | ~1.000 |
+| Storage | SQLite (`gossip_db`)| MMKV JSON string |
+| Update incremental | ✅ Por registro | ❌ Reescreve tudo |
+| Memory usage | O(1) por query | O(n) parse inteiro |
+| Prune automático | ✅ Policies 2w | ✅ Básico |
+| Commit batching | ✅ interval=100 | ❌ Síncrono |
+
+**Tabelas SQLite do Electrum:**
+
+```sql
+CREATE TABLE channel_info (short_channel_id BLOB(8), msg BLOB, PRIMARY KEY(short_channel_id));
+CREATE TABLE policy (key BLOB(41), msg BLOB, PRIMARY KEY(key));
+CREATE TABLE node_info (node_id BLOB(33), msg BLOB, PRIMARY KEY(node_id));
+CREATE TABLE address (node_id BLOB(33), host STRING, port INTEGER, timestamp INTEGER, PRIMARY KEY(node_id, host, port));
+```
+
+**Solução Proposta:**
+
+1. Usar `expo-sqlite` para criar `gossip.db` separado
+2. Implementar `GossipDatabase` class similar ao Electrum
+3. Queries otimizadas: `get_channels_for_node()`, `get_policy_for_node()`
+4. Migrar `RoutingGraph` para usar SQLite como backend
+5. Manter MMKV apenas para dados pequenos (peers, invoices)
 
 ---
 
@@ -395,9 +480,10 @@ export default function PaymentSendScreen() {
 
 ### 🔴 Fase 1: Críticos (Bloqueadores de Funcionamento)
 
-1. **2.4.6, 2.4.7**: Adicionar guards de readiness em `paymentSend.tsx` e `paymentReceive.tsx`
-2. **2.10.1-2.10.4**: Adicionar `LightningReadinessGuard` em todas as telas de operação
-3. **2.13.1-2.13.3**: Testes de inicialização, pagamento com gates, e handshake
+1. **2.11.3a**: Implementar Gossip Graph Database com SQLite (paridade com Electrum)
+2. **2.4.6, 2.4.7**: Adicionar guards de readiness em `paymentSend.tsx` e `paymentReceive.tsx`
+3. **2.10.1-2.10.4**: Adicionar `LightningReadinessGuard` em todas as telas de operação
+4. **2.13.1-2.13.3**: Testes de inicialização, pagamento com gates, e handshake
 
 ### 🟡 Fase 2: Importantes (Estabilidade)
 
@@ -418,14 +504,18 @@ export default function PaymentSendScreen() {
 
 | Arquivo                                                   | Alterações Necessárias                           |
 | --------------------------------------------------------- | ------------------------------------------------ |
+| **🔴 NOVO** `src/core/lib/lightning/gossip-database.ts`   | Criar SQLite backend para grafo (12k+ nodes)     |
 | `src/app/(tabs)/lightning/paymentSend.tsx`                | Adicionar guard de readiness                     |
 | `src/app/(tabs)/lightning/paymentReceive.tsx`             | Adicionar guard de readiness                     |
 | `src/app/(tabs)/lightning/channels.tsx`                   | Adicionar guard de readiness                     |
 | `src/app/(tabs)/lightning/channelCreate.tsx`              | Adicionar guard de readiness                     |
 | `src/core/lib/lightning/peer.ts`                          | Verificar Noise sobre TCP, sequence de handshake |
+| `src/core/lib/lightning/routing.ts`                       | Integrar com GossipDatabase (SQLite backend)     |
 | `src/ui/features/app-provider/AppProvider.tsx`            | Alert para HTLCs pendentes                       |
 | `src/ui/features/lightning/components/GossipProgress.tsx` | **Criar** componente                             |
 | `src/core/lib/lightning/tests/*.test.ts`                  | Adicionar testes críticos                        |
+
+> **Documento de referência:** [gossip-database-implementation.md](./gossip-database-implementation.md)
 
 ---
 
@@ -453,3 +543,4 @@ npx tsc --noEmit
 - [lightning-worker-consolidation-plan.md](./lightning-worker-consolidation-plan.md) — Plano de consolidação do worker
 - [ihodl-gap-implementation.md](./ihodl-gap-implementation.md) — Gap analysis completo
 - [wallets-comparison.md](./wallets-comparison.md) — Comparativo de funcionalidades
+- [gossip-database-implementation.md](./gossip-database-implementation.md) — **NOVO** Implementação SQLite para grafo 12k+ nodes

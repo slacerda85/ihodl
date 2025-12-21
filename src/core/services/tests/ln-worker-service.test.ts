@@ -49,7 +49,7 @@ jest.mock('../ln-peer-service', () => ({
   __esModule: true,
   PeerConnectivityService: class {
     private peers = [{ nodeId: 'peer-1', address: '127.0.0.1', port: 9735, isConnected: true }]
-    constructor() {}
+
     start = jest.fn(async () => undefined)
     stop = jest.fn(async () => undefined)
     reconnectAll = jest.fn(async () => undefined)
@@ -258,7 +258,6 @@ describe('WorkerService initialization and lifecycle', () => {
     let initCount = 0
 
     // Spy on doInitialize to count actual executions
-    const originalDoInit = (service as any).doInitialize.bind(service)
     jest.spyOn(service as any, 'doInitialize').mockImplementation(async (...args: any[]) => {
       initCount++
       // Simulate some async work

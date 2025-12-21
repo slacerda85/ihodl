@@ -32,7 +32,7 @@ import { randomFillSync } from 'crypto'
 // Lightweight Crypto mock to avoid heavy Expo/Node bridges during Jest
 jest.mock('expo-crypto', () => {
   return {
-    getRandomValues: (arr: Uint8Array) => randomFillSync(arr),
+    getRandomValues: (arr: Uint8Array) => require('crypto').randomFillSync(arr),
   }
 })
 

@@ -12,7 +12,6 @@ import {
   ErrorAggregator,
   HealthMonitor,
   RateLimiter,
-  DEFAULT_RETRY_CONFIG,
 } from '../errorHandling'
 
 describe('Error Handling', () => {

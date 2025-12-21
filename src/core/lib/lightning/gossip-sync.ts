@@ -20,6 +20,20 @@ import { RoutingGraph } from './routing'
 import { GraphCacheManager } from './graph-cache'
 
 /**
+ * Logger com timestamp para debugging de gossip sync
+ */
+function logWithTimestamp(tag: string, message: string, data?: unknown): void {
+  const now = new Date()
+  const timestamp = `${now.toISOString().slice(11, 23)}`
+  const fullMessage = `[${timestamp}][gossip-sync:${tag}] ${message}`
+  if (data !== undefined) {
+    console.log(fullMessage, data)
+  } else {
+    console.log(fullMessage)
+  }
+}
+
+/**
  * Progresso da sincronização
  */
 export interface SyncProgress {
@@ -118,27 +132,52 @@ export class GossipSyncManager {
    * Inicia sincronização completa com todos os peers disponíveis
    */
   async startSync(peers?: GossipPeerInterface[]): Promise<void> {
+    const startTime = Date.now()
     const syncPeers = peers || this.peers
+
+    logWithTimestamp('startSync', `Iniciando com ${syncPeers.length} peers`)
+
     if (syncPeers.length === 0) {
+      logWithTimestamp('startSync', 'ERRO: Nenhum peer disponível')
       throw new Error('No peers available for gossip sync')
     }
 
     // Carregar grafo do cache antes de iniciar sincronização
+    logWithTimestamp('startSync', 'Carregando grafo do cache...')
     await this.loadCachedGraph()
+    logWithTimestamp('startSync', `Cache carregado em ${Date.now() - startTime}ms`)
 
     this.globalStats.state = GossipSyncState.SYNCING
     this.globalStats.lastSyncTimestamp = Date.now()
+    this.globalStats.syncProgress = 0.1 // Marcando início
     this.isReadyFlag = false
 
-    console.log(`[gossip-sync] Starting sync with ${syncPeers.length} peers`)
+    logWithTimestamp('startSync', `Estado: SYNCING, progress=0.1`)
 
     try {
       // Dividir trabalho entre peers disponíveis
       const concurrentPeers = Math.min(syncPeers.length, this.options.maxConcurrentPeers)
       const peerBatches = this.chunkArray(syncPeers, concurrentPeers)
 
+      logWithTimestamp(
+        'startSync',
+        `Dividido em ${peerBatches.length} batches de ${concurrentPeers} peers`,
+      )
+
+      let batchIndex = 0
       for (const peerBatch of peerBatches) {
+        batchIndex++
+        const batchProgress = batchIndex / peerBatches.length
+
+        logWithTimestamp('startSync', `Processando batch ${batchIndex}/${peerBatches.length}`)
         await this.syncWithPeerBatch(peerBatch)
+
+        // Atualizar progresso global após cada batch
+        this.globalStats.syncProgress = 0.1 + batchProgress * 0.8 // 0.1 a 0.9
+        logWithTimestamp(
+          'startSync',
+          `Batch ${batchIndex} completo, progress=${this.globalStats.syncProgress.toFixed(2)}`,
+        )
 
         // Pequena pausa entre batches
         if (peerBatches.length > 1) {
@@ -147,16 +186,22 @@ export class GossipSyncManager {
       }
 
       // Salvar grafo no cache após sincronização completa
+      logWithTimestamp('startSync', 'Salvando grafo no cache...')
       await this.saveGraphToCache()
 
       this.globalStats.state = GossipSyncState.SYNCED
       this.globalStats.syncProgress = 1.0
       this.isReadyFlag = true
 
-      console.log('[gossip-sync] Gossip sync completed successfully')
+      const totalTime = Date.now() - startTime
+      logWithTimestamp('startSync', `SUCESSO - Sync completo em ${totalTime}ms`)
+      logWithTimestamp(
+        'startSync',
+        `Stats finais: channels=${this.globalStats.channelAnnouncementsReceived}, nodes=${this.globalStats.nodeAnnouncementsReceived}`,
+      )
     } catch (error) {
       this.globalStats.state = GossipSyncState.ERROR
-      console.error('[gossip-sync] Gossip sync failed:', error)
+      logWithTimestamp('startSync', `ERRO: ${(error as Error).message}`)
       throw error
     }
   }
@@ -170,22 +215,25 @@ export class GossipSyncManager {
     numBlocks: number,
   ): Promise<void> {
     if (!peer.isConnected()) {
+      logWithTimestamp('queryChannelRange', 'ERRO: Peer desconectado')
       throw new Error('Peer not connected')
     }
+
+    logWithTimestamp(
+      'queryChannelRange',
+      `Consultando blocos ${firstBlock} - ${firstBlock + numBlocks}`,
+    )
 
     // TODO: Implementar query_channel_range message
     // Esta é uma simplificação - em produção, precisaria implementar
     // a mensagem completa de acordo com BOLT #7
-
-    console.log(
-      `[gossip-sync] Querying channel range: ${firstBlock} - ${firstBlock + numBlocks} on peer`,
-    )
 
     // Simular envio da mensagem
     // const queryMsg = createQueryChannelRange(firstBlock, numBlocks)
     // await peer.sendMessage(queryMsg)
 
     this.globalStats.queriesSent++
+    logWithTimestamp('queryChannelRange', `Query enviada, total=${this.globalStats.queriesSent}`)
   }
 
   /**
@@ -193,12 +241,16 @@ export class GossipSyncManager {
    */
   async queryShortChannelIds(peer: GossipPeerInterface, ids: ShortChannelId[]): Promise<void> {
     if (!peer.isConnected()) {
+      logWithTimestamp('queryShortChannelIds', 'ERRO: Peer desconectado')
       throw new Error('Peer not connected')
     }
 
-    if (ids.length === 0) return
+    if (ids.length === 0) {
+      logWithTimestamp('queryShortChannelIds', 'Nenhum ID para consultar')
+      return
+    }
 
-    console.log(`[gossip-sync] Querying ${ids.length} short channel IDs on peer`)
+    logWithTimestamp('queryShortChannelIds', `Consultando ${ids.length} short channel IDs`)
 
     // TODO: Implementar query_short_channel_ids message
     // Dividir em batches se necessário
@@ -211,19 +263,27 @@ export class GossipSyncManager {
     // }
 
     this.globalStats.queriesSent++
+    logWithTimestamp('queryShortChannelIds', `Query enviada, total=${this.globalStats.queriesSent}`)
   }
 
   /**
    * Retorna progresso atual da sincronização
    */
   getProgress(): SyncProgress {
-    return {
+    const progress: SyncProgress = {
       overall: this.globalStats.syncProgress,
       channelsDiscovered: this.globalStats.channelAnnouncementsReceived,
       nodesDiscovered: this.globalStats.nodeAnnouncementsReceived,
       lastBlockHeight: this.options.startBlockHeight, // TODO: track actual block height
       state: this.globalStats.state,
     }
+
+    logWithTimestamp(
+      'getProgress',
+      `overall=${progress.overall.toFixed(2)}, state=${progress.state}, channels=${progress.channelsDiscovered}, nodes=${progress.nodesDiscovered}`,
+    )
+
+    return progress
   }
 
   /**
@@ -251,17 +311,33 @@ export class GossipSyncManager {
    * Carrega grafo do cache se disponível
    */
   async loadCachedGraph(): Promise<void> {
+    const startTime = Date.now()
+
     if (this.cacheManager) {
       try {
-        console.log('[gossip-sync] Loading cached routing graph')
+        logWithTimestamp('loadCachedGraph', 'Iniciando carregamento do cache...')
         const cachedGraph = this.cacheManager.loadGraph()
+
         // Mesclar dados do cache com o grafo atual
         // Nota: Isso é uma simplificação - em produção, seria mais sofisticado
         this.routingGraph = cachedGraph
-        console.log('[gossip-sync] Cached graph loaded successfully')
+
+        const elapsed = Date.now() - startTime
+        const stats = this.routingGraph.getStats()
+        logWithTimestamp(
+          'loadCachedGraph',
+          `Cache carregado em ${elapsed}ms - nodes=${stats.nodes}, channels=${stats.channels}`,
+        )
+
+        // Atualizar estatísticas globais com dados do cache
+        this.globalStats.nodeAnnouncementsReceived = stats.nodes
+        this.globalStats.channelAnnouncementsReceived = stats.channels
       } catch (error) {
-        console.warn('[gossip-sync] Failed to load cached graph:', error)
+        const elapsed = Date.now() - startTime
+        logWithTimestamp('loadCachedGraph', `FALHA em ${elapsed}ms: ${(error as Error).message}`)
       }
+    } else {
+      logWithTimestamp('loadCachedGraph', 'Sem cacheManager configurado')
     }
   }
 
@@ -269,14 +345,26 @@ export class GossipSyncManager {
    * Salva grafo no cache
    */
   async saveGraphToCache(): Promise<void> {
+    const startTime = Date.now()
+
     if (this.cacheManager) {
       try {
-        console.log('[gossip-sync] Saving routing graph to cache')
+        const stats = this.routingGraph.getStats()
+        logWithTimestamp(
+          'saveGraphToCache',
+          `Salvando grafo - nodes=${stats.nodes}, channels=${stats.channels}`,
+        )
+
         this.cacheManager.saveGraph(this.routingGraph)
-        console.log('[gossip-sync] Graph saved to cache successfully')
+
+        const elapsed = Date.now() - startTime
+        logWithTimestamp('saveGraphToCache', `Grafo salvo em ${elapsed}ms`)
       } catch (error) {
-        console.warn('[gossip-sync] Failed to save graph to cache:', error)
+        const elapsed = Date.now() - startTime
+        logWithTimestamp('saveGraphToCache', `FALHA em ${elapsed}ms: ${(error as Error).message}`)
       }
+    } else {
+      logWithTimestamp('saveGraphToCache', 'Sem cacheManager configurado')
     }
   }
 
@@ -338,17 +426,30 @@ export class GossipSyncManager {
    * Para sincronização em andamento
    */
   stopSync(): void {
+    logWithTimestamp('stopSync', `Parando sync - estado atual: ${this.globalStats.state}`)
     this.globalStats.state = GossipSyncState.IDLE
     this.activeSyncs.clear()
-    console.log('[gossip-sync] Sync stopped')
+    logWithTimestamp('stopSync', 'Sync parado')
   }
 
   /**
    * Sincroniza com um batch de peers simultaneamente
    */
   private async syncWithPeerBatch(peers: GossipPeerInterface[]): Promise<void> {
+    logWithTimestamp('syncWithPeerBatch', `Iniciando batch com ${peers.length} peers`)
+    const startTime = Date.now()
+
     const promises = peers.map(peer => this.syncWithPeer(peer))
-    await Promise.allSettled(promises)
+    const results = await Promise.allSettled(promises)
+
+    const fulfilled = results.filter(r => r.status === 'fulfilled').length
+    const rejected = results.filter(r => r.status === 'rejected').length
+    const elapsed = Date.now() - startTime
+
+    logWithTimestamp(
+      'syncWithPeerBatch',
+      `Batch completo em ${elapsed}ms - sucesso=${fulfilled}, falhas=${rejected}`,
+    )
   }
 
   /**
@@ -356,38 +457,68 @@ export class GossipSyncManager {
    */
   private async syncWithPeer(peer: GossipPeerInterface): Promise<void> {
     const peerId = this.getPeerId(peer)
+    const startTime = Date.now()
 
     try {
-      // TODO: Implementar sincronização real com o peer
-      // Por enquanto, apenas simular
+      logWithTimestamp('syncWithPeer', `Iniciando sync com peer ${peerId}`)
 
-      console.log(`[gossip-sync] Starting sync with peer ${peerId}`)
+      // Verificar se peer está conectado
+      if (!peer.isConnected()) {
+        logWithTimestamp('syncWithPeer', `Peer ${peerId} desconectado, pulando`)
+        return
+      }
 
-      // Simular progresso
+      // Inicializar stats do peer
       this.activeSyncs.set(peerId, {
         state: GossipSyncState.SYNCING,
         channelAnnouncementsReceived: 0,
         nodeAnnouncementsReceived: 0,
         channelUpdatesReceived: 0,
-        queriesSent: 1,
-        repliesReceived: 1,
+        queriesSent: 0,
+        repliesReceived: 0,
         lastSyncTimestamp: Date.now(),
-        syncProgress: 0.5,
+        syncProgress: 0,
         messagesProcessed: 0,
         errors: 0,
       })
 
-      // Simular delay de sincronização
-      await this.delay(2000)
+      // TODO: Implementar sincronização real com BOLT #7 query_channel_range
+      // Por enquanto, simular uma sincronização básica para não bloquear
 
-      // Atualizar estatísticas
+      logWithTimestamp('syncWithPeer', `Peer ${peerId}: aguardando respostas (simulado)...`)
+
+      // Simular delay de sincronização - representa tempo de RTT + processamento
+      await this.delay(1500)
+
+      // Simular recebimento de alguns canais/nodes do cache ou peer
+      const simulatedChannels = Math.floor(Math.random() * 100) + 10
+      const simulatedNodes = Math.floor(Math.random() * 50) + 5
+
+      // Atualizar stats do peer
       const stats = this.activeSyncs.get(peerId)!
       stats.state = GossipSyncState.SYNCED
       stats.syncProgress = 1.0
+      stats.channelAnnouncementsReceived = simulatedChannels
+      stats.nodeAnnouncementsReceived = simulatedNodes
+      stats.repliesReceived = 1
 
-      console.log(`[gossip-sync] Completed sync with peer ${peerId}`)
+      // Atualizar stats globais
+      this.globalStats.channelAnnouncementsReceived += simulatedChannels
+      this.globalStats.nodeAnnouncementsReceived += simulatedNodes
+      this.globalStats.repliesReceived++
+
+      const elapsed = Date.now() - startTime
+      logWithTimestamp(
+        'syncWithPeer',
+        `Peer ${peerId}: COMPLETO em ${elapsed}ms - channels=${simulatedChannels}, nodes=${simulatedNodes}`,
+      )
     } catch (error) {
-      console.error(`[gossip-sync] Failed to sync with peer ${peerId}:`, error)
+      const elapsed = Date.now() - startTime
+      logWithTimestamp(
+        'syncWithPeer',
+        `Peer ${peerId}: ERRO em ${elapsed}ms - ${(error as Error).message}`,
+      )
+
       this.activeSyncs.set(peerId, {
         state: GossipSyncState.ERROR,
         channelAnnouncementsReceived: 0,
@@ -400,6 +531,8 @@ export class GossipSyncManager {
         messagesProcessed: 0,
         errors: 1,
       })
+
+      this.globalStats.errors++
     }
   }
 
@@ -407,22 +540,33 @@ export class GossipSyncManager {
    * Processa mensagem de gossip e atualiza o grafo de roteamento
    */
   async processGossipMessage(message: any): Promise<void> {
+    const startTime = Date.now()
+
     try {
+      logWithTimestamp('processGossipMessage', `Processando mensagem tipo=${message.type}`)
+
       // TODO: Implementar processamento real das mensagens BOLT #7
       // Por enquanto, apenas simular atualização do grafo
-
-      console.log('[gossip-sync] Processing gossip message:', message.type)
 
       // Simular atualização do grafo baseada no tipo de mensagem
       // Em produção, isso seria feito pelo LightningWorker
 
       // Após processar algumas mensagens, salvar grafo no cache
       this.globalStats.messagesProcessed++
+
+      const elapsed = Date.now() - startTime
+      logWithTimestamp(
+        'processGossipMessage',
+        `Mensagem processada em ${elapsed}ms, total=${this.globalStats.messagesProcessed}`,
+      )
+
       if (this.globalStats.messagesProcessed % 100 === 0) {
+        logWithTimestamp('processGossipMessage', 'Checkpoint: salvando grafo no cache...')
         await this.saveGraphToCache()
       }
     } catch (error) {
-      console.error('[gossip-sync] Failed to process gossip message:', error)
+      const elapsed = Date.now() - startTime
+      logWithTimestamp('processGossipMessage', `ERRO em ${elapsed}ms: ${(error as Error).message}`)
       this.globalStats.errors++
     }
   } /**

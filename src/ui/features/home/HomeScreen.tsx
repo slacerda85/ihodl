@@ -5,6 +5,8 @@ import { router, useSegments } from 'expo-router'
 import { useAuth, useIsDark } from '@/ui/features/app-provider'
 import IHodlLogo from '@/ui/assets/ihodl-logo'
 
+const defaultRoute = '/(tabs)/settings'
+
 export default function HomeScreen() {
   const { authenticated } = useAuth()
   const segments = useSegments()
@@ -13,7 +15,7 @@ export default function HomeScreen() {
 
   useEffect(() => {
     if (currentRoute === '/' && authenticated) {
-      router.push('/(tabs)/wallet')
+      router.push(defaultRoute)
     }
   }, [authenticated, currentRoute])
 

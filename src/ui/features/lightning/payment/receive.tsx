@@ -207,6 +207,7 @@ export default function PaymentReceiveScreen() {
     openChannelIfNeeded,
     inboundCapacity,
     inboundBalance,
+    canReceivePayment,
   ])
 
   const handleCopyInvoice = useCallback(async () => {

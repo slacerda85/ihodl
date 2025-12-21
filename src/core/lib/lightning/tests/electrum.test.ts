@@ -16,7 +16,6 @@ import {
 
 import {
   connect,
-  close,
   callElectrumMethod,
   getTransaction,
   broadcastTransaction,
@@ -55,7 +54,6 @@ jest.mock('../../utils', () => ({
 }))
 
 const mockConnect = connect as jest.Mock
-const mockClose = close as jest.Mock
 const mockCallElectrumMethod = callElectrumMethod as jest.Mock
 const mockGetTransaction = getTransaction as jest.Mock
 const mockBroadcastTransaction = broadcastTransaction as jest.Mock

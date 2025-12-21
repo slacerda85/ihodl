@@ -4,7 +4,7 @@ import { sha256, hash160, verifyMessage, signMessage } from '@/core/lib/crypto'
 import { createPublicKey } from '@/core/lib/key'
 import { createP2WPKHScript } from '@/core/lib/address'
 import * as secp from '@noble/secp256k1'
-import { encodeU16, encodeU32, encodeU64 } from './base'
+import { encodeU16, encodeU64 } from './base'
 import { uint8ArrayToHex } from '@/core/lib/utils/utils'
 import {
   Satoshis,
@@ -24,6 +24,7 @@ import {
 } from '@/core/models/lightning/transaction'
 import { Sha256, Point, Signature } from '@/core/models/lightning/base'
 import { OpCode } from '@/core/models/opcodes'
+import { ripemd160 } from '@noble/hashes/legacy.js'
 
 // const ORDER = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n
 
@@ -386,8 +387,6 @@ export function createReceivedHtlcScript(
  * Helper: RIPEMD160 standalone (não hash160 que é RIPEMD160(SHA256))
  */
 function ripemd160Hash(data: Uint8Array): Uint8Array {
-  // Importar de @noble/hashes/legacy
-  const { ripemd160 } = require('@noble/hashes/legacy.js')
   return ripemd160(data)
 }
 

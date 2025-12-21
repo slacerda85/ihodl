@@ -16,7 +16,6 @@ import {
   callElectrumMethod,
   getTransaction,
   broadcastTransaction,
-  getBlockHeader,
   getMerkleProof,
 } from '../electrum/client'
 import type { Connection } from '@/core/models/network'
@@ -77,10 +76,8 @@ export interface MonitorOptions {
 // CONSTANTES
 // ==========================================
 
-const DEFAULT_CONFIRMATIONS_REQUIRED = 3
 const DEFAULT_POLL_INTERVAL_MS = 30000 // 30 segundos
 const FUNDING_CONFIRMATIONS = 3 // Confirmações para funding tx
-const CLOSING_CONFIRMATIONS = 1 // Confirmações para closing tx
 
 // ==========================================
 // CLASSE PRINCIPAL
@@ -746,10 +743,10 @@ export class LightningElectrumManager {
       }
 
       // Verificar endereços monitorados
-      for (const [address, callback] of this.monitoredAddresses) {
+      for (const [address] of this.monitoredAddresses) {
         try {
           const scripthash = toScriptHash(address)
-          const response = await callElectrumMethod<{ tx_hash: string; height: number }[]>(
+          await callElectrumMethod<{ tx_hash: string; height: number }[]>(
             'blockchain.scripthash.get_history',
             [scripthash],
             this.socket!,

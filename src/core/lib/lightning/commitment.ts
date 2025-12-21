@@ -12,6 +12,7 @@ import {
   deriveRevocationPubkey,
 } from './revocation'
 import { OpCode } from '@/core/models/opcodes'
+import { scalarAdd } from '@/core/lib/crypto/secp256k1'
 
 // ==========================================
 // CONSTANTES BOLT #3
@@ -1133,7 +1134,6 @@ export class CommitmentBuilder {
     const tweak = sha256(combined)
 
     // Adicionar tweak à chave privada base (mod n)
-    const { scalarAdd } = require('@/core/lib/crypto/secp256k1')
     return scalarAdd(this.localConfig.fundingPrivateKey, tweak) as Uint8Array
   }
 

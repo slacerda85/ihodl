@@ -63,7 +63,7 @@ export class CloudStorageWrapper {
       const path = `${key}.json`
       const data = await CloudStorage.readFile(path, CloudStorageScope.AppData)
       return JSON.parse(data) as T
-    } catch (error: any) {
+    } catch {
       // Qualquer erro ao ler é tratado como arquivo inexistente
       // Isso cobre "Directory not found", "File not found", etc.
       return null

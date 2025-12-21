@@ -3,7 +3,7 @@
  * Tests the LightningRepository integration with LightningWorker
  */
 
-import lightningRepository, {
+import {
   LightningRepository,
   PersistedChannel,
   PersistedPeer,

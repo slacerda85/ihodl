@@ -22,7 +22,6 @@ const VALID_BECH32_HRPS = getAllBech32Prefixes().map(hrp => `${hrp}1`)
 // Lazy imports to avoid circular dependency
 // TransactionService and WalletService are imported dynamically where needed
 type TransactionServiceType = import('./transaction').default
-type WalletServiceType = import('./wallet').default
 
 function getTransactionService(): TransactionServiceType {
   // eslint-disable-next-line @typescript-eslint/no-require-imports

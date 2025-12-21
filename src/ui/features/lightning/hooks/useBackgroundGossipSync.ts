@@ -57,7 +57,7 @@ export function useBackgroundGossipSync(): {
 /**
  * Hook para estatísticas da sincronização
  *
- * @returns Estatísticas da sincronização quando completa
+ * @returns Estatísticas da sincronização em tempo real
  */
 export function useBackgroundSyncStats(): {
   nodesCount: number
@@ -65,14 +65,14 @@ export function useBackgroundSyncStats(): {
   syncDuration: number
   isAvailable: boolean
 } | null {
-  const { state } = useBackgroundGossipSync()
+  const { state, progress } = useBackgroundGossipSync()
 
-  // Retornar estatísticas mockadas quando sincronização estiver completa
-  if (state === BackgroundSyncState.COMPLETED) {
+  // Retornar estatísticas reais baseadas no progresso
+  if (state === BackgroundSyncState.COMPLETED || state === BackgroundSyncState.SYNCING) {
     return {
-      nodesCount: 15000, // Exemplo
-      channelsCount: 45000, // Exemplo
-      syncDuration: 1800000, // 30 minutos em ms
+      nodesCount: progress?.nodesDiscovered ?? 0,
+      channelsCount: progress?.channelsDiscovered ?? 0,
+      syncDuration: 0, // TODO: Track actual duration in WorkerService
       isAvailable: true,
     }
   }

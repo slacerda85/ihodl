@@ -70,11 +70,11 @@ export function useLightningMonitor() {
 }
 
 /**
- * Hook para acessar apenas o Peer Connectivity Service
+ * Hook para acessar peers conectados via worker.peerManager
  */
-export function usePeerConnectivity() {
+export function useConnectedPeers() {
   const workerService = useWorkerService()
-  return workerService.getPeerConnectivityService()
+  return workerService.getConnectedPeers()
 }
 
 /**

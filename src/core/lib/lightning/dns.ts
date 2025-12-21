@@ -16,7 +16,7 @@ import {
   DEFAULT_PORT,
   MIN_TTL,
 } from '@/core/models/lightning/dns'
-import { encodeBech32NodeId, decodeBech32NodeId } from '@/core/lib/address'
+import { decodeBech32NodeId } from '@/core/lib/address'
 
 // Re-export for tests
 export { DnsQueryType }

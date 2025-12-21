@@ -292,12 +292,10 @@ describe('BOLT #3 HTLC Scripts', () => {
 
       // Contar IFs/ELSEs/ENDIFs
       let ifCount = 0
-      let elseCount = 0
       let endifCount = 0
 
       for (let i = 0; i < script.length; i++) {
         if (script[i] === OpCode.OP_IF) ifCount++
-        if (script[i] === OpCode.OP_ELSE) elseCount++
         if (script[i] === OpCode.OP_ENDIF) endifCount++
         if (script[i] === OpCode.OP_NOTIF) ifCount++ // NOTIF conta como IF
       }

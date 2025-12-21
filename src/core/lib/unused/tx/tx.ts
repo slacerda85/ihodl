@@ -1,5 +1,4 @@
 import { FriendlyTx, Tx, FriendlyTxType, FriendlyTxStatus } from '@/core/models/transaction'
-import { Utxo } from '@/core/models/transaction'
 // import { WalletAccount } from '@/core/models/account'
 
 const MINIMUM_CONFIRMATIONS = 6
@@ -111,49 +110,6 @@ export function getBalance(
  * Versão reescrita e otimizada para calcular o saldo da carteira.
  * Usa abordagem funcional moderna, processando UTXOs de forma eficiente.
  */
-function calculateWalletBalance(
-  allTransactions: Tx[],
-  walletAddresses: Set<string>,
-): {
-  balance: number
-  utxos: Utxo[]
-} {
-  // Deduplicar transações
-  const uniqueTxs = deduplicateTxs(allTransactions)
-
-  // Etapa 1: Coletar todas as chaves de UTXOs que foram gastos
-  const spentUtxoKeys = new Set<string>()
-  uniqueTxs.forEach(tx => {
-    tx.vin.forEach(vin => {
-      spentUtxoKeys.add(`${vin.txid}:${vin.vout}`)
-    })
-  })
-
-  // Etapa 2: Coletar UTXOs não gastos da carteira
-  const unspentUtxos = uniqueTxs.flatMap(tx =>
-    tx.vout
-      .map((vout, index) => ({
-        key: `${tx.txid}:${index}`,
-        utxo: {
-          txid: tx.txid,
-          vout: index,
-          address: vout.scriptPubKey.address,
-          scriptPubKey: vout.scriptPubKey,
-          amount: vout.value,
-          confirmations: tx.confirmations ?? 0,
-          blocktime: tx.blocktime,
-          isSpent: false,
-        } as Utxo,
-      }))
-      .filter(({ key, utxo }) => walletAddresses.has(utxo.address) && !spentUtxoKeys.has(key))
-      .map(({ utxo }) => utxo),
-  )
-
-  // Etapa 3: Calcular saldo total
-  const balance = unspentUtxos.reduce((sum, utxo) => sum + utxo.amount, 0)
-
-  return { balance, utxos: unspentUtxos }
-}
 
 export function getFriendlyTxs(addresses: string[], txs: Tx[], walletId: string): FriendlyTx[] {
   // Cria um mapa de todas as transações para acesso rápido por txid

@@ -12,6 +12,20 @@ import { RoutingGraph, RoutingNode, RoutingChannel } from './routing'
 import { uint8ArrayToHex, hexToUint8Array } from '@/core/lib/utils/utils'
 
 /**
+ * Logger com timestamp para debugging de graph cache
+ */
+function logCache(tag: string, message: string, data?: unknown): void {
+  const now = new Date()
+  const timestamp = `${now.toISOString().slice(11, 23)}`
+  const fullMessage = `[${timestamp}][graph-cache:${tag}] ${message}`
+  if (data !== undefined) {
+    console.log(fullMessage, data)
+  } else {
+    console.log(fullMessage)
+  }
+}
+
+/**
  * Configuração do cache de grafo
  */
 export interface GraphCacheConfig {
@@ -84,10 +98,16 @@ export class GraphCacheManager {
    * Carrega grafo completo do cache
    */
   loadGraph(): RoutingGraph {
-    console.log('[graph-cache] Loading routing graph from cache')
+    const startTime = Date.now()
+    logCache('loadGraph', 'Iniciando carregamento do grafo...')
 
     const cached = this.repository.getRoutingGraph()
     const graph = new RoutingGraph()
+
+    let nodesLoaded = 0
+    let nodesFailed = 0
+    let channelsLoaded = 0
+    let channelsFailed = 0
 
     // Carregar nós
     for (const [key, node] of Object.entries(cached.nodes)) {
@@ -104,8 +124,12 @@ export class GraphCacheManager {
           })),
         }
         graph.addNode(routingNode)
+        nodesLoaded++
       } catch (error) {
-        console.warn(`[graph-cache] Failed to load node ${key}:`, error)
+        nodesFailed++
+        if (nodesFailed <= 3) {
+          logCache('loadGraph', `Falha ao carregar node ${key}: ${(error as Error).message}`)
+        }
       }
     }
 
@@ -127,14 +151,20 @@ export class GraphCacheManager {
           disabled: false,
         }
         graph.addChannel(routingChannel)
+        channelsLoaded++
       } catch (error) {
-        console.warn(`[graph-cache] Failed to load channel ${key}:`, error)
+        channelsFailed++
+        if (channelsFailed <= 3) {
+          logCache('loadGraph', `Falha ao carregar channel ${key}: ${(error as Error).message}`)
+        }
       }
     }
 
     this.updateStats()
-    console.log(
-      `[graph-cache] Loaded ${this.cacheStats.nodeCount} nodes, ${this.cacheStats.channelCount} channels`,
+    const elapsed = Date.now() - startTime
+    logCache(
+      'loadGraph',
+      `Carregado em ${elapsed}ms: nodes=${nodesLoaded} (falhas=${nodesFailed}), channels=${channelsLoaded} (falhas=${channelsFailed})`,
     )
 
     return graph
@@ -144,7 +174,8 @@ export class GraphCacheManager {
    * Salva grafo completo no cache
    */
   saveGraph(graph: RoutingGraph): void {
-    console.log('[graph-cache] Saving routing graph to cache')
+    const startTime = Date.now()
+    logCache('saveGraph', 'Iniciando salvamento do grafo...')
 
     // Obter dados do grafo (esta é uma simplificação - em produção,
     // precisaria de métodos na RoutingGraph para exportar dados)
@@ -155,7 +186,8 @@ export class GraphCacheManager {
     this.cacheStats.lastUpdate = Date.now()
     this.updateStats()
 
-    console.log(`[graph-cache] Saved graph with ${stats.nodes} nodes, ${stats.channels} channels`)
+    const elapsed = Date.now() - startTime
+    logCache('saveGraph', `Salvo em ${elapsed}ms: nodes=${stats.nodes}, channels=${stats.channels}`)
   }
 
   /**

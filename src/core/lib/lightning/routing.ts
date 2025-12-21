@@ -45,6 +45,24 @@ import { chacha20 } from '@noble/ciphers/chacha.js'
 import * as secp256k1 from 'secp256k1'
 
 // ==========================================
+// LOGGING UTILITIES
+// ==========================================
+
+/**
+ * Logger com timestamp para debugging de routing
+ */
+function logRouting(tag: string, message: string, data?: unknown): void {
+  const now = new Date()
+  const timestamp = `${now.toISOString().slice(11, 23)}`
+  const fullMessage = `[${timestamp}][routing:${tag}] ${message}`
+  if (data !== undefined) {
+    console.log(fullMessage, data)
+  } else {
+    console.log(fullMessage)
+  }
+}
+
+// ==========================================
 // PATHFINDING AND ROUTING GRAPH
 // ==========================================
 
@@ -119,6 +137,20 @@ export interface PathfindResult {
 
 /**
  * Lightning Network Routing Graph
+ *
+ * Implementação de pathfinding inspirada no lnrouter.py do Electrum.
+ *
+ * Comparação com Electrum (lnrouter.py):
+ * - LNPathFinder.get_shortest_path_hops(): Usa PriorityQueue para Dijkstra (mais eficiente)
+ * - Busca reversa: Electrum busca de destino→origem para calcular fees compostas
+ * - LiquidityHintMgr: Rastreia quais canais podem/não podem enviar determinados valores
+ * - Edge cost: Combina fee_msat + (cltv_delta * amount * 15 / 1e9) + liquidity_penalty
+ *
+ * TODOs para paridade com Electrum:
+ * - [ ] Usar heap/PriorityQueue em vez de busca linear
+ * - [ ] Implementar LiquidityHintMgr para penalizar canais com falhas
+ * - [ ] Busca reversa para cálculo correto de fees
+ * - [ ] Edge blacklist com expiração temporal
  */
 export class RoutingGraph {
   private nodes: Map<string, RoutingNode> = new Map()
@@ -130,7 +162,12 @@ export class RoutingGraph {
    */
   addNode(node: RoutingNode): void {
     const key = uint8ArrayToHex(node.nodeId)
+    const isNew = !this.nodes.has(key)
     this.nodes.set(key, { ...node, lastUpdate: Date.now() })
+
+    if (isNew && this.nodes.size % 100 === 0) {
+      logRouting('addNode', `Total nodes: ${this.nodes.size}`)
+    }
   }
 
   /**
@@ -138,6 +175,7 @@ export class RoutingGraph {
    */
   addChannel(channel: RoutingChannel): void {
     const key = uint8ArrayToHex(channel.shortChannelId)
+    const isNew = !this.channels.has(key)
     this.channels.set(key, { ...channel, lastUpdate: Date.now() })
 
     // Update node-channel mappings
@@ -153,14 +191,21 @@ export class RoutingGraph {
 
     this.nodeChannels.get(node1Key)!.add(key)
     this.nodeChannels.get(node2Key)!.add(key)
+
+    if (isNew && this.channels.size % 100 === 0) {
+      logRouting('addChannel', `Total channels: ${this.channels.size}`)
+    }
   }
 
   /**
    * Remove stale entries older than maxAge
    */
   pruneStaleEntries(maxAge: number = 7 * 24 * 60 * 60 * 1000): void {
-    // 7 days
+    const startTime = Date.now()
     const cutoff = Date.now() - maxAge
+
+    const nodesBefore = this.nodes.size
+    const channelsBefore = this.channels.size
 
     // Remove stale nodes
     for (const [key, node] of this.nodes.entries()) {
@@ -176,6 +221,15 @@ export class RoutingGraph {
         this.channels.delete(key)
       }
     }
+
+    const nodesRemoved = nodesBefore - this.nodes.size
+    const channelsRemoved = channelsBefore - this.channels.size
+    const elapsed = Date.now() - startTime
+
+    logRouting(
+      'prune',
+      `Removidos: ${nodesRemoved} nodes, ${channelsRemoved} channels em ${elapsed}ms`,
+    )
   }
 
   /**
@@ -188,10 +242,17 @@ export class RoutingGraph {
     maxFeeMsat: bigint = 10000n,
     maxCltvExpiry: number = 144 * 24, // ~24 hours
   ): PathfindResult {
+    const startTime = Date.now()
     const sourceKey = uint8ArrayToHex(sourceNodeId)
     const destKey = uint8ArrayToHex(destinationNodeId)
 
+    logRouting(
+      'findRoute',
+      `Buscando rota ${sourceKey.slice(0, 8)}... -> ${destKey.slice(0, 8)}..., amount=${amountMsat}`,
+    )
+
     if (!this.nodes.has(sourceKey) || !this.nodes.has(destKey)) {
+      logRouting('findRoute', 'ERRO: Source ou destination não encontrados')
       return { route: null, error: 'Source or destination node not found in graph' }
     }
 
@@ -306,6 +367,7 @@ export class RoutingGraph {
     previous: Map<string, { nodeId: string; channelId: string }>,
     amountMsat: bigint,
   ): PathfindResult {
+    const startTime = Date.now()
     const hops: RouteHop[] = []
     let current = destination
     let totalFeeMsat = 0n
@@ -315,7 +377,7 @@ export class RoutingGraph {
     const visited = new Set<string>()
     while (previous.has(current)) {
       if (visited.has(current)) {
-        console.error(`Loop detected in path reconstruction at ${current}`)
+        logRouting('reconstructRoute', `ERRO: Loop detectado em ${current}`)
         break
       }
       visited.add(current)
@@ -347,6 +409,7 @@ export class RoutingGraph {
     }
 
     if (hops.length === 0) {
+      logRouting('reconstructRoute', 'ERRO: Falha ao reconstruir rota')
       return { route: null, error: 'Failed to reconstruct route' }
     }
 
@@ -356,6 +419,12 @@ export class RoutingGraph {
       totalFeeMsat,
       totalCltvExpiry,
     }
+
+    const elapsed = Date.now() - startTime
+    logRouting(
+      'reconstructRoute',
+      `Rota encontrada com ${hops.length} hops, fee=${totalFeeMsat}msat, cltv=${totalCltvExpiry} em ${elapsed}ms`,
+    )
 
     return { route }
   }

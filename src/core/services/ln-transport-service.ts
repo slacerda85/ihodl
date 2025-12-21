@@ -525,7 +525,7 @@ export async function performInitExchange(
   // Enviar init apenas quando transporte estiver pronto (handshake completo)
   try {
     transport.sendMessage(encodedInit)
-  } catch (error) {
+  } catch {
     throw new Error('Transport not ready for init exchange')
   }
 

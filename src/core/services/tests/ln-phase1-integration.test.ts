@@ -146,15 +146,6 @@ describe('Phase 1 Integration Tests', () => {
       // Test that init messages are exchanged and features are negotiated
       // This is more of a unit test for the transport layer
 
-      const mockTransport = {
-        connect: jest.fn().mockResolvedValue(undefined),
-        disconnect: jest.fn().mockResolvedValue(undefined),
-        sendMessage: jest.fn(),
-        getState: jest.fn().mockReturnValue('connected'),
-        on: jest.fn(),
-        off: jest.fn(),
-      }
-
       // Mock the performInitExchange function
       const mockPerformInitExchange = jest.fn().mockResolvedValue({
         negotiatedFeatures: new Uint8Array([0x01, 0x02, 0x03]),

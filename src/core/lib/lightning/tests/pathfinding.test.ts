@@ -297,15 +297,7 @@ describe('Pathfinding Implementation', () => {
         throw new Error('No route found')
       }
 
-      const routeInfo = {
-        hops: route.hops.length,
-        hopsDetails: route.hops.map(
-          (h, i) => `Hop ${i}: node ending with ${h.nodeId[h.nodeId.length - 1]}`,
-        ),
-        totalFee: route.totalFee,
-      }
-
-      // For debugging: throw new Error(`Route found: ${JSON.stringify(routeInfo)}`)
+      // For debugging: throw new Error(`Route found: ${JSON.stringify(route)}`)
 
       expect(route.hops).toHaveLength(2) // Should take 2 hops
       // TODO: Fix Dijkstra to reach destination properly

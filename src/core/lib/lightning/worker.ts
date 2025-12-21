@@ -756,9 +756,9 @@ export class LightningWorker {
     let channelsCount = 0
 
     // Restaurar nós
-    for (const [nodeId, node] of Object.entries(persistedGraph.nodes)) {
+    for (const [, node] of Object.entries(persistedGraph.nodes)) {
       const routingNode: RoutingNode = {
-        nodeId: hexToUint8Array(nodeId),
+        nodeId: hexToUint8Array(node.nodeId),
         features: node.features ? hexToUint8Array(node.features) : undefined,
         lastUpdate: node.lastUpdate,
         addresses: node.addresses.map(addr => ({
@@ -773,9 +773,9 @@ export class LightningWorker {
     }
 
     // Restaurar canais
-    for (const [scid, channel] of Object.entries(persistedGraph.channels)) {
+    for (const [, channel] of Object.entries(persistedGraph.channels)) {
       const routingChannel: RoutingChannel = {
-        shortChannelId: hexToUint8Array(scid),
+        shortChannelId: hexToUint8Array(channel.shortChannelId),
         nodeId1: hexToUint8Array(channel.node1),
         nodeId2: hexToUint8Array(channel.node2),
         capacity: BigInt(channel.capacity),
@@ -1210,7 +1210,8 @@ export class LightningWorker {
   // PEER MANAGEMENT
   // ==========================================
 
-  private peerManager: PeerManager
+  /** PeerManager para gerenciar conexões de peers */
+  public peerManager: PeerManager
 
   /**
    * Connect to Lightning peer
@@ -4030,7 +4031,7 @@ export class LightningWorker {
     // Fallback: tentar encontrar no routing graph
     if (this.routingGraph) {
       // Procurar em todos os canais do routing graph
-      for (const [scidHex, channelInfo] of this.routingGraph['channels']) {
+      for (const [scidHex] of this.routingGraph['channels']) {
         // Verificar se este canal corresponde ao channelId
         // TODO: Melhorar mapeamento channelId <-> shortChannelId
         if (scidHex.length >= 16 && channelId.includes(scidHex.slice(0, 16))) {
@@ -7400,11 +7401,27 @@ export class LightningWorker {
     network: 'mainnet' | 'testnet' | 'regtest' = 'mainnet',
     channelFeeConfig?: ChannelOpeningFeeConfig,
   ): Promise<LightningWorker> {
-    // Criar conexão Lightning
-    const connection = await this.createConnection(config, masterKey, network, channelFeeConfig)
+    // Criar conexão Lightning e obter info do peer conectado
+    const { connection, peer } = await this.createConnection(
+      config,
+      masterKey,
+      network,
+      channelFeeConfig,
+    )
 
-    // Retornar instância configurada
-    return new LightningWorker(connection, masterKey, network, channelFeeConfig)
+    // Criar instância do worker
+    const worker = new LightningWorker(connection, masterKey, network, channelFeeConfig)
+
+    // Registrar o peer no peerManager do worker
+    // Isso é necessário porque createConnection usa um PeerManager temporário
+    const peerId = `${peer.host}:${peer.port}`
+    worker.peerManager.registerConnection(peerId, connection, peer)
+
+    console.log(
+      `[${new Date().toISOString()}] [lightning] Worker created, peer registered: ${peerId}`,
+    )
+
+    return worker
   }
 
   /**
@@ -7416,9 +7433,9 @@ export class LightningWorker {
     masterKey: Uint8Array,
     network: 'mainnet' | 'testnet' | 'regtest',
     channelFeeConfig?: ChannelOpeningFeeConfig,
-  ): Promise<LightningConnection> {
+  ): Promise<{ connection: LightningConnection; peer: PeerWithPubkey }> {
     // Lista de peers para tentar (peer fornecido + fallbacks)
-    const FALLBACK_PEERS: Array<{ host: string; port: number; pubkey: string; name: string }> = [
+    const FALLBACK_PEERS: { host: string; port: number; pubkey: string; name: string }[] = [
       // ACINQ trampoline - reliable for incoming connections
       {
         host: '13.248.222.197',
@@ -7470,7 +7487,7 @@ export class LightningWorker {
           console.log(
             `[${new Date().toISOString()}] [lightning] Connected to configured peer: ${peer.host}:${peer.port}`,
           )
-          return result.connection
+          return { connection: result.connection, peer }
         }
         errors.push(`${peer.host}:${peer.port}: ${result.error?.message || result.message}`)
       } catch (error) {
@@ -7505,7 +7522,7 @@ export class LightningWorker {
           console.log(
             `[${new Date().toISOString()}] [lightning] Connected to fallback peer ${fallback.name}: ${peer.host}:${peer.port}`,
           )
-          return result.connection
+          return { connection: result.connection, peer }
         }
         errors.push(
           `${fallback.name} (${peer.host}:${peer.port}): ${result.error?.message || result.message}`,

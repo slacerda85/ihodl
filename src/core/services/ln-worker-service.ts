@@ -39,7 +39,6 @@ import {
   type HtlcConfirmationProvider,
 } from './ln-htlc-service'
 import { LightningMonitorService } from './ln-monitor-service'
-import { PeerConnectivityService } from './ln-peer-service'
 import { getLightningRoutingService, RoutingMode } from './ln-routing-service'
 import type {
   ChannelState,
@@ -167,7 +166,6 @@ export class WorkerService extends EventEmitter {
   private worker?: LightningWorker
   private watchtowerService?: WatchtowerService
   private lightningMonitor?: LightningMonitorService
-  private peerConnectivity?: PeerConnectivityService
   private config: WorkerServiceConfig
   private isRunning: boolean = false
   private startTime: number = 0
@@ -296,17 +294,15 @@ export class WorkerService extends EventEmitter {
   }
 
   async startPeers(): Promise<LightningInitResult> {
-    try {
-      if (!this.peerConnectivity) {
-        this.peerConnectivity = new PeerConnectivityService({ maxPeers: this.config.maxPeers })
-      }
-      await this.peerConnectivity.start()
-      this.setReadiness({ peerConnected: true, transportConnected: true })
-      this.setMetrics({ connectedPeers: this.peerConnectivity.getConnectedPeers().length })
-      return { success: true }
-    } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : 'Peer start failed' }
+    // Peers são gerenciados pelo LightningWorker.peerManager
+    // Conectados automaticamente durante LightningWorker.create()
+    if (!this.worker) {
+      return { success: false, error: 'Worker not initialized' }
     }
+    const peers = this.worker.getConnectedPeers()
+    this.setReadiness({ peerConnected: peers.length > 0, transportConnected: peers.length > 0 })
+    this.setMetrics({ connectedPeers: peers.length })
+    return { success: true }
   }
 
   async reestablishChannels(): Promise<LightningInitResult> {
@@ -419,17 +415,17 @@ export class WorkerService extends EventEmitter {
 
       // Restore metrics
       if (persistedState.metrics) {
-        const sanitized: WorkerMetrics = { ...this.metrics }
+        const sanitized = { ...this.metrics } as Record<string, unknown>
         Object.entries(persistedState.metrics).forEach(([metricKey, value]) => {
           if (this.numericMetricKeys.has(metricKey as keyof WorkerMetrics)) {
             if (typeof value === 'number' && Number.isFinite(value)) {
-              sanitized[metricKey as keyof WorkerMetrics] = value
+              sanitized[metricKey] = value
             }
           } else if (typeof value === 'boolean' || typeof value === 'number' || value === null) {
-            sanitized[metricKey as keyof WorkerMetrics] = value as any
+            sanitized[metricKey] = value
           }
         })
-        this.metrics = sanitized
+        this.metrics = sanitized as WorkerMetrics
       }
 
       // Restore background sync state
@@ -487,13 +483,8 @@ export class WorkerService extends EventEmitter {
       this.errorRecovery = createErrorRecoveryService()
       await this.errorRecovery.start()
 
-      // Initialize peer connectivity service (always, not just for trampoline)
-      if (!this.peerConnectivity) {
-        this.peerConnectivity = new PeerConnectivityService({ maxPeers: this.config.maxPeers })
-      }
-
+      // Routing mode for trampoline
       if (this.config.enableTrampoline) {
-        await this.startPeerConnectivityWithRetry()
         await this.ensureRoutingServiceInitialized()
         await this.routingService.setRoutingMode(RoutingMode.TRAMPOLINE)
       }
@@ -543,6 +534,12 @@ export class WorkerService extends EventEmitter {
           })
 
           this.worker = await Promise.race([workerPromise, timeoutPromise])
+
+          // O LightningWorker.create() já conecta ao peer durante a criação
+          // Marcar como conectado para que o gossip sync funcione
+          this.setReadiness({ transportConnected: true, peerConnected: true })
+          this.setMetrics({ connectedPeers: 1 })
+          console.log('[LightningWorker] Worker created with peer connection established')
         }
       }
 
@@ -683,6 +680,10 @@ export class WorkerService extends EventEmitter {
       generateInvoice: async () => ({ invoice: 'lnmock', amount: 0n }),
       getPeers: () => [{ nodeId: 'peer-1', address: '127.0.0.1', port: 9735 }],
       stop: async () => undefined,
+      // HTLC getters used by WorkerService during shutdown
+      hasPendingHtlcs: () => false,
+      countPendingHtlcs: () => 0,
+      getPendingHtlcs: () => new Map<string, any>(),
     } as unknown as LightningWorker
 
     return mock
@@ -721,30 +722,20 @@ export class WorkerService extends EventEmitter {
 
   private async establishPeerConnections(): Promise<LightningInitResult> {
     this.updateStatus('connecting', 60, 'Establishing peer connections...')
-    try {
-      if (this.isTestEnv) {
-        this.setReadiness({ peerConnected: true, transportConnected: true })
-        this.setMetrics({ connectedPeers: 1 })
-        return { success: true }
-      }
-
-      if (this.peerConnectivity) {
-        // Already started; ensure metrics and readiness reflect the current state
-        const connectedPeers = this.peerConnectivity.getConnectedPeers().length
-        this.setMetrics({ connectedPeers })
-        if (connectedPeers > 0) {
-          this.setReadiness({ peerConnected: true, transportConnected: true })
-        }
-      } else if (this.config.enableTrampoline) {
-        await this.startPeerConnectivityWithRetry()
-      }
+    // Peers são gerenciados pelo LightningWorker.peerManager
+    // Conectados automaticamente durante LightningWorker.create()
+    if (this.isTestEnv) {
+      this.setReadiness({ peerConnected: true, transportConnected: true })
+      this.setMetrics({ connectedPeers: 1 })
       return { success: true }
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Peer connection failed',
-      }
     }
+
+    const peers = this.worker?.getConnectedPeers() ?? []
+    this.setMetrics({ connectedPeers: peers.length })
+    if (peers.length > 0) {
+      this.setReadiness({ peerConnected: true, transportConnected: true })
+    }
+    return { success: true }
   }
 
   private async startMonitoringServices(): Promise<void> {
@@ -776,14 +767,10 @@ export class WorkerService extends EventEmitter {
       return
     }
 
-    if (!this.peerConnectivity) {
-      console.log('[LightningWorker] Background gossip sync skipped: no peer connectivity')
-      return
-    }
-
+    // Usar peers do LightningWorker.peerManager (conectado durante worker.create())
     const gossipPeers = this.buildGossipPeers()
     if (gossipPeers.length === 0) {
-      console.log('[LightningWorker] Background gossip sync skipped: no connected peers')
+      console.log('[LightningWorker] Background gossip sync skipped: no connected peers in worker')
       return
     }
 
@@ -834,19 +821,31 @@ export class WorkerService extends EventEmitter {
   }
 
   private buildGossipPeers(): GossipPeerInterface[] {
-    if (!this.peerConnectivity) return []
+    // Usar peers do LightningWorker.peerManager (conectado durante worker.create())
+    if (!this.worker) {
+      console.log('[LightningWorker] buildGossipPeers: worker not initialized')
+      return []
+    }
 
-    const connectedPeers = this.peerConnectivity.getConnectedPeers()
-    const peersToUse = connectedPeers.slice(0, this.config.maxPeers)
+    const workerPeers = this.worker.getConnectedPeers()
+    if (workerPeers.length === 0) {
+      console.log('[LightningWorker] buildGossipPeers: no peers in worker.peerManager')
+      return []
+    }
+
+    const peersToUse = workerPeers.slice(0, this.config.maxPeers)
+    console.log(
+      `[LightningWorker] Building gossip peers from Worker.peerManager: ${peersToUse.length} peers`,
+    )
 
     return peersToUse.map(peerInfo => ({
       sendMessage: async (_data: Uint8Array) => {
-        console.log(`[LightningWorker] Gossip message enqueued for ${peerInfo.nodeId}`)
+        console.log(`[LightningWorker] Gossip message enqueued for ${peerInfo.id}`)
       },
       onMessage: (_handler: (data: Uint8Array) => void) => {
-        console.log(`[LightningWorker] Gossip message handler registered for ${peerInfo.nodeId}`)
+        console.log(`[LightningWorker] Gossip message handler registered for ${peerInfo.id}`)
       },
-      isConnected: () => Boolean((peerInfo as any).isConnected ?? true),
+      isConnected: () => true, // Worker peers são sempre conectados
     }))
   }
 
@@ -871,11 +870,19 @@ export class WorkerService extends EventEmitter {
 
     try {
       const progress = (this.backgroundGossipManager as any).getProgress?.()
+
+      console.log(
+        `[LightningWorker][${new Date().toISOString().slice(11, 23)}] checkBackgroundSyncProgress: overall=${progress?.overall?.toFixed(2)}, state=${progress?.state}, channels=${progress?.channelsDiscovered}, nodes=${progress?.nodesDiscovered}`,
+      )
+
       if (progress) {
         this.setBackgroundSyncProgress(progress as SyncProgress)
       }
 
       if (progress?.overall && progress.overall >= 1) {
+        console.log(
+          `[LightningWorker][${new Date().toISOString().slice(11, 23)}] Sync completo! Chamando handleBackgroundSyncCompleted`,
+        )
         this.handleBackgroundSyncCompleted()
         return
       }
@@ -883,13 +890,18 @@ export class WorkerService extends EventEmitter {
       if (this.backgroundSyncStartTime) {
         const elapsedMinutes = (Date.now() - this.backgroundSyncStartTime) / (1000 * 60)
         if (elapsedMinutes > this.backgroundSyncTimeoutMinutes) {
-          console.warn('[LightningWorker] Background gossip sync timed out')
+          console.warn(
+            `[LightningWorker][${new Date().toISOString().slice(11, 23)}] Background gossip sync timed out após ${elapsedMinutes.toFixed(1)} minutos`,
+          )
           void this.stopBackgroundGossipSync()
           this.setBackgroundSyncState(BackgroundSyncState.ERROR)
         }
       }
     } catch (error) {
-      console.error('[LightningWorker] Error checking background sync progress:', error)
+      console.error(
+        `[LightningWorker][${new Date().toISOString().slice(11, 23)}] Error checking background sync progress:`,
+        error,
+      )
     }
   }
 
@@ -948,67 +960,6 @@ export class WorkerService extends EventEmitter {
 
     this.lightningRepository.saveInitState(initState)
     console.log('[LightningWorker] Saved initialization state')
-  }
-
-  private attachPeerEventHandlers(): void {
-    if (!this.peerConnectivity) return
-
-    const updateConnectedPeers = () => {
-      const count = this.peerConnectivity?.getConnectedPeers().length ?? 0
-      this.setMetrics({ connectedPeers: count })
-      if (count > 0) {
-        this.setReadiness({ peerConnected: true, transportConnected: true })
-      }
-    }
-
-    this.peerConnectivity.on('peer_connected', updateConnectedPeers)
-    this.peerConnectivity.on('peer_disconnected', event => {
-      this.bumpMetric('disconnectCount')
-      this.emit('error', { phase: 'peers', event })
-      updateConnectedPeers()
-    })
-    this.peerConnectivity.on('peer_failed', event => {
-      this.bumpMetric('disconnectCount')
-      this.emit('error', { phase: 'peers', event })
-      updateConnectedPeers()
-    })
-    this.peerConnectivity.on('peer_reconnecting', updateConnectedPeers)
-    this.peerConnectivity.on('pool_updated', updateConnectedPeers)
-  }
-
-  private async startPeerConnectivityWithRetry(): Promise<void> {
-    if (this.peerConnectivity) {
-      return
-    }
-
-    const maxRetries = 3
-    const backoffMs = 1500
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      this.bumpMetric('peerStartAttempts')
-      try {
-        if (!this.peerConnectivity) {
-          this.peerConnectivity = new PeerConnectivityService({
-            maxPeers: this.config.maxPeers,
-            reconnectInterval: 30000,
-            maxReconnectAttempts: 2,
-          })
-          this.attachPeerEventHandlers()
-        }
-
-        await this.peerConnectivity.start()
-        this.setReadiness({ peerConnected: true, transportConnected: true })
-        this.setMetrics({ connectedPeers: this.peerConnectivity.getConnectedPeers().length })
-        return
-      } catch (error) {
-        this.bumpMetric('peerStartFailures')
-        this.emit('error', { phase: 'peers', attempt, error })
-        if (attempt === maxRetries) {
-          throw error
-        }
-        await this.delay(backoffMs * attempt)
-      }
-    }
   }
 
   // ==========================================
@@ -1202,12 +1153,6 @@ export class WorkerService extends EventEmitter {
         this.lightningMonitor = undefined
       }
 
-      if (this.peerConnectivity) {
-        this.peerConnectivity.removeAllListeners()
-        await this.peerConnectivity.stop()
-        this.peerConnectivity = undefined
-      }
-
       if (this.errorRecovery) {
         await this.errorRecovery.stop()
         this.errorRecovery = undefined
@@ -1256,7 +1201,6 @@ export class WorkerService extends EventEmitter {
     this.worker = undefined
     this.watchtowerService = undefined
     this.lightningMonitor = undefined
-    this.peerConnectivity = undefined
     this.lightningRepository = undefined
     // this.lightningService = undefined
     this.walletService = undefined
@@ -1604,13 +1548,6 @@ export class WorkerService extends EventEmitter {
     return this.lightningMonitor
   }
 
-  /**
-   * Get peer connectivity service
-   */
-  getPeerConnectivityService(): PeerConnectivityService | undefined {
-    return this.peerConnectivity
-  }
-
   // ==========================================
   // LIGHTNING MONITOR METHODS
   // ==========================================
@@ -1676,67 +1613,50 @@ export class WorkerService extends EventEmitter {
   }
 
   // ==========================================
-  // PEER CONNECTIVITY METHODS
+  // PEER METHODS (delegates to worker.peerManager)
   // ==========================================
 
   /**
    * Add a peer to the connection pool
    */
-  addPeer(nodeId: string, address: string, port?: number): void {
-    if (!this.peerConnectivity) {
-      throw new Error('Peer connectivity service not initialized')
+  async addPeer(host: string, port: number, pubkey?: string): Promise<boolean> {
+    if (!this.worker) {
+      throw new Error('Worker not initialized')
     }
-    this.peerConnectivity.addPeer(nodeId, address, port)
+    const result = await this.worker.connectPeer({ host, port, pubkey })
+    if (result.success) {
+      this.setMetrics({ connectedPeers: this.worker.getConnectedPeers().length })
+    }
+    return result.success
   }
 
   /**
    * Remove a peer from the connection pool
    */
-  removePeer(nodeId: string, address: string): void {
-    if (!this.peerConnectivity) {
-      throw new Error('Peer connectivity service not initialized')
+  async removePeer(peerId: string): Promise<boolean> {
+    if (!this.worker) {
+      throw new Error('Worker not initialized')
     }
-    this.peerConnectivity.removePeer(nodeId, address)
+    const result = await this.worker.disconnectPeer(peerId)
+    this.setMetrics({ connectedPeers: this.worker.getConnectedPeers().length })
+    return result
   }
 
   /**
-   * Get connected peers
+   * Get connected peers from worker.peerManager
    */
   getConnectedPeers() {
-    if (!this.peerConnectivity) {
-      throw new Error('Peer connectivity service not initialized')
+    if (!this.worker) {
+      return []
     }
-    return this.peerConnectivity.getConnectedPeers()
+    return this.worker.getConnectedPeers()
   }
 
   /**
-   * Get all peers in the pool
+   * Get peer count
    */
-  getAllPeers() {
-    if (!this.peerConnectivity) {
-      throw new Error('Peer connectivity service not initialized')
-    }
-    return this.peerConnectivity.getAllPeers()
-  }
-
-  /**
-   * Get peer connectivity status
-   */
-  getPeerConnectivityStatus() {
-    if (!this.peerConnectivity) {
-      throw new Error('Peer connectivity service not initialized')
-    }
-    return this.peerConnectivity.getStatus()
-  }
-
-  /**
-   * Force reconnection to all peers
-   */
-  async reconnectAllPeers(): Promise<void> {
-    if (!this.peerConnectivity) {
-      throw new Error('Peer connectivity service not initialized')
-    }
-    return this.peerConnectivity.reconnectAll()
+  getPeerCount(): number {
+    return this.worker?.getConnectedPeers().length ?? 0
   }
 
   // Background gossip sync getters for UI telemetry

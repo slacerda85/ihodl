@@ -198,7 +198,7 @@ describe('LightningWorker', () => {
         },
         channels: {
           scid1: {
-            shortChannelId: 'scid1',
+            shortChannelId: '00'.repeat(8),
             node1: '02' + '00'.repeat(32),
             node2: '03' + '00'.repeat(32),
             capacity: '1000000',
