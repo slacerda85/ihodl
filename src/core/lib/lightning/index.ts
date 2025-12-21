@@ -510,3 +510,25 @@ export {
   LN_DNS_SEEDS,
   type LNPeerAddr,
 } from './dns-bootstrap'
+
+// Gossip Database (SQLite with Drizzle ORM)
+export {
+  GossipDatabase,
+  getGossipDatabase,
+  closeGossipDatabase,
+  type ChannelInfo as DbChannelInfo,
+  type NewChannelInfo as DbNewChannelInfo,
+  type Policy as DbPolicy,
+  type NewPolicy as DbNewPolicy,
+  type NodeInfo as DbNodeInfo,
+  type NewNodeInfo as DbNewNodeInfo,
+  type NodeAddress as DbNodeAddress,
+  type NewNodeAddress as DbNewNodeAddress,
+} from './db'
+
+// Persistent Routing Graph (SQLite-backed)
+export {
+  PersistentRoutingGraph,
+  getPersistentRoutingGraph,
+  resetPersistentRoutingGraph,
+} from './persistent-routing-graph'

@@ -1,8 +1,31 @@
 # Gossip Graph Database Implementation
 
 **Data:** 21 de dezembro de 2025  
-**Status:** Proposta de implementação  
+**Status:** ✅ Implementado (Phase 1 + Phase 2 - Integração com RoutingGraph)  
+**Atualização:** 21 de dezembro de 2025  
 **Objetivo:** Escalar o grafo de roteamento para 12k+ nós e 40k+ canais (paridade Electrum)
+
+---
+
+## Status da Implementação
+
+### ✅ Completado
+
+- **Drizzle ORM + expo-sqlite** configurado
+- **SQLCipher habilitado** (para futuros dados sensíveis)
+- **Schema criado**: `src/core/lib/lightning/db/schema.ts`
+- **GossipDatabase class**: `src/core/lib/lightning/db/gossip-database.ts`
+- **PersistentRoutingGraph**: `src/core/lib/lightning/persistent-routing-graph.ts`
+- **Integração com LightningRoutingService**: Usa SQLite por padrão
+- **Integração com LightningWorkerService**: Usa SQLite para gossip sync
+- **Exports**: `src/core/lib/lightning/db/index.ts` + `lightning/index.ts`
+
+### 🔄 Próximos Passos
+
+1. ~~Integrar `GossipDatabase` com `RoutingGraph`~~ ✅
+2. ~~Migrar dados existentes do MMKV para SQLite~~ (não necessário - dados limpos)
+3. Implementar sync incremental com Electrum peer
+4. Criar `LightningDatabase` (SQLCipher encrypted) para dados privados
 
 ---
 

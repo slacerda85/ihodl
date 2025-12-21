@@ -68,6 +68,16 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     'expo-font',
     'expo-background-task',
     [
+      'expo-sqlite',
+      {
+        // Full-text search para busca de nodes/channels por alias
+        enableFTS: true,
+        // SQLCipher para criptografia de dados sensíveis (lightning.db)
+        // gossip.db usa SQLite padrão (dados públicos)
+        useSQLCipher: true,
+      },
+    ],
+    [
       'expo-local-authentication',
       {
         faceIDPermission: 'Allow $(PRODUCT_NAME) to use Face ID.',

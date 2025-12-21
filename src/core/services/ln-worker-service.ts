@@ -10,6 +10,7 @@ import EventEmitter from 'eventemitter3'
 import { GossipPeerInterface } from '../lib/lightning/gossip'
 import { GossipSyncManager, type SyncProgress } from '../lib/lightning/gossip-sync'
 import { GraphCacheManager } from '../lib/lightning/graph-cache'
+import { getPersistentRoutingGraph } from '../lib/lightning/persistent-routing-graph'
 import { decodeInvoice } from '../lib/lightning/invoice'
 import { LightningWorker } from '../lib/lightning/worker'
 import { hexToUint8Array, uint8ArrayToHex } from '../lib/utils/utils'
@@ -779,7 +780,14 @@ export class WorkerService extends EventEmitter {
     }
 
     this.backgroundCacheManager = new GraphCacheManager(this.lightningRepository)
-    const routingGraph = this.backgroundCacheManager.loadGraph()
+
+    // Use SQLite-backed PersistentRoutingGraph for better scalability (12k+ nodes, 40k+ channels)
+    const routingGraph = getPersistentRoutingGraph()
+    await routingGraph.initialize()
+
+    console.log(
+      `[LightningWorker] Using persistent graph: ${routingGraph.getStats().nodes} nodes, ${routingGraph.getStats().channels} channels`,
+    )
 
     this.backgroundGossipManager = new GossipSyncManager({
       routingGraph,

@@ -9,6 +9,10 @@
 
 import { EventEmitter } from 'eventemitter3'
 import { RoutingGraph } from '../lib/lightning/routing'
+import {
+  PersistentRoutingGraph,
+  getPersistentRoutingGraph,
+} from '../lib/lightning/persistent-routing-graph'
 import { GraphCacheManager } from '../lib/lightning/graph-cache'
 import { LightningRepository } from '../repositories/lightning'
 import { BackgroundSyncState } from './ln-background-gossip-sync-service'
@@ -43,10 +47,11 @@ export interface RoutingServiceEvents {
 
 export class LightningRoutingService extends EventEmitter {
   private state: RoutingServiceState
-  private routingGraph?: RoutingGraph
+  private routingGraph?: RoutingGraph | PersistentRoutingGraph
   private graphCacheManager?: GraphCacheManager
   private backgroundSyncSource?: EventEmitter
   private isInitialized = false
+  private usePersistentGraph = true // Use SQLite-backed graph by default
 
   constructor() {
     super()
@@ -167,13 +172,34 @@ export class LightningRoutingService extends EventEmitter {
 
   private async initializeLocalRouting(): Promise<void> {
     try {
-      const repository = new LightningRepository()
-      this.graphCacheManager = new GraphCacheManager(repository)
-      this.routingGraph = this.graphCacheManager.loadGraph()
+      if (this.usePersistentGraph) {
+        // Use SQLite-backed PersistentRoutingGraph (scales to 12k+ nodes, 40k+ channels)
+        console.log('[LightningRouting] Initializing SQLite-backed persistent graph...')
+        const persistentGraph = getPersistentRoutingGraph()
+        await persistentGraph.initialize()
+        this.routingGraph = persistentGraph
+
+        const stats = persistentGraph.getStats()
+        console.log(
+          `[LightningRouting] Persistent graph initialized: ${stats.nodes} nodes, ${stats.channels} channels`,
+        )
+      } else {
+        // Legacy: Use MMKV-backed graph (for smaller graphs or fallback)
+        console.log('[LightningRouting] Initializing legacy MMKV-backed graph...')
+        const repository = new LightningRepository()
+        this.graphCacheManager = new GraphCacheManager(repository)
+        this.routingGraph = this.graphCacheManager.loadGraph()
+      }
 
       console.log('[LightningRouting] Local routing components initialized')
     } catch (error) {
       console.warn('[LightningRouting] Failed to initialize local routing:', error)
+      // Fallback to legacy if persistent fails
+      if (this.usePersistentGraph) {
+        console.log('[LightningRouting] Falling back to legacy MMKV-backed graph...')
+        this.usePersistentGraph = false
+        await this.initializeLocalRouting()
+      }
     }
   }
 

@@ -9,6 +9,7 @@
 
 import { LightningRepository } from '@/core/repositories/lightning'
 import { RoutingGraph, RoutingNode, RoutingChannel } from './routing'
+import { PersistentRoutingGraph, getPersistentRoutingGraph } from './persistent-routing-graph'
 import { uint8ArrayToHex, hexToUint8Array } from '@/core/lib/utils/utils'
 
 /**
@@ -95,7 +96,36 @@ export class GraphCacheManager {
   }
 
   /**
-   * Carrega grafo completo do cache
+   * Carrega grafo persistente do SQLite (recomendado para produção)
+   *
+   * Este método usa o PersistentRoutingGraph que é backed por SQLite,
+   * escalando para 12k+ nodes e 40k+ channels.
+   */
+  async loadPersistentGraph(): Promise<PersistentRoutingGraph> {
+    const startTime = Date.now()
+    logCache('loadPersistentGraph', 'Carregando grafo persistente do SQLite...')
+
+    const graph = getPersistentRoutingGraph()
+    await graph.initialize()
+
+    const stats = graph.getStats()
+    const elapsed = Date.now() - startTime
+    logCache(
+      'loadPersistentGraph',
+      `Carregado do SQLite em ${elapsed}ms: nodes=${stats.nodes}, channels=${stats.channels}`,
+    )
+
+    this.cacheStats.nodeCount = stats.nodes
+    this.cacheStats.channelCount = stats.channels
+    this.cacheStats.lastUpdate = Date.now()
+
+    return graph
+  }
+
+  /**
+   * Carrega grafo completo do cache (MMKV - legacy)
+   *
+   * @deprecated Use loadPersistentGraph() para melhor performance com grafos grandes
    */
   loadGraph(): RoutingGraph {
     const startTime = Date.now()

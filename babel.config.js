@@ -9,6 +9,10 @@ module.exports = function (api) {
         },
       ],
     ],
+    plugins: [
+      // Drizzle ORM: permite importar arquivos .sql inline
+      ['inline-import', { extensions: ['.sql'] }],
+    ],
     overrides: [
       {
         test: /node_modules\/@noble/,
